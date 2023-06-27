@@ -26,8 +26,30 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
+import java.util.ServiceLoader;
 import java.util.SortedSet;
 
+/**
+ * A {@link PluginScanner} implementation which uses {@link ServiceLoader} to discover plugins.
+ * <p>This implements the modern discovery strategy, which uses only service loading in order to discover plugins.
+ * Specifically, a plugin appears in the scan result if all the following conditions are true:
+ * <ul>
+ *     <li>The class is concrete</li>
+ *     <li>The class is public</li>
+ *     <li>The class has a no-args constructor</li>
+ *     <li>The no-args constructor is public</li>
+ *     <li>Static initialization of the class completes without throwing an exception</li>
+ *     <li>The no-args constructor completes without throwing an exception</li>
+ *     <li>The class is a subclass of {@link SinkConnector}, {@link SourceConnector}, {@link Converter},
+ *         {@link HeaderConverter}, {@link Transformation}, {@link Predicate}, {@link ConfigProvider},
+ *         {@link ConnectRestExtension}, or {@link ConnectorClientConfigOverridePolicy}
+ *     </li>
+ *     <li>The class has a {@link ServiceLoader} compatible manifest file or module declaration</li>
+ * </ul>
+ * <p>Note: This scanner can only find plugins with corresponding {@link ServiceLoader} manifests, which are
+ * not required to be packaged with plugins. This has the effect that some plugins discoverable by the
+ * {@link ReflectionScanner} may not be visible with this implementation.
+ */
 public class ServiceLoaderScanner extends PluginScanner {
 
     @Override

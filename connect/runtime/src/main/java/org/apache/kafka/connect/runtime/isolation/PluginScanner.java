@@ -34,10 +34,30 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+/**
+ * Superclass for plugin discovery implementations.
+ *
+ * <p>Callers of this class should use {@link #discoverPlugins(Set)} to discover plugins which are present in the
+ * passed-in {@link PluginSource} instances.
+ *
+ * <p>Implementors of this class should implement {@link #scanPlugins(PluginSource)}, in order to scan a single source.
+ * The returned {@link PluginScanResult} should contain only plugins which are loadable from the passed-in source.
+ * The superclass has some common functionality which is usable in subclasses, and handles merging multiple results.
+ *
+ * <p>Implementations of this class must be thread-safe, but may have side effects on the provided {@link ClassLoader}
+ * instances and plugin classes which may not be thread safe. This depends on the thread safety of the plugin
+ * implementations, due to the necessity of initializing and instantiate plugin classes to evaluate their versions.
+ */
 public abstract class PluginScanner {
 
     private static final Logger log = LoggerFactory.getLogger(PluginScanner.class);
 
+    /**
+     * Entry point for plugin scanning. Discovers plugins present in any of the provided plugin sources.
+     * <p>See the implementation-specific documentation for the conditions for a plugin to appear in this result.
+     * @param sources to scan for contained plugins
+     * @return A {@link PluginScanResult} containing all plugins which this scanning implementation could discover.
+     */
     public PluginScanResult discoverPlugins(Set<PluginSource> sources) {
         long startMs = System.currentTimeMillis();
         List<PluginScanResult> results = new ArrayList<>();
@@ -60,6 +80,11 @@ public abstract class PluginScanner {
         return plugins;
     }
 
+    /**
+     * Implementation-specific strategy for scanning a single {@link PluginSource}.
+     * @param source A single source to scan for plugins.
+     * @return A {@link PluginScanResult} containing all plugins which this scanning implementation could discover.
+     */
     protected abstract PluginScanResult scanPlugins(PluginSource source);
 
     private void loadJdbcDrivers(final ClassLoader loader) {

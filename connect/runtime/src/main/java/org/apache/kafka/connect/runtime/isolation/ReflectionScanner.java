@@ -35,10 +35,36 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.util.Collections;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+/**
+ * A {@link PluginScanner} implementation which uses reflection and {@link ServiceLoader} to discover plugins.
+ * <p>This implements the legacy discovery strategy, which uses a combination of reflection and service loading in
+ * order to discover plugins. Specifically, a plugin appears in the scan result if all the following conditions are true:
+ * <ul>
+ *     <li>The class is concrete</li>
+ *     <li>The class is public</li>
+ *     <li>The class has a no-args constructor</li>
+ *     <li>The no-args constructor is public</li>
+ *     <li>Static initialization of the class completes without throwing an exception</li>
+ *     <li>The no-args constructor completes without throwing an exception</li>
+ *     <li>One of the following is true:
+ *         <ul>
+ *             <li>Is a subclass of {@link SinkConnector}, {@link SourceConnector}, {@link Converter},
+ *             {@link HeaderConverter}, {@link Transformation}, or {@link Predicate}</li>
+ *             <li>Is a subclass of {@link ConfigProvider}, {@link ConnectRestExtension}, or
+ *             {@link ConnectorClientConfigOverridePolicy}, and has a {@link ServiceLoader} compatible
+ *             manifest file or module declaration</li>
+ *         </ul>
+ *     </li>
+ * </ul>
+ * <p>Note: This scanner has a runtime proportional to the number of overall classes in the passed-in
+ * {@link PluginSource} objects, which may be significant for plugins with large dependencies. For a more performant
+ * implementation, consider using {@link ServiceLoaderScanner} and follow migration instructions for KIP-898.
+ */
 public class ReflectionScanner extends PluginScanner {
 
     private static final Logger log = LoggerFactory.getLogger(ReflectionScanner.class);
