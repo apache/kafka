@@ -246,7 +246,7 @@ object RequestChannel extends Logging {
             if (body[FetchRequest].isFromFollower) RequestMetrics.followFetchMetricName
             else RequestMetrics.consumerFetchMetricName
           Seq(specifiedMetricName, header.apiKey.name)
-        } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].allVerifyOnlyRequest()) {
+        } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].allVerifyOnlyRequest) {
             Seq(RequestMetrics.verifyPartitionsInTxnMetricName)
         } else {
           Seq(header.apiKey.name)

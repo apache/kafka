@@ -248,8 +248,8 @@ class AddPartitionsToTxnManagerTest {
     )
 
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup], (mock: KafkaMetricsGroup, context: Context) => {
-        when(mock.newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))).thenReturn(mockVerificationFailureMeter)
-        when(mock.newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationTimeMsMetricName))).thenReturn(mockVerificationTime)
+        when(mock.newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))).thenReturn(mockVerificationFailureMeter)
+        when(mock.newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationTimeMsMetricName))).thenReturn(mockVerificationTime)
       })
 
     val addPartitionsManagerWithMockedMetrics = new AddPartitionsToTxnManager(
@@ -280,10 +280,10 @@ class AddPartitionsToTxnManagerTest {
 
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
 
-      verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))
-      verify(mockMetricsGroup).newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationTimeMsMetricName))
-      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.verificationFailureRateMetricName)
-      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.verificationTimeMsMetricName)
+      verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))
+      verify(mockMetricsGroup).newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationTimeMsMetricName))
+      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.VerificationFailureRateMetricName)
+      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.VerificationTimeMsMetricName)
 
       // assert that we have verified all invocations on the metrics group.
       verifyNoMoreInteractions(mockMetricsGroup)

@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.server.AddPartitionsToTxnManager.{verificationFailureRateMetricName, verificationTimeMsMetricName}
+import kafka.server.AddPartitionsToTxnManager.{VerificationFailureRateMetricName, VerificationTimeMsMetricName}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -35,8 +35,8 @@ import scala.collection.mutable
 object AddPartitionsToTxnManager {
   type AppendCallback = Map[TopicPartition, Errors] => Unit
 
-  val verificationFailureRateMetricName = "VerificationFailureRate"
-  val verificationTimeMsMetricName = "VerificationTimeMs"
+  val VerificationFailureRateMetricName = "VerificationFailureRate"
+  val VerificationTimeMsMetricName = "VerificationTimeMs"
 }
 
 
@@ -60,8 +60,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
-  val verificationFailureRate = metricsGroup.newMeter(verificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
-  val verificationTimeMs = metricsGroup.newHistogram(verificationTimeMsMetricName)
+  val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
+  val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
 
   def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
     nodesToTransactions.synchronized {
@@ -113,8 +113,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     topicPartitionsToError.toMap
   }
 
-  private def sendCallback(callback: AddPartitionsToTxnManager.AppendCallback, errorMap: Map[TopicPartition, Errors], startTime: Long): Unit = {
-    verificationTimeMs.update(time.milliseconds() - startTime)
+  private def sendCallback(callback: AddPartitionsToTxnManager.AppendCallback, errorMap: Map[TopicPartition, Errors], startTimeMs: Long): Unit = {
+    verificationTimeMs.update(time.milliseconds() - startTimeMs)
     callback(errorMap)
   }
 
@@ -218,8 +218,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
 
   override def shutdown(): Unit = {
     super.shutdown()
-    metricsGroup.removeMetric(verificationFailureRateMetricName)
-    metricsGroup.removeMetric(verificationTimeMsMetricName)
+    metricsGroup.removeMetric(VerificationFailureRateMetricName)
+    metricsGroup.removeMetric(VerificationTimeMsMetricName)
   }
 
 }
