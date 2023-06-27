@@ -70,6 +70,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
+import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
@@ -1503,6 +1504,9 @@ public final class QuorumController implements Controller {
                 break;
             case DELEGATION_TOKEN_RECORD:
                 delegationTokenControlManager.replay((DelegationTokenRecord) message);
+                break;
+            case REMOVE_DELEGATION_TOKEN_RECORD:
+                delegationTokenControlManager.replay((RemoveDelegationTokenRecord) message);
                 break;
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
