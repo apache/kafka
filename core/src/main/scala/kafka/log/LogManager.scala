@@ -1099,7 +1099,6 @@ class LogManager(logDirs: Seq[File],
       currentLogs.put(topicPartition, destLog)
       if (cleaner != null) {
         cleaner.alterCheckpointDir(topicPartition, sourceLog.parentDirFile, destLog.parentDirFile)
-        resumeCleaning(topicPartition)
       }
 
       try {

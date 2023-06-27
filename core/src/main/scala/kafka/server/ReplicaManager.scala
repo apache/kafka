@@ -881,7 +881,6 @@ class ReplicaManager(val config: KafkaConfig,
               if (partition.futureReplicaDirChanged(destinationDir)) {
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
                 partition.removeFutureLocalReplica()
-                logManager.resumeCleaning(topicPartition)
               }
             case HostedPartition.Offline =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
@@ -908,7 +907,6 @@ class ReplicaManager(val config: KafkaConfig,
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
           if (partition.maybeCreateFutureReplica(destinationDir, highWatermarkCheckpoints)) {
             val futureLog = futureLocalLogOrException(topicPartition)
-            logManager.abortAndPauseCleaning(topicPartition)
 
             val initialFetchState = InitialFetchState(topicId, BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
@@ -1806,13 +1804,6 @@ class ReplicaManager(val config: KafkaConfig,
             isFutureReplica = true,
             offsetCheckpoints,
             topicIds(partition.topic))
-
-          // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
-          // replica from source dir to destination dir
-          replicaAlterLogDirsManager.getFetcher(topicPartition) match {
-            case None => logManager.abortAndPauseCleaning(topicPartition)
-            case Some(_) => // do nothing
-          }
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
             partition.getLeaderEpoch, futureLog.highWatermark))
