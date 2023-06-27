@@ -249,6 +249,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
         reassignments.put(new TopicPartition(topicWithSingleRackPartitions, p), util.Optional.of(newAssignment))
       }
       admin.alterPartitionReassignments(reassignments).all().get(30, TimeUnit.SECONDS)
+      TestUtils.waitUntilTrue(
+        () => admin.listPartitionReassignments().reassignments().get().isEmpty,
+        msg = "The reassignment never completed.", waitTimeMs = 30000)
       verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
 
     } finally {
