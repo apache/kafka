@@ -673,7 +673,7 @@ public class TransactionManager {
     }
 
     public synchronized void transitionToUninitialized(RuntimeException exception) {
-        transitionTo(State.UNINITIALIZED, exception);
+        transitionTo(State.UNINITIALIZED);
         if (pendingTransition != null) {
             pendingTransition.result.fail(exception);
         }
