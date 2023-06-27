@@ -293,7 +293,7 @@ public class PartitionChangeBuilder {
             if (!Replicas.contains(targetReplicas, partition.replicas)) {
                 // Reassignment
                 record.setLeader(partition.leader);
-            } else if (!Replicas.contains(targetIsr, partition.isr) && bumpLeaderEpochOnIsrShrink) {
+            } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
                 // ISR shrink
                 record.setLeader(partition.leader);
             }
