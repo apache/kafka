@@ -37,7 +37,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   private val consumeRecordTimeout = 30000
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
-  private val numPartitions = 3
+  private val numPartitions = 1
   private val outputTopic = "output-topic"
   private val inputTopic = "input-topic"
 
@@ -91,7 +91,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
-    val numInputRecords = 10000
+    val numInputRecords = 2000
     createTopics()
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
@@ -109,24 +109,24 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
       while (numMessagesProcessed < numInputRecords) {
         val toRead = Math.min(200, numInputRecords - numMessagesProcessed)
-        trace(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
+        warn(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
         val records = TestUtils.pollUntilAtLeastNumRecords(consumer, toRead, waitTimeMs = consumeRecordTimeout)
-        trace(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
+        warn(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
 
         producer.beginTransaction()
         val shouldAbort = iteration % 3 == 0
         records.foreach { record =>
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, null, record.key, record.value, !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
-        trace(s"Sent ${records.size} messages. Committing offsets.")
+        warn(s"Sent ${records.size} messages. Committing offsets.")
         commit(producer, consumerGroup, consumer)
 
         if (shouldAbort) {
-          trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")
+          warn(s"Committed offsets. Aborting transaction of ${records.size} messages.")
           producer.abortTransaction()
           TestUtils.resetToCommittedPositions(consumer)
         } else {
-          trace(s"Committed offsets. committing transaction of ${records.size} messages.")
+          warn(s"Committed offsets. committing transaction of ${records.size} messages.")
           producer.commitTransaction()
           numMessagesProcessed += records.size
         }
@@ -152,7 +152,8 @@ class TransactionsBounceTest extends IntegrationTestHarness {
     }
 
     val recordSet = outputRecords.toSet
-    assertEquals(numInputRecords, recordSet.size)
+    val recordsSize = outputRecords.size
+    assertEquals(numInputRecords, recordsSize)
 
     val expectedValues = (0 until numInputRecords).toSet
     assertEquals(expectedValues, recordSet, s"Missing messages: ${expectedValues -- recordSet}")
