@@ -1699,7 +1699,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
                         <p>For equi-joins, input data must be co-partitioned when joining. This ensures that input records with the same key from both sides of the
                             join, are delivered to the same stream task during processing.
                             <strong>It is your responsibility to ensure data co-partitioning when joining</strong>.
-                            Co-partitioning is not required when performing <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> and <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">Global KTable joins</span></a>.
+                            Co-partitioning is not required when performing <a class="reference internal" href="#ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> and <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">Global KTable joins</span></a>.
                             </p>
                         <p>The requirements for data co-partitioning are:</p>
                         <ul class="simple">
@@ -1724,7 +1724,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
                             not required because <em>all</em> partitions of the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>&#8216;s underlying changelog stream are made available to
                              each <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance. That is, each instance has a full copy of the changelog stream.  Further, a
                             <code class="docutils literal"><span class="pre">KeyValueMapper</span></code> allows for non-key based joins from the <code class="docutils literal"><span class="pre">KStream</span></code> to the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>.
-                            <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> also do not require co-partitioning. Kafka Streams internally ensures co-partitioning for Foreign-Key joins.
+                            <a class="reference internal" href="#ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> also do not require co-partitioning. Kafka Streams internally ensures co-partitioning for Foreign-Key joins.
                             </p>
 
                         <div class="admonition note">
