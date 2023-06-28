@@ -2391,7 +2391,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * Violating these conditions leads to a {@code ConcurrentModificationException}.
      * <p>
-     * See also <a href="https://cwiki.apache.org/confluence/x/chw0Dw">KIP-941</a>.
+     * See also <a href="https://cwiki.apache.org/confluence/x/chw0Dw">KIP-944</a>.
      * @return the access key for the current thread, or {@code null} when the current thread is currently not invoked
      * from a callback and any thread can access the consumer.
      */
