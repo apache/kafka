@@ -45,14 +45,14 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogAppendInfo, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
-import org.mockito.Mockito.{mock, reset, times, verify, when}
+import org.mockito.Mockito.{mock, mockConstruction, reset, times, verify, verifyNoMoreInteractions, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -106,6 +106,28 @@ class GroupMetadataManagerTest {
   @AfterEach
   def tearDown(): Unit = {
     groupMetadataManager.shutdown()
+  }
+
+  @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val gmm = new GroupMetadataManager(1, MetadataVersion.latest, offsetConfig, replicaManager,
+        time, metrics)
+
+      // shutdown GroupMetadataManager so that metrics are removed
+      gmm.shutdown()
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      // verify that each `metricsGroup` metric in `GroupMetadataManager` is registered when initialized.
+      GroupMetadataManager.MetricNames.foreach(metricName =>
+        verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      // verify that each `metricsGroup` metric in `GroupMetadataManager` is removed when shutdown.
+      GroupMetadataManager.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
   }
 
   @Test

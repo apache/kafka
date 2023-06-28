@@ -24,8 +24,8 @@ import java.util.{Optional, OptionalInt}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
-import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
+import kafka.coordinator.group.GroupMetadataManager.{MetricNames, NumGroupsCompletingRebalanceMetricName, NumGroupsDeadMetricName, NumGroupsEmptyMetricName, NumGroupsMetricName, NumGroupsPreparingRebalanceMetricName, NumGroupsStableMetricName, NumOffsetsMetricName}
 import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
@@ -124,55 +124,54 @@ class GroupMetadataManager(brokerId: Int,
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
-  private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
-    metricsGroup.removeMetric(name)
-    metricsGroup.newGauge(name, gauge)
-  }
-
-  recreateGauge("NumOffsets",
+  metricsGroup.newGauge(NumOffsetsMetricName,
     () => groupMetadataCache.values.map { group =>
       group.inLock { group.numOffsets }
-    }.sum
-  )
+    }.sum)
 
-  recreateGauge("NumGroups",
+  metricsGroup.newGauge(NumGroupsMetricName,
     () => groupMetadataCache.size
   )
 
-  recreateGauge("NumGroupsPreparingRebalance",
+  metricsGroup.newGauge(NumGroupsPreparingRebalanceMetricName,
     () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(PreparingRebalance)
       }
-    })
+    }
+  )
 
-  recreateGauge("NumGroupsCompletingRebalance",
+  metricsGroup.newGauge(NumGroupsCompletingRebalanceMetricName,
     () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(CompletingRebalance)
       }
-    })
+    }
+  )
 
-  recreateGauge("NumGroupsStable",
+  metricsGroup.newGauge(NumGroupsStableMetricName,
     () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(Stable)
       }
-    })
+    }
+  )
 
-  recreateGauge("NumGroupsDead",
+  metricsGroup.newGauge(NumGroupsDeadMetricName,
     () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(Dead)
       }
-    })
+    }
+  )
 
-  recreateGauge("NumGroupsEmpty",
+  metricsGroup.newGauge(NumGroupsEmptyMetricName,
     () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(Empty)
       }
-    })
+    }
+  )
 
   def startup(retrieveGroupMetadataTopicPartitionCount: () => Int, enableMetadataExpiration: Boolean): Unit = {
     groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
@@ -985,7 +984,7 @@ class GroupMetadataManager(brokerId: Int,
     metrics.removeSensor(GroupMetadataManager.LoadTimeSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetCommitsSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetExpiredSensor)
-
+    MetricNames.foreach(metricsGroup.removeMetric)
     // TODO: clear the caches
   }
 
@@ -1048,6 +1047,25 @@ object GroupMetadataManager {
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
   val OffsetCommitsSensor: String = "OffsetCommits"
   val OffsetExpiredSensor: String = "OffsetExpired"
+
+  private val NumOffsetsMetricName = "NumOffsets"
+  private val NumGroupsMetricName = "NumGroups"
+  private val NumGroupsPreparingRebalanceMetricName = "NumGroupsPreparingRebalance"
+  private val NumGroupsCompletingRebalanceMetricName = "NumGroupsCompletingRebalance"
+  private val NumGroupsStableMetricName = "NumGroupsStable"
+  private val NumGroupsDeadMetricName = "NumGroupsDead"
+  private val NumGroupsEmptyMetricName = "NumGroupsEmpty"
+
+  // Visible for test
+  private[group] val MetricNames = Set(
+    NumOffsetsMetricName,
+    NumGroupsMetricName,
+    NumGroupsPreparingRebalanceMetricName,
+    NumGroupsCompletingRebalanceMetricName,
+    NumGroupsStableMetricName,
+    NumGroupsDeadMetricName,
+    NumGroupsEmptyMetricName
+  )
 
   /**
    * Generates the key for offset commit message for given (group, topic, partition)
