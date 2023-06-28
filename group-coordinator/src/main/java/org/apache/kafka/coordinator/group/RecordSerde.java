@@ -43,7 +43,18 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 /**
- * Serializer/Deserializer for {{@link Record}}.
+ * Serializer/Deserializer for {@link Record}. The format is defined below:
+ * <pre>
+ *     record_key   = [record_type key_message]
+ *     record_value = [value_version value_message]
+ *
+ *     record_type     : The record type is currently define as the version of the key
+ *                       {@link ApiMessageAndVersion} object.
+ *     key_message     : The serialized message of the key {@link ApiMessageAndVersion} object.
+ *     value_version   : The value version is currently define as the version of the value
+ *                       {@link ApiMessageAndVersion} object.
+ *     value_message   : The serialized message of the value {@link ApiMessageAndVersion} object.
+ * </pre>
  */
 public class RecordSerde implements PartitionWriter.Serializer<Record>, CoordinatorLoader.Deserializer<Record> {
     @Override
