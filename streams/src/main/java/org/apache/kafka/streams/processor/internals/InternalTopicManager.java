@@ -417,7 +417,7 @@ public class InternalTopicManager {
         long currentWallClockMs = time.milliseconds();
         final long deadlineMs = currentWallClockMs + retryTimeoutMs;
 
-        Set<String> topicsToDescribe = new HashSet<>(topics);
+        final Set<String> topicsToDescribe = new HashSet<>(topics);
         final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = new HashMap<>();
 
         while (!topicsToDescribe.isEmpty()) {
