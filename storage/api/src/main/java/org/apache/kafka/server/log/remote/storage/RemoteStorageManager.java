@@ -92,7 +92,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @param startPosition            start position of log segment to be read, inclusive.
      * @return input stream of the requested log segment data.
      * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
-     * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadata.
+     * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
      */
     InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                 int startPosition) throws RemoteStorageException;
@@ -107,7 +107,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @param endPosition              end position of log segment to be read, inclusive.
      * @return input stream of the requested log segment data.
      * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
-     * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadata.
+     * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
      */
     InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                 int startPosition,
@@ -115,12 +115,14 @@ public interface RemoteStorageManager extends Configurable, Closeable {
 
     /**
      * Returns the index for the respective log segment of {@link RemoteLogSegmentMetadata}.
+     * <p>
+     * If the index is not present (e.g. Transaction index may not exist), throws {@link RemoteResourceNotFoundException}
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param indexType                type of the index to be fetched for the segment.
      * @return input stream of the requested index.
      * @throws RemoteStorageException          if there are any errors while fetching the index.
-     * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadata.
+     * @throws RemoteResourceNotFoundException the requested index is not found in the remote storage.
      */
     InputStream fetchIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                            IndexType indexType) throws RemoteStorageException;
