@@ -554,31 +554,27 @@ public class GroupMetadataManager {
             .setClientHost(clientHost)
             .build();
 
-        boolean updatedMemberSubscriptions = false;
+        boolean requireGroupEpochBump = false;
         if (!updatedMember.equals(member)) {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
 
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
                 log.info("[GroupId " + groupId + "] Member " + memberId + " updated its subscribed topics to: " +
                     updatedMember.subscribedTopicNames());
-                updatedMemberSubscriptions = true;
+                requireGroupEpochBump = true;
             }
 
             if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
                 log.info("[GroupId " + groupId + "] Member " + memberId + " updated its subscribed regex to: " +
                     updatedMember.subscribedTopicRegex());
-                updatedMemberSubscriptions = true;
+                requireGroupEpochBump = true;
             }
         }
 
-        // The subscription metadata is updated in two cases:
-        // 1) The member has updated its subscriptions;
-        // 2) The refresh deadline has been reached.
-        boolean updatedSubscriptionMetadata = false;
-        boolean verifiedSubscriptionMetadata = false;
-        if (updatedMemberSubscriptions || group.hasMetadataExpired(currentTimeMs)) {
-            verifiedSubscriptionMetadata = true;
-
+        if (requireGroupEpochBump || group.hasMetadataExpired(currentTimeMs)) {
+            // The subscription metadata is updated in two cases:
+            // 1) The member has updated its subscriptions;
+            // 2) The refresh deadline has been reached.
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
@@ -588,19 +584,16 @@ public class GroupMetadataManager {
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
                 log.info("[GroupId " + groupId + "] Computed new subscription metadata: "
                     + subscriptionMetadata + ".");
-                updatedSubscriptionMetadata = true;
+                requireGroupEpochBump = true;
                 records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
-        }
 
-        if (updatedMemberSubscriptions || updatedSubscriptionMetadata) {
-            groupEpoch += 1;
-            records.add(newGroupEpochRecord(groupId, groupEpoch));
-            log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
-        }
+            if (requireGroupEpochBump) {
+                groupEpoch += 1;
+                records.add(newGroupEpochRecord(groupId, groupEpoch));
+                log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
+            }
 
-        // If the subscription metadata was refreshed, the refresh deadline is reset as well.
-        if (verifiedSubscriptionMetadata) {
             group.setMetadataRefreshDeadline(
                 Math.min(Long.MAX_VALUE, currentTimeMs + consumerGroupMetadataRefreshIntervalMs),
                 groupEpoch
