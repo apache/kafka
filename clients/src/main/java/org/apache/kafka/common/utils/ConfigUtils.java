@@ -105,7 +105,7 @@ public class ConfigUtils {
                 newConfigs.put(target, configs.get(target));
             } else if (deprecated.size() > 1) {
                 log.error("The configuration keys " + aliasString + " are deprecated and may be " +
-                          "removed in the future.  Additionally, this configuration is ambigous because " +
+                          "removed in the future.  Additionally, this configuration is ambiguous because " +
                           "these configuration keys are all aliases for " + target + ".  Please update " +
                           "your configuration to have only " + target + " set.");
                 newConfigs.put(target, configs.get(deprecated.get(0)));
