@@ -575,7 +575,10 @@ public class GroupMetadataManager {
         // 1) The member has updated its subscriptions;
         // 2) The refresh deadline has been reached.
         boolean updatedSubscriptionMetadata = false;
+        boolean verifiedSubscriptionMetadata = false;
         if (updatedMemberSubscriptions || group.hasMetadataExpired(currentTimeMs)) {
+            verifiedSubscriptionMetadata = true;
+
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
@@ -587,11 +590,6 @@ public class GroupMetadataManager {
                     + subscriptionMetadata + ".");
                 updatedSubscriptionMetadata = true;
                 records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
-                // Reset the metadata refresh deadline.
-                group.setMetadataRefreshDeadline(
-                    Math.min(Long.MAX_VALUE, currentTimeMs + consumerGroupMetadataRefreshIntervalMs),
-                    groupEpoch + 1
-                );
             }
         }
 
@@ -599,6 +597,14 @@ public class GroupMetadataManager {
             groupEpoch += 1;
             records.add(newGroupEpochRecord(groupId, groupEpoch));
             log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
+        }
+
+        // If the subscription metadata was refreshed, the refresh deadline is reset as well.
+        if (verifiedSubscriptionMetadata) {
+            group.setMetadataRefreshDeadline(
+                Math.min(Long.MAX_VALUE, currentTimeMs + consumerGroupMetadataRefreshIntervalMs),
+                groupEpoch
+            );
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
