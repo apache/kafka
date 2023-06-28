@@ -95,6 +95,7 @@ class LogCleanerTest {
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
+      verifyNoMoreInteractions(mockLogCleanerManagerMetricsGroup)
     } finally {
       mockMetricsGroupCtor.close()
     }
