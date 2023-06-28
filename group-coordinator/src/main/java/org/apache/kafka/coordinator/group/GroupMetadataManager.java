@@ -215,8 +215,6 @@ public class GroupMetadataManager {
 
     /**
      * The metadata image.
-     *
-     * Package private for testing.
      */
     private MetadataImage metadataImage;
 
@@ -521,7 +519,8 @@ public class GroupMetadataManager {
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
-        List<Record> records = new ArrayList<>();
+        final long currentTimeMs = time.milliseconds();
+        final List<Record> records = new ArrayList<>();
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
@@ -572,10 +571,11 @@ public class GroupMetadataManager {
             }
         }
 
-        long currentTimeMs = time.milliseconds();
-        boolean maybeUpdateMetadata = updatedMemberSubscriptions || group.refreshMetadataNeeded(currentTimeMs);
+        // The subscription metadata is updated in two cases:
+        // 1) The member has updated its subscriptions;
+        // 2) The refresh deadline has been reached.
         boolean updatedSubscriptionMetadata = false;
-        if (maybeUpdateMetadata) {
+        if (updatedMemberSubscriptions || group.refreshMetadataNeeded(currentTimeMs)) {
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
@@ -585,8 +585,13 @@ public class GroupMetadataManager {
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
                 log.info("[GroupId " + groupId + "] Computed new subscription metadata: "
                     + subscriptionMetadata + ".");
-                records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
                 updatedSubscriptionMetadata = true;
+                records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+                // Reset the metadata refresh deadline.
+                group.setNextMetadataRefreshTime(
+                    Math.min(Long.MAX_VALUE, currentTimeMs + consumerGroupMetadataRefreshIntervalMs),
+                    groupEpoch + 1
+                );
             }
         }
 
@@ -594,13 +599,6 @@ public class GroupMetadataManager {
             groupEpoch += 1;
             records.add(newGroupEpochRecord(groupId, groupEpoch));
             log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
-        }
-
-        if (maybeUpdateMetadata) {
-            group.setNextMetadataRefreshTime(
-                Math.min(Long.MAX_VALUE, currentTimeMs + consumerGroupMetadataRefreshIntervalMs),
-                groupEpoch
-            );
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
@@ -788,7 +786,6 @@ public class GroupMetadataManager {
             consumerGroup.updateMember(new ConsumerGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build());
-            updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames());
         } else {
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
             if (oldMember.memberEpoch() != -1) {
@@ -800,8 +797,9 @@ public class GroupMetadataManager {
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
             consumerGroup.removeMember(memberId);
-            updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames());
         }
+
+        updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames());
     }
 
     /**
@@ -1036,13 +1034,11 @@ public class GroupMetadataManager {
         Set<String> allGroupIds = new HashSet<>();
         delta.topicsDelta().changedTopics().forEach((topicId, topicDelta) -> {
             String topicName = topicDelta.name();
-            Set<String> groupIds = groupsByTopics.get(topicName);
-            if (groupIds != null) allGroupIds.addAll(groupIds);
+            allGroupIds.addAll(groupsSubscribedToTopic(topicName));
         });
         delta.topicsDelta().deletedTopicIds().forEach(topicId -> {
             TopicImage topicImage = delta.image().topics().getTopic(topicId);
-            Set<String> groupIds = groupsByTopics.get(topicImage.name());
-            if (groupIds != null) allGroupIds.addAll(groupIds);
+            allGroupIds.addAll(groupsSubscribedToTopic(topicImage.name()));
         });
         allGroupIds.forEach(groupId -> {
             Group group = groups.get(groupId);

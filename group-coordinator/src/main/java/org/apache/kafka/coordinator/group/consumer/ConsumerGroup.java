@@ -139,7 +139,7 @@ public class ConsumerGroup implements Group {
      * next metadata refresh time is invalidated if the group epoch does not correspond to
      * the current group epoch. This can happen if the next metadata refresh time is updated
      * after having refreshed the metadata but the write operation failed. In this case, the
-     * time is not automatically rollback.
+     * time is not automatically rolled back.
      */
     private TimeAndEpoch nextMetadataRefreshTime = TimeAndEpoch.EMPTY;
 
