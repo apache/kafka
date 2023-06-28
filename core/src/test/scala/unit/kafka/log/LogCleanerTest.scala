@@ -30,6 +30,7 @@ import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mockConstruction, times, verify, verifyNoMoreInteractions}
 
@@ -83,8 +84,14 @@ class LogCleanerTest {
       val numMetricsRegistered = LogCleaner.MetricNames.size
       verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
       
-      // verify that each metric is removed
+      // verify that each metric in `LogCleaner` is removed
       LogCleaner.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+
+      // verify that each metric in `LogCleanerManager` is removed
+      val mockLogCleanerManagerMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
+      LogCleanerManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      LogCleanerManager.GaugeMetricNameWithTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any(), any()))
+      LogCleanerManager.MetricNames.foreach(verify(mockLogCleanerManagerMetricsGroup).removeMetric(_))
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
