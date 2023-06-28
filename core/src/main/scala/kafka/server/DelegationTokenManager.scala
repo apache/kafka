@@ -222,35 +222,8 @@ class DelegationTokenManager(val config: KafkaConfig,
                  hmac: ByteBuffer,
                  renewLifeTimeMs: Long,
                  renewCallback: RenewResponseCallback): Unit = {
-
-    if (!config.tokenAuthEnabled) {
-      renewCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
-    } else {
-      lock.synchronized  {
-        getToken(hmac) match {
-          case Some(token) => {
-            val now = time.milliseconds
-            val tokenInfo =  token.tokenInfo
-
-            if (!allowedToRenew(principal, tokenInfo)) {
-              renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
-            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
-              renewCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
-            } else {
-              val renewLifeTime = if (renewLifeTimeMs < 0) defaultTokenRenewTime else renewLifeTimeMs
-              val renewTimeStamp = now + renewLifeTime
-              val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, renewTimeStamp)
-              tokenInfo.setExpiryTimestamp(expiryTimeStamp)
-
-              updateToken(token)
-              info(s"Delegation token renewed for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
-              renewCallback(Errors.NONE, expiryTimeStamp)
-            }
-          }
-          case None => renewCallback(Errors.DELEGATION_TOKEN_NOT_FOUND, -1)
-        }
-      }
-    }
+    // Must be forwarded to KRaft Controller or handled in DelegationTokenManagerZk
+    throw new IllegalStateException("API renewToken was not forwarded to a handler.")
   }
 
   /**
@@ -260,33 +233,9 @@ class DelegationTokenManager(val config: KafkaConfig,
     updateCache(token)
   }
 
-  /**
-   *
-   * @param hmac
-   * @return
-   */
-  private def getToken(hmac: ByteBuffer): Option[DelegationToken] = {
-    try {
-      val byteArray = new Array[Byte](hmac.remaining)
-      hmac.get(byteArray)
-      val base64Pwd = Base64.getEncoder.encodeToString(byteArray)
-      val tokenInfo = tokenCache.tokenForHmac(base64Pwd)
-      if (tokenInfo == null) None else Some(new DelegationToken(tokenInfo, byteArray))
-    } catch {
-      case e: Exception =>
-        error("Exception while getting token for hmac", e)
-        None
-    }
-  }
-
-  /**
-   *
-   * @param principal
-   * @param tokenInfo
-   * @return
-   */
-  private def allowedToRenew(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean = {
-    if (principal.equals(tokenInfo.owner) || tokenInfo.renewers.asScala.toList.contains(principal)) true else false
+  def getDelegationToken(tokenInfo: TokenInformation): DelegationToken = {
+    val hmac = createHmac(tokenInfo.tokenId, secretKey)
+    new DelegationToken(tokenInfo, hmac)
   }
 
   /**
@@ -296,17 +245,13 @@ class DelegationTokenManager(val config: KafkaConfig,
    */
   def getToken(tokenId: String): Option[DelegationToken] = {
     val tokenInfo = tokenCache.token(tokenId)
-    if (tokenInfo != null) Some(getToken(tokenInfo)) else None
+    if (tokenInfo != null) Some(getDelegationToken(tokenInfo)) else None
   }
 
-  /**
-   *
-   * @param tokenInfo
-   * @return
-   */
-  private def getToken(tokenInfo: TokenInformation): DelegationToken = {
-    val hmac = createHmac(tokenInfo.tokenId, secretKey)
-    new DelegationToken(tokenInfo, hmac)
+  def getAllTokenInformation: List[TokenInformation] = tokenCache.tokens.asScala.toList
+
+  def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] = {
+    getAllTokenInformation.filter(filterToken).map(token => getDelegationToken(token))
   }
 
   /**
@@ -320,38 +265,8 @@ class DelegationTokenManager(val config: KafkaConfig,
                   hmac: ByteBuffer,
                   expireLifeTimeMs: Long,
                   expireResponseCallback: ExpireResponseCallback): Unit = {
-
-    if (!config.tokenAuthEnabled) {
-      expireResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
-    } else {
-      lock.synchronized  {
-        getToken(hmac) match {
-          case Some(token) =>  {
-            val tokenInfo =  token.tokenInfo
-            val now = time.milliseconds
-
-            if (!allowedToRenew(principal, tokenInfo)) {
-              expireResponseCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
-            } else if (expireLifeTimeMs < 0) { //expire immediately
-              removeToken(tokenInfo.tokenId)
-              info(s"Token expired for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
-              expireResponseCallback(Errors.NONE, now)
-            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
-              expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
-            } else {
-              //set expiry time stamp
-              val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, now + expireLifeTimeMs)
-              tokenInfo.setExpiryTimestamp(expiryTimeStamp)
-
-              updateToken(token)
-              info(s"Updated expiry time for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
-              expireResponseCallback(Errors.NONE, expiryTimeStamp)
-            }
-          }
-          case None => expireResponseCallback(Errors.DELEGATION_TOKEN_NOT_FOUND, -1)
-        }
-      }
-    }
+    // Must be forwarded to KRaft Controller or handled in DelegationTokenManagerZk
+    throw new IllegalStateException("API expireToken was not forwarded to a handler.")
   }
 
   /**
@@ -386,15 +301,6 @@ class DelegationTokenManager(val config: KafkaConfig,
     }
   }
 
-  def getAllTokenInformation: List[TokenInformation] = tokenCache.tokens.asScala.toList
-
-  def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] = {
-    getAllTokenInformation.filter(filterToken).map(token => getToken(token))
-  }
-
-  def getDelegationToken(tokenInfo: TokenInformation): DelegationToken = {
-    getToken(tokenInfo)
-  }
 }
 
 case class CreateTokenResult(owner: KafkaPrincipal,

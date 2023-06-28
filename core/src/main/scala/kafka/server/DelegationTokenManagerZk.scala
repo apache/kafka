@@ -17,12 +17,16 @@
 
 package kafka.server
 
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.util.Base64
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.Json
 import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils, Time}
@@ -146,12 +150,128 @@ class DelegationTokenManagerZk(config: KafkaConfig,
   }
 
   /**
+   *
+   * @param hmac
+   * @return
+   */
+  private def getToken(hmac: ByteBuffer): Option[DelegationToken] = {
+    try {
+      val byteArray = new Array[Byte](hmac.remaining)
+      hmac.get(byteArray)
+      val base64Pwd = Base64.getEncoder.encodeToString(byteArray)
+      val tokenInfo = tokenCache.tokenForHmac(base64Pwd)
+      if (tokenInfo == null) None else Some(new DelegationToken(tokenInfo, byteArray))
+    } catch {
+      case e: Exception =>
+        error("Exception while getting token for hmac", e)
+        None
+    }
+  }
+
+  /**
    * @param token
    */
   override def updateToken(token: DelegationToken): Unit = {
     zkClient.setOrCreateDelegationToken(token)
     updateCache(token)
     zkClient.createTokenChangeNotification(token.tokenInfo.tokenId())
+  }
+
+  /**
+   *
+   * @param principal
+   * @param tokenInfo
+   * @return
+   */
+  private def allowedToRenew(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean = {
+    if (principal.equals(tokenInfo.owner) || tokenInfo.renewers.asScala.toList.contains(principal)) true else false
+  }
+
+  /**
+   *
+   * @param principal
+   * @param hmac
+   * @param renewLifeTimeMs
+   * @param renewResponseCallback
+   */
+  override def renewToken(principal: KafkaPrincipal,
+                 hmac: ByteBuffer,
+                 renewLifeTimeMs: Long,
+                 renewCallback: RenewResponseCallback): Unit = {
+
+    if (!config.tokenAuthEnabled) {
+      renewCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
+    } else {
+      lock.synchronized  {
+        getToken(hmac) match {
+          case Some(token) => {
+            val now = time.milliseconds
+            val tokenInfo =  token.tokenInfo
+
+            if (!allowedToRenew(principal, tokenInfo)) {
+              renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
+            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
+              renewCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
+            } else {
+              val renewLifeTime = if (renewLifeTimeMs < 0) defaultTokenRenewTime else renewLifeTimeMs
+              val renewTimeStamp = now + renewLifeTime
+              val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, renewTimeStamp)
+              tokenInfo.setExpiryTimestamp(expiryTimeStamp)
+
+              updateToken(token)
+              info(s"Delegation token renewed for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
+              renewCallback(Errors.NONE, expiryTimeStamp)
+            }
+          }
+          case None => renewCallback(Errors.DELEGATION_TOKEN_NOT_FOUND, -1)
+        }
+      }
+    }
+  }
+
+  /**
+   *
+   * @param principal
+   * @param hmac
+   * @param expireLifeTimeMs
+   * @param expireResponseCallback
+   */
+  override def expireToken(principal: KafkaPrincipal,
+                  hmac: ByteBuffer,
+                  expireLifeTimeMs: Long,
+                  expireResponseCallback: ExpireResponseCallback): Unit = {
+
+    if (!config.tokenAuthEnabled) {
+      expireResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
+    } else {
+      lock.synchronized  {
+        getToken(hmac) match {
+          case Some(token) =>  {
+            val tokenInfo =  token.tokenInfo
+            val now = time.milliseconds
+
+            if (!allowedToRenew(principal, tokenInfo)) {
+              expireResponseCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
+            } else if (expireLifeTimeMs < 0) { //expire immediately
+              removeToken(tokenInfo.tokenId)
+              info(s"Token expired for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
+              expireResponseCallback(Errors.NONE, now)
+            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
+              expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
+            } else {
+              //set expiry time stamp
+              val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, now + expireLifeTimeMs)
+              tokenInfo.setExpiryTimestamp(expiryTimeStamp)
+
+              updateToken(token)
+              info(s"Updated expiry time for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
+              expireResponseCallback(Errors.NONE, expiryTimeStamp)
+            }
+          }
+          case None => expireResponseCallback(Errors.DELEGATION_TOKEN_NOT_FOUND, -1)
+        }
+      }
+    }
   }
 
   /**
