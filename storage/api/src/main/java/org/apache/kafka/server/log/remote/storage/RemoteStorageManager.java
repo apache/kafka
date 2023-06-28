@@ -75,6 +75,9 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * <p>
      * Invoker of this API should always send a unique id as part of {@link RemoteLogSegmentMetadata#remoteLogSegmentId()}
      * even when it retries to invoke this method for the same log segment data.
+     * <p>
+     * This operation is expected to be idempotent. If a copy operation is retried and there is existing content already written,
+     * it should be overwritten, and do not throw {@link RemoteStorageException}
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param logSegmentData           data to be copied to tiered storage.
@@ -132,11 +135,11 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * successful if this call returns successfully without any errors. It will throw {@link RemoteStorageException} if
      * there are any errors in deleting the file.
      * <p>
+     * This operation is expected to be idempotent. If resources are not found, it is not expected to
+     * throw {@link RemoteResourceNotFoundException} as it may be already removed from a previous attempt.
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment to be deleted.
-     * @throws RemoteResourceNotFoundException if the requested resource is not found
      * @throws RemoteStorageException          if there are any storage related errors occurred.
-     * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadata.
      */
     void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 }
