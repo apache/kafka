@@ -47,6 +47,8 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
@@ -1888,6 +1890,16 @@ public final class QuorumController implements Controller {
         System.out.println("QuorumController renewDelegationToken: start");
         return appendWriteEvent("renewDelegationToken", context.deadlineNs(),
             () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersion()));
+    }
+
+    @Override
+    public CompletableFuture<ExpireDelegationTokenResponseData> expireDelegationToken(
+        ControllerRequestContext context,
+        ExpireDelegationTokenRequestData request
+    ) {
+        System.out.println("QuorumController expireDelegationToken: start");
+        return appendWriteEvent("expireDelegationToken", context.deadlineNs(),
+            () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersion()));
     }
 
     @Override

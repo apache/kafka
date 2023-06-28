@@ -158,7 +158,7 @@ class DelegationTokenManagerZk(config: KafkaConfig,
    *
    * @param tokenId
    */
-  override protected def removeToken(tokenId: String): Unit = {
+  override def removeToken(tokenId: String): Unit = {
     zkClient.deleteDelegationToken(tokenId)
     removeCache(tokenId)
     zkClient.createTokenChangeNotification(tokenId)

@@ -115,6 +115,9 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val expireResult2 = adminClient.expireDelegationToken(token2.hmac())
     expiryTimestamp = expireResult2.expiryTimestamp().get()
 
+    TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 0),
+          "Timed out waiting for token to propagate to all servers")
+
     tokens = adminClient.describeDelegationToken().delegationTokens().get()
     assertTrue(tokens.size == 0)
 

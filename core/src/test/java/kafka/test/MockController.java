@@ -44,6 +44,8 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
@@ -156,6 +158,14 @@ public class MockController implements Controller {
     public CompletableFuture<RenewDelegationTokenResponseData> renewDelegationToken(
         ControllerRequestContext context,
         RenewDelegationTokenRequestData request
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<ExpireDelegationTokenResponseData> expireDelegationToken(
+        ControllerRequestContext context,
+        ExpireDelegationTokenRequestData request
     ) {
         throw new UnsupportedOperationException();
     }

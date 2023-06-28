@@ -55,6 +55,7 @@ import java.util.Base64;
 import java.util.List;
 
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_AUTH_DISABLED;
+import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_EXPIRED;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_NOT_FOUND;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PRINCIPAL_TYPE;
 import static org.apache.kafka.common.protocol.Errors.NONE;
@@ -259,13 +260,48 @@ public class DelegationTokenControlManager {
         ExpireDelegationTokenRequestData requestData,
         MetadataVersion metadataVersion
     ) {
+        long now = time.milliseconds();
+
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ExpireDelegationTokenResponseData responseData = new ExpireDelegationTokenResponseData();
 
+        if (secretKeyString == null) {
+            // DelegationTokens are not enabled
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
+        }
+
         TokenInformation myTokenInformation = getToken(requestData.hmac());
 
-        records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
+        if (myTokenInformation == null) {
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
+        }
+
+        // XXX if allowedToRenew
+
+        if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code()));
+        }
+
+        if (requestData.expiryTimePeriodMs() < 0) { // expire immediately
+            responseData
+                .setErrorCode(NONE.code())
+                .setExpiryTimestampMs(requestData.expiryTimePeriodMs());
+            records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                 setTokenId(myTokenInformation.tokenId()), (short) 0));
+        } else {
+            long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(),
+                now + requestData.expiryTimePeriodMs());
+
+            responseData
+                .setErrorCode(NONE.code())
+                .setExpiryTimestampMs(expiryTimestamp);
+
+            myTokenInformation.setExpiryTimestamp(expiryTimestamp);
+
+            DelegationTokenData newDelegationTokenData = new DelegationTokenData(myTokenInformation);
+            records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
+        }
+
         return ControllerResult.atomicOf(records, responseData);
     }
 

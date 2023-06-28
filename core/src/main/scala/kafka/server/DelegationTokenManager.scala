@@ -358,7 +358,7 @@ class DelegationTokenManager(val config: KafkaConfig,
    *
    * @param tokenId
    */
-  protected def removeToken(tokenId: String): Unit = {
+  def removeToken(tokenId: String): Unit = {
     removeCache(tokenId)
   }
 
