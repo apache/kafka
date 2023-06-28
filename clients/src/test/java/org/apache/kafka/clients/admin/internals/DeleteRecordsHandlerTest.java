@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DeleteRecordsHandlerTest {
     private final LogContext logContext = new LogContext();
+    private final int timeout = 2000;
     private final TopicPartition t0p0 = new TopicPartition("t0", 0);
     private final TopicPartition t0p1 = new TopicPartition("t0", 1);
     private final TopicPartition t0p2 = new TopicPartition("t0", 2);
@@ -61,7 +62,7 @@ public class DeleteRecordsHandlerTest {
 
     @Test
     public void testBuildRequestSimple() {
-        DeleteRecordsHandler handler = new DeleteRecordsHandler(recordsToDelete, logContext);
+        DeleteRecordsHandler handler = new DeleteRecordsHandler(recordsToDelete, logContext, timeout);
         DeleteRecordsRequest request = handler.buildBatchedRequest(node.id(), mkSet(t0p0, t0p1)).build();
         List<DeleteRecordsRequestData.DeleteRecordsTopic> topicPartitions = request.data().topics();
         assertEquals(1, topicPartitions.size());
@@ -225,7 +226,7 @@ public class DeleteRecordsHandlerTest {
 
     private AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> handleResponse(DeleteRecordsResponse response) {
         DeleteRecordsHandler handler =
-                new DeleteRecordsHandler(recordsToDelete, logContext);
+                new DeleteRecordsHandler(recordsToDelete, logContext, timeout);
         return handler.handleResponse(node, recordsToDelete.keySet(), response);
     }
 

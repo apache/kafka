@@ -2921,7 +2921,11 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                              final DeleteRecordsOptions options) {
         SimpleAdminApiFuture<TopicPartition, DeletedRecords> future = DeleteRecordsHandler.newFuture(recordsToDelete.keySet());
-        DeleteRecordsHandler handler = new DeleteRecordsHandler(recordsToDelete, logContext);
+        int timeoutMs = defaultApiTimeoutMs;
+        if (options.timeoutMs() != null) {
+            timeoutMs = options.timeoutMs();
+        }
+        DeleteRecordsHandler handler = new DeleteRecordsHandler(recordsToDelete, logContext, timeoutMs);
         invokeDriver(handler, future, options.timeoutMs);
 
         return new DeleteRecordsResult(future.all());

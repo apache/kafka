@@ -48,13 +48,16 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
 
+    private final int timeout;
+
     public DeleteRecordsHandler(
             Map<TopicPartition, RecordsToDelete> recordsToDelete,
-            LogContext logContext
+            LogContext logContext, int timeout
     ) {
         this.recordsToDelete = recordsToDelete;
         this.log = logContext.logger(DeleteRecordsHandler.class);
         this.lookupStrategy = new PartitionLeaderStrategy(logContext);
+        this.timeout = timeout;
     }
 
     @Override
@@ -88,7 +91,8 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
         }
 
         DeleteRecordsRequestData data = new DeleteRecordsRequestData()
-                .setTopics(new ArrayList<>(deletionsForTopic.values()));
+                .setTopics(new ArrayList<>(deletionsForTopic.values()))
+                .setTimeoutMs(timeout);
         return new DeleteRecordsRequest.Builder(data);
     }
 
