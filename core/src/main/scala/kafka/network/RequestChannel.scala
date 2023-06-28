@@ -506,9 +506,14 @@ class RequestChannel(val queueSize: Int,
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
 
   def sendCallbackRequest(request: CallbackRequest): Unit = {
-    callbackQueue.put(request)
-    if (!requestQueue.offer(RequestChannel.WakeupRequest))
-      trace("Wakeup request could not be added to queue. This means queue is full, so we will still process callback.")
+    try {
+      callbackQueue.put(request)
+      if (!requestQueue.offer(RequestChannel.WakeupRequest))
+        trace("Wakeup request could not be added to queue. This means queue is full, so we will still process callback.")
+    } catch {
+      case e: Throwable =>
+        warn("There was an exception when attempting to send the callback request", e)
+    }
   }
 
 }
