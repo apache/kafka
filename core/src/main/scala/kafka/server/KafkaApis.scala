@@ -216,7 +216,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, handleCreatePartitionsRequest)
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
-        case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForwardToController(request, handleRenewTokenRequest)
+        case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewTokenRequest(request)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal).exceptionally(handleError)
@@ -3024,11 +3024,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
           Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
     } else {
-      maybeForwardToController(request, handleCreateTokenRequestLocal)
+      maybeForwardToController(request, handleCreateTokenRequestZk)
     }
   }
 
-  def handleCreateTokenRequestLocal(request: RequestChannel.Request): Unit = {
+  def handleCreateTokenRequestZk(request: RequestChannel.Request): Unit = {
     metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
 
     val createTokenRequest = request.body[CreateDelegationTokenRequest]
@@ -3062,7 +3062,21 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleRenewTokenRequest(request: RequestChannel.Request): Unit = {
+    if (!allowTokenRequests(request)) {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new RenewDelegationTokenResponse(
+          new RenewDelegationTokenResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
+              .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
+    } else {
+      maybeForwardToController(request, handleRenewTokenRequestZk)
+    }
+  }
+
+  def handleRenewTokenRequestZk(request: RequestChannel.Request): Unit = {
     metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+
     val renewTokenRequest = request.body[RenewDelegationTokenRequest]
 
     // the callback for sending a renew token response
@@ -3076,17 +3090,12 @@ class KafkaApis(val requestChannel: RequestChannel,
                .setErrorCode(error.code)
                .setExpiryTimestampMs(expiryTimestamp)))
     }
-
-    if (!allowTokenRequests(request))
-      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, DelegationTokenManager.ErrorTimestamp)
-    else {
-      tokenManager.renewToken(
-        request.context.principal,
-        ByteBuffer.wrap(renewTokenRequest.data.hmac),
-        renewTokenRequest.data.renewPeriodMs,
-        sendResponseCallback
-      )
-    }
+    tokenManager.renewToken(
+      request.context.principal,
+      ByteBuffer.wrap(renewTokenRequest.data.hmac),
+      renewTokenRequest.data.renewPeriodMs,
+      sendResponseCallback
+    )
   }
 
   def handleExpireTokenRequest(request: RequestChannel.Request): Unit = {
@@ -3118,7 +3127,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setErrorCode(error.code)
               .setExpiryTimestampMs(expiryTimestamp)))
     }
-
     tokenManager.expireToken(
       request.context.principal,
       expireTokenRequest.hmac(),
