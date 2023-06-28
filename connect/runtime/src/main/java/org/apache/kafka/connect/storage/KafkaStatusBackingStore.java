@@ -597,7 +597,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             // Note that this could also mean that when a generation reset happens, and an
             // UNASSIGNED status is sent, then it would be ignored if the current status is RUNNING
             // at a higher generation. But since it will be followed by a RUNNING or a different
-            // status message(at a lower generation) soon after, the misrepresentation of the UNASSIGNED
+            // status message(at the lower generation) soon after, the misrepresentation of the UNASSIGNED
             // status would be short-lived in most cases.
             if (status.state() == TaskStatus.State.UNASSIGNED
                     && entry.get() != null
