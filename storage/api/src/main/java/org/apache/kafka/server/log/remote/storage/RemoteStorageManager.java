@@ -119,13 +119,17 @@ public interface RemoteStorageManager extends Configurable, Closeable {
     /**
      * Returns the index for the respective log segment of {@link RemoteLogSegmentMetadata}.
      * <p>
-     * If the index is not present (e.g. Transaction index may not exist), throws {@link RemoteResourceNotFoundException}
+     * If the index is not present (e.g. Transaction index may not exist because segments create prior to
+     * version 2.8.0 will not have transaction index associated with them.),
+     * throws {@link RemoteResourceNotFoundException}
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param indexType                type of the index to be fetched for the segment.
      * @return input stream of the requested index.
      * @throws RemoteStorageException          if there are any errors while fetching the index.
      * @throws RemoteResourceNotFoundException the requested index is not found in the remote storage.
+     * The caller of this function are encouraged to re-create the indexes from the segment
+     * as the suggested way of handling this error.
      */
     InputStream fetchIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                            IndexType indexType) throws RemoteStorageException;
