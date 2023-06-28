@@ -290,7 +290,7 @@ public class ChunkedBytesStream extends FilterInputStream {
 
         // Skip bytes stored in intermediate buffer first
         int avail = count - pos;
-        int bytesSkipped = Math.min(avail, (int) remaining);
+        int bytesSkipped = (int) Math.min(avail, remaining);
         pos += bytesSkipped;
         remaining -= bytesSkipped;
 
@@ -320,7 +320,7 @@ public class ChunkedBytesStream extends FilterInputStream {
                         break;
                 }
                 avail = count - pos;
-                bytesSkipped = Math.min(avail, (int) remaining);
+                bytesSkipped = (int) Math.min(avail, remaining);
                 pos += bytesSkipped;
                 remaining -= bytesSkipped;
             }
