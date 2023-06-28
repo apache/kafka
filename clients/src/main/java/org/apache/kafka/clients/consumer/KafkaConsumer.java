@@ -2383,8 +2383,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Conditions:
      * <ol>
      * <li>only one thread can invoke the consumer at a time,</li>
-     * <li>this thread must wait for any other thread to complete before returning from the callback,</li>
-     * <li>the same conditions apply to nested callbacks (to enforce this, every callback uses a different access key).</li>
+     * <li>this thread must wait with returning from the callback until the other thread completed their invocation of
+     *     the consumer,</li>
+     * <li>the same conditions apply to nested callbacks (to enforce this, every callback uses a different access key).
+     * </li>
      * </ol>
      *
      * Violating these conditions leads to a {@code ConcurrentModificationException}.
