@@ -554,24 +554,24 @@ public class GroupMetadataManager {
             .setClientHost(clientHost)
             .build();
 
-        boolean requireGroupEpochBump = false;
+        boolean bumpGroupEpoch = false;
         if (!updatedMember.equals(member)) {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
 
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
                 log.info("[GroupId " + groupId + "] Member " + memberId + " updated its subscribed topics to: " +
                     updatedMember.subscribedTopicNames());
-                requireGroupEpochBump = true;
+                bumpGroupEpoch = true;
             }
 
             if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
                 log.info("[GroupId " + groupId + "] Member " + memberId + " updated its subscribed regex to: " +
                     updatedMember.subscribedTopicRegex());
-                requireGroupEpochBump = true;
+                bumpGroupEpoch = true;
             }
         }
 
-        if (requireGroupEpochBump || group.hasMetadataExpired(currentTimeMs)) {
+        if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
@@ -584,11 +584,11 @@ public class GroupMetadataManager {
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
                 log.info("[GroupId " + groupId + "] Computed new subscription metadata: "
                     + subscriptionMetadata + ".");
-                requireGroupEpochBump = true;
+                bumpGroupEpoch = true;
                 records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
 
-            if (requireGroupEpochBump) {
+            if (bumpGroupEpoch) {
                 groupEpoch += 1;
                 records.add(newGroupEpochRecord(groupId, groupEpoch));
                 log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
