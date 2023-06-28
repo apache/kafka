@@ -37,7 +37,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   private val consumeRecordTimeout = 30000
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
-  private val numPartitions = 1
+  private val numPartitions = 3
   private val outputTopic = "output-topic"
   private val inputTopic = "input-topic"
 
@@ -91,7 +91,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
-    val numInputRecords = 2000
+    val numInputRecords = 10000
     createTopics()
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
