@@ -594,6 +594,11 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             // RUNNING status by another worker because the first worker
             // couldn't read the latest RUNNING status. This can lead to an inaccurate status
             // representation even though the task might be actually running.
+            // Note that this could also mean that when a generation reset happens, and an
+            // UNASSIGNED status is sent, then it would be ignored if the current status is RUNNING
+            // at a higher generation. But since it will be followed by a RUNNING or a different
+            // status message(at a lower generation) soon after, the misrepresentation of the UNASSIGNED
+            // status would be short-lived in most cases.
             if (status.state() == TaskStatus.State.UNASSIGNED
                     && entry.get() != null
                     && entry.get().state() == TaskStatus.State.RUNNING
