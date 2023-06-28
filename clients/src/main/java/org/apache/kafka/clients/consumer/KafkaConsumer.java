@@ -80,9 +80,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -596,45 +594,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final List<ConsumerPartitionAssignor> assignors;
 
     // Holds the key that this thread needs to access the consumer, it is used to prevent multi-threaded access.
-    private final ThreadLocal<String> threadAccessKeyHolder = new ThreadLocal<>();
-    // The stack of allowed thread access keys. The head of the list contains the access key of the thread that is
-    // currently allowed to use the consumer. When the list is empty, any thread is allowed.
+    private final ThreadLocal<ThreadAccessKey> threadAccessKeyHolder = new ThreadLocal<>();
+    // The stack of allowed thread access keys. The top of the stack (head of the list) contains the access key of the
+    // thread that is currently allowed to use the consumer. When the stack is empty, any thread is allowed.
     // Access is synchronized on the instance.
-    private final List<String> threadAccess = new LinkedList<>();
+    private final List<ThreadAccessKey> threadAccessStack = new LinkedList<>();
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
-
-    /**
-     * Get the access key for the current thread.
-     *
-     * By default, when running from a consumer call-back, only the current thread may invoke the consumer again.
-     * Access keys can be used to let another thread access the consumer. The returned access key may be passed to
-     * another thread. That thread can then invoke ${link #setThreadAccessKey} after which the consumer can be used.
-     *
-     * Conditions:
-     * - only one other thread can invoke the consumer at a time,
-     * - this thread must wait for the other thread to complete before returning from the callback,
-     * - the same conditions apply to nested callbacks (to enforce this, nested callbacks use a different access key).
-     *
-     * Violations of these conditions lead to a `ConcurrentModificationException`.
-     *
-     * @return the access key for the current thread, or null when the current thread is currently not invoked from a
-     * callback and any thread can access the consumer.
-     */
-    public String getThreadAccessKey() {
-        return threadAccessKeyHolder.get();
-    }
-
-    /**
-     * Set the access key for the current thread.
-     *
-     * @param threadAccessKey obtained via {@link #getThreadAccessKey()}, or `null` to clear the key
-     * @see #getThreadAccessKey() for more information
-     */
-    public void setThreadAccessKey(String threadAccessKey) {
-        threadAccessKeyHolder.set(threadAccessKey);
-    }
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -2407,6 +2374,40 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Get the access key for the current thread.
+     * <p>
+     * By default, while running from a consumer call-back, only the current thread may invoke the consumer. To give
+     * another thread access to the consumer, access keys can be used. The returned access key may be passed to another
+     * thread. That thread can then invoke {@link #setThreadAccessKey} after which the consumer can be used.
+     * <p>
+     * Conditions:
+     * <ol>
+     * <li>only one thread can invoke the consumer at a time,</li>
+     * <li>this thread must wait for any other thread to complete before returning from the callback,</li>
+     * <li>the same conditions apply to nested callbacks (to enforce this, every callback uses a different access key).</li>
+     * </ol>
+     *
+     * Violating these conditions leads to a {@code ConcurrentModificationException}.
+     * <p>
+     * See also <a href="https://cwiki.apache.org/confluence/x/chw0Dw">KIP-941</a>.
+     * @return the access key for the current thread, or {@code null} when the current thread is currently not invoked
+     * from a callback and any thread can access the consumer.
+     */
+    public ThreadAccessKey getThreadAccessKey() {
+        return threadAccessKeyHolder.get();
+    }
+
+    /**
+     * Set the access key for the current thread.
+     *
+     * @param threadAccessKey obtained via {@link #getThreadAccessKey()}, or {@code null} to clear the key
+     * @see #getThreadAccessKey() for more information
+     */
+    public void setThreadAccessKey(ThreadAccessKey threadAccessKey) {
+        threadAccessKeyHolder.set(threadAccessKey);
+    }
+
+    /**
      * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
      * timeout. See {@link #close(Duration)} for details. Note that {@link #wakeup()}
@@ -2576,20 +2577,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws ConcurrentModificationException if another thread already has the lock
      */
     private void acquire() {
-        final String threadAccessKey = threadAccessKeyHolder.get();
-        final String nextKey = UUID.randomUUID().toString();
+        final ThreadAccessKey threadAccessKey = threadAccessKeyHolder.get();
+        final ThreadAccessKey nextKey = new ThreadAccessKey();
 
-        synchronized (threadAccess) {
-            // Access is granted when threadAccess is empty, or
-            // when the top value is the same as current key (same thread, reentrant access)
-            if (threadAccess.isEmpty() || threadAccess.get(0).equals(threadAccessKey)) {
+        synchronized (threadAccessStack) {
+            // Access is granted when threadAccess is empty (consumer is currently not used), or
+            // when the top value is the same as current key (consumer is used from callback)
+            if (threadAccessStack.isEmpty() || threadAccessStack.get(0) == threadAccessKey) {
                 threadAccessKeyHolder.set(nextKey);
-                threadAccess.add(0, nextKey);
+                threadAccessStack.add(0, nextKey);
             } else {
                 final Thread thread = Thread.currentThread();
                 throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
                         "currentThread(name: " + thread.getName() + ", id: " + thread.getId() + ")" +
-                        " could not provide access key (" + threadAccess.get(0) + ")"
+                        " could not provide access key (" + threadAccessStack.get(0) + ")"
                 );
             }
         }
@@ -2599,28 +2600,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Release the light lock protecting the consumer from multi-threaded access.
      */
     private void release() {
-        final String threadAccessKey = threadAccessKeyHolder.get();
+        final ThreadAccessKey threadAccessKey = threadAccessKeyHolder.get();
 
-        synchronized (threadAccess) {
-            if (threadAccess.isEmpty()) {
-                // When we get here there is a bug in KafkaConsumer, e.g. unbalanced calls to `acquire` and `release`.
-                final Thread thread = Thread.currentThread();
-                throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
-                        "currentThread(name: " + thread.getName() + ", id: " + thread.getId() + ")" +
-                        " unexpectedly returned from callback"
-                );
-            } else if (threadAccess.get(0).equals(threadAccessKey)) {
-                threadAccess.remove(0);
-                if (threadAccess.isEmpty()) {
+        synchronized (threadAccessStack) {
+            if (threadAccessStack.isEmpty()) {
+                throw new AssertionError("KafkaConsumer invariant violated: `release` invoked without `acquire`");
+            } else if (threadAccessStack.get(0) == threadAccessKey) {
+                threadAccessStack.remove(0);
+                if (threadAccessStack.isEmpty()) {
                     threadAccessKeyHolder.set(null);
                 } else {
-                    threadAccessKeyHolder.set(threadAccess.get(0));
+                    threadAccessKeyHolder.set(threadAccessStack.get(0));
                 }
             } else {
                 final Thread thread = Thread.currentThread();
                 throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
                         "currentThread(name: " + thread.getName() + ", id: " + thread.getId() + ")" +
-                        " returned from callback but not provide access key (" + threadAccess.get(0) + ")"
+                        " returned from callback but not provide access key (" + threadAccessStack.get(0) + ")"
                 );
             }
         }
