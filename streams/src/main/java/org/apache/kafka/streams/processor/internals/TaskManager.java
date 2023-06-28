@@ -1139,7 +1139,8 @@ public class TaskManager {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
         final Map<TaskId, Task> tasks = allTasks();
-        final Set<TaskId> createdAndClosedTasks = new HashSet<>();
+        final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks =
+            union(HashSet::new, lockedTaskDirectories, tasks.keySet());
         for (final Task task : tasks.values()) {
             if (task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
@@ -1149,17 +1150,14 @@ public class TaskManager {
                 } else {
                     taskOffsetSums.put(task.id(), sumOfChangelogOffsets(task.id(), changelogOffsets));
                 }
-            } else {
-                createdAndClosedTasks.add(task.id());
+                lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks.remove(task.id());
             }
         }
 
         // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
         // just have an empty changelogOffsets map.
-        final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasks = new HashSet<>(lockedTaskDirectories);
-        lockedTaskDirectoriesOfNonOwnedTasks.removeAll(tasks.keySet());
-        for (final TaskId id : union(HashSet::new, lockedTaskDirectoriesOfNonOwnedTasks, createdAndClosedTasks)) {
+        for (final TaskId id : lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks) {
             final File checkpointFile = stateDirectory.checkpointFileFor(id);
             try {
                 if (checkpointFile.exists()) {
