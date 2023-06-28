@@ -217,7 +217,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, handleCreatePartitionsRequest)
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
         case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForwardToController(request, handleRenewTokenRequest)
-//        case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForwardToController(request, handleExpireTokenRequest)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal).exceptionally(handleError)
@@ -3091,7 +3090,21 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleExpireTokenRequest(request: RequestChannel.Request): Unit = {
-//    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+    if (!allowTokenRequests(request)) {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new ExpireDelegationTokenResponse(
+          new ExpireDelegationTokenResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
+              .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
+    } else {
+      maybeForwardToController(request, handleExpireTokenRequestZk)
+    }
+  }
+
+  def handleExpireTokenRequestZk(request: RequestChannel.Request): Unit = {
+    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+
     val expireTokenRequest = request.body[ExpireDelegationTokenRequest]
 
     // the callback for sending a expire token response
@@ -3106,16 +3119,12 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setExpiryTimestampMs(expiryTimestamp)))
     }
 
-    if (!allowTokenRequests(request))
-      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, DelegationTokenManager.ErrorTimestamp)
-    else {
-      tokenManager.expireToken(
-        request.context.principal,
-        expireTokenRequest.hmac(),
-        expireTokenRequest.expiryTimePeriod(),
-        sendResponseCallback
-      )
-    }
+    tokenManager.expireToken(
+      request.context.principal,
+      expireTokenRequest.hmac(),
+      expireTokenRequest.expiryTimePeriod(),
+      sendResponseCallback
+    )
   }
 
   def handleDescribeTokensRequest(request: RequestChannel.Request): Unit = {

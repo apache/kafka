@@ -103,6 +103,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateDelegationTokenRequest(request)
         case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewDelegationTokenRequest(request)
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireDelegationTokenRequest(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -860,7 +861,6 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
   }
 
-  // XXX RenewDelegationTokenResponse is not version dependent
   def handleRenewDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
      val alterRequest = request.body[RenewDelegationTokenRequest]
 
@@ -872,6 +872,20 @@ class ControllerApis(val requestChannel: RequestChannel,
        .thenApply[Unit] { response =>
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            new RenewDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+  }
+
+  def handleExpireDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+     val alterRequest = request.body[ExpireDelegationTokenRequest]
+
+     val context = new ControllerRequestContext(
+       request.context.header.data,
+       request.context.principal,
+       OptionalLong.empty())
+     controller.expireDelegationToken(context, alterRequest.data)
+       .thenApply[Unit] { response =>
+         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+           new ExpireDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
   }
 

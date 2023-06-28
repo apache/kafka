@@ -56,7 +56,7 @@ class DelegationTokenPublisher(
             if (delegationTokenData.isPresent) {
               tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()))
             } else {
-              // XXX
+              tokenManager.removeToken(tokenId)
             }
         }
       }

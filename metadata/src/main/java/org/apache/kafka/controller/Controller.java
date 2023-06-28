@@ -36,6 +36,8 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
@@ -100,7 +102,7 @@ public interface Controller extends AclMutator, AutoCloseable {
     );
 
     /**
-     * Renew an existing DelegationToken creating a new one as a result.
+     * Renew an existing DelegationToken for a specific TokenID.
      *
      * @param context       The controller request context.
      * @param request       The RenewDelegationTokenRequest data.
@@ -110,6 +112,19 @@ public interface Controller extends AclMutator, AutoCloseable {
     CompletableFuture<RenewDelegationTokenResponseData> renewDelegationToken(
         ControllerRequestContext context,
         RenewDelegationTokenRequestData request
+    );
+
+    /**
+     * Expire an existing DelegationToken for a specific TokenID.
+     *
+     * @param context       The controller request context.
+     * @param request       The ExpireDelegationTokenRequest data.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<ExpireDelegationTokenResponseData> expireDelegationToken(
+        ControllerRequestContext context,
+        ExpireDelegationTokenRequestData request
     );
 
     /**
