@@ -27,7 +27,7 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.network.RequestChannel
+import kafka.network.{RequestChannel, RequestMetrics}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
 import kafka.utils.{Log4jController, TestUtils}
@@ -2122,56 +2122,64 @@ class KafkaApisTest {
 
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.ADD_PARTITIONS_TO_TXN)
-  def testHandleAddPartitionsToTxnAuthorizationFailed(version: Short): Unit = {
-    val topic = "topic"
+  def testHandleAddPartitionsToTxnAuthorizationFailedAndMetrics(version: Short): Unit = {
+    val requestMetrics = new RequestChannel.Metrics(Seq(ApiKeys.ADD_PARTITIONS_TO_TXN))
+    try {
+      val topic = "topic"
 
-    val transactionalId = "txnId1"
-    val producerId = 15L
-    val epoch = 0.toShort
+      val transactionalId = "txnId1"
+      val producerId = 15L
+      val epoch = 0.toShort
 
-    val tp = new TopicPartition(topic, 0)
+      val tp = new TopicPartition(topic, 0)
 
-    val addPartitionsToTxnRequest = 
-      if (version < 4) 
-        AddPartitionsToTxnRequest.Builder.forClient(
-          transactionalId,
-          producerId,
-          epoch,
-          Collections.singletonList(tp)).build(version)
+      val addPartitionsToTxnRequest =
+        if (version < 4)
+          AddPartitionsToTxnRequest.Builder.forClient(
+            transactionalId,
+            producerId,
+            epoch,
+            Collections.singletonList(tp)).build(version)
+        else
+          AddPartitionsToTxnRequest.Builder.forBroker(
+            new AddPartitionsToTxnTransactionCollection(
+              List(new AddPartitionsToTxnTransaction()
+                .setTransactionalId(transactionalId)
+                .setProducerId(producerId)
+                .setProducerEpoch(epoch)
+                .setVerifyOnly(true)
+                .setTopics(new AddPartitionsToTxnTopicCollection(
+                  Collections.singletonList(new AddPartitionsToTxnTopic()
+                    .setName(tp.topic)
+                    .setPartitions(Collections.singletonList(tp.partition))
+                  ).iterator()))
+              ).asJava.iterator())).build(version)
+
+      val requestChannelRequest = buildRequest(addPartitionsToTxnRequest, requestMetrics = requestMetrics)
+
+      val authorizer: Authorizer = mock(classOf[Authorizer])
+      when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+        .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+      createKafkaApis(authorizer = Some(authorizer)).handle(
+        requestChannelRequest,
+        RequestLocal.NoCaching
+      )
+
+      val response = verifyNoThrottlingAndUpdateMetrics[AddPartitionsToTxnResponse](requestChannelRequest)
+      val error = if (version < 4)
+        response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)
       else
-        AddPartitionsToTxnRequest.Builder.forBroker(
-          new AddPartitionsToTxnTransactionCollection(
-            List(new AddPartitionsToTxnTransaction()
-              .setTransactionalId(transactionalId)
-              .setProducerId(producerId)
-              .setProducerEpoch(epoch)
-              .setVerifyOnly(true)
-              .setTopics(new AddPartitionsToTxnTopicCollection(
-                Collections.singletonList(new AddPartitionsToTxnTopic()
-                  .setName(tp.topic)
-                  .setPartitions(Collections.singletonList(tp.partition))
-                ).iterator()))
-            ).asJava.iterator())).build(version)
+        Errors.forCode(response.data().errorCode)
 
-    val requestChannelRequest = buildRequest(addPartitionsToTxnRequest)
+      val expectedError = if (version < 4) Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED else Errors.CLUSTER_AUTHORIZATION_FAILED
+      assertEquals(expectedError, error)
 
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
-      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(authorizer = Some(authorizer)).handle(
-      requestChannelRequest,
-      RequestLocal.NoCaching
-    )
-
-    val response = verifyNoThrottling[AddPartitionsToTxnResponse](requestChannelRequest)
-    val error = if (version < 4) 
-      response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp) 
-    else
-      Errors.forCode(response.data().errorCode)
-      
-    val expectedError = if (version < 4) Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED else Errors.CLUSTER_AUTHORIZATION_FAILED
-    assertEquals(expectedError, error)
+      val metricName = if (version < 4) ApiKeys.ADD_PARTITIONS_TO_TXN.name else RequestMetrics.verifyPartitionsInTxnMetricName
+      assertEquals(8, TestUtils.metersCount(metricName))
+    } finally {
+      requestMetrics.close()
+    }
   }
 
   @ParameterizedTest
@@ -5275,7 +5283,8 @@ class KafkaApisTest {
   private def buildRequest(request: AbstractRequest,
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
-                           requestHeader: Option[RequestHeader] = None): RequestChannel.Request = {
+                           requestHeader: Option[RequestHeader] = None,
+                           requestMetrics: RequestChannel.Metrics = requestChannelMetrics): RequestChannel.Request = {
     val buffer = request.serializeWithHeader(
       requestHeader.getOrElse(new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
@@ -5285,7 +5294,7 @@ class KafkaApisTest {
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, fromPrivilegedListener,
       Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
-      requestChannelMetrics, envelope = None)
+      requestMetrics, envelope = None)
   }
 
   private def verifyNoThrottling[T <: AbstractResponse](
@@ -5302,6 +5311,37 @@ class KafkaApisTest {
       response.data,
       request.context.header.apiVersion
     )
+    AbstractResponse.parseResponse(
+      request.context.header.apiKey,
+      buffer,
+      request.context.header.apiVersion,
+    ).asInstanceOf[T]
+  }
+
+  private def verifyNoThrottlingAndUpdateMetrics[T <: AbstractResponse](
+    request: RequestChannel.Request
+  ): T = {
+    val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      any()
+    )
+    val response = capturedResponse.getValue
+    val buffer = MessageUtil.toByteBuffer(
+      response.data,
+      request.context.header.apiVersion
+    )
+
+    // Create the RequestChannel.Response that is created when sendResponse is called in order to update the metrics.
+    val sendResponse = new RequestChannel.SendResponse(
+      request,
+      request.buildResponseSend(response),
+      request.responseNode(response),
+      None
+    )
+    request.updateRequestMetrics(time.milliseconds(), sendResponse)
+
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
       buffer,
