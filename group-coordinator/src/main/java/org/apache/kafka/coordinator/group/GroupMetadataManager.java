@@ -594,10 +594,7 @@ public class GroupMetadataManager {
                 log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
             }
 
-            group.setMetadataRefreshDeadline(
-                Math.min(Long.MAX_VALUE, currentTimeMs + consumerGroupMetadataRefreshIntervalMs),
-                groupEpoch
-            );
+            group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
