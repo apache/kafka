@@ -575,7 +575,7 @@ public class GroupMetadataManager {
         // 1) The member has updated its subscriptions;
         // 2) The refresh deadline has been reached.
         boolean updatedSubscriptionMetadata = false;
-        if (updatedMemberSubscriptions || group.refreshMetadataNeeded(currentTimeMs)) {
+        if (updatedMemberSubscriptions || group.hasMetadataExpired(currentTimeMs)) {
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
@@ -588,7 +588,7 @@ public class GroupMetadataManager {
                 updatedSubscriptionMetadata = true;
                 records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
                 // Reset the metadata refresh deadline.
-                group.setNextMetadataRefreshTime(
+                group.setMetadataRefreshDeadline(
                     Math.min(Long.MAX_VALUE, currentTimeMs + consumerGroupMetadataRefreshIntervalMs),
                     groupEpoch + 1
                 );
@@ -1043,7 +1043,7 @@ public class GroupMetadataManager {
         allGroupIds.forEach(groupId -> {
             Group group = groups.get(groupId);
             if (group != null && group.type() == Group.GroupType.CONSUMER) {
-                ((ConsumerGroup) group).resetNextMetadataRefreshTime();
+                ((ConsumerGroup) group).requestMetadataRefresh();
             }
         });
     }

@@ -58,14 +58,14 @@ public class ConsumerGroup implements Group {
         }
     }
 
-    public static class TimeAndEpoch {
-        static final TimeAndEpoch EMPTY = new TimeAndEpoch(0L, 0);
+    public static class DeadlineAndEpoch {
+        static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
 
-        public final long timeMs;
+        public final long deadlineMs;
         public final int epoch;
 
-        TimeAndEpoch(long timeMs, int epoch) {
-            this.timeMs = timeMs;
+        DeadlineAndEpoch(long deadlineMs, int epoch) {
+            this.deadlineMs = deadlineMs;
             this.epoch = epoch;
         }
     }
@@ -132,7 +132,7 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
 
     /**
-     * The next metadata refresh time. It consists of a timestamp in milliseconds together with
+     * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
      * because it is not persisted to the log. The group epoch is here to ensure that the
@@ -141,7 +141,7 @@ public class ConsumerGroup implements Group {
      * after having refreshed the metadata but the write operation failed. In this case, the
      * time is not automatically rolled back.
      */
-    private TimeAndEpoch nextMetadataRefreshTime = TimeAndEpoch.EMPTY;
+    private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
@@ -457,28 +457,28 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the next metadata refresh time.
+     * Updates the metadata refresh deadline.
      *
-     * @param nextTimeMs The next time in milliseconds.
+     * @param deadlineMs The next time in milliseconds.
      * @param groupEpoch The associated group epoch.
      */
-    public void setNextMetadataRefreshTime(
-        long nextTimeMs,
+    public void setMetadataRefreshDeadline(
+        long deadlineMs,
         int groupEpoch
     ) {
-        this.nextMetadataRefreshTime = new TimeAndEpoch(nextTimeMs, groupEpoch);
+        this.metadataRefreshDeadline = new DeadlineAndEpoch(deadlineMs, groupEpoch);
     }
 
     /**
-     * Resets the next metadata refresh.
+     * Requests a metadata refresh.
      */
-    public void resetNextMetadataRefreshTime() {
-        this.nextMetadataRefreshTime = TimeAndEpoch.EMPTY;
+    public void requestMetadataRefresh() {
+        this.metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
     }
 
     /**
      * Checks if a metadata refresh is required. A refresh is required in two cases:
-     * 1) The next update time is smaller or equals to the current time;
+     * 1) The deadline is smaller or equals to the current time;
      * 2) The group epoch associated with the next update time is smaller than
      *    the current group epoch. This means that the operations which updated
      *    the next update time failed.
@@ -486,15 +486,15 @@ public class ConsumerGroup implements Group {
      * @param currentTimeMs The current time in milliseconds.
      * @return A boolean indicating whether a refresh is required or not.
      */
-    public boolean refreshMetadataNeeded(long currentTimeMs) {
-        return currentTimeMs >= nextMetadataRefreshTime.timeMs || groupEpoch() < nextMetadataRefreshTime.epoch;
+    public boolean hasMetadataExpired(long currentTimeMs) {
+        return currentTimeMs >= metadataRefreshDeadline.deadlineMs || groupEpoch() < metadataRefreshDeadline.epoch;
     }
 
     /**
-     * @return The next metadata refresh time.
+     * @return The metadata refresh deadline.
      */
-    public TimeAndEpoch nextMetadataRefreshTime() {
-        return nextMetadataRefreshTime;
+    public DeadlineAndEpoch metadataRefreshDeadline() {
+        return metadataRefreshDeadline;
     }
 
     /**

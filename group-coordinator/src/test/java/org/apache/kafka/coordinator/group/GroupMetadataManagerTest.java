@@ -2006,7 +2006,7 @@ public class GroupMetadataManagerTest {
         // The metadata refresh flag should be true.
         ConsumerGroup consumerGroup = context.groupMetadataManager
             .getOrMaybeCreateConsumerGroup(groupId, false);
-        assertTrue(consumerGroup.refreshMetadataNeeded(context.time.milliseconds()));
+        assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
 
         // Prepare the assignment result.
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -2066,9 +2066,9 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords, result.records());
 
         // Check next refresh time.
-        assertFalse(consumerGroup.refreshMetadataNeeded(context.time.milliseconds()));
-        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.nextMetadataRefreshTime().timeMs);
-        assertEquals(11, consumerGroup.nextMetadataRefreshTime().epoch);
+        assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.metadataRefreshDeadline().deadlineMs);
+        assertEquals(11, consumerGroup.metadataRefreshDeadline().epoch);
     }
 
     @Test
@@ -2116,7 +2116,7 @@ public class GroupMetadataManagerTest {
         // The metadata refresh flag should be true.
         ConsumerGroup consumerGroup = context.groupMetadataManager
             .getOrMaybeCreateConsumerGroup(groupId, false);
-        assertTrue(consumerGroup.refreshMetadataNeeded(context.time.milliseconds()));
+        assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
 
         // Prepare the assignment result.
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -2133,9 +2133,9 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(10));
 
         // The metadata refresh flag is set to a future time.
-        assertFalse(consumerGroup.refreshMetadataNeeded(context.time.milliseconds()));
-        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.nextMetadataRefreshTime().timeMs);
-        assertEquals(11, consumerGroup.nextMetadataRefreshTime().epoch);
+        assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.metadataRefreshDeadline().deadlineMs);
+        assertEquals(11, consumerGroup.metadataRefreshDeadline().epoch);
 
         // Rollback the uncommitted changes. This does not rollback the metadata flag
         // because it is not using a timeline data structure.
@@ -2194,9 +2194,9 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords, result.records());
 
         // Check next refresh time.
-        assertFalse(consumerGroup.refreshMetadataNeeded(context.time.milliseconds()));
-        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.nextMetadataRefreshTime().timeMs);
-        assertEquals(11, consumerGroup.nextMetadataRefreshTime().epoch);
+        assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.metadataRefreshDeadline().deadlineMs);
+        assertEquals(11, consumerGroup.metadataRefreshDeadline().epoch);
     }
 
     @Test
@@ -2341,8 +2341,8 @@ public class GroupMetadataManagerTest {
         // Ensures that all refresh flags are set to the future.
         Arrays.asList("group1", "group2", "group3", "group4", "group5").forEach(groupId -> {
             ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
-            group.setNextMetadataRefreshTime(context.time.milliseconds() + 5000L, 0);
-            assertFalse(group.refreshMetadataNeeded(context.time.milliseconds()));
+            group.setMetadataRefreshDeadline(context.time.milliseconds() + 5000L, 0);
+            assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
         });
 
         // Update the metadata image.
@@ -2378,12 +2378,12 @@ public class GroupMetadataManagerTest {
         // Verify the groups.
         Arrays.asList("group1", "group2", "group3", "group4").forEach(groupId -> {
             ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
-            assertTrue(group.refreshMetadataNeeded(context.time.milliseconds()));
+            assertTrue(group.hasMetadataExpired(context.time.milliseconds()));
         });
 
         Arrays.asList("group5").forEach(groupId -> {
             ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
-            assertFalse(group.refreshMetadataNeeded(context.time.milliseconds()));
+            assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
         });
 
         // Verify image.

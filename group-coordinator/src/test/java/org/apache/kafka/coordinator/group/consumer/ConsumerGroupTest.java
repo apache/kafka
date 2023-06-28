@@ -549,24 +549,24 @@ public class ConsumerGroupTest {
         ConsumerGroup group = createConsumerGroup("group-foo");
 
         // The next refresh time should be empty when the group is created or loaded.
-        assertTrue(group.refreshMetadataNeeded(time.milliseconds()));
-        assertEquals(0L, group.nextMetadataRefreshTime().timeMs);
-        assertEquals(0, group.nextMetadataRefreshTime().epoch);
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(0, group.metadataRefreshDeadline().epoch);
 
         // Set the next refresh time.
-        group.setNextMetadataRefreshTime(time.milliseconds() + 1000, group.groupEpoch());
-        assertFalse(group.refreshMetadataNeeded(time.milliseconds()));
-        assertEquals(time.milliseconds() + 1000, group.nextMetadataRefreshTime().timeMs);
-        assertEquals(group.groupEpoch(), group.nextMetadataRefreshTime().epoch);
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
+        assertFalse(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch(), group.metadataRefreshDeadline().epoch);
 
         // Advance past the deadline.
         time.sleep(1001L);
-        assertTrue(group.refreshMetadataNeeded(time.milliseconds()));
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
 
         // Set the next refresh time with a higher group epoch.
-        group.setNextMetadataRefreshTime(time.milliseconds() + 1000, group.groupEpoch() + 1);
-        assertTrue(group.refreshMetadataNeeded(time.milliseconds()));
-        assertEquals(time.milliseconds() + 1000, group.nextMetadataRefreshTime().timeMs);
-        assertEquals(group.groupEpoch() + 1, group.nextMetadataRefreshTime().epoch);
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch() + 1);
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch() + 1, group.metadataRefreshDeadline().epoch);
     }
 }
