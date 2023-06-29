@@ -28,16 +28,22 @@ public class CommitFailedException extends KafkaException {
 
     private static final long serialVersionUID = 1L;
 
+    private static final String UNREASONABLE_PARAMETERS_REASON = "This means that the time " +
+            "between subsequent calls to poll() was longer than the configured max.poll.interval.ms, " +
+            "which typically implies that the poll loop is spending too much time message processing. " +
+            "You can address this either by increasing max.poll.interval.ms or by reducing the maximum " +
+            "size of batches returned in poll() with max.poll.records.";
+    private static final String CONFLICT_GROUP_ID_REASON = "This means that when the high level consumer is " +
+            "consuming in a stable state, a simple consumer with the same name group id will fail when committing offset.";
+
     public CommitFailedException(final String message) {
         super(message);
     }
 
     public CommitFailedException() {
-        super("Commit cannot be completed since the group has already " +
-                "rebalanced and assigned the partitions to another member. This means that the time " +
-                "between subsequent calls to poll() was longer than the configured max.poll.interval.ms, " +
-                "which typically implies that the poll loop is spending too much time message processing. " +
-                "You can address this either by increasing max.poll.interval.ms or by reducing the maximum " +
-                "size of batches returned in poll() with max.poll.records.");
+        super("Commit cannot be completed since the group has already rebalanced and assigned the partitions to another " +
+                "member. There may be two scenarios, 1: " + UNREASONABLE_PARAMETERS_REASON + "\n" +
+                "2: " + CONFLICT_GROUP_ID_REASON
+        );
     }
 }
