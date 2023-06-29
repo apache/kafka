@@ -56,6 +56,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
     private List<String> knownConsumerGroups = Collections.emptyList();
+    private GroupListener groupListener;
 
     public MirrorCheckpointConnector() {
         // nop
@@ -79,6 +80,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         groupFilter = config.groupFilter();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("checkpoint-source-admin"));
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
+        groupListener = config.groupListener();
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
@@ -98,6 +100,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         Utils.closeQuietly(groupFilter, "group filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
+        Utils.closeQuietly(groupListener, "group listener");
     }
 
     @Override
@@ -141,6 +144,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         Set<String> deadConsumerGroups = new HashSet<>();
         deadConsumerGroups.addAll(knownConsumerGroups);
         deadConsumerGroups.removeAll(consumerGroups);
+        groupListener.groupsChanged(consumerGroups);
         if (!newConsumerGroups.isEmpty() || !deadConsumerGroups.isEmpty()) {
             log.info("Found {} consumer groups for {}. {} are new. {} were removed. Previously had {}.",
                     consumerGroups.size(), sourceAndTarget, newConsumerGroups.size(), deadConsumerGroups.size(),

@@ -77,6 +77,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = "offset-syncs-target-consumer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = "offset-syncs-source-admin";
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = "offset-syncs-target-admin";
+    public static final String GROUP_LISTENER_CLASS_CONFIG = "group.listener.class";
+    public static final Class<? extends GroupListener> GROUP_LISTENER_CLASS_DEFAULT = DefaultGroupListener.class;
+    public static final String GROUP_LISTENER_CLASS_DOC =
+            "Class listening to changes in the list of checkpointed groups.";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
@@ -165,6 +169,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
+    GroupListener groupListener() {
+        return getConfiguredInstance(GROUP_LISTENER_CLASS_CONFIG, GroupListener.class);
+    }
+
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(BASE_CONNECTOR_CONFIG_DEF)
             .define(
                     CONSUMER_POLL_TIMEOUT_MILLIS,
@@ -250,7 +258,13 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                     ConfigDef.Type.CLASS,
                     TOPIC_FILTER_CLASS_DEFAULT,
                     ConfigDef.Importance.LOW,
-                    TOPIC_FILTER_CLASS_DOC);
+                    TOPIC_FILTER_CLASS_DOC)
+            .define(
+                    GROUP_LISTENER_CLASS_CONFIG,
+                    ConfigDef.Type.CLASS,
+                    GROUP_LISTENER_CLASS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    GROUP_LISTENER_CLASS_DOC);
 
     public static void main(String[] args) {
         System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_checkpoint_" + config));

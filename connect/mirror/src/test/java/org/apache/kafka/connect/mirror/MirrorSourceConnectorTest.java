@@ -94,7 +94,8 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testReplicatesHeartbeatsByDefault() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+            new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(),
+            new DefaultTopicListener());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
     }
@@ -102,7 +103,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testReplicatesHeartbeatsDespiteFilter() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> false, new DefaultConfigPropertyFilter());
+            new DefaultReplicationPolicy(), x -> false, new DefaultConfigPropertyFilter(), new DefaultTopicListener());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
     }
@@ -110,7 +111,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(), new DefaultTopicListener());
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
@@ -123,7 +124,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIdentityReplication() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter());
+            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter(), new DefaultTopicListener());
         assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
@@ -143,7 +144,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(), new DefaultTopicListener());
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
@@ -155,7 +156,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclTransformation() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(), new DefaultTopicListener());
         AclBinding allowAllAclBinding = new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
@@ -222,7 +223,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testConfigPropertyFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+            new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter(), new DefaultTopicListener());
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
@@ -241,7 +242,8 @@ public class MirrorSourceConnectorTest {
     @Deprecated
     public void testConfigPropertyFilteringWithAlterConfigs() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+                new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter(),
+                new DefaultTopicListener());
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         // When "use.defaults.from" set to "target" by default, the config with default value should be excluded
@@ -265,7 +267,7 @@ public class MirrorSourceConnectorTest {
         filter.configure(filterConfig);
 
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(),  x -> true, filter);
+                new DefaultReplicationPolicy(),  x -> true, filter, new DefaultTopicListener());
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         // When "use.defaults.from" explicitly set to "source", the config with default value should be replicated
@@ -295,7 +297,7 @@ public class MirrorSourceConnectorTest {
         filter.configure(filterConfig);
 
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), x -> true, filter));
+                new DefaultReplicationPolicy(), x -> true, filter, new DefaultTopicListener()));
 
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
@@ -480,8 +482,10 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testRefreshTopicPartitions() throws Exception {
+        TopicListener mockTopicListener = mock(TopicListener.class);
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(),
+                mockTopicListener);
         connector.initialize(mock(ConnectorContext.class));
         connector = spy(connector);
 
@@ -496,9 +500,15 @@ public class MirrorSourceConnectorTest {
         doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("topic"));
         doNothing().when(connector).createNewTopics(any());
 
+        Map<String, String> expectedTopicsForListener = new HashMap<>();
+        expectedTopicsForListener.put("topic", "source.topic");
+
         connector.refreshTopicPartitions();
+        verify(mockTopicListener, times(1)).topicsChanged(expectedTopicsForListener);
+
         // if target topic is not created, refreshTopicPartitions() will call createTopicPartitions() again
         connector.refreshTopicPartitions();
+        verify(mockTopicListener, times(2)).topicsChanged(expectedTopicsForListener);
 
         Map<String, Long> expectedPartitionCounts = new HashMap<>();
         expectedPartitionCounts.put("source.topic", 1L);
@@ -518,12 +528,14 @@ public class MirrorSourceConnectorTest {
 
         // once target topic is created, refreshTopicPartitions() will NOT call computeAndCreateTopicPartitions() again
         verify(connector, times(2)).computeAndCreateTopicPartitions();
+        verify(mockTopicListener, times(3)).topicsChanged(expectedTopicsForListener);
     }
 
     @Test
     public void testRefreshTopicPartitionsTopicOnTargetFirst() throws Exception {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(),
+                new DefaultTopicListener());
         connector.initialize(mock(ConnectorContext.class));
         connector = spy(connector);
 
@@ -563,7 +575,8 @@ public class MirrorSourceConnectorTest {
             }
         }
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new CustomReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+                new CustomReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(),
+                new DefaultTopicListener());
         assertDoesNotThrow(() -> connector.isCycle(".b"));
     }
 

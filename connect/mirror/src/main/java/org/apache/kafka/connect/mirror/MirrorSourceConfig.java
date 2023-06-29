@@ -113,6 +113,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = "offset-syncs-target-producer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = "offset-syncs-source-admin";
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = "offset-syncs-target-admin";
+    public static final String TOPIC_LISTENER_CLASS_CONFIG = "topic.listener.class";
+    public static final Class<? extends TopicListener> TOPIC_LISTENER_CLASS_DEFAULT = DefaultTopicListener.class;
+    public static final String TOPIC_LISTENER_CLASS_DOC =
+            "Class listening to changes in the list of replicated topics.";
 
     public MirrorSourceConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
@@ -218,6 +222,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     boolean addSourceAliasToMetrics() {
         return getBoolean(ADD_SOURCE_ALIAS_TO_METRICS);
+    }
+
+    TopicListener topicListener() {
+        return getConfiguredInstance(TOPIC_LISTENER_CLASS_CONFIG, TopicListener.class);
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(BASE_CONNECTOR_CONFIG_DEF)
@@ -342,7 +350,13 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                     ConfigDef.Type.BOOLEAN,
                     ADD_SOURCE_ALIAS_TO_METRICS_DEFAULT,
                     ConfigDef.Importance.LOW,
-                    ADD_SOURCE_ALIAS_TO_METRICS_DOC);
+                    ADD_SOURCE_ALIAS_TO_METRICS_DOC)
+            .define(
+                    TOPIC_LISTENER_CLASS_CONFIG,
+                    ConfigDef.Type.CLASS,
+                    TOPIC_LISTENER_CLASS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    TOPIC_LISTENER_CLASS_DOC);
 
     public static void main(String[] args) {
         System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_source_" + config));
