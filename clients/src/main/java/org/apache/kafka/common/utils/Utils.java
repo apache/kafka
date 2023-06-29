@@ -981,8 +981,6 @@ public final class Utils {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
                 log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
                         outer.getMessage());
-            } catch (NoSuchFileException noSuch) {
-                log.debug("Source file {} not exists, supress exception to prevent server shutdown", source, noSuch);
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
