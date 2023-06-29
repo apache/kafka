@@ -136,8 +136,8 @@ public class ConsumerGroup implements Group {
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
      * because it is not persisted to the log. The group epoch is here to ensure that the
-     * next metadata refresh time is invalidated if the group epoch does not correspond to
-     * the current group epoch. This can happen if the next metadata refresh time is updated
+     * metadata refresh deadline is invalidated if the group epoch does not correspond to
+     * the current group epoch. This can happen if the metadata refresh deadline is updated
      * after having refreshed the metadata but the write operation failed. In this case, the
      * time is not automatically rolled back.
      */
@@ -459,7 +459,7 @@ public class ConsumerGroup implements Group {
     /**
      * Updates the metadata refresh deadline.
      *
-     * @param deadlineMs The next time in milliseconds.
+     * @param deadlineMs The deadline in milliseconds.
      * @param groupEpoch The associated group epoch.
      */
     public void setMetadataRefreshDeadline(
@@ -478,10 +478,10 @@ public class ConsumerGroup implements Group {
 
     /**
      * Checks if a metadata refresh is required. A refresh is required in two cases:
-     * 1) The deadline is smaller or equals to the current time;
-     * 2) The group epoch associated with the next update time is smaller than
+     * 1) The deadline is smaller or equal to the current time;
+     * 2) The group epoch associated with the deadline is larger than
      *    the current group epoch. This means that the operations which updated
-     *    the next update time failed.
+     *    the deadline failed.
      *
      * @param currentTimeMs The current time in milliseconds.
      * @return A boolean indicating whether a refresh is required or not.

@@ -544,16 +544,16 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testNextMetadataRefreshTime() {
+    public void testMetadataRefreshDeadline() {
         MockTime time = new MockTime();
         ConsumerGroup group = createConsumerGroup("group-foo");
 
-        // The next refresh time should be empty when the group is created or loaded.
+        // The refresh time deadline should be empty when the group is created or loaded.
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
         assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
         assertEquals(0, group.metadataRefreshDeadline().epoch);
 
-        // Set the next refresh time.
+        // Set the next refresh deadline.
         group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
         assertFalse(group.hasMetadataExpired(time.milliseconds()));
         assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
@@ -563,7 +563,7 @@ public class ConsumerGroupTest {
         time.sleep(1001L);
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
 
-        // Set the next refresh time with a higher group epoch.
+        // Set the refresh time deadline with a higher group epoch.
         group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch() + 1);
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
         assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
