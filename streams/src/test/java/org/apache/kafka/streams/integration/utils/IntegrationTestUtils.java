@@ -775,6 +775,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -791,6 +792,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -807,6 +809,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
