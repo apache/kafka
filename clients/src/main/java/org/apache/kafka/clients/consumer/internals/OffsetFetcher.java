@@ -430,7 +430,7 @@ public class OffsetFetcher {
      * leaders available. Topic partitions from `timestampsToSearch` that do not have their leader
      * available are added to `partitionsToRetry`
      *
-     * @param timestampsToSearch The mapping from partitions ot the target timestamps
+     * @param timestampsToSearch The mapping from partitions to the target timestamps
      * @param partitionsToRetry  A set of topic partitions that will be extended with partitions
      *                           that need metadata update or re-connect to the leader.
      */

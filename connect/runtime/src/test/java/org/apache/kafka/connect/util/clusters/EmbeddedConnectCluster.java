@@ -647,7 +647,8 @@ public class EmbeddedConnectCluster {
 
     /**
      * Get the offsets for a connector via the <strong><em>GET /connectors/{connector}/offsets</em></strong> endpoint
-     * @param connectorName name of the connector
+     *
+     * @param connectorName name of the connector whose offsets are to be retrieved
      * @return the connector's offsets
      */
     public ConnectorOffsets connectorOffsets(String connectorName) {
@@ -668,7 +669,8 @@ public class EmbeddedConnectCluster {
 
     /**
      * Alter a connector's offsets via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong> endpoint
-     * @param connectorName name of the connector
+     *
+     * @param connectorName name of the connector whose offsets are to be altered
      * @param offsets offsets to alter
      */
     public String alterConnectorOffsets(String connectorName, ConnectorOffsets offsets) {
@@ -686,7 +688,23 @@ public class EmbeddedConnectCluster {
             return responseToString(response);
         } else {
             throw new ConnectRestException(response.getStatus(),
-                    "Could not execute PATCH request. Error response: " + responseToString(response));
+                    "Could not alter connector offsets. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
+     * Reset a connector's offsets via the <strong><em>DELETE /connectors/{connector}/offsets</em></strong> endpoint
+     *
+     * @param connectorName name of the connector whose offsets are to be reset
+     */
+    public String resetConnectorOffsets(String connectorName) {
+        String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
+        Response response = requestDelete(url);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        } else {
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not reset connector offsets. Error response: " + responseToString(response));
         }
     }
 

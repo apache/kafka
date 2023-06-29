@@ -892,7 +892,7 @@ A->B.topics = bar
   </p>
 
   <p>
-    It is therefore important to keep the MirrorMaker configration consistent across replication flows to the same target cluster. This can be achieved, for example, through automation tooling or by using a single, shared MirrorMaker configuration file for your entire organization.
+    It is therefore important to keep the MirrorMaker configuration consistent across replication flows to the same target cluster. This can be achieved, for example, through automation tooling or by using a single, shared MirrorMaker configuration file for your entire organization.
   </p>
 
   <h5 class="anchor-heading"><a id="georeplication-best-practice" class="anchor-link"></a><a href="#georeplication-best-practice">Best Practice: Consume from Remote, Produce to Local</a></h5>
@@ -1415,7 +1415,7 @@ $ bin/kafka-acls.sh \
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
   <p>When Kafka is configured to use KRaft, the controllers store the cluster metadata in the directory specified in <code>metadata.log.dir</code> -- or the first log directory, if <code>metadata.log.dir</code> is not configured. See the documentation for <code>metadata.log.dir</code> for details.</p>
 
-  <p>If the data in the cluster metdata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
+  <p>If the data in the cluster metadata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-metadata-quorum.sh --bootstrap-server broker_host:port describe --replication
  NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   Status
@@ -1427,7 +1427,7 @@ $ bin/kafka-acls.sh \
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
 
-  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happend when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
+  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
 
   <p>Start the KRaft controller after formatting the log directories.</p>
 
@@ -1779,7 +1779,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>ZooKeeper client request latency</td>
         <td>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</td>
-        <td>Latency in millseconds for ZooKeeper requests from broker.</td>
+        <td>Latency in milliseconds for ZooKeeper requests from broker.</td>
       </tr>
       <tr>
         <td>ZooKeeper connection status</td>
@@ -2447,7 +2447,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>commited-time-ns-total</td>
+        <td>committed-time-ns-total</td>
         <td>The total time the Consumer spent in committed in nanoseconds.</td>
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
@@ -3461,7 +3461,7 @@ for built-in state stores, currently we have:
       </tr>
       <tr>
         <td>hit-ratio-min</td>
-        <td>The mininum cache hit ratio.</td>
+        <td>The minimum cache hit ratio.</td>
         <td>kafka.streams:type=stream-record-cache-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),record-cache-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3562,7 +3562,7 @@ CurrentObservers:       [0,1,2]</code></pre>
 
   <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log</code></pre>
 
-  <p>This command decodes and prints the recrods in the a cluster metadata snapshot:</p>
+  <p>This command decodes and prints the records in the a cluster metadata snapshot:</p>
 
   <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000100-0000000001.checkpoint</code></pre>
 

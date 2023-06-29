@@ -426,7 +426,7 @@ public final class Stores {
      * Create an in-memory {@link SessionBytesStoreSupplier}.
      *
      * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
      *                          (note that the retention period must be at least as long enough to
      *                          contain the inactivity gap of the session and the entire grace period.)
      * @return an instance of a {@link  SessionBytesStoreSupplier}
