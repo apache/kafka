@@ -27,11 +27,13 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
-import org.mockito.Mockito.{mock, verify, when}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{mock, mockConstruction, verify, verifyNoMoreInteractions, when}
 
 import java.util.Optional
 import scala.collection.{Map, Set, mutable}
@@ -40,13 +42,41 @@ import scala.jdk.CollectionConverters._
 class AbstractFetcherManagerTest {
 
   @BeforeEach
-  def cleanMetricRegistry(): Unit = {
+  def cleanMetricRegistryBefore(): Unit = {
+    TestUtils.clearYammerMetrics()
+  }
+
+  @AfterEach
+  def cleanMetricRegistryAfter(): Unit = {
     TestUtils.clearYammerMetrics()
   }
 
   private def getMetricValue(name: String): Any = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) => k.getName == name }.values.headOption.get.
       asInstanceOf[Gauge[Int]].value()
+  }
+
+  @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val fetcher: AbstractFetcherThread = mock(classOf[AbstractFetcherThread])
+      val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
+        override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+          fetcher
+        }
+      }
+      fetcherManager.removeMetrics()
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      // verify that each metric in `AbstractFetcherManager` is registered when initialized.
+      AbstractFetcherManager.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any(), any()))
+      // verify that each metric in `AbstractFetcherManager` is removed.
+      AbstractFetcherManager.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
   }
 
   @Test

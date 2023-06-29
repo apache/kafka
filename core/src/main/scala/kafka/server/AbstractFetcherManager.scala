@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
+import kafka.server.AbstractFetcherManager.{DeadThreadCountMetricName, FailedPartitionsCountMetricName, MaxLagMetricName, MetricNames, MinFetchRateMetricName}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -41,7 +42,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   private val tags = Map("clientId" -> clientId).asJava
 
-  metricsGroup.newGauge("MaxLag", () => {
+  metricsGroup.newGauge(MaxLagMetricName, () => {
     // current max lag across all fetchers/topics/partitions
     fetcherThreadMap.values.foldLeft(0L) { (curMaxLagAll, fetcherThread) =>
       val maxLagThread = fetcherThread.fetcherLagStats.stats.values.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
@@ -50,16 +51,16 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }, tags)
 
-  metricsGroup.newGauge("MinFetchRate", () => {
+  metricsGroup.newGauge(MinFetchRateMetricName, () => {
     // current min fetch rate across all fetchers/topics/partitions
     val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
     fetcherThreadMap.values.foldLeft(headRate)((curMinAll, fetcherThread) =>
       math.min(curMinAll, fetcherThread.fetcherStats.requestRate.oneMinuteRate))
   }, tags)
 
-  metricsGroup.newGauge("FailedPartitionsCount", () => failedPartitions.size, tags)
+  metricsGroup.newGauge(FailedPartitionsCountMetricName, () => failedPartitions.size, tags)
 
-  metricsGroup.newGauge("DeadThreadCount", () => deadThreadCount, tags)
+  metricsGroup.newGauge(DeadThreadCountMetricName, () => deadThreadCount, tags)
 
   private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 
@@ -226,6 +227,25 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       fetcherThreadMap.clear()
     }
   }
+
+  def removeMetrics(): Unit = {
+    MetricNames.foreach(metricsGroup.removeMetric)
+  }
+}
+
+object AbstractFetcherManager {
+  private val MaxLagMetricName = "MaxLag"
+  private val MinFetchRateMetricName = "MinFetchRate"
+  private val FailedPartitionsCountMetricName = "FailedPartitionsCount"
+  private val DeadThreadCountMetricName = "DeadThreadCount"
+
+  // Visible for test
+  private[server] val MetricNames = Set(
+    MaxLagMetricName,
+    MinFetchRateMetricName,
+    FailedPartitionsCountMetricName,
+    DeadThreadCountMetricName
+  )
 }
 
 /**
