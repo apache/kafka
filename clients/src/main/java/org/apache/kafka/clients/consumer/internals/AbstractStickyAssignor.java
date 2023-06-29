@@ -177,7 +177,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             // move partition from the member with an older generation to the member with the newer generation
                             ownedPartitions.add(tp);
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
-                            allPreviousPartitionsToOwner.put(tp, consumer);
                             log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
                                             "TopicPartition {} in different generations. The topic partition wil be " +
                                             "assigned to the member with the higher generation {}.",
@@ -194,6 +193,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                     otherConsumer, otherMemberGeneration,
                                     tp,
                                     otherMemberGeneration);
+                            allPreviousPartitionsToOwner.put(tp, otherConsumer);
                         }
                     }
                 }
