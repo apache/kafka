@@ -1142,7 +1142,8 @@ public class TaskManager {
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
         // just have an empty changelogOffsets map.
         final Map<TaskId, Task> tasks = allTasks();
-        final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks = new HashSet<>(lockedTaskDirectories);
+        final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks =
+            union(HashSet::new, lockedTaskDirectories, tasks.keySet());
         for (final Task task : tasks.values()) {
             if (task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
