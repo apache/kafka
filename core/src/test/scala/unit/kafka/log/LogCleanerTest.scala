@@ -90,8 +90,9 @@ class LogCleanerTest {
       // verify that each metric in `LogCleanerManager` is removed
       val mockLogCleanerManagerMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
       LogCleanerManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
-      LogCleanerManager.GaugeMetricNameWithTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any(), any()))
-      LogCleanerManager.MetricNames.foreach(verify(mockLogCleanerManagerMetricsGroup).removeMetric(_))
+      LogCleanerManager.GaugeMetricNameWithTag.keySet().asScala.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any(), any()))
+      LogCleanerManager.GaugeMetricNameNoTag.foreach(verify(mockLogCleanerManagerMetricsGroup).removeMetric(_))
+      LogCleanerManager.GaugeMetricNameWithTag.keySet().asScala.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).removeMetric(ArgumentMatchers.eq(metricName), any()))
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)

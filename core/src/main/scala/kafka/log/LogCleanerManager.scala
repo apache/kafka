@@ -88,12 +88,16 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /* for coordinating the pausing and the cleaning of a partition */
   private val pausedCleaningCond = lock.newCondition()
 
+  // Avoid adding legacy tags for a metric when initializing `LogCleanerManager`
+  GaugeMetricNameWithTag.clear()
   /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
   for (dir <- logDirs) {
     metricsGroup.newGauge(UncleanablePartitionsCountMetricName,
       () => inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) },
       Map("logDirectory" -> dir.getAbsolutePath).asJava
     )
+    GaugeMetricNameWithTag.computeIfAbsent(UncleanablePartitionsCountMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
+      .add(Map("logDirectory" -> dir.getAbsolutePath).asJava)
   }
 
   /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
@@ -118,6 +122,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       },
       Map("logDirectory" -> dir.getAbsolutePath).asJava
     )
+    GaugeMetricNameWithTag.computeIfAbsent(UncleanableBytesMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
+      .add(Map("logDirectory" -> dir.getAbsolutePath).asJava)
   }
 
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
@@ -540,7 +546,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   def removeMetrics(): Unit = {
-    MetricNames.foreach(metricsGroup.removeMetric)
+    GaugeMetricNameNoTag.foreach(metricsGroup.removeMetric)
+    GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
+      metricNameAndTags._2.asScala.foreach(tag => metricsGroup.removeMetric(metricNameAndTags._1, tag))
+    })
   }
 }
 
@@ -564,17 +573,12 @@ private[log] object LogCleanerManager extends Logging {
   private val MaxDirtyPercentMetricName = "max-dirty-percent"
   private val TimeSinceLastRunMsMetricName = "time-since-last-run-ms"
 
-  private[log] val GaugeMetricNameWithTag = Set(
-    UncleanablePartitionsCountMetricName,
-    UncleanableBytesMetricName
-  )
+  private[log] val GaugeMetricNameWithTag = new java.util.HashMap[String, java.util.List[java.util.Map[String, String]]]()
 
   private[log] val GaugeMetricNameNoTag = Set(
     MaxDirtyPercentMetricName,
     TimeSinceLastRunMsMetricName
   )
-
-  private[log] val MetricNames = GaugeMetricNameWithTag.union(GaugeMetricNameNoTag)
 
   def isCompactAndDelete(log: UnifiedLog): Boolean = {
     log.config.compact && log.config.delete
