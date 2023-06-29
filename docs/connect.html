@@ -301,7 +301,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>GET /connectors/{name}/tasks</code> - get a list of tasks currently running for a connector</li>
         <li><code>GET /connectors/{name}/tasks/{taskid}/status</code> - get current status of the task, including if it is running, failed, paused, etc., which worker it is assigned to, and error information if it has failed</li>
         <li><code>PUT /connectors/{name}/pause</code> - pause the connector and its tasks, which stops message processing until the connector is resumed. Any resources claimed by its tasks are left allocated, which allows the connector to begin processing data quickly once it is resumed.</li>
-        <li><code>PUT /connectors/{name}/stop</code> - stop the connector and shut down its tasks, deallocating any resources claimed by its tasks. This is more efficient from a resource usage standpoint than pausing the connector, but can cause it to take longer to begin processing data once resumed.</li>
+        <li id="connect_stopconnector"><code>PUT /connectors/{name}/stop</code> - stop the connector and shut down its tasks, deallocating any resources claimed by its tasks. This is more efficient from a resource usage standpoint than pausing the connector, but can cause it to take longer to begin processing data once resumed. Note that the offsets for a connector can be only modified via the offsets management endpoints if it is in the stopped state</li>
         <li><code>PUT /connectors/{name}/resume</code> - resume a paused or stopped connector (or do nothing if the connector is not paused or stopped)</li>
         <li><code>POST /connectors/{name}/restart?includeTasks=&lt;true|false&gt;&amp;onlyFailed=&lt;true|false&gt;</code> - restart a connector and its tasks instances.
             <ul>
@@ -313,7 +313,52 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
         <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
         <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
-        <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details)</li>
+        <li>Offsets management endpoints (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details):
+            <ul>
+                <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector</li>
+                <li><code>DELETE /connectors/{name}/offsets</code> - reset the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>)</li>
+                <li><code>PATCH /connectors/{name}/offsets</code> - alter the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>). The request body should be a JSON object containing a JSON array <code>offsets</code> field, similar to the response body of the <code>GET /connectors/{name}/offsets</code> endpoint</li>
+                An example request body for the <code>FileStreamSourceConnector</code>:
+                <pre class="line-numbers"><code class="json">
+{
+  "offsets": [
+    {
+      "partition": {
+        "filename": "test.txt"
+      },
+      "offset": {
+        "position": 30
+      }
+    }
+  ]
+}
+                </code></pre>
+                An example request body for the <code>FileStreamSinkConnector</code>:
+                <pre class="line-numbers"><code class="json">
+{
+  "offsets": [
+    {
+      "partition": {
+        "kafka_topic": "test",
+        "kafka_partition": 0
+      },
+      "offset": {
+        "kafka_offset": 5
+      }
+    },
+    {
+      "partition": {
+        "kafka_topic": "test",
+        "kafka_partition": 1
+      },
+      "offset": null
+    }
+  ]
+}
+                </code></pre>
+                The "offset" field may be null to reset the offset for a specific partition (applicable to both source and sink connectors). Note that the request body format depends on the connector implementation in the case of source connectors, whereas there is a common format across all sink connectors.
+            </ul>
+        </li>
     </ul>
 
     <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
