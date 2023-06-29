@@ -23,6 +23,8 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -120,6 +122,58 @@ public class TransactionManager {
     private final Set<TopicPartition> newPartitionsInTransaction;
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
+
+    /**
+     * During its normal course of operations, the transaction manager transitions through different internal
+     * states (i.e. by updating {@link #currentState}) to one of those defined in {@link State}. These state transitions
+     * result from actions on one of the following classes of threads:
+     *
+     * <ul>
+     *     <li><em>Application</em> threads that invokes {@link Producer} API calls</li>
+     *     <li><em>{@link Sender}</em> thread operations</li>
+     * </ul>
+     *
+     * When an invalid state transition is detected during execution on an <em>application</em> thread, the
+     * {@link #currentState} is <em>not updated</em> and an {@link IllegalStateException} is thrown. This gives the
+     * application the opportunity to fix the issue without permanently poisoning the state of the
+     * transaction manager. The {@link Producer} API calls that perform a state transition include:
+     *
+     * <ul>
+     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
+     *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
+     *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
+     *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
+     *     </li>
+     *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls
+     *         {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
+     *     </li>
+     *     <li>{@link Producer#send(ProducerRecord)} (and its variants) calls
+     *         {@link #maybeAddPartition(TopicPartition)} and
+     *         {@link #maybeTransitionToErrorState(RuntimeException)}
+     *     </li>
+     * </ul>
+     *
+     * <p/>
+     *
+     * The {@link Producer} is implemented such that much of its work delegated to and performed asynchronously on the
+     * <em>{@link Sender}</em> thread. This includes record batching, network I/O, broker response handlers, etc. If an
+     * invalid state transition is detected in the <em>{@link Sender}</em> thread, in addition to throwing an
+     * {@link IllegalStateException}, the transaction manager intentionally "poisons" itself by setting its
+     * {@link #currentState} to {@link State#FATAL_ERROR}, a state from which it cannot recover.
+     *
+     * <p/>
+     *
+     * It's important to prevent possible corruption when the transaction manager has determined that it is in a
+     * fatal state. Subsequent transaction operations attempted via either the <em>application</em> or the
+     * <em>{@link Sender}</em> thread should fail. This is achieved when these operations invoke the
+     * {@link #maybeFailWithError()} method, as it causes a {@link KafkaException} to be thrown, ensuring the stated
+     * transactional guarantees are not violated.
+     *
+     * <p/>
+     *
+     * See KAFKA-14831 for more detail.
+     */
+    private final ThreadLocal<Boolean> shouldPoisonStateOnInvalidTransition;
     private PendingStateTransition pendingTransition;
 
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
@@ -211,6 +265,7 @@ public class TransactionManager {
         this.newPartitionsInTransaction = new HashSet<>();
         this.pendingPartitionsInTransaction = new HashSet<>();
         this.partitionsInTransaction = new HashSet<>();
+        this.shouldPoisonStateOnInvalidTransition = ThreadLocal.withInitial(() -> false);
         this.pendingRequests = new PriorityQueue<>(10, Comparator.comparingInt(o -> o.priority().priority));
         this.pendingTxnOffsetCommits = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
@@ -218,6 +273,10 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.txnPartitionMap = new TxnPartitionMap();
         this.apiVersions = apiVersions;
+    }
+
+    void setPoisonStateOnInvalidTransition(boolean shouldPoisonState) {
+        shouldPoisonStateOnInvalidTransition.set(shouldPoisonState);
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -425,6 +484,11 @@ public class TransactionManager {
     }
 
     synchronized public void maybeUpdateProducerIdAndEpoch(TopicPartition topicPartition) {
+        if (hasFatalError()) {
+            log.debug("Ignoring producer ID and epoch update request since the producer is in fatal error state");
+            return;
+        }
+
         if (hasStaleProducerIdAndEpoch(topicPartition) && !hasInflightBatches(topicPartition)) {
             // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
             // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
@@ -984,11 +1048,17 @@ public class TransactionManager {
     private void transitionTo(State target, RuntimeException error) {
         if (!currentState.isTransitionValid(currentState, target)) {
             String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
-            throw new IllegalStateException(idString + "Invalid transition attempted from state "
-                    + currentState.name() + " to state " + target.name());
-        }
+            String message = idString + "Invalid transition attempted from state "
+                    + currentState.name() + " to state " + target.name();
 
-        if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
+            if (shouldPoisonStateOnInvalidTransition.get()) {
+                currentState = State.FATAL_ERROR;
+                lastError = new IllegalStateException(message);
+                throw lastError;
+            } else {
+                throw new IllegalStateException(message);
+            }
+        } else if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
             if (error == null)
                 throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
@@ -1023,6 +1093,10 @@ public class TransactionManager {
         if (lastError instanceof InvalidProducerEpochException) {
             throw new InvalidProducerEpochException("Producer with transactionalId '" + transactionalId
                     + "' and " + producerIdAndEpoch + " attempted to produce with an old epoch");
+        }
+        if (lastError instanceof IllegalStateException) {
+            throw new IllegalStateException("Producer with transactionalId '" + transactionalId
+                    + "' and " + producerIdAndEpoch + " cannot execute transactional method because of previous invalid state transition attempt", lastError);
         }
         throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
     }
