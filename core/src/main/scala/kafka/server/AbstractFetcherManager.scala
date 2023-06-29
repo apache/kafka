@@ -40,27 +40,37 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  private val tags = Map("clientId" -> clientId).asJava
+  newMetrics()
 
-  metricsGroup.newGauge(MaxLagMetricName, () => {
-    // current max lag across all fetchers/topics/partitions
-    fetcherThreadMap.values.foldLeft(0L) { (curMaxLagAll, fetcherThread) =>
-      val maxLagThread = fetcherThread.fetcherLagStats.stats.values.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
-        math.max(curMaxLagThread, lagMetrics.lag))
-      math.max(curMaxLagAll, maxLagThread)
-    }
-  }, tags)
+  private[server] def newMetrics(): Unit = {
+    val tags = Map("clientId" -> clientId).asJava
+    metricsGroup.newGauge(MaxLagMetricName, () => {
+      // current max lag across all fetchers/topics/partitions
+      fetcherThreadMap.values.foldLeft(0L) { (curMaxLagAll, fetcherThread) =>
+        val maxLagThread = fetcherThread.fetcherLagStats.stats.values.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
+          math.max(curMaxLagThread, lagMetrics.lag))
+        math.max(curMaxLagAll, maxLagThread)
+      }
+    }, tags)
 
-  metricsGroup.newGauge(MinFetchRateMetricName, () => {
-    // current min fetch rate across all fetchers/topics/partitions
-    val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
-    fetcherThreadMap.values.foldLeft(headRate)((curMinAll, fetcherThread) =>
-      math.min(curMinAll, fetcherThread.fetcherStats.requestRate.oneMinuteRate))
-  }, tags)
+    metricsGroup.newGauge(MinFetchRateMetricName, () => {
+      // current min fetch rate across all fetchers/topics/partitions
+      val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
+      fetcherThreadMap.values.foldLeft(headRate)((curMinAll, fetcherThread) =>
+        math.min(curMinAll, fetcherThread.fetcherStats.requestRate.oneMinuteRate))
+    }, tags)
 
-  metricsGroup.newGauge(FailedPartitionsCountMetricName, () => failedPartitions.size, tags)
+    metricsGroup.newGauge(FailedPartitionsCountMetricName, () => failedPartitions.size, tags)
 
-  metricsGroup.newGauge(DeadThreadCountMetricName, () => deadThreadCount, tags)
+    metricsGroup.newGauge(DeadThreadCountMetricName, () => deadThreadCount, tags)
+
+    MetricNames = Map(
+      MaxLagMetricName -> tags,
+      MinFetchRateMetricName -> tags,
+      FailedPartitionsCountMetricName -> tags,
+      DeadThreadCountMetricName -> tags
+    )
+  }
 
   private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 
@@ -229,7 +239,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   def removeMetrics(): Unit = {
-    MetricNames.foreach(metricsGroup.removeMetric)
+    MetricNames.foreach(metricTags => metricsGroup.removeMetric(metricTags._1, metricTags._2))
   }
 }
 
@@ -240,12 +250,7 @@ object AbstractFetcherManager {
   private val DeadThreadCountMetricName = "DeadThreadCount"
 
   // Visible for test
-  private[server] val MetricNames = Set(
-    MaxLagMetricName,
-    MinFetchRateMetricName,
-    FailedPartitionsCountMetricName,
-    DeadThreadCountMetricName
-  )
+  private[server] var MetricNames: Map[String, java.util.Map[String, String]] = Map.empty
 }
 
 /**
