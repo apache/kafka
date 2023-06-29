@@ -242,6 +242,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
       // Perform reassignment for topicWithSingleRackPartitions to reverse the replica racks and
       // verify that change in replica racks results in re-assignment based on new racks.
+      println("START")
       val admin = createAdminClient()
       val reassignments = new util.HashMap[TopicPartition, util.Optional[NewPartitionReassignment]]()
       partitionList.foreach { p =>
@@ -253,7 +254,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
         () => admin.listPartitionReassignments().reassignments().get().isEmpty,
         msg = "The reassignment never completed.", waitTimeMs = 30000)
       verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
-
+      println("END")
     } finally {
       executor.shutdownNow()
     }

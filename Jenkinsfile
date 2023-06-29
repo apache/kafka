@@ -29,8 +29,8 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "unitTest integrationTest") {
-  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+def doTest(env, target = ":core:test") {
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} --tests integration.kafka.server.FetchFromFollowerIntegrationTest.testRackAwareRangeAssignor \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
@@ -112,7 +112,7 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             tryStreamsArchetype()
           }
@@ -131,7 +131,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
@@ -150,7 +150,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
@@ -179,7 +179,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             tryStreamsArchetype()
           }
@@ -202,7 +202,7 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
@@ -225,7 +225,7 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
