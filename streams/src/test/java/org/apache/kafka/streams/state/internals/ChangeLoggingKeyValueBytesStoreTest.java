@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
@@ -45,6 +44,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
@@ -82,6 +82,8 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final Integer INPUT_PARTITION = 0;
     private static final Long INPUT_OFFSET = 100L;
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @Before
     public void before() {
@@ -98,7 +100,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             streamsConfig,
             () -> collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            new ThreadCache(new LogContext("testCache "), 0, this.mockStreamsMetrics),
             Time.SYSTEM
         );
     }

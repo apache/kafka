@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -33,11 +32,11 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -45,6 +44,7 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
+import org.mockito.Mock;
 
 import java.io.File;
 import java.util.Collections;
@@ -164,6 +164,12 @@ public class KeyValueStoreTestDriver<K, V> {
         return new KeyValueStoreTestDriver<>(serdes);
     }
 
+    public static <K, V> KeyValueStoreTestDriver<K, V> create(final Class<K> keyClass, final Class<V> valueClass, final StreamsMetricsImpl mockStreamMetrics) {
+        final StateSerdes<K, V> serdes = StateSerdes.withBuiltinTypes("unexpected", keyClass, valueClass);
+        return new KeyValueStoreTestDriver<>(serdes, mockStreamMetrics);
+    }
+
+
     /**
      * Create a driver object that will have a {@link #context()} that records messages
      * {@link ProcessorContext#forward(Object, Object) forwarded} by the store and that provides the specified serializers and
@@ -194,6 +200,13 @@ public class KeyValueStoreTestDriver<K, V> {
     private final InternalMockProcessorContext context;
     private final StateSerdes<K, V> stateSerdes;
 
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
+
+    public void setMockStreamsMetrics(final StreamsMetricsImpl mockStreamsMetrics) {
+        this.mockStreamsMetrics = mockStreamsMetrics;
+    }
+
     @SuppressWarnings("unchecked")
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         props = new Properties();
@@ -221,8 +234,100 @@ public class KeyValueStoreTestDriver<K, V> {
                 logContext,
                 Time.SYSTEM),
             new DefaultProductionExceptionHandler(),
-            new MockStreamsMetrics(new Metrics()),
+                this.mockStreamsMetrics,
             topology
+        ) {
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      final K1 key,
+                                      final V1 value,
+                                      final Headers headers,
+                                      final Integer partition,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer,
+                                      final String processorNodeId,
+                                      final InternalProcessorContext<Void, Void> context) {
+                // for byte arrays we need to wrap it for comparison
+
+                final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
+                final byte[] valueBytes = valueSerializer.serialize(topic, headers, value);
+
+                final K keyTest = serdes.keyFrom(keyBytes);
+                final V valueTest = serdes.valueFrom(valueBytes);
+
+                recordFlushed(keyTest, valueTest);
+            }
+
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      final K1 key,
+                                      final V1 value,
+                                      final Headers headers,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer,
+                                      final String processorNodeId,
+                                      final InternalProcessorContext<Void, Void> context,
+                                      final StreamPartitioner<? super K1, ? super V1> partitioner) {
+                throw new UnsupportedOperationException();
+            }
+        };
+
+        final File stateDir = TestUtils.tempDirectory();
+        //noinspection ResultOfMethodCallIgnored
+        stateDir.mkdirs();
+        stateSerdes = serdes;
+
+        context = new InternalMockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
+            final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
+
+            @Override
+            public ThreadCache cache() {
+                return cache;
+            }
+
+            @Override
+            public Map<String, Object> appConfigs() {
+                return new StreamsConfig(props).originals();
+            }
+
+            @Override
+            public Map<String, Object> appConfigsWithPrefix(final String prefix) {
+                return new StreamsConfig(props).originalsWithPrefix(prefix);
+            }
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes, final StreamsMetricsImpl mockStreamsMetrics) {
+        props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+
+        final ProcessorTopology topology = mock(ProcessorTopology.class);
+        when(topology.sinkTopics()).thenReturn(Collections.emptySet());
+
+        final LogContext logContext = new LogContext("KeyValueStoreTestDriver ");
+        final RecordCollector recordCollector = new RecordCollectorImpl(
+                logContext,
+                new TaskId(0, 0),
+                new StreamsProducer(
+                        new StreamsConfig(props),
+                        "threadId",
+                        new MockClientSupplier(),
+                        null,
+                        null,
+                        logContext,
+                        Time.SYSTEM),
+                new DefaultProductionExceptionHandler(),
+                mockStreamsMetrics,
+                topology
         ) {
             @Override
             public <K1, V1> void send(final String topic,

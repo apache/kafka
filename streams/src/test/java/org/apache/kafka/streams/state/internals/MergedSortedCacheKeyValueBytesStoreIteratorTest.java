@@ -16,28 +16,42 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
     private final String namespace = "0.0-one";
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @Before
     public void setUp() {
+        this.mockStreamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+        final Sensor mockSensor = mock(Sensor.class);
+        when(mockStreamsMetrics.cacheLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class)))
+                .thenReturn(mockSensor);
+        when(mockStreamsMetrics.taskLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class))).thenReturn(mockSensor);
+
         store = new InMemoryKeyValueStore(namespace);
-        cache = new ThreadCache(new LogContext("testCache "), 10000L, new MockStreamsMetrics(new Metrics()));
+        cache = new ThreadCache(new LogContext("testCache "), 10000L, this.mockStreamsMetrics);
     }
     @Test
     public void shouldIterateOverRange() {
@@ -175,7 +189,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     @Test
     public void shouldPeekNextKey() {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore("one");
-        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, new MockStreamsMetrics(new Metrics()));
+        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, this.mockStreamsMetrics);
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);
@@ -204,7 +218,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     @Test
     public void shouldPeekNextKeyReverse() {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore("one");
-        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, new MockStreamsMetrics(new Metrics()));
+        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, this.mockStreamsMetrics);
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);

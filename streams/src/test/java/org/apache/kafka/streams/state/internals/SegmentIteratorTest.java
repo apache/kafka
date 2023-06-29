@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -30,6 +29,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -52,6 +52,8 @@ public class SegmentIteratorTest {
     private final HasNextCondition hasNextCondition = Iterator::hasNext;
 
     private SegmentIterator<KeyValueSegment> iterator = null;
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @SuppressWarnings("rawtypes")
     @Before
@@ -64,7 +66,7 @@ public class SegmentIteratorTest {
             new ThreadCache(
                 new LogContext("testCache "),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                this.mockStreamsMetrics));
         segmentOne.init((StateStoreContext) context, segmentOne);
         segmentTwo.init((StateStoreContext) context, segmentTwo);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());

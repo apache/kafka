@@ -18,12 +18,13 @@ package org.apache.kafka.streams.state.internals;
 
 import java.util.Collection;
 import java.util.function.Function;
-import org.apache.kafka.common.metrics.Metrics;
+
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
@@ -39,11 +40,16 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 
+import org.mockito.Mock;
+import org.mockito.Mockito;
+
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @RunWith(Parameterized.class)
 public class MergedSortedCacheWrappedWindowStoreIteratorTest {
@@ -61,7 +67,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     private final List<KeyValue<Long, byte[]>> windowStoreKvPairs = new ArrayList<>();
-    private final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L,  new MockStreamsMetrics(new Metrics()));
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
+    private ThreadCache cache;
     private final String namespace = "0.0-one";
     private final StateSerdes<String, String> stateSerdes = new StateSerdes<>("foo", Serdes.String(), Serdes.String());
     private Function<byte[], Long> tsExtractor;
@@ -87,6 +95,15 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
 
     @Before
     public void setUp() {
+        this.mockStreamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+        final Sensor mockSensor = mock(Sensor.class);
+        when(mockStreamsMetrics.cacheLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class)))
+                .thenReturn(mockSensor);
+        when(mockStreamsMetrics.taskLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class))).thenReturn(mockSensor);
+
+        this.cache = new ThreadCache(new LogContext("testCache "), 1000000L,  this.mockStreamsMetrics);
         switch (schemaType) {
             case KEY_FIRST_SCHEMA:
                 tsExtractor = KeyFirstWindowKeySchema::extractStoreTimestamp;

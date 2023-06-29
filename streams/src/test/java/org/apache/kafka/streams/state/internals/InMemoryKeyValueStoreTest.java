@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -34,6 +36,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,13 +50,29 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private KeyValueStore<Bytes, byte[]> byteStore;
     private final Serializer<String> stringSerializer = new StringSerializer();
-    private final KeyValueStoreTestDriver<Bytes, byte[]> byteStoreDriver = KeyValueStoreTestDriver.create(Bytes.class, byte[].class);
+    private KeyValueStoreTestDriver<Bytes, byte[]> byteStoreDriver;
     private InMemoryKeyValueStore inMemoryKeyValueStore;
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
+
+    @Override
+    protected KeyValueStoreTestDriver<Integer, String> createKeyValueStoreTestDriver() {
+        mockStreamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+        final Sensor mockSensor = mock(Sensor.class);
+        when(mockStreamsMetrics.taskLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class))).thenReturn(mockSensor);
+
+        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class, mockStreamsMetrics);
+        this.byteStoreDriver = KeyValueStoreTestDriver.create(Bytes.class, byte[].class, mockStreamsMetrics);
+        return driver;
+    }
 
     @Before
     public void createStringKeyValueStore() {

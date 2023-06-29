@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -34,8 +34,8 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -46,6 +46,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.charset.StandardCharsets;
@@ -94,12 +96,22 @@ public class CachingInMemorySessionStoreTest {
     private InternalMockProcessorContext context;
     private CachingSessionStore cachingStore;
     private ThreadCache cache;
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @Before
     public void before() {
+        mockStreamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+        final Sensor mockSensor = mock(Sensor.class);
+        when(mockStreamsMetrics.cacheLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class)))
+                .thenReturn(mockSensor);
+        when(mockStreamsMetrics.taskLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class))).thenReturn(mockSensor);
+
         underlyingStore = new InMemorySessionStore("store-name", Long.MAX_VALUE, "metric-scope");
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
-        cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+        cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, mockStreamsMetrics);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, new RecordHeaders()));
         cachingStore.init((StateStoreContext) context, cachingStore);

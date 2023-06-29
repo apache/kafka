@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -52,6 +52,8 @@ public class KeyValueSegmentsTest {
     private KeyValueSegments segments;
     private File stateDirectory;
     private final String storeName = "test";
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @Before
     public void createContext() {
@@ -61,7 +63,7 @@ public class KeyValueSegmentsTest {
             Serdes.String(),
             Serdes.Long(),
             new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, this.mockStreamsMetrics)
         );
         segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
         segments.openExisting(context, -1L);

@@ -41,7 +41,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -60,6 +59,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
+import org.mockito.Mock;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -104,6 +104,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     final long segmentInterval = 60_000L;
     final String storeName = "bytes-store";
 
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
+
     @Parameter
     public SegmentedBytesStore.KeySchema schema;
 
@@ -145,7 +148,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             Serdes.String(),
             Serdes.Long(),
             new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, mockStreamsMetrics)
         );
         bytesStore.init((StateStoreContext) context, bytesStore);
     }
@@ -552,7 +555,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new ThreadCache(new LogContext("testCache "), 0, mockStreamsMetrics),
                 Time.SYSTEM
         );
         bytesStore = getBytesStore();
@@ -590,7 +593,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new ThreadCache(new LogContext("testCache "), 0, mockStreamsMetrics),
                 Time.SYSTEM
         );
         bytesStore = getBytesStore();
@@ -630,7 +633,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new ThreadCache(new LogContext("testCache "), 0, mockStreamsMetrics),
                 Time.SYSTEM
         );
         bytesStore = getBytesStore();
@@ -672,7 +675,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new ThreadCache(new LogContext("testCache "), 0, mockStreamsMetrics),
                 Time.SYSTEM
         );
         bytesStore = getBytesStore();

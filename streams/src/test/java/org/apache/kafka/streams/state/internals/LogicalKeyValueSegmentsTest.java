@@ -26,17 +26,17 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.List;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.mockito.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,6 +53,9 @@ public class LogicalKeyValueSegmentsTest {
 
     private LogicalKeyValueSegments segments;
 
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
+
     @Before
     public void setUp() {
         context = new InternalMockProcessorContext<>(
@@ -60,7 +63,7 @@ public class LogicalKeyValueSegmentsTest {
             Serdes.String(),
             Serdes.Long(),
             new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, this.mockStreamsMetrics)
         );
         segments = new LogicalKeyValueSegments(
             STORE_NAME,
