@@ -30,7 +30,7 @@ public class GeneralAssignmentBuilder extends UniformAssignor.AbstractAssignment
     }
 
     @Override
-    Map<String, List<RackAwareTopicIdPartition>> build() {
+    GroupAssignment build() {
         return null;
     }
 }

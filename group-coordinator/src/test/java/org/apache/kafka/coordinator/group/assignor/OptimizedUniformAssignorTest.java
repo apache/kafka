@@ -60,9 +60,9 @@ public class OptimizedUniformAssignorTest {
         );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
 
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        assertThrows(PartitionAssignorException.class,
+            () -> assignor.assign(assignmentSpec));
     }
 
     @Test
@@ -174,7 +174,35 @@ public class OptimizedUniformAssignorTest {
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
     }
+    @Test
+    public void testSameSubscriptions() {
+        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        for (int i = 1; i < 100; i++) {
+            Uuid topicName = Uuid.randomUuid();
+            topics.put(topicName, new AssignmentTopicMetadata(100));
+        }
+        //System.out.println("Topics map is " + topics);
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
+        List<Uuid> subscribedTopics = new ArrayList<>();
+        for (Uuid topicId : topics.keySet()){
+            subscribedTopics.add(topicId);
+        }
+        //System.out.println("Subscriptions list is " + topics);
+
+        for (int i = 1; i < 50; i++) {
+            members.put("consumer"+i, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                subscribedTopics,
+                Collections.emptyMap()
+            ));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        //System.out.println("Final Assignment is " + computedAssignment);
+    }
     @Test
     public void testReassignmentForTwoConsumersTwoTopicsGivenUnbalancedPrevAssignment() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
@@ -232,7 +260,7 @@ public class OptimizedUniformAssignorTest {
     @Test
     public void testReassignmentWhenPartitionsAreAddedForTwoConsumersTwoTopics() {
         // Simulating adding partition to T1 and T2 - originally T1 -> 3 Partitions and T2 -> 3 Partitions
-        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        Map<Uuid, AssignmentTopicMetadata> topics = new TreeMap<>();
         topics.put(topic1Uuid, new AssignmentTopicMetadata(6));
         topics.put(topic2Uuid, new AssignmentTopicMetadata(5));
 
@@ -272,13 +300,13 @@ public class OptimizedUniformAssignorTest {
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
         expectedAssignment.put(consumerA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 2, 4),
-            mkTopicAssignment(topic2Uuid, 0, 3, 4)
+            mkTopicAssignment(topic1Uuid, 0, 2, 3, 5),
+            mkTopicAssignment(topic2Uuid, 0, 4)
         ));
 
         expectedAssignment.put(consumerB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1, 3, 5),
-            mkTopicAssignment(topic2Uuid, 1, 2)
+            mkTopicAssignment(topic1Uuid, 1, 4),
+            mkTopicAssignment(topic2Uuid, 1, 2, 3)
         ));
 
         // TOPIC WISE THE LOAD COULD BE SPLIT BETTER, check what the order is
