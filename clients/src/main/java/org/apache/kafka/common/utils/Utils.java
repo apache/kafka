@@ -983,7 +983,7 @@ public final class Utils {
                         outer.getMessage());
             } catch (NoSuchFileException noSuch) {
                 log.debug("Source file {} not exists, supress exception to prevent server shutdown", source, noSuch);
-            } catch (IOException inner) {j
+            } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
             }
