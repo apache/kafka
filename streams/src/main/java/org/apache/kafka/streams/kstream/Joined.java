@@ -225,7 +225,11 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
     }
 
     /**
-     * Set the grace period on the stream side of the join. Records will enter a buffer before being processed. Out of order records in the grace period will be processed in timestamp order. Late records, out of the grace period, will be executed right as they come in, if it is past the table history retention this could result in joins on the wrong version or a null join. Long gaps in stream side arriving records will cause records to be delayed in processing, even resulting in be processed out of the grace period window.
+     * Set the grace period on the stream side of the join. Records will enter a buffer before being processed.
+     * Out of order records in the grace period will be processed in timestamp order. Late records, out of the
+     * grace period, will be executed right as they come in, if it is past the table history retention this could
+     * result in a null join. Long gaps in stream side arriving records will cause
+     * records to be delayed in processing.
      *
      *
      * @param gracePeriod the duration of the grace period. Must be less than the joining table's history retention.

@@ -188,9 +188,38 @@ public class KStreamKTableJoinTest {
             new KeyValueTimestamp<>(0, "X0+YY0", 0),
             new KeyValueTimestamp<>(1, "X1+YY1", 1));
 
+        inputStreamTopic.pipeInput(5, "test", 7);
+
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(2, "X2+YY2", 2),
+            new KeyValueTimestamp<>(2, "X2+YY2", 2),
+            new KeyValueTimestamp<>(3, "X3+YY3", 3),
+            new KeyValueTimestamp<>(3, "X3+YY3", 3));
+
+
         // push all items to the table. this should not produce any item
         pushToTableNonRandom(4, "YYY");
         processor.checkAndClearProcessResult(EMPTY);
+    }
+
+    @Test
+    public void shouldHandleLateJoinsWithGracePeriod() {
+        makeJoin(Duration.ofMillis(2));
+
+        // push four items to the table. this should not produce any item.
+        pushToTableNonRandom(4, "Y");
+        processor.checkAndClearProcessResult(EMPTY);
+
+        // push 4 records into the buffer and evict the first two
+        pushToStream(4, "X");
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1+Y1", 1));
+
+        //should be processed immediately and not evict any other records
+        pushToStream(1, "X");
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0));
     }
 
     @Test

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -101,16 +102,22 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         } else {
             if (!buffer.get().put(observedStreamTime, record, internalProcessorContext.recordContext())) {
                 doJoin(record);
+            } else {
+                buffer.get().evictWhile(() -> true, this::emit);
             }
-            buffer.get().evictWhile(() -> true, this::emit);
         }
     }
 
     private void emit(final TimeOrderedKeyValueBuffer.Eviction<K1, V1> toEmit) {
         final Record<K1, V1> record = new Record<>(toEmit.key(), toEmit.value(), toEmit.recordContext().timestamp())
             .withHeaders(toEmit.recordContext().headers());
-        internalProcessorContext.setRecordContext(toEmit.recordContext());
-        doJoin(record);
+        final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
+        try {
+            internalProcessorContext.setRecordContext(toEmit.recordContext());
+            doJoin(record);
+        } finally {
+            internalProcessorContext.setRecordContext(prevRecordContext);
+        }
     }
 
     protected void updateObservedStreamTime(final long timestamp) {
