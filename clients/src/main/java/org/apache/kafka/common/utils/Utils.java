@@ -982,8 +982,8 @@ public final class Utils {
                 log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
                         outer.getMessage());
             } catch (NoSuchFileException noSuch) {
-                log.debug("Source file not exists, supress exception to prevent server shutdown", noSuch);
-            } catch (IOException inner) {
+                log.debug("Source file {} not exists, supress exception to prevent server shutdown", source, noSuch);
+            } catch (IOException inner) {j
                 inner.addSuppressed(outer);
                 throw inner;
             }
