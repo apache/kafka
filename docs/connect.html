@@ -443,7 +443,7 @@ errors.tolerance=all</pre>
 
     <p>If a sink connector supports exactly-once semantics, to enable exactly-once at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property <code>consumer.isolation.level</code> to <code>read_committed</code> or, if running a version of Kafka Connect that supports it, using a <a href="#connectconfigs_connector.client.config.override.policy">connector client config override policy</a> that allows the <code>consumer.override.isolation.level</code> property to be set to <code>read_committed</code> in individual connector configs. There are no additional ACL requirements.</p>
 
-    <h5><a id="connect_exactlyoncesource" href="connect_exactlyoncesource">Source connectors</a></h5>
+    <h5><a id="connect_exactlyoncesource" href="#connect_exactlyoncesource">Source connectors</a></h5>
 
     <p>If a source connector supports exactly-once semantics, you must configure your Connect cluster to enable framework-level support for exactly-once source connectors. Additional ACLs may be necessary if running against a secured Kafka cluster. Note that exactly-once support for source connectors is currently only available in distributed mode; standalone Connect workers cannot provide exactly-once semantics.</p>
 
