@@ -17,7 +17,7 @@
 package kafka.log.remote
 
 import kafka.log.UnifiedLog
-import kafka.log.remote.RemoteIndexCache.RemoteLogIndexCacheCleanerThread
+import kafka.log.remote.RemoteIndexCache.{RemoteLogIndexCacheCleanerThread, RemoteOffsetIndexFile, RemoteOffsetIndexFileName, RemoteTimeIndexFile, RemoteTimeIndexFileName, RemoteTransactionIndexFile, RemoteTransactionIndexFileName}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
@@ -44,7 +43,7 @@ class RemoteIndexCacheTest {
   private val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
   private val time = new MockTime()
   private val brokerId = 1
-  private val baseOffset: Long = Int.MaxValue + 10_000 // start with a base offset which is a long
+  private val baseOffset: Long = Int.MaxValue.toLong + 10_1337L // start with a base offset which is a long
   private val lastOffset: Long = baseOffset + 30L
   private val segmentSize: Int = 1024
   private val rsm: RemoteStorageManager = mock(classOf[RemoteStorageManager])
@@ -105,9 +104,9 @@ class RemoteIndexCacheTest {
     val txnIndexFile = entry.txnIndex.file().toPath
     val timeIndexFile = entry.timeIndex.file().toPath
 
-    val expectedOffsetIndexFileName: String = cache.generateFileNamePrefixForIndex(rlsMetadata) + UnifiedLog.IndexFileSuffix
-    val expectedTimeIndexFileName: String = cache.generateFileNamePrefixForIndex(rlsMetadata) + UnifiedLog.TimeIndexFileSuffix
-    val expectedTxnIndexFileName: String = cache.generateFileNamePrefixForIndex(rlsMetadata) + UnifiedLog.TxnIndexFileSuffix
+    val expectedOffsetIndexFileName: String = RemoteOffsetIndexFileName(rlsMetadata)
+    val expectedTimeIndexFileName: String = RemoteTimeIndexFileName(rlsMetadata)
+    val expectedTxnIndexFileName: String = RemoteTransactionIndexFileName(rlsMetadata)
 
     assertEquals(expectedOffsetIndexFileName, offsetIndexFile.getFileName.toString)
     assertEquals(expectedTxnIndexFileName, txnIndexFile.getFileName.toString)
@@ -228,12 +227,6 @@ class RemoteIndexCacheTest {
 
     // verify that entry is only closed once
     verify(spyEntry).close()
-  }
-
-  @ParameterizedTest
-  @
-  def testGetBaseOffsetFromIndexFileName(fileName: String, expectedOffset: Long): Unit = {
-    assertEquals(expectedOffset, cache.getBaseOffsetFromIndexFileName(fileName))
   }
 
   @Test
@@ -486,24 +479,19 @@ class RemoteIndexCacheTest {
   }
 
   private def createTxIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TransactionIndex = {
-    val fileNamePrefix = cache.generateFileNamePrefixForIndex(metadata)
-    val txnIdxFile = new File(tpDir, fileNamePrefix + UnifiedLog.TxnIndexFileSuffix)
+    val txnIdxFile = RemoteTransactionIndexFile(tpDir, metadata)
     txnIdxFile.createNewFile()
     new TransactionIndex(metadata.startOffset(), txnIdxFile)
   }
 
   private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TimeIndex = {
-    val fileNamePrefix = cache.generateFileNamePrefixForIndex(metadata)
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new TimeIndex(new File(tpDir, fileNamePrefix + UnifiedLog.TimeIndexFileSuffix),
-      metadata.startOffset(), maxEntries * 12)
+    new TimeIndex(RemoteTimeIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 12)
   }
 
   private def createOffsetIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata) = {
-    val fileNamePrefix = cache.generateFileNamePrefixForIndex(metadata)
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new OffsetIndex(new File(tpDir, fileNamePrefix + UnifiedLog.IndexFileSuffix),
-      metadata.startOffset(), maxEntries * 8)
+    new OffsetIndex(RemoteOffsetIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 8)
   }
 
   private def generateRemoteLogSegmentMetadata(size: Int,

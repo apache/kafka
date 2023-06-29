@@ -18,7 +18,7 @@ package kafka.log.remote
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine, RemovalCause}
 import kafka.log.UnifiedLog
-import kafka.log.remote.RemoteIndexCache.{DirName, RemoteLogIndexCacheCleanerThread}
+import kafka.log.remote.RemoteIndexCache.{DirName, OffsetFromRemoteIndexFileName, RemoteLogIndexCacheCleanerThread, RemoteLogSegmentIdFromRemoteIndexFileName, RemoteOffsetIndexFile, RemoteTimeIndexFile, RemoteTransactionIndexFile}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{CoreUtils, Logging, threadsafe}
 import org.apache.kafka.common.Uuid
@@ -39,6 +39,59 @@ object RemoteIndexCache {
   val DirName = "remote-log-index-cache"
   val TmpFileSuffix = ".tmp"
   val RemoteLogIndexCacheCleanerThread = "remote-log-index-cleaner"
+
+  def RemoteLogSegmentIdFromRemoteIndexFileName(fileName: String): Uuid = {
+    val underscoreIndex = fileName.indexOf("_")
+    val dotIndex = fileName.indexOf(".")
+    Uuid.fromString(fileName.substring(underscoreIndex + 1, dotIndex))
+  }
+
+  def OffsetFromRemoteIndexFileName(fileName: String): Long = {
+    fileName.substring(0, fileName.indexOf("_")).toLong
+  }
+
+  /**
+   * Generates prefix for file name for the on-disk representation of remote indexes.
+   *
+   * Example of file name prefix is 45_dsdsd where 45 represents the base offset for the segment and
+   * sdsdsd represents the unique [[RemoteLogSegmentId]]
+   *
+   * @param remoteLogSegmentMetadata remote segment for the remote indexes
+   * @return string which should be used as prefix for on-disk representation of remote indexes
+   */
+  private def generateFileNamePrefixForIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+    val startOffset = remoteLogSegmentMetadata.startOffset
+    val segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id
+    // uuid.toString uses URL encoding which is safe for filenames and URLs.
+    s"${startOffset.toString}_${segmentId.toString}"
+  }
+
+  def RemoteOffsetIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
+    new File(dir, RemoteOffsetIndexFileName(remoteLogSegmentMetadata))
+  }
+
+  def RemoteOffsetIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+    val prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
+    prefix + UnifiedLog.IndexFileSuffix
+  }
+
+  def RemoteTimeIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
+    new File(dir, RemoteTimeIndexFileName(remoteLogSegmentMetadata))
+  }
+
+  def RemoteTimeIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+    val prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
+    prefix + UnifiedLog.TimeIndexFileSuffix
+  }
+
+  def RemoteTransactionIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
+    new File(dir, RemoteTransactionIndexFileName(remoteLogSegmentMetadata))
+  }
+
+  def RemoteTransactionIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+    val prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
+    prefix + UnifiedLog.TxnIndexFileSuffix
+  }
 }
 
 @threadsafe
@@ -206,23 +259,21 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
     Files.list(cacheDir.toPath).forEach((path:Path) => {
       val indexFileName = path.getFileName.toString
-
-      // Create entries for each path if all the index files exist.
-      val offset = getBaseOffsetFromIndexFileName(indexFileName)
-      val uuid = getRemoteLogSegmentIdFromIndexFileName(indexFileName)
-      val fileNameWithoutDotExtensions = indexFileName.substring(0, indexFileName.indexOf("."))
-
+      val uuid = RemoteLogSegmentIdFromRemoteIndexFileName(indexFileName)
       // It is safe to update the internalCache non-atomically here since this function is always called by a single
       // thread only.
       if (!internalCache.asMap().containsKey(uuid)) {
+        val fileNameWithoutDotExtensions = indexFileName.substring(0, indexFileName.indexOf("."))
         val offsetIndexFile = new File(cacheDir, fileNameWithoutDotExtensions + UnifiedLog.IndexFileSuffix)
         val timestampIndexFile = new File(cacheDir, fileNameWithoutDotExtensions + UnifiedLog.TimeIndexFileSuffix)
         val txnIndexFile = new File(cacheDir, fileNameWithoutDotExtensions + UnifiedLog.TxnIndexFileSuffix)
 
+        // Create entries for each path if all the index files exist.
         if (Files.exists(offsetIndexFile.toPath) &&
             Files.exists(timestampIndexFile.toPath) &&
             Files.exists(txnIndexFile.toPath)) {
 
+          val offset = OffsetFromRemoteIndexFileName(indexFileName)
           val offsetIndex = new OffsetIndex(offsetIndexFile, offset, Int.MaxValue, false)
           offsetIndex.sanityCheck()
 
@@ -291,14 +342,11 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
       val cacheKey = remoteLogSegmentMetadata.remoteLogSegmentId().id()
       internalCache.get(cacheKey, (_: Uuid) => {
-        def loadIndexFile[T](fileName: String,
-                             suffix: String,
+        def loadIndexFile[T](indexFile: File,
                              fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
                              readIndex: File => T): T = {
-          val indexFile = new File(cacheDir, fileName + suffix)
-
           def fetchAndCreateIndex(): T = {
-            val tmpIndexFile = new File(cacheDir, fileName + suffix + RemoteIndexCache.TmpFileSuffix)
+            val tmpIndexFile = new File(cacheDir, indexFile.getName + RemoteIndexCache.TmpFileSuffix)
 
             val inputStream = fetchRemoteIndex(remoteLogSegmentMetadata)
             try {
@@ -327,9 +375,8 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         }
 
         val startOffset = remoteLogSegmentMetadata.startOffset()
-        val fileName = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
-
-        val offsetIndex: OffsetIndex = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
+        val offsetIndexFile = RemoteOffsetIndexFile(cacheDir, remoteLogSegmentMetadata)
+        val offsetIndex: OffsetIndex = loadIndexFile(offsetIndexFile,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
           file => {
             val index = new OffsetIndex(file, startOffset, Int.MaxValue, false)
@@ -337,7 +384,8 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             index
           })
 
-        val timeIndex: TimeIndex = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
+        val timeIndexFile = RemoteTimeIndexFile(cacheDir, remoteLogSegmentMetadata)
+        val timeIndex: TimeIndex = loadIndexFile(timeIndexFile,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
           file => {
             val index = new TimeIndex(file, startOffset, Int.MaxValue, false)
@@ -345,7 +393,8 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             index
           })
 
-        val txnIndex: TransactionIndex = loadIndexFile(fileName, UnifiedLog.TxnIndexFileSuffix,
+        val txnIndexFile = RemoteTransactionIndexFile(cacheDir, remoteLogSegmentMetadata)
+        val txnIndex: TransactionIndex = loadIndexFile(txnIndexFile,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION),
           file => {
             val index = new TransactionIndex(startOffset, file)
@@ -368,32 +417,6 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     inReadLock(lock) {
       getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position
     }
-  }
-
-  /**
-   * Generates prefix for file name for the on-disk representation of remote indexes.
-   *
-   * Example of file name prefix is 45_dsdsd where 45 represents the base offset for the segment and
-   * sdsdsd represents the unique [[RemoteLogSegmentId]]
-   *
-   * @param remoteLogSegmentMetadata remote segment for the remote indexes
-   * @return string which should be used as prefix for on-disk representation of remote indexes
-   */
-  private[remote] def generateFileNamePrefixForIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
-    val startOffset = remoteLogSegmentMetadata.startOffset
-    val segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id
-    // uuid.toString uses URL encoding which is safe for filenames and URLs.
-    s"${startOffset.toString}_${segmentId.toString}"
-  }
-
-  private[remote] def getRemoteLogSegmentIdFromIndexFileName(fileName: String): Uuid = {
-    val underscoreIndex = fileName.indexOf("_")
-    val dotIndex = fileName.indexOf(".")
-    Uuid.fromString(fileName.substring(underscoreIndex + 1, dotIndex))
-  }
-
-  private[remote] def getBaseOffsetFromIndexFileName(fileName: String): Long = {
-    fileName.split('_').head.toLong
   }
 
   /**
