@@ -1566,11 +1566,7 @@ public class TaskManager {
     }
 
     Set<TaskId> standbyTaskIds() {
-        if (stateUpdater != null) {
-            return stateUpdater.getStandbyTasks().stream().map(Task::id).collect(Collectors.toSet());
-        } else {
-            return standbyTaskStream().map(Task::id).collect(Collectors.toSet());
-        }
+        return standbyTaskStream().map(Task::id).collect(Collectors.toSet());
     }
 
     Map<TaskId, Task> allTasks() {
