@@ -18,7 +18,7 @@ package kafka.log.remote
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine, RemovalCause}
 import kafka.log.UnifiedLog
-import kafka.log.remote.RemoteIndexCache.{DirName, remoteLogIndexCacheCleanerThread}
+import kafka.log.remote.RemoteIndexCache.{DirName, RemoteLogIndexCacheCleanerThread}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{CoreUtils, Logging, threadsafe}
 import org.apache.kafka.common.Uuid
@@ -38,7 +38,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 object RemoteIndexCache {
   val DirName = "remote-log-index-cache"
   val TmpFileSuffix = ".tmp"
-  val remoteLogIndexCacheCleanerThread = "remote-log-index-cleaner"
+  val RemoteLogIndexCacheCleanerThread = "remote-log-index-cleaner"
 }
 
 @threadsafe
@@ -104,11 +104,18 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
     inWriteLock(lock) {
       // close is no-op if entry is already marked for cleanup. Mmap resources are released during cleanup.
       if (!markedForCleanup) {
-        Utils.closeQuietly(offsetIndex, "Closing the offset index.")
-        Utils.closeQuietly(timeIndex, "Closing the time index.")
-        Utils.closeQuietly(txnIndex, "Closing the transaction index.")
+        Utils.closeQuietly(offsetIndex, "offset index")
+        Utils.closeQuietly(timeIndex, "time index")
+        Utils.closeQuietly(txnIndex, "transaction index")
       }
     }
+  }
+
+  override def toString: String = {
+    s"RemoteIndexCacheEntry(" +
+      s"timeIndex=${timeIndex.file.getName}, " +
+      s"txnIndex=${txnIndex.file.getName}, " +
+      s"offsetIndex=${offsetIndex.file.getName})"
   }
 }
 
@@ -168,11 +175,11 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     .maximumSize(maxSize)
     // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
     // evicted (means removal due to the policy)
-    .removalListener((_: Uuid, entry: Entry, _: RemovalCause) => {
+    .removalListener((key: Uuid, entry: Entry, _: RemovalCause) => {
       // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
       entry.markForCleanup()
       if (!expiredIndexes.offer(entry)) {
-        error(s"Error while inserting entry $entry into the cleaner queue")
+        error(s"Error while inserting entry $entry for key $key into the cleaner queue because queue is full.")
       }
     })
     .build[Uuid, Entry]()
@@ -198,20 +205,19 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     })
 
     Files.list(cacheDir.toPath).forEach((path:Path) => {
-      val pathStr = path.getFileName.toString
-      val name = pathStr.substring(0, pathStr.lastIndexOf("_") + 1)
+      val indexFileName = path.getFileName.toString
 
       // Create entries for each path if all the index files exist.
-      val firstIndex = name.indexOf('_')
-      val offset = name.substring(0, firstIndex).toInt
-      val uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')))
+      val offset = getBaseOffsetFromIndexFileName(indexFileName)
+      val uuid = getRemoteLogSegmentIdFromIndexFileName(indexFileName)
+      val fileNameWithoutDotExtensions = indexFileName.substring(0, indexFileName.indexOf("."))
 
       // It is safe to update the internalCache non-atomically here since this function is always called by a single
       // thread only.
       if (!internalCache.asMap().containsKey(uuid)) {
-        val offsetIndexFile = new File(cacheDir, name + UnifiedLog.IndexFileSuffix)
-        val timestampIndexFile = new File(cacheDir, name + UnifiedLog.TimeIndexFileSuffix)
-        val txnIndexFile = new File(cacheDir, name + UnifiedLog.TxnIndexFileSuffix)
+        val offsetIndexFile = new File(cacheDir, fileNameWithoutDotExtensions + UnifiedLog.IndexFileSuffix)
+        val timestampIndexFile = new File(cacheDir, fileNameWithoutDotExtensions + UnifiedLog.TimeIndexFileSuffix)
+        val txnIndexFile = new File(cacheDir, fileNameWithoutDotExtensions + UnifiedLog.TxnIndexFileSuffix)
 
         if (Files.exists(offsetIndexFile.toPath) &&
             Files.exists(timestampIndexFile.toPath) &&
@@ -240,32 +246,29 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   init()
 
   // Start cleaner thread that will clean the expired entries
-  private[remote] var cleanerThread: ShutdownableThread = new ShutdownableThread(remoteLogIndexCacheCleanerThread) {
+  private[remote] var cleanerThread: ShutdownableThread = new ShutdownableThread(RemoteLogIndexCacheCleanerThread) {
     setDaemon(true)
 
     override def doWork(): Unit = {
-      if (!isRemoteIndexCacheClosed.get()) {
-        try {
-          val entry = expiredIndexes.take()
-          debug(s"Cleaning up index entry $entry")
-          entry.cleanup()
-        } catch {
-          // propagate the InterruptedException outside to correctly close the thread.
-          // do not propagate any other exceptions because it will kill the thread
-          case ex: InterruptedException =>
-            // cleaner thread should only be interrupted when cache is being closed, else it's an error
-            if (!isRemoteIndexCacheClosed.get()) {
-              error("Cleaner thread received interruption but remote index cache is not closed", ex)
-              throw ex
-            } else {
-              debug("Cleaner thread was interrupted on cache shutdown")
-            }
-          case ex: Throwable => error("Error occurred while fetching/cleaning up expired entry", ex)
-        }
-      } else {
-        error("Cleaner thread is not closed even though associated cache is closed." +
-          "Initiating shutdown to prevent thread leak.")
-        cleanerThread.initiateShutdown
+      var expiredEntryOpt: Option[Entry] = None
+      try {
+        expiredEntryOpt = Some(expiredIndexes.take())
+        expiredEntryOpt.foreach( expiredEntry => {
+          log.debug(s"Cleaning up index entry $expiredEntry")
+          expiredEntry.cleanup()
+        })
+      } catch {
+        case ie: InterruptedException =>
+          // cleaner thread should only be interrupted when cache is being closed, else it's an error
+          if (!isRemoteIndexCacheClosed.get()) {
+            log.error("Cleaner thread received interruption but remote index cache is not closed", ie)
+            // propagate the InterruptedException outside to correctly close the thread.
+            throw ie
+          } else {
+            log.debug("Cleaner thread was interrupted on cache shutdown")
+          }
+        // do not exit for exceptions other than InterruptedException
+        case ex: Throwable => log.error(s"Error occurred while cleaning up expired entry $expiredEntryOpt", ex)
       }
     }
   }
@@ -279,6 +282,13 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     }
 
     inReadLock(lock) {
+      // while this thread was waiting for lock, another thread may have changed the value of isRemoteIndexCacheClosed.
+      // check for index close again
+      if (isRemoteIndexCacheClosed.get()) {
+        throw new IllegalStateException(s"Unable to fetch index for " +
+          s"segment id=${remoteLogSegmentMetadata.remoteLogSegmentId().id()}. Index instance is already closed.")
+      }
+
       val cacheKey = remoteLogSegmentMetadata.remoteLogSegmentId().id()
       internalCache.get(cacheKey, (_: Uuid) => {
         def loadIndexFile[T](fileName: String,
@@ -360,11 +370,30 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     }
   }
 
+  /**
+   * Generates prefix for file name for the on-disk representation of remote indexes.
+   *
+   * Example of file name prefix is 45_dsdsd where 45 represents the base offset for the segment and
+   * sdsdsd represents the unique [[RemoteLogSegmentId]]
+   *
+   * @param remoteLogSegmentMetadata remote segment for the remote indexes
+   * @return string which should be used as prefix for on-disk representation of remote indexes
+   */
   private[remote] def generateFileNamePrefixForIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
     val startOffset = remoteLogSegmentMetadata.startOffset
     val segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id
     // uuid.toString uses URL encoding which is safe for filenames and URLs.
-    s"${startOffset.toString}_${segmentId.toString}_"
+    s"${startOffset.toString}_${segmentId.toString}"
+  }
+
+  private[remote] def getRemoteLogSegmentIdFromIndexFileName(fileName: String): Uuid = {
+    val underscoreIndex = fileName.indexOf("_")
+    val dotIndex = fileName.indexOf(".")
+    Uuid.fromString(fileName.substring(underscoreIndex + 1, dotIndex))
+  }
+
+  private[remote] def getBaseOffsetFromIndexFileName(fileName: String): Long = {
+    fileName.split('_').head.toLong
   }
 
   /**
@@ -379,7 +408,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         info(s"Close initiated for RemoteIndexCache. Cache stats=${internalCache.stats}. " +
           s"Cache entries pending delete=${expiredIndexes.size()}")
         // Initiate shutdown for cleaning thread
-        val shutdownRequired = cleanerThread.initiateShutdown()
+        val shutdownRequired = cleanerThread.initiateShutdown
         // Close all the opened indexes to force unload mmap memory. This does not delete the index files from disk.
         internalCache.asMap().forEach((_, entry) => entry.close())
         // wait for cleaner thread to shutdown
