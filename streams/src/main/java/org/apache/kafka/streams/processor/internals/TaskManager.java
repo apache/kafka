@@ -1138,9 +1138,11 @@ public class TaskManager {
     public Map<TaskId, Long> getTaskOffsetSums() {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
+        // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
+        // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
+        // just have an empty changelogOffsets map.
         final Map<TaskId, Task> tasks = allTasks();
-        final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks =
-            union(HashSet::new, lockedTaskDirectories, tasks.keySet());
+        final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks = new HashSet<>(lockedTaskDirectories);
         for (final Task task : tasks.values()) {
             if (task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
@@ -1154,9 +1156,6 @@ public class TaskManager {
             }
         }
 
-        // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
-        // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
-        // just have an empty changelogOffsets map.
         for (final TaskId id : lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks) {
             final File checkpointFile = stateDirectory.checkpointFileFor(id);
             try {
@@ -1182,6 +1181,7 @@ public class TaskManager {
         // current set of actually-locked tasks.
         lockedTaskDirectories.clear();
 
+        final Map<TaskId, Task> allTasks = allTasks();
         for (final TaskDirectory taskDir : stateDirectory.listNonEmptyTaskDirectories()) {
             final File dir = taskDir.file();
             final String namedTopology = taskDir.namedTopology();
@@ -1189,7 +1189,7 @@ public class TaskManager {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
-                    if (!tasks.contains(id)) {
+                    if (!allTasks.containsKey(id)) {
                         log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                     }
                 }
