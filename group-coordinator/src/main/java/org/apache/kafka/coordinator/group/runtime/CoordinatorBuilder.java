@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 /**
@@ -24,7 +25,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
  * @param <S> The type of the coordinator.
  * @param <U> The record type.
  */
-interface CoordinatorBuilder<S extends Coordinator<U>, U> {
+public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
 
     /**
      * Sets the snapshot registry used to back all the timeline
@@ -36,6 +37,17 @@ interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      */
     CoordinatorBuilder<S, U> withSnapshotRegistry(
         SnapshotRegistry snapshotRegistry
+    );
+
+    /**
+     * Sets the log context.
+     *
+     * @param logContext The log context.
+     *
+     * @return The builder.
+     */
+    CoordinatorBuilder<S, U> withLogContext(
+        LogContext logContext
     );
 
     /**

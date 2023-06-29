@@ -26,11 +26,11 @@ public interface Coordinator<U> extends CoordinatorPlayback<U> {
      * The coordinator has been loaded. This is used to apply any
      * post loading operations (e.g. registering timers).
      */
-    default void onLoaded() {};
+    default void onLoaded() {}
 
     /**
      * The coordinator has been unloaded. This is used to apply
      * any post unloading operations.
      */
-    default void onUnloaded() {};
+    default void onUnloaded() {}
 }

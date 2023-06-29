@@ -67,7 +67,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     }
 
     @Override
-    public long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
+    public int writeTo(TransferableChannel channel, int previouslyWritten, int remaining) throws IOException {
         if (convertedRecordsWriter == null || convertedRecordsWriter.completed()) {
             MemoryRecords convertedRecords;
 
@@ -93,7 +93,8 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
 
             convertedRecordsWriter = new DefaultRecordsSend<>(convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));
         }
-        return convertedRecordsWriter.writeTo(channel);
+        // safe to cast to int since `remaining` is an int
+        return (int) convertedRecordsWriter.writeTo(channel);
     }
 
     public RecordConversionStats recordConversionStats() {

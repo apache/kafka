@@ -22,7 +22,7 @@ package org.apache.kafka.coordinator.group.runtime;
  * @param <S> The type of the coordinator.
  * @param <U> The record type.
  */
-interface CoordinatorBuilderSupplier<S extends Coordinator<U>, U> {
+public interface CoordinatorBuilderSupplier<S extends Coordinator<U>, U> {
     /**
      * @return A {@link CoordinatorBuilder}.
      */
