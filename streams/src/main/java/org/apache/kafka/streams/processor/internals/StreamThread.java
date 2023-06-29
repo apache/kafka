@@ -374,11 +374,7 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final boolean stateUpdaterEnabled = InternalConfig.getBoolean(
-                config.originals(),
-                InternalConfig.STATE_UPDATER_ENABLED,
-                InternalConfig.STATE_UPDATER_ENABLED_DEFAULT
-        );
+        final boolean stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -561,11 +557,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.stateUpdaterEnabled = InternalConfig.getBoolean(
-                config.originals(),
-                InternalConfig.STATE_UPDATER_ENABLED,
-                InternalConfig.STATE_UPDATER_ENABLED_DEFAULT
-        );
+        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {

@@ -1197,7 +1197,10 @@ public class StreamsConfig extends AbstractConfig {
 
         // Private API to enable the state updater (i.e. state updating on a dedicated thread)
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
-        public static final boolean STATE_UPDATER_ENABLED_DEFAULT = true;
+
+        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
+        }
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
