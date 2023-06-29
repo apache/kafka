@@ -806,23 +806,6 @@ public class StreamTaskTest {
     public void shouldRecordRestoredRecords() {
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
 
-
-//        final Map<MetricName, KafkaMetric> mockMetricsMap = new HashMap<>();
-//        final Measurable measurable = Mockito.mock(Measurable.class);
-//
-//        final KafkaMetric metric = Mockito.mock(KafkaMetric.class);
-//        when(metric.measurable()).thenReturn(measurable);
-//        when(measurable.measure(Mockito.any(MetricConfig.class), Mockito.anyLong())).thenReturn(1.0);
-//        when(metric.metricValue()).thenReturn(0D);
-//        mockMetricsMap.put(metricName, metric);
-//        doReturn(mockMetricsMap).when(mockStreamsMetrics).metrics();
-//
-//        this.metrics = Mockito.mock(Metrics.class);
-//        when(this.metrics.sensor(Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor.class))).thenReturn(mockSensor);
-//        when(this.metrics.metricName(Mockito.anyString(), Mockito.anyString(), Mockito.anyMap())).thenReturn(metricName);
-//        when(this.metrics.metrics()).thenReturn(mockMetricsMap);
-
-
         final KafkaMetric totalMetric = getMetric("restore", "%s-total", task.id().toString());
         final KafkaMetric rateMetric = getMetric("restore", "%s-rate", task.id().toString());
         final KafkaMetric remainMetric = getMetric("restore", "%s-remaining-records-total", task.id().toString());
@@ -2252,18 +2235,12 @@ public class StreamTaskTest {
         EasyMock.replay(stateManager, recordCollector);
 
         final Map<String, String> tagLevelMap = new HashMap<>();
-//        final KafkaMetric kafkaMetric = Mockito.mock(KafkaMetric.class);
-//        final Measurable measurable = Mockito.mock(Measurable.class);
-//        threadLevelTagMap
         tagLevelMap.put(THREAD_ID_TAG, threadId);
         doReturn(tagLevelMap).when(this.mockStreamsMetrics).threadLevelTagMap(Mockito.anyString());
         tagLevelMap.put(TASK_ID_TAG, this.taskId.toString());
         doReturn(tagLevelMap).when(this.mockStreamsMetrics).taskLevelTagMap(Mockito.anyString(), Mockito.anyString());
 
-//        when(kafkaMetric.measurable()).thenReturn(measurable);
-
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
-
 
         task.suspend();
         assertThat(getTaskMetrics(), not(empty()));
@@ -2445,7 +2422,7 @@ public class StreamTaskTest {
                 taskId,
                 createConfig("100"),
                 stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
                 null
         );
         final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", StreamsConfig.METRICS_LATEST, time);
@@ -2642,7 +2619,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2652,7 +2629,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-                streamsMetrics,
+            streamsMetrics,
             stateDirectory,
             cache,
             time,
@@ -2683,7 +2660,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2693,7 +2670,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             stateDirectory,
             cache,
             time,
@@ -2716,7 +2693,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2726,7 +2703,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             stateDirectory,
             cache,
             time,
@@ -2754,7 +2731,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2764,7 +2741,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             stateDirectory,
             cache,
             time,
@@ -2794,7 +2771,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2835,7 +2812,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2874,7 +2851,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2908,7 +2885,7 @@ public class StreamTaskTest {
             taskId,
             config,
             stateManager,
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             null
         );
 
@@ -2918,7 +2895,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null, config, new Properties()).getTaskConfig(),
-                this.mockStreamsMetrics,
+            this.mockStreamsMetrics,
             stateDirectory,
             cache,
             time,
