@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -78,6 +79,9 @@ public class CoordinatorRuntimeTest {
         public CompletableFuture<Void> load(TopicPartition tp, CoordinatorPlayback<String> replayable) {
             return CompletableFuture.completedFuture(null);
         }
+
+        @Override
+        public void close() throws Exception { }
     }
 
     /**
@@ -790,9 +794,11 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testClose() throws Exception {
+        MockCoordinatorLoader loader = spy(new MockCoordinatorLoader());
+
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
-                .withLoader(new MockCoordinatorLoader())
+                .withLoader(loader)
                 .withEventProcessor(new MockEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
@@ -824,5 +830,8 @@ public class CoordinatorRuntimeTest {
         // All the pending operations are completed with NotCoordinatorException.
         assertFutureThrows(write1, NotCoordinatorException.class);
         assertFutureThrows(write2, NotCoordinatorException.class);
+
+        // Verify that the loader was closed.
+        verify(loader).close();
     }
 }

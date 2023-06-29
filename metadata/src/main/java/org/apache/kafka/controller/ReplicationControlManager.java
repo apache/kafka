@@ -995,7 +995,7 @@ public class ReplicationControlManager {
                     clusterControl::isActive,
                     featureControl.metadataVersion()
                 );
-                builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
+                builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1383,7 +1383,7 @@ public class ReplicationControlManager {
             clusterControl::isActive,
             featureControl.metadataVersion()
         );
-        builder.setElection(election).setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
+        builder.setElection(election).setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
             if (electionType == ElectionType.PREFERRED) {
@@ -1519,7 +1519,7 @@ public class ReplicationControlManager {
                 featureControl.metadataVersion()
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
+                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             builder.build().ifPresent(records::add);
         }
 
@@ -1740,7 +1740,7 @@ public class ReplicationControlManager {
                 isAcceptableLeader,
                 featureControl.metadataVersion()
             );
-            builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
+            builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -1853,7 +1853,7 @@ public class ReplicationControlManager {
             clusterControl::isActive,
             featureControl.metadataVersion()
         );
-        builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
+        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -1911,7 +1911,7 @@ public class ReplicationControlManager {
             clusterControl::isActive,
             featureControl.metadataVersion()
         );
-        builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
+        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }

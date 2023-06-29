@@ -501,8 +501,7 @@ class ZkMigrationIntegrationTest {
       // Verify the changes seen in Zk.
       verifyTopicPartitionMetadata(topicName, existingPartitions ++ Seq(new TopicPartition(topicName, 2)), zkClient)
     } finally {
-      zkCluster.stop()
-      kraftCluster.close()
+      shutdownInSequence(zkCluster, kraftCluster)
     }
   }
 

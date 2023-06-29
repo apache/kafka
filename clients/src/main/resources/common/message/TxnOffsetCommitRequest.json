@@ -46,7 +46,7 @@
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]TxnOffsetCommitRequestPartition", "versions": "0+",
-        "about": "The partitions inside the topic that we want to committ offsets for.", "fields": [
+        "about": "The partitions inside the topic that we want to commit offsets for.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The index of the partition within the topic." },
         { "name": "CommittedOffset", "type": "int64", "versions": "0+",

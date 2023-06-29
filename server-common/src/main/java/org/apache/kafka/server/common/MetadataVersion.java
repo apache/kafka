@@ -263,8 +263,8 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_5_IV2);
     }
 
-    public boolean isSkipLeaderEpochBumpSupported() {
-        return this.isAtLeast(IBP_3_6_IV0);
+    public boolean isLeaderEpochBumpRequiredOnIsrShrink() {
+        return !this.isAtLeast(IBP_3_6_IV0);
     }
 
     public boolean isKRaftSupported() {

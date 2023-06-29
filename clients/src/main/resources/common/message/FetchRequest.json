@@ -21,7 +21,7 @@
   //
   // Version 1 is the same as version 0.
   //
-  // Starting in Version 2, the requestor must be able to handle Kafka Log
+  // Starting in Version 2, the requester must be able to handle Kafka Log
   // Message format version 1.
   //
   // Version 3 adds MaxBytes.  Starting in version 3, the partition ordering in
