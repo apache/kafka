@@ -124,7 +124,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return input stream of the requested index.
      * @throws RemoteStorageException          if there are any errors while fetching the index.
      * @throws RemoteResourceNotFoundException the requested index is not found in the remote storage
-     * (e.g. Transaction index may not exist because segments create prior to version 2.8.0 will not have transaction index associated with them.).
+     * (e.g. Transaction index may not exist because segments created prior to version 2.8.0 will not have transaction index associated with them.).
      * The caller of this function are encouraged to re-create the indexes from the segment
      * as the suggested way of handling this error if the index is expected to be existed.
      */
