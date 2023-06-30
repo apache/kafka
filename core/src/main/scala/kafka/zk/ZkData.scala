@@ -517,6 +517,7 @@ object DeleteTopicsTopicZNode {
 }
 
 // LI feature of dynamic deletion flag requires Zk, so actually KIP-500 would fail the feature"
+// TODO: refactor as Kafka dynamic configs (configs/brokers/<default>)
 object DeleteTopicFlagZNode {
   def path = "/topic_deletion_flag"
   def encode(topicDeletionFlag: String): Array[Byte] = topicDeletionFlag.getBytes(UTF_8)

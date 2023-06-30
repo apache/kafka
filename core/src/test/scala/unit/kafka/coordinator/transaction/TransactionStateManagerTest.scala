@@ -869,6 +869,7 @@ class TransactionStateManagerTest {
       EasyMock.capture(callbackCapture),
       EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject(),
+      EasyMock.anyObject(),
       EasyMock.anyObject()
     )).andAnswer(() => callbackCapture.getValue.apply(
       recordsCapture.getValue.map { case (topicPartition, records) =>
@@ -1026,6 +1027,7 @@ class TransactionStateManagerTest {
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
       EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
+      EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => capturedArgument.getValue.apply(

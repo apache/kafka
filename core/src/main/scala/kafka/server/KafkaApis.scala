@@ -28,6 +28,8 @@ import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.{LiCombinedControlRequestBreakdownMetrics, RequestChannel}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
+import kafka.server.instrumentation.ProduceRequestInstrumentation.Stage
+import kafka.server.instrumentation.{ProduceRequestInstrumentation, ProduceRequestInstrumentationLogger}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, LiDecomposedControlRequestUtils, Logging}
@@ -119,6 +121,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
+  val produceRequestInstrumentationLogger =
+    new ProduceRequestInstrumentationLogger(kafkaConfig = config,
+                                            time,
+                                            rnd = new scala.util.Random,
+                                            replicaManager)
 
   val unofficialClientsCache: LoadingCache[String, String] = CacheBuilder.newBuilder()
     .expireAfterWrite(config.unofficialClientCacheTtl, TimeUnit.HOURS)
@@ -581,6 +588,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleProduceRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     val produceRequest = request.body[ProduceRequest]
     val requestSize = request.sizeInBytes
+    val instrumentation = new ProduceRequestInstrumentation(time = time)
 
     if (RequestUtils.hasTransactionalRecords(produceRequest)) {
       val isAuthorizedTransactional = produceRequest.transactionalId != null &&
@@ -598,6 +606,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     // cache the result to avoid redundant authorization calls
     val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC,
       produceRequest.data().topicData().asScala)(_.name())
+
+    instrumentation.markStage(Stage.Authorization)
 
     produceRequest.data.topicData.forEach(topic => topic.partitionData.forEach { partition =>
       val topicPartition = new TopicPartition(topic.name, partition.index)
@@ -627,6 +637,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false
+      instrumentation.markStage(Stage.BeginResponseCallback)
+      instrumentation.appliedTopicPartitions = responseStatus.keys  // logging relies on the info
 
       mergedResponseStatus.forKeyValue { (topicPartition, status) =>
         if (status.error != Errors.NONE) {
@@ -661,11 +673,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         (0, 0)
       }
+      instrumentation.markStage(Stage.ResponseThrottling)
       requestHelper.throttle(quotas.produce, request, effectiveBandWidthThrottleTime)
       requestHelper.throttle(quotas.request, request, effectiveRequestThrottleTime)
 
       // Send the response immediately. In case of throttling, the channel has already been muted.
       if (produceRequest.acks == 0) {
+        // We intentionally don't instrument acks=0 requests,
+        // since they're a rare use case and not a source of high tail latencies.
+
         // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
         // the request, since no response is expected by the producer, the server will close socket server so that
         // the producer client will know that some error has happened and will refresh its metadata
@@ -685,7 +701,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendNoOpResponseExemptThrottle(request)
         }
       } else {
-        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs), None)
+        requestChannel.sendResponse(request,
+                                    new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs),
+                                    Some(_ => {
+                                      // Conclude instrumentation via marking stage; this is the onComplete callback
+                                      instrumentation.markStage(Stage.Finish)
+                                      produceRequestInstrumentationLogger.maybeLog(request, instrumentation)
+                                    }))
       }
     }
 
@@ -710,6 +732,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val internalTopicsAllowed = (clientId == AdminUtils.AdminClientId
         || (clientId != null && clientId.startsWith(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CLIENT_PREFIX)))
 
+      instrumentation.markStage(Stage.BeginAppendRecords)
       // call the replica manager to append messages to the replicas
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
@@ -719,7 +742,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         entriesPerPartition = authorizedRequestInfo,
         requestLocal = requestLocal,
         responseCallback = sendResponseCallback,
-        recordConversionStatsCallback = processingStatsCallback)
+        recordConversionStatsCallback = processingStatsCallback,
+        produceRequestInstrumentation = instrumentation)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log

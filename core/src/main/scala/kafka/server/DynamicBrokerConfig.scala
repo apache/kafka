@@ -24,6 +24,7 @@ import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager}
 import kafka.network.SocketServer
 import kafka.server.DynamicBrokerConfig._
+import kafka.server.instrumentation.ProduceRequestInstrumentationLogger
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -86,6 +87,7 @@ object DynamicBrokerConfig {
     Set(KafkaConfig.AllowPreferredControllerFallbackProp) ++
     Set(KafkaConfig.LiCombinedControlRequestEnableProp) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
+    ProduceRequestInstrumentationLogger.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs
 
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp)

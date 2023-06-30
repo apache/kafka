@@ -17,17 +17,14 @@
 
 package kafka.network
 
-import java.net.InetAddress
-import java.nio.ByteBuffer
-import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Counter, Histogram, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network
 import kafka.server.{BrokerMetadataStats, KafkaConfig, Observer}
-import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
+import kafka.utils.{Logging, NotNothing, Pool}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
@@ -39,7 +36,10 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 
+import java.net.InetAddress
+import java.nio.ByteBuffer
 import java.util
+import java.util.concurrent._
 import scala.annotation.nowarn
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.mutable
@@ -153,6 +153,26 @@ object RequestChannel extends Logging {
     @volatile var temporaryMemoryBytes = 0L
     @volatile var responseBytes = 0L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
+    @volatile var endTimeNanos = -1L
+
+
+    /**
+     * Converts nanos to millis with micros precision as additional decimal places in the request log have low
+     * signal to noise ratio. When it comes to metrics, there is little difference either way as we round the value
+     * to the nearest long.
+     */
+    def nanosToMs(nanos: Long): Double = {
+      val positiveNanos = math.max(nanos, 0)
+      TimeUnit.NANOSECONDS.toMicros(positiveNanos).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
+    }
+
+    def requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
+    def apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
+    def apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos)
+    def responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
+    def responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
+    def messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
+    def totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
 
     val session = Session(context.principal, context.clientAddress)
 
@@ -292,25 +312,8 @@ object RequestChannel extends Logging {
     }
 
     def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response): Unit = {
-      val endTimeNanos = Time.SYSTEM.nanoseconds
+      endTimeNanos = Time.SYSTEM.nanoseconds
 
-      /**
-       * Converts nanos to millis with micros precision as additional decimal places in the request log have low
-       * signal to noise ratio. When it comes to metrics, there is little difference either way as we round the value
-       * to the nearest long.
-       */
-      def nanosToMs(nanos: Long): Double = {
-        val positiveNanos = math.max(nanos, 0)
-        TimeUnit.NANOSECONDS.toMicros(positiveNanos).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
-      }
-
-      val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-      val apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos)
-      val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
-      val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-      val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
-      val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
         if (header.apiKey == ApiKeys.FETCH) {
           val isFromFollower = body[FetchRequest].isFromFollower

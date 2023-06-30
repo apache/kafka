@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.Meter
 import kafka.api._
-import kafka.cluster.{BrokerEndPoint, Partition}
+import kafka.cluster.{BrokerEndPoint, IsrState, Partition}
 import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -34,6 +34,8 @@ import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
+import kafka.server.instrumentation.ProduceRequestInstrumentation
+import kafka.server.instrumentation.ProduceRequestInstrumentation.{NoOpProduceRequestInstrumentation, Stage}
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid}
@@ -54,7 +56,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
-import org.apache.kafka.common.replica.{ClientMetadata, _}
+import org.apache.kafka.common.replica._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
@@ -284,8 +286,10 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge("OneAboveMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isOneAboveMinIsr))
   newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
   Partition.ISR_STATES_TO_CREATE_METRICS.foreach(c =>
-    newGauge(s"${c.getSimpleName}PartitionCount", () => leaderPartitionsIterator.count(_.isrStateClass.equals(c)))
+    newGauge(s"${c.getSimpleName}PartitionCount", () => numOfPartitionOfIsrState(c))
   )
+
+  def numOfPartitionOfIsrState(c: Class[_ <: IsrState]) = leaderPartitionsIterator.count(_.isrStateClass.equals(c))
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -639,13 +643,16 @@ class ReplicaManager(val config: KafkaConfig,
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                    requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                    requestLocal: RequestLocal = RequestLocal.NoCaching,
+                    produceRequestInstrumentation: ProduceRequestInstrumentation = NoOpProduceRequestInstrumentation): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
+      produceRequestInstrumentation.markStage(Stage.AppendToLocalLog)
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
         origin, entriesPerPartition, requiredAcks, requestLocal)
       debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
+      produceRequestInstrumentation.markStage(Stage.ProcessAppendToLocalLogStatus)
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
         topicPartition -> ProducePartitionStatus(
           result.info.lastOffset + 1, // required offset
@@ -683,6 +690,7 @@ class ReplicaManager(val config: KafkaConfig,
       recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
 
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
+        produceRequestInstrumentation.markStage(Stage.PrepareDelayedProduce)
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
         val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
@@ -693,6 +701,7 @@ class ReplicaManager(val config: KafkaConfig,
         // try to complete the request immediately, otherwise put it into the purgatory
         // this is because while the delayed produce operation is being created, new
         // requests may arrive and hence make this operation completable.
+        produceRequestInstrumentation.markStage(Stage.EnqueueDelayedProduce)
         delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
 
       } else {

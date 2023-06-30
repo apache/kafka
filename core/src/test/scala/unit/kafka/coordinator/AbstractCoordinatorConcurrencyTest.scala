@@ -21,10 +21,11 @@ import java.util.concurrent.{ConcurrentHashMap, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
-
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.{AppendOrigin, Log, LogConfig}
 import kafka.server._
+import kafka.server.instrumentation.ProduceRequestInstrumentation
+import kafka.server.instrumentation.ProduceRequestInstrumentation.NoOpProduceRequestInstrumentation
 import kafka.utils._
 import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
@@ -179,7 +180,8 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                               requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                               requestLocal: RequestLocal = RequestLocal.NoCaching,
+                               produceRequestInstrumentation: ProduceRequestInstrumentation = NoOpProduceRequestInstrumentation): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return

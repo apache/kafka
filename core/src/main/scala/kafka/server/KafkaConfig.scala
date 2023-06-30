@@ -337,6 +337,9 @@ object Defaults {
   val LiLeaderElectionOnCorruptionWaitMs = 0L
   val LiZookeeperPaginationEnable = false
   val LiRackIdMapperClassNameForRackAwareReplicaAssignment: String = null
+  // Waiting for kicking out a dead host from ISR is common.  It's a good starting point to use 2 * Defaults.ReplicaLagTimeMaxMs.
+  val LiLongTailProduceRequestLogThresholdMs = 2 * Defaults.ReplicaLagTimeMaxMs
+  val LiLongTailProduceRequestLogRatio = 0.0
 }
 
 object KafkaConfig {
@@ -459,6 +462,8 @@ object KafkaConfig {
   val LiLeaderElectionOnCorruptionWaitMsProp = "li.leader.election.on.corruption.wait.ms"
   val LiZookeeperPaginationEnableProp = "li.zookeeper.pagination.enable"
   val LiRackIdMapperClassNameForRackAwareReplicaAssignmentProp = "li.rack.aware.assignment.rack.id.mapper.class"
+  val LiLongTailProduceRequestLogThresholdMsProp = "li.instrumentation.requests.produce.long.tail.log.threshold.ms"
+  val LiLongTailProduceRequestLogRatioProp = "li.instrumentation.requests.produce.long.tail.log.ratio"
   val AllowPreferredControllerFallbackProp = "allow.preferred.controller.fallback"
   val UnofficialClientLoggingEnableProp = "unofficial.client.logging.enable"
   val UnofficialClientCacheTtlProp = "unofficial.client.cache.ttl"
@@ -810,6 +815,8 @@ object KafkaConfig {
   val LiLogCleanerFineGrainedLockEnableDoc = "Specifies whether the log cleaner should use fine grained locks when calculating the filthiest log to clean"
   val LiZookeeperPaginationEnableDoc = "Specifies whether Zookeeper pagination should be used when listing the /brokers/topics znode. Required when sum of all topic-name lengths in the cluster exceeds ZK response-size limit (1 MB by default)."
   val LiRackIdMapperClassNameForRackAwareReplicaAssignmentDoc = "The mapper class name to translate rack ID for the use of assigning replicas to brokers in a rack-aware manner.  The class should implement kafka.admin.RackAwareReplicaAssignmentRackIdMapper."
+  val LiLongTailProduceRequestLogThresholdMsDoc = s"If the request time is faster than this threshold, then skip logging.  Defaults to 2 * ${KafkaConfig.ReplicaLagTimeMaxMsProp}."
+  val LiLongTailProduceRequestLogRatioDoc = "Only log this ratio of request instrumentation, applied after all funnels/thresholds.  Defaults to 0.0 (disable logging at all)"
   // Although AllowPreferredControllerFallback is expected to be configured dynamically at per cluster level, providing a static configuration entry
   // here allows its value to be obtained without holding the dynamic broker configuration lock.
   val AllowPreferredControllerFallbackDoc = "Specifies whether a non-preferred controller node (broker) is allowed to become the controller." +
@@ -1260,6 +1267,8 @@ object KafkaConfig {
       .define(LiLeaderElectionOnCorruptionWaitMsProp, LONG, Defaults.LiLeaderElectionOnCorruptionWaitMs, atLeast(0), HIGH, LiLeaderElectionOnCorruptionWaitMsDoc)
       .define(LiZookeeperPaginationEnableProp, BOOLEAN, Defaults.LiZookeeperPaginationEnable, LOW, LiZookeeperPaginationEnableDoc)
       .define(LiRackIdMapperClassNameForRackAwareReplicaAssignmentProp, STRING, Defaults.LiRackIdMapperClassNameForRackAwareReplicaAssignment, LOW, LiRackIdMapperClassNameForRackAwareReplicaAssignmentDoc)
+      .define(LiLongTailProduceRequestLogThresholdMsProp, LONG, Defaults.LiLongTailProduceRequestLogThresholdMs, atLeast(0), MEDIUM, LiLongTailProduceRequestLogThresholdMsDoc)
+      .define(LiLongTailProduceRequestLogRatioProp, DOUBLE, Defaults.LiLongTailProduceRequestLogRatio, between(0, 1), MEDIUM, LiLongTailProduceRequestLogRatioDoc)
       .define(AllowPreferredControllerFallbackProp, BOOLEAN, Defaults.AllowPreferredControllerFallback, HIGH, AllowPreferredControllerFallbackDoc)
       .define(UnofficialClientLoggingEnableProp, BOOLEAN, Defaults.UnofficialClientLoggingEnable, LOW, UnofficialClientLoggingEnableDoc)
       .define(UnofficialClientCacheTtlProp, LONG, Defaults.UnofficialClientCacheTtl, LOW, UnofficialClientCacheTtlDoc)
@@ -1807,6 +1816,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val liDropCorruptedFilesEnable = getBoolean(KafkaConfig.LiDropCorruptedFilesEnableProp)
   val liConsumerFetchSampleRatio = getDouble(KafkaConfig.LiConsumerFetchSampleRatioProp)
   val liLeaderElectionOnCorruptionWaitMs = getLong(KafkaConfig.LiLeaderElectionOnCorruptionWaitMsProp)
+  def longTailProduceRequestLogThresholdMs = getLong(KafkaConfig.LiLongTailProduceRequestLogThresholdMsProp)
+  def longTailProduceRequestLogRatio = getDouble(KafkaConfig.LiLongTailProduceRequestLogRatioProp)
 
   def liZookeeperPaginationEnable = getBoolean(KafkaConfig.LiZookeeperPaginationEnableProp)
   def unofficialClientLoggingEnable = getBoolean(KafkaConfig.UnofficialClientLoggingEnableProp)

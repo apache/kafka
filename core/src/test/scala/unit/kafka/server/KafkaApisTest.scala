@@ -1576,6 +1576,7 @@ class KafkaApisTest {
         EasyMock.capture(responseCallback),
         EasyMock.anyObject(),
         EasyMock.anyObject(),
+        EasyMock.anyObject(),
         EasyMock.anyObject())
       ).andAnswer(() => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
@@ -1721,7 +1722,8 @@ class KafkaApisTest {
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
-      EasyMock.eq(requestLocal))
+      EasyMock.eq(requestLocal),
+      EasyMock.anyObject())
     ).andAnswer(() => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
     EasyMock.expect(requestChannel.sendResponse(
@@ -1867,7 +1869,8 @@ class KafkaApisTest {
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
-      EasyMock.eq(requestLocal))
+      EasyMock.eq(requestLocal),
+      EasyMock.anyObject())
     ).andAnswer(() => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
     EasyMock.expect(requestChannel.sendResponse(
@@ -1900,7 +1903,8 @@ class KafkaApisTest {
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
-      EasyMock.eq(requestLocal)))
+      EasyMock.eq(requestLocal),
+      EasyMock.anyObject()))
 
     EasyMock.replay(replicaManager)
 
