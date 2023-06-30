@@ -1657,13 +1657,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (assignment.failed()) {
             needsRejoin = true;
             if (isLeader()) {
-                log.warn("Join group completed, but the assignment failed and we are the leader. Reading to end of config and retrying.");
+                log.warn("Join group completed, but assignment failed and we are the leader. Reading to end of config and retrying.");
                 needsReadToEnd = true;
             } else if (configState.offset() < assignment.offset()) {
-                log.warn("Join group completed, but the assignment failed and we are lagging. Reading to end of config and retrying.");
+                log.warn("Join group completed, but assignment failed and we are lagging. Reading to end of config and retrying.");
                 needsReadToEnd = true;
             } else {
-                log.warn("Join group completed, but the assignment failed. We were up to date, so just retrying.");
+                log.warn("Join group completed, but assignment failed. We were up to date, so just retrying.");
             }
         } else {
             if (configState.offset() < assignment.offset()) {
