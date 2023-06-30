@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
-import kafka.server.AbstractFetcherManager.{DeadThreadCountMetricName, FailedPartitionsCountMetricName, MaxLagMetricName, MetricNames, MinFetchRateMetricName}
+import kafka.server.AbstractFetcherManager.{DeadThreadCountMetricName, FailedPartitionsCountMetricName, MaxLagMetricName, MinFetchRateMetricName}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -31,6 +31,9 @@ import scala.jdk.CollectionConverters._
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
+  // Visible for test
+  private[server] var MetricNames: Map[String, java.util.Map[String, String]] = Map.empty
 
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
@@ -239,7 +242,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   def removeMetrics(): Unit = {
-    MetricNames.foreach(metricTags => metricsGroup.removeMetric(metricTags._1, metricTags._2))
+    MetricNames.foreach(metricTags => {
+      metricsGroup.removeMetric(metricTags._1, metricTags._2)
+    })
   }
 }
 
@@ -248,9 +253,6 @@ object AbstractFetcherManager {
   private val MinFetchRateMetricName = "MinFetchRate"
   private val FailedPartitionsCountMetricName = "FailedPartitionsCount"
   private val DeadThreadCountMetricName = "DeadThreadCount"
-
-  // Visible for test
-  private[server] var MetricNames: Map[String, java.util.Map[String, String]] = Map.empty
 }
 
 /**

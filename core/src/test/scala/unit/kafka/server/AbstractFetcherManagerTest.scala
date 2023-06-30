@@ -69,9 +69,9 @@ class AbstractFetcherManagerTest {
       fetcherManager.removeMetrics()
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
       // verify that each metric in `AbstractFetcherManager` is registered when initialized.
-      AbstractFetcherManager.MetricNames.foreach(metricNameTags => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
+      fetcherManager.MetricNames.foreach(metricNameTags => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
       // verify that each metric in `AbstractFetcherManager` is removed.
-      AbstractFetcherManager.MetricNames.foreach(metricNameTags => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
+      fetcherManager.MetricNames.foreach(metricNameTags => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
     } finally {
