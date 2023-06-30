@@ -22,11 +22,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.mockito.Mockito.spy;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -35,6 +30,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.spy;
 
 public class ChunkedBytesStreamTest {
     private static final Random RANDOM = new Random(1337);
@@ -62,6 +63,16 @@ public class ChunkedBytesStreamTest {
             is.read(got, toRead, got.length - toRead);
         }
         assertArrayEquals(input.array(), got);
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideEdgeCaseInputsForMethodRead")
+    public void testEdgeCaseInputsForMethodRead(byte[] b, int off, int len) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(16);
+
+        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(buffer.duplicate()), supplier, 10, false)) {
+            assertThrows(IndexOutOfBoundsException.class, () -> is.read(b, off, len));
+        }
     }
 
     @ParameterizedTest
@@ -147,6 +158,38 @@ public class ChunkedBytesStreamTest {
                 assertNotEquals(-1, readRes, "Unexpected end of data.");
             }
         }
+    }
+
+    @Test
+    public void testEdgeCaseInputForMethodSkip() throws IOException {
+        int bufferLength = 16;
+        ByteBuffer inputBuf = ByteBuffer.allocate(bufferLength);
+        RANDOM.nextBytes(inputBuf.array());
+        inputBuf.position(inputBuf.capacity());
+        inputBuf.flip();
+
+        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(inputBuf.duplicate()), supplier, 10, true)) {
+            // larger than int input
+            assertEquals(bufferLength, is.skip(Integer.MAX_VALUE + 1000L));
+            // negative input
+            assertEquals(0, is.skip(-1));
+        }
+    }
+
+    private static Stream<Arguments> provideEdgeCaseInputsForMethodRead() {
+        byte[] b = new byte[16];
+        return Stream.of(
+            // negative off
+            Arguments.of(b, -1, b.length),
+            // negative len
+            Arguments.of(b, 0, -1),
+            // overflow off + len
+            Arguments.of(b, Integer.MAX_VALUE, 10),
+            // len greater than size of target array
+            Arguments.of(b, 0, b.length + 1),
+            // off + len greater than size of target array
+            Arguments.of(b, b.length - 1, 2)
+        );
     }
 
     private static List<Arguments> provideSourceSkipValuesForTest() {
