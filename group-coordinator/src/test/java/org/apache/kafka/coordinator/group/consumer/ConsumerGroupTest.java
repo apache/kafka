@@ -553,7 +553,7 @@ public class ConsumerGroupTest {
         assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
         assertEquals(0, group.metadataRefreshDeadline().epoch);
 
-        // Set the next refresh deadline.
+        // Set the refresh deadline.
         group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
         assertFalse(group.hasMetadataExpired(time.milliseconds()));
         assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
@@ -568,5 +568,20 @@ public class ConsumerGroupTest {
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
         assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
         assertEquals(group.groupEpoch() + 1, group.metadataRefreshDeadline().epoch);
+
+        // Set the refresh deadline.
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
+        assertFalse(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch(), group.metadataRefreshDeadline().epoch);
+
+        // Deadline has not past.
+        assertFalse(group.hasMetadataExpired(time.milliseconds()));
+
+        // Request metadata refresh.
+        group.requestMetadataRefresh();
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(0, group.metadataRefreshDeadline().epoch);
     }
 }
