@@ -53,6 +53,23 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
+// We use Mockito 4.11 with Scala 2.13+ for Java 20 support and Mockito 4.9 with Scala 2.12
+// to workaround ambiguous reference to `Mockito.spy` compiler errors. Since Scala 2.12 support
+// is going away soon, this is simpler than adjusting the code.
+String mockitoVersion
+if (scalaVersion == "2.12")
+  mockitoVersion = "4.9.0"
+else
+  mockitoVersion = "4.11.0"
+
+// easymock 5.1 is required for Java 20 support, but it breaks tests using powermock
+// powermock doesn't work with Java 16 or newer and hence it's safe to use easymock 5.1 in this case only
+String easymockVersion
+if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
+  easymockVersion = "5.1.0"
+else
+  easymockVersion = "4.3"
+
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
@@ -69,7 +86,6 @@ versions += [
   gradle: "8.1.1",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  easymock: "4.3",
   jackson: "2.13.5",
   jacksonDatabind: "2.13.5",
   jacoco: "0.8.10",
@@ -110,7 +126,6 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.8.4",
   metrics: "2.2.0",
-  mockito: "4.9.0",
   netty: "4.1.92.Final",
   pcollections: "4.0.1",
   powermock: "2.0.9",
@@ -133,6 +148,7 @@ versions += [
   zookeeper: "3.6.4",
   zstd: "1.5.5-1"
 ]
+
 libs += [
   activation: "javax.activation:activation:$versions.activation",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
@@ -149,7 +165,7 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
-  easymock: "org.easymock:easymock:$versions.easymock",
+  easymock: "org.easymock:easymock:$easymockVersion",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
@@ -200,9 +216,9 @@ libs += [
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
-  mockitoCore: "org.mockito:mockito-core:$versions.mockito",
-  mockitoInline: "org.mockito:mockito-inline:$versions.mockito",
-  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockito",
+  mockitoCore: "org.mockito:mockito-core:$mockitoVersion",
+  mockitoInline: "org.mockito:mockito-inline:$mockitoVersion",
+  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$mockitoVersion",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
