@@ -72,7 +72,7 @@ class LogCleanerTest {
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     try {
       val logCleaner = new LogCleaner(new CleanerConfig(true),
-        logDirs = Array(TestUtils.tempDir()),
+        logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
         logs = new Pool[TopicPartition, UnifiedLog](),
         logDirFailureChannel = new LogDirFailureChannel(1),
         time = time)
@@ -90,9 +90,17 @@ class LogCleanerTest {
       // verify that each metric in `LogCleanerManager` is removed
       val mockLogCleanerManagerMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
       LogCleanerManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
-      LogCleanerManager.GaugeMetricNameWithTag.keySet().asScala.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any(), any()))
+      LogCleanerManager.GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
+        metricNameAndTags._2.asScala.foreach(tags => {
+          verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameAndTags._1), any(), ArgumentMatchers.eq(tags))
+        })
+      })
       LogCleanerManager.GaugeMetricNameNoTag.foreach(verify(mockLogCleanerManagerMetricsGroup).removeMetric(_))
-      LogCleanerManager.GaugeMetricNameWithTag.keySet().asScala.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).removeMetric(ArgumentMatchers.eq(metricName), any()))
+      LogCleanerManager.GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
+        metricNameAndTags._2.asScala.foreach(tags => {
+          verify(mockLogCleanerManagerMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameAndTags._1), ArgumentMatchers.eq(tags))
+        })
+      })
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)

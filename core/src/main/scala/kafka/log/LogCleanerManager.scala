@@ -92,16 +92,18 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   GaugeMetricNameWithTag.clear()
   /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
   for (dir <- logDirs) {
+    val metricTag = Map("logDirectory" -> dir.getAbsolutePath).asJava
     metricsGroup.newGauge(UncleanablePartitionsCountMetricName,
       () => inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) },
-      Map("logDirectory" -> dir.getAbsolutePath).asJava
+      metricTag
     )
     GaugeMetricNameWithTag.computeIfAbsent(UncleanablePartitionsCountMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
-      .add(Map("logDirectory" -> dir.getAbsolutePath).asJava)
+      .add(metricTag)
   }
 
   /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
   for (dir <- logDirs) {
+    val metricTag = Map("logDirectory" -> dir.getAbsolutePath).asJava
     metricsGroup.newGauge(UncleanableBytesMetricName,
       () => inLock(lock) {
         uncleanablePartitions.get(dir.getAbsolutePath) match {
@@ -120,10 +122,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           case None => 0
         }
       },
-      Map("logDirectory" -> dir.getAbsolutePath).asJava
+      metricTag
     )
     GaugeMetricNameWithTag.computeIfAbsent(UncleanableBytesMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
-      .add(Map("logDirectory" -> dir.getAbsolutePath).asJava)
+      .add(metricTag)
   }
 
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
