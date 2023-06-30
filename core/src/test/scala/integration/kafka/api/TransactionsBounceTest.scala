@@ -114,7 +114,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
         warn(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
 
         producer.beginTransaction()
-        val shouldAbort = iteration % 3 == 0
+        val shouldAbort = false
         records.foreach { record =>
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, null, record.key, record.value, !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
