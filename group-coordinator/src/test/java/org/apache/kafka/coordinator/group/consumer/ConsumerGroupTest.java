@@ -564,9 +564,9 @@ public class ConsumerGroupTest {
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
 
         // Set the refresh time deadline with a higher group epoch.
-        group.setMetadataRefreshDeadline(time.milliseconds(), group.groupEpoch() + 1);
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch() + 1);
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
-        assertEquals(time.milliseconds(), group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
         assertEquals(group.groupEpoch() + 1, group.metadataRefreshDeadline().epoch);
 
         // Set the refresh deadline.
