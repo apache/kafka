@@ -55,6 +55,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   protected val privilegedAdminClientConfig = new Properties()
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
+  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
 
   def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions()
 
