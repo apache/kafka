@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.slf4j.Logger;
 
 import java.util.concurrent.LinkedBlockingQueue;
@@ -32,7 +34,8 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
 
     public RemoteStorageThreadPool(String threadNamePrefix,
                                    int numThreads,
-                                   int maxPendingTasks) {
+                                   int maxPendingTasks,
+                                   String metricsNamePrefix) {
         super(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(maxPendingTasks),
                 new RemoteStorageThreadFactory(threadNamePrefix));
         logger = new LogContext() {
@@ -41,6 +44,19 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
                 return "[" + Thread.currentThread().getName() + "]";
             }
         }.logger(RemoteStorageThreadPool.class);
+        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
+        metricsGroup.newGauge(metricsNamePrefix.concat("TaskQueueSize"), new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return RemoteStorageThreadPool.this.getQueue().size();
+            }
+        });
+        metricsGroup.newGauge(metricsNamePrefix.concat("AvgIdlePercent"), new Gauge<Double>() {
+            @Override
+            public Double value() {
+                return 1 - (double) RemoteStorageThreadPool.this.getActiveCount() / (double) RemoteStorageThreadPool.this.getCorePoolSize();
+            }
+        });
     }
 
     @Override

@@ -604,7 +604,7 @@ class KafkaServer(
       }
 
       Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava));
+        (tp: TopicPartition) => logManager.getLog(tp).asJava, brokerTopicStats));
     } else {
       None
     }

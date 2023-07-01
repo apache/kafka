@@ -98,7 +98,7 @@ import scala.jdk.CollectionConverters._
 @threadsafe
 class UnifiedLog(@volatile var logStartOffset: Long,
                  private val localLog: LocalLog,
-                 brokerTopicStats: BrokerTopicStats,
+                 val brokerTopicStats: BrokerTopicStats,
                  val producerIdExpirationCheckIntervalMs: Int,
                  @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
                  val producerStateManager: ProducerStateManager,
