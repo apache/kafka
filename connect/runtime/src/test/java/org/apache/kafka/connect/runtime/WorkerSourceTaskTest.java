@@ -689,10 +689,13 @@ public class WorkerSourceTaskTest {
     @Test
     public void testSlowTaskStart() throws Exception {
         final CountDownLatch startupLatch = new CountDownLatch(1);
+        final CountDownLatch finishStartupLatch = new CountDownLatch(1);
+
         createWorkerTask();
 
         doAnswer((Answer<Object>) invocation -> {
             startupLatch.countDown();
+            ConcurrencyUtils.awaitLatch(finishStartupLatch, "Timeout waiting for task to finish");
             return null;
         }).when(sourceTask).start(TASK_PROPS);
 
@@ -706,6 +709,7 @@ public class WorkerSourceTaskTest {
         // cannot be invoked immediately in the thread trying to stop the task.
         ConcurrencyUtils.awaitLatch(startupLatch, "Timeout waiting for task to start");
         workerTask.stop();
+        finishStartupLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
 
         workerTaskFuture.get();
