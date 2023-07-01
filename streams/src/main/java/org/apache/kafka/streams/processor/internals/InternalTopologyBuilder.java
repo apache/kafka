@@ -696,6 +696,15 @@ public class InternalTopologyBuilder {
         }
     }
 
+    public Long getHistoryRetention(final String storeName) {
+        return stateFactories.get(storeName).historyRetention();
+    }
+
+    public boolean isStoreVersioned(final String storeName) {
+        return stateFactories.get(storeName).isVersionedStore();
+    }
+
+
     public final void connectProcessorAndStateStores(final String processorName,
                                                      final String... stateStoreNames) {
         Objects.requireNonNull(processorName, "processorName can't be null");
