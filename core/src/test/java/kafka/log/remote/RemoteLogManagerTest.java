@@ -739,6 +739,70 @@ public class RemoteLogManagerTest {
         verify(mockLog, never()).updateHighestOffsetInRemoteStorage(anyLong());
     }
 
+    @Test
+    void testCleanupDeletedRemoteLogSegmentsShouldDeleteLogSegment() throws Exception {
+        Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
+        RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
+
+        when(remoteLogMetadataManager.remoteLogSegmentMetadata(any(TopicIdPartition.class), anyInt(), anyLong()))
+            .thenReturn(Optional.empty());
+        verifyNotInCache(leaderTopicIdPartition);
+        // Load topicId cache
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds);
+        verifyInCache(leaderTopicIdPartition);
+
+        when(remoteLogMetadataManager.listRemoteLogSegments(any(TopicIdPartition.class)))
+            .thenReturn(Collections.singleton(segmentMetadata).iterator());
+
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.addTopicIdToBeDeleted(Optional.ofNullable(leaderTopicIdPartition.topicId()));
+        task.convertToLeader(2);
+        task.cleanupDeletedRemoteLogSegments();
+
+        // verify deleteLogSegmentData is passing the RemoteLogSegmentMetadata we created above
+        ArgumentCaptor<RemoteLogSegmentMetadata> remoteLogSegmentMetadataArg = ArgumentCaptor.forClass(RemoteLogSegmentMetadata.class);
+        verify(remoteStorageManager, times(1)).deleteLogSegmentData(remoteLogSegmentMetadataArg.capture());
+        assertEquals(segmentMetadata, remoteLogSegmentMetadataArg.getValue());
+
+        // verify the topicPartition has evicted from topicId cache
+        verifyNotInCache(leaderTopicIdPartition);
+
+        // verify the partitions passed is expected
+        ArgumentCaptor<Set<TopicIdPartition>> partitionsArg = ArgumentCaptor.forClass(Set.class);
+        verify(remoteLogMetadataManager, times(1)).onStopPartitions(partitionsArg.capture());
+        assertEquals(leaderTopicIdPartition, partitionsArg.getValue().stream().findAny().get());
+    }
+
+    @Test
+    void testCleanupDeletedRemoteLogSegmentsShouldNotDeleteSegmentForFollower() throws Exception {
+        Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
+        RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
+
+        when(remoteLogMetadataManager.remoteLogSegmentMetadata(any(TopicIdPartition.class), anyInt(), anyLong()))
+            .thenReturn(Optional.empty());
+        verifyNotInCache(followerTopicIdPartition);
+        // Load topicId cache
+        remoteLogManager.onLeadershipChange(Collections.emptySet(), Collections.singleton(mockFollowerPartition), topicIds);
+        verifyInCache(followerTopicIdPartition);
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(followerTopicIdPartition);
+        RemoteLogManager.addTopicIdToBeDeleted(Optional.ofNullable(followerTopicIdPartition.topicId()));
+        task.convertToFollower();
+        task.cleanupDeletedRemoteLogSegments();
+
+        // verify the topicPartition has evicted from topicId cache
+        verifyNotInCache(followerTopicIdPartition);
+
+        // verify the partitions passed is expected
+        ArgumentCaptor<Set<TopicIdPartition>> partitionsArg = ArgumentCaptor.forClass(Set.class);
+        verify(remoteLogMetadataManager, times(1)).onStopPartitions(partitionsArg.capture());
+        assertEquals(followerTopicIdPartition, partitionsArg.getValue().stream().findAny().get());
+
+        // verify the remoteStorageManager never delete any segment
+        verify(remoteStorageManager, never()).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
+    }
+
     private void verifyRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                                 long oldSegmentStartOffset,
                                                 long oldSegmentEndOffset,

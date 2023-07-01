@@ -212,6 +212,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def topicId: Option[Uuid] = _topicId
 
+  def topicIdAsJava: Optional[Uuid] = _topicId.asJava
+
   def dir: File = localLog.dir
 
   def parentDir: String = localLog.parentDir

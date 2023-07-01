@@ -457,6 +457,7 @@ class ReplicaManager(val config: KafkaConfig,
         this.controllerEpoch = controllerEpoch
 
         val stoppedPartitions = mutable.Map.empty[TopicPartition, Boolean]
+        val partitionsMaybeToDeleteRemote = mutable.Set.empty[TopicPartition]
         partitionStates.forKeyValue { (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition()
 
@@ -471,6 +472,9 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.Online(partition) =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
+
+              if (requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete && remoteLogManager.isDefined)
+                partitionsMaybeToDeleteRemote += topicPartition
               // When a topic is deleted, the leader epoch is not incremented. To circumvent this,
               // a sentinel value (EpochDuringDelete) overwriting any previous epoch is used.
               // When an older version of the StopReplica request which does not contain the leader
@@ -500,11 +504,13 @@ class ReplicaManager(val config: KafkaConfig,
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
               stoppedPartitions += topicPartition -> deletePartition
+              if (remoteLogManager.isDefined)
+                partitionsMaybeToDeleteRemote += topicPartition
               responseMap.put(topicPartition, Errors.NONE)
           }
         }
 
-        stopPartitions(stoppedPartitions).foreach { case (topicPartition, e) =>
+        stopPartitions(stoppedPartitions, partitionsMaybeToDeleteRemote).foreach { case (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
               stateChangeLogger.error(s"Ignoring StopReplica request (delete=true) from " +
                 s"controller $controllerId with correlation id $correlationId " +
@@ -526,14 +532,17 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Stop the given partitions.
    *
-   * @param partitionsToStop    A map from a topic partition to a boolean indicating
-   *                            whether the partition should be deleted.
+   * @param partitionsToStop                A map from a topic partition to a boolean indicating
+   *                                        whether the partition should be deleted.
+   * @param partitionsMaybeToDeleteRemote   A set of topic partitions that may need to delete
+   *                                        remote segments.
    *
-   * @return                    A map from partitions to exceptions which occurred.
-   *                            If no errors occurred, the map will be empty.
+   * @return                                A map from partitions to exceptions which occurred.
+   *                                        If no errors occurred, the map will be empty.
    */
   protected def stopPartitions(
-    partitionsToStop: Map[TopicPartition, Boolean]
+    partitionsToStop: Map[TopicPartition, Boolean],
+    partitionsMaybeToDeleteRemote: Set[TopicPartition] = mutable.Set.empty[TopicPartition]
   ): Map[TopicPartition, Throwable] = {
     // First stop fetchers for all partitions.
     val partitions = partitionsToStop.keySet
@@ -567,7 +576,7 @@ class ReplicaManager(val config: KafkaConfig,
     val errorMap = new mutable.HashMap[TopicPartition, Throwable]()
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
-      logManager.asyncDelete(partitionsToDelete, (tp, e) => errorMap.put(tp, e))
+      logManager.asyncDelete(partitionsToDelete, partitionsMaybeToDeleteRemote, (tp, e) => errorMap.put(tp, e))
     }
     errorMap
   }
@@ -745,7 +754,7 @@ class ReplicaManager(val config: KafkaConfig,
             Some(error.exception())
           )
         }
-        
+
         val allResults = localProduceResults ++ unverifiedResults ++ errorResults
 
         val produceStatus = allResults.map { case (topicPartition, result) =>
