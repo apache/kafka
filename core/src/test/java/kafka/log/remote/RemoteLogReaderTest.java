@@ -16,6 +16,7 @@
  */
 package kafka.log.remote;
 
+import kafka.server.BrokerTopicStats;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.record.Records;
@@ -41,6 +42,7 @@ import static org.mockito.Mockito.when;
 
 public class RemoteLogReaderTest {
     RemoteLogManager mockRLM = mock(RemoteLogManager.class);
+    BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
     Records records = mock(Records.class);
 
@@ -51,7 +53,7 @@ public class RemoteLogReaderTest {
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
         RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition("test", 0), null, null, false);
-        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback);
+        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats);
         remoteLogReader.call();
 
         // verify the callback did get invoked with the expected remoteLogReadResult
@@ -69,7 +71,7 @@ public class RemoteLogReaderTest {
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
         RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition("test", 0), null, null, false);
-        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback);
+        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats);
         remoteLogReader.call();
 
         // verify the callback did get invoked with the expected remoteLogReadResult
