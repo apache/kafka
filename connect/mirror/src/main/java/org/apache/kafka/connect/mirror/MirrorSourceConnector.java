@@ -104,7 +104,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private Admin offsetSyncsAdminClient;
     private volatile boolean useIncrementalAlterConfigs;
     private AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
-    private List<AclBinding> knownTopicAclBindings = Collections.emptyList();
+    private Set<AclBinding> knownTopicAclBindings = Collections.emptySet();
 
     public MirrorSourceConnector() {
         // nop
@@ -582,21 +582,23 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private void updateTopicAcls(List<AclBinding> bindings) {
-        Set<AclBinding> addBindings = new HashSet<>();
-        addBindings.addAll(bindings);
+    // Visible for testing
+    int updateTopicAcls(List<AclBinding> bindings) {
+        Set<AclBinding> addBindings = new HashSet<>(bindings);
         addBindings.removeAll(knownTopicAclBindings);
+        int newBindCount = addBindings.size();
         if (!addBindings.isEmpty()) {
-            log.info("Syncing new found {} topic ACL bindings.", addBindings.size());
+            log.info("Syncing new found {} topic ACL bindings.", newBindCount);
             targetAdminClient.createAcls(addBindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {
                     log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
                 }
             }));
-            knownTopicAclBindings = bindings;
+            knownTopicAclBindings = new HashSet<>(bindings);
         } else {
             log.debug("Not found new topic Acl info, skip sync!");
         }
+        return newBindCount;
     }
 
     private static Stream<TopicPartition> expandTopicDescription(TopicDescription description) {
@@ -680,5 +682,10 @@ public class MirrorSourceConnector extends SourceConnector {
 
     String formatRemoteTopic(String topic) {
         return replicationPolicy.formatRemoteTopic(sourceAndTarget.source(), topic);
+    }
+
+    // Visible for testing
+    Set<AclBinding> knownTopicAclBindings() {
+        return knownTopicAclBindings;
     }
 }

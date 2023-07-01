@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.CreateAclsResult;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -55,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
@@ -74,6 +76,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -682,5 +685,36 @@ public class MirrorSourceConnectorTest {
         ConfigValue result = results.get(0);
         assertNotNull(result, "Connector should not have record null config value for '" + name + "' property");
         return Optional.of(result);
+    }
+
+    @Test
+    public void testUpdateIncrementTopicAcls() {
+        Admin sourceAdmin = mock(Admin.class);
+        Admin targetAdmin = mock(Admin.class);
+        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin);
+
+        List<AclBinding> filteredBindings = new ArrayList<>();
+        AclBinding binding1 = mock(AclBinding.class);
+        AclBinding binding2 = mock(AclBinding.class);
+        filteredBindings.add(binding1);
+        filteredBindings.add(binding2);
+        doReturn(mock(CreateAclsResult.class)).when(targetAdmin).createAcls(anySet());
+
+        // First topic acl info update when starting `syncTopicAcls` thread
+        int newAddCount = connector.updateTopicAcls(filteredBindings);
+        assertEquals(connector.knownTopicAclBindings(), new HashSet<>(filteredBindings));
+        assertTrue(newAddCount == filteredBindings.size());
+
+        List<AclBinding> newAddBindings = new ArrayList<>();
+        AclBinding binding3 = mock(AclBinding.class);
+        AclBinding binding4 = mock(AclBinding.class);
+        newAddBindings.add(binding3);
+        newAddBindings.add(binding4);
+        filteredBindings.addAll(newAddBindings);
+
+        // The next increment topic acl info update
+        newAddCount = connector.updateTopicAcls(filteredBindings);
+        assertEquals(connector.knownTopicAclBindings(), new HashSet<>(filteredBindings));
+        assertTrue(newAddCount == newAddBindings.size());
     }
 }
