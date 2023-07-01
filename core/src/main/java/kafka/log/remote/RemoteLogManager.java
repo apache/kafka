@@ -47,6 +47,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
@@ -572,6 +573,9 @@ public class RemoteLogManager implements Closeable {
                 } else {
                     logger.debug("Skipping copying segments, current read-offset:{}, and LSO:{}", copiedOffset, lso);
                 }
+            } catch (CustomMetadataSizeLimitExceededException e) {
+                // Only stop this task. Logging is done where the exception is thrown.
+                this.cancel();
             } catch (InterruptedException ex) {
                 throw ex;
             } catch (Exception ex) {
@@ -595,7 +599,8 @@ public class RemoteLogManager implements Closeable {
             return nextSegmentBaseOffset;
         }
 
-        private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException {
+        private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException,
+                CustomMetadataSizeLimitExceededException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
 
@@ -621,10 +626,30 @@ public class RemoteLogManager implements Closeable {
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
             brokerTopicStats.topicStats(log.topicPartition().topic()).remoteWriteRequestRate().mark();
             brokerTopicStats.allTopicsStats().remoteWriteRequestRate().mark();
-            remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+            Optional<CustomMetadata> customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
-                    RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+                    customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+
+            int customMetadataSizeLimit = RemoteLogManager.this.rlmConfig.remoteLogMetadataCustomMetadataMaxSize();
+            if (customMetadata.isPresent()) {
+                long customMetadataSize = customMetadata.get().value().length;
+                if (customMetadataSize > customMetadataSizeLimit) {
+                    CustomMetadataSizeLimitExceededException e = new CustomMetadataSizeLimitExceededException();
+                    logger.error("Custom metadata size {} exceeds configured limit {}." +
+                                    " Copying will be stopped and copied segment will be attempted to clean." +
+                                    " Original metadata: {}",
+                            customMetadataSize, customMetadataSizeLimit, copySegmentStartedRlsm, e);
+                    try {
+                        // For deletion, we provide back the custom metadata by creating a new metadata object from the update.
+                        // However, the update itself will not be stored in this case.
+                        remoteLogStorageManager.deleteLogSegmentData(copySegmentStartedRlsm.createWithUpdates(copySegmentFinishedRlsm));
+                    } catch (RemoteStorageException e1) {
+                        logger.error("Error while cleaning segment after custom metadata size exceeded", e1);
+                    }
+                    throw e;
+                }
+            }
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
