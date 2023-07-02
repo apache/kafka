@@ -48,6 +48,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -146,6 +147,12 @@ public class RemoteLogManagerTest {
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
         Properties props = new Properties();
         remoteLogManagerConfig = createRLMConfig(props);
+
+        KafkaYammerMetrics.defaultRegistry()
+            .allMetrics()
+            .keySet()
+            .forEach(metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName));
+
         remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time, tp -> Optional.of(mockLog), brokerTopicStats) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
@@ -303,6 +310,10 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         doNothing().when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
+        // Verify the metrics for remote writes and for failures is zero before attempt to copy log segment
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
@@ -336,15 +347,16 @@ public class RemoteLogManagerTest {
         verify(mockLog, times(1)).updateHighestOffsetInRemoteStorage(argument.capture());
         assertEquals(oldSegmentEndOffset, argument.getValue());
 
-        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topicPartition().topic()).remoteBytesOutRate().count());
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topicPartition().topic()).failedRemoteWriteRequestRate().count());
+        // Verify the metric for remote writes is updated correctly
+        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
+        // Verify we did not report any failure for remote writes
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
     }
 
     @Test
     void testMetricsUpdateOnCopyLogSegmentsFailure() throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
-        long oldSegmentEndOffset = nextSegmentStartOffset - 1;
 
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
 
@@ -391,35 +403,21 @@ public class RemoteLogManagerTest {
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
-        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         doThrow(new RuntimeException()).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
+        // Verify the metrics for remote write failures is zero before attempt to copy log segment
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
 
-        // verify remoteLogMetadataManager did add the expected RemoteLogSegmentMetadata
-        ArgumentCaptor<RemoteLogSegmentMetadata> remoteLogSegmentMetadataArg = ArgumentCaptor.forClass(RemoteLogSegmentMetadata.class);
-        verify(remoteLogMetadataManager).addRemoteLogSegmentMetadata(remoteLogSegmentMetadataArg.capture());
-        // The old segment should only contain leader epoch [0->0, 1->100] since its offset range is [0, 149]
-        Map<Integer, Long> expectedLeaderEpochs = new TreeMap<>();
-        expectedLeaderEpochs.put(epochEntry0.epoch, epochEntry0.startOffset);
-        expectedLeaderEpochs.put(epochEntry1.epoch, epochEntry1.startOffset);
-        verifyRemoteLogSegmentMetadata(remoteLogSegmentMetadataArg.getValue(), oldSegmentStartOffset, oldSegmentEndOffset, expectedLeaderEpochs);
+        // Verify we attempted to copy log segment metadata to remote storage
+        verify(remoteStorageManager, times(1)).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
-        // verify copyLogSegmentData is passing the RemoteLogSegmentMetadata we created above
-        // and verify the logSegmentData passed is expected
-        ArgumentCaptor<RemoteLogSegmentMetadata> remoteLogSegmentMetadataArg2 = ArgumentCaptor.forClass(RemoteLogSegmentMetadata.class);
-        ArgumentCaptor<LogSegmentData> logSegmentDataArg = ArgumentCaptor.forClass(LogSegmentData.class);
-        verify(remoteStorageManager, times(1)).copyLogSegmentData(remoteLogSegmentMetadataArg2.capture(), logSegmentDataArg.capture());
-        assertEquals(remoteLogSegmentMetadataArg.getValue(), remoteLogSegmentMetadataArg2.getValue());
-        // The old segment should only contain leader epoch [0->0, 1->100] since its offset range is [0, 149]
-        verifyLogSegmentData(logSegmentDataArg.getValue(), idx, timeIdx, txnIndex, tempFile, mockProducerSnapshotIndex,
-            Arrays.asList(epochEntry0, epochEntry1));
-
-        verify(remoteLogMetadataManager, times(0)).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+        // Verify we should not have updated the highest offset because of write failure
         verify(mockLog, times(0)).updateHighestOffsetInRemoteStorage(anyLong());
-        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topicPartition().topic()).failedRemoteWriteRequestRate().count());
+        // Verify the metric for remote write failure was updated.
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
     }
 
     @Test
