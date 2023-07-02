@@ -435,6 +435,11 @@ class BrokerTopicStats extends Logging {
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesOutPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesInPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.RemoteReadRequestsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteReadRequestsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteWriteRequestsPerSec)
     }
   }
 
