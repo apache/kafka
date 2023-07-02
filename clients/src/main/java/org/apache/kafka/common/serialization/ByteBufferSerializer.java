@@ -48,7 +48,10 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
             }
         }
 
-        data.flip();
+        // Consider that ByteBuffer#wrap(byte[]) return a ByteBuffer that does not need to call flip().
+        if (data.position() > 0) {
+            data.flip();
+        }
         return Utils.toArray(data);
     }
 

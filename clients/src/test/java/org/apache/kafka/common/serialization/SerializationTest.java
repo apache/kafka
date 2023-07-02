@@ -416,15 +416,29 @@ public class SerializationTest {
         final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
         final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
         final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
+        final ByteBuffer heapBuffer3 = heapBuffer0.duplicate();
+        final ByteBuffer heapBuffer4 = heapBuffer1.duplicate();
+        final ByteBuffer heapBuffer5 = heapBuffer2.duplicate();
+        final ByteBuffer heapBuffer6 = heapBuffer0.asReadOnlyBuffer();
+        final ByteBuffer heapBuffer7 = heapBuffer1.asReadOnlyBuffer();
+        final ByteBuffer heapBuffer8 = heapBuffer2.asReadOnlyBuffer();
         final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
         final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
         try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
             assertNull(serializer.serialize(topic, null));
             assertNull(serializer.serializeToByteBuffer(topic, null));
+            assertArrayEquals(new byte[0], serializer.serialize(topic, ByteBuffer.allocate(0)));
 
             testByteBufferSerCompatibility0(serializer, bytes, heapBuffer0);
             testByteBufferSerCompatibility0(serializer, bytes, heapBuffer1);
             testByteBufferSerCompatibility0(serializer, bytes, heapBuffer2);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer3);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer4);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer5);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer6);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer7);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer8);
+
             testByteBufferSerCompatibility0(serializer, bytes, directBuffer0);
             testByteBufferSerCompatibility0(serializer, bytes, directBuffer1);
         }
