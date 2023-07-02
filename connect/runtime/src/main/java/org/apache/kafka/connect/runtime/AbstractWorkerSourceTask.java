@@ -108,7 +108,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     /**
      * Invoked when a record is about to be dispatched to the producer. May be invoked multiple times for the same
-     * record if retriable errors are encountered.
+     * record if retryable errors are encountered.
      * @param sourceRecord the pre-transform {@link SourceRecord} provided by the source task; never null.
      * @param producerRecord the {@link ProducerRecord} produced by transforming and converting the
      * {@code sourceRecord}; never null;
@@ -472,7 +472,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      * Convert the source record into a producer record.
      *
      * @param record the transformed record
-     * @return the producer record which can sent over to Kafka. A null is returned if the input is null or
+     * @return the producer record which can be sent over to Kafka. A null is returned if the input is null or
      * if an error was encountered during any of the converter stages.
      */
     protected ProducerRecord<byte[], byte[]> convertTransformedRecord(SourceRecord record) {

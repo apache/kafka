@@ -61,6 +61,7 @@ public class MirrorSourceTask extends SourceTask {
     private Duration pollTimeout;
     private long maxOffsetLag;
     private Map<TopicPartition, PartitionState> partitionStates;
+    private final Map<TopicPartition, Long> lastReplicatedSourceOffsets = new HashMap<>();
     private ReplicationPolicy replicationPolicy;
     private MirrorSourceMetrics metrics;
     private boolean stopping = false;
@@ -151,6 +152,7 @@ public class MirrorSourceTask extends SourceTask {
         }
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+            reportReplicationOffsetLag(records);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
@@ -200,6 +202,7 @@ public class MirrorSourceTask extends SourceTask {
         TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
         long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
         long downstreamOffset = metadata.offset();
+        lastReplicatedSourceOffsets.put(sourceTopicPartition, upstreamOffset);
         maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
         // We may be able to immediately publish an offset sync that we've queued up here
         firePendingOffsetSyncs();
@@ -280,6 +283,38 @@ public class MirrorSourceTask extends SourceTask {
                 Schema.OPTIONAL_BYTES_SCHEMA, record.key(),
                 Schema.BYTES_SCHEMA, record.value(),
                 record.timestamp(), headers);
+    }
+
+    //visible for testing
+    void reportReplicationOffsetLag(ConsumerRecords<byte[], byte[]> lastPolledRecords) {
+        Set<TopicPartition> partitions = lastPolledRecords.partitions();
+        partitions.forEach(p -> {
+            try {
+                long replicationOffsetLag = getReplicationOffsetLagForPartition(p, lastPolledRecords.records(p));
+                if (replicationOffsetLag < 0) {
+                    log.warn("Replication offset lag for partition {} is negative({}) - " +
+                            "skipping metric reporting for this partition.", p, replicationOffsetLag);
+                    return;
+                }
+                metrics.replicationOffsetLag(p, replicationOffsetLag + 1); //+1 to account for zero-based offset numbering
+            } catch (UnsupportedOperationException e) {
+                log.error("Failed to calculate replication offset lag for partition {}.", p, e);
+            }
+        });
+    }
+
+    private long getReplicationOffsetLagForPartition(TopicPartition partition,
+                                                     List<ConsumerRecord<byte[], byte[]>> lastPolledRecordsForPartition) {
+        ConsumerRecord<byte[], byte[]> lastPolledRecord =
+                lastPolledRecordsForPartition.get(lastPolledRecordsForPartition.size() - 1);
+        if (!lastPolledRecord.topic().equals(partition.topic()) || lastPolledRecord.partition() != partition.partition()) {
+            String error = String.format(
+                    "Unexpected topic/partition mismatch while calculating replication-offset-lag. Expected: %s, got: %s-%s.",
+                    partition, lastPolledRecord.topic(), lastPolledRecord.partition());
+            throw new UnsupportedOperationException(error);
+        }
+        long endOffsetForPartition = lastPolledRecord.offset();
+        return endOffsetForPartition - lastReplicatedSourceOffsets.getOrDefault(partition, 0L);
     }
 
     private Headers convertHeaders(ConsumerRecord<byte[], byte[]> record) {
