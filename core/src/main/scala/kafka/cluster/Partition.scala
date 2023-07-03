@@ -20,6 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
+import kafka.cluster.Partition.{AtMinIsrMetricName, InSyncReplicasCountMetricName, LastStableOffsetLagMetricName, ReplicasCountMetricName, UnderMinIsrMetricName, UnderReplicatedMetricName, removeMetrics}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -103,7 +104,23 @@ class DelayedOperations(topicPartition: TopicPartition,
 }
 
 object Partition {
-  private val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
+  private val UnderReplicatedMetricName = "UnderReplicated"
+  private val UnderMinIsrMetricName = "UnderMinIsr"
+  private val InSyncReplicasCountMetricName = "InSyncReplicasCount"
+  private val ReplicasCountMetricName = "ReplicasCount"
+  private val LastStableOffsetLagMetricName = "LastStableOffsetLag"
+  private val AtMinIsrMetricName = "AtMinIsr"
+
+  private[cluster] val MetricNames = Set(
+    UnderReplicatedMetricName,
+    UnderMinIsrMetricName,
+    InSyncReplicasCountMetricName,
+    ReplicasCountMetricName,
+    LastStableOffsetLagMetricName,
+    AtMinIsrMetricName
+  )
+
+  private[cluster] val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
 
   def apply(topicPartition: TopicPartition,
             time: Time,
@@ -142,12 +159,7 @@ object Partition {
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
     val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString).asJava
-    metricsGroup.removeMetric("UnderReplicated", tags)
-    metricsGroup.removeMetric("UnderMinIsr", tags)
-    metricsGroup.removeMetric("InSyncReplicasCount", tags)
-    metricsGroup.removeMetric("ReplicasCount", tags)
-    metricsGroup.removeMetric("LastStableOffsetLag", tags)
-    metricsGroup.removeMetric("AtMinIsr", tags)
+    MetricNames.foreach(metricsGroup.removeMetric(_, tags))
   }
 }
 
@@ -344,12 +356,12 @@ class Partition(val topicPartition: TopicPartition,
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString).asJava
 
-  metricsGroup.newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
-  metricsGroup.newGauge("InSyncReplicasCount", () => if (isLeader) partitionState.isr.size else 0, tags)
-  metricsGroup.newGauge("UnderMinIsr", () => if (isUnderMinIsr) 1 else 0, tags)
-  metricsGroup.newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
-  metricsGroup.newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
-  metricsGroup.newGauge("LastStableOffsetLag", () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
+  metricsGroup.newGauge(UnderReplicatedMetricName, () => if (isUnderReplicated) 1 else 0, tags)
+  metricsGroup.newGauge(InSyncReplicasCountMetricName, () => if (isLeader) partitionState.isr.size else 0, tags)
+  metricsGroup.newGauge(UnderMinIsrMetricName, () => if (isUnderMinIsr) 1 else 0, tags)
+  metricsGroup.newGauge(AtMinIsrMetricName, () => if (isAtMinIsr) 1 else 0, tags)
+  metricsGroup.newGauge(ReplicasCountMetricName, () => if (isLeader) assignmentState.replicationFactor else 0, tags)
+  metricsGroup.newGauge(LastStableOffsetLagMetricName, () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
 
   def hasLateTransaction(currentTimeMs: Long): Boolean = leaderLogIfLocal.exists(_.hasLateTransaction(currentTimeMs))
 
@@ -642,6 +654,7 @@ class Partition(val topicPartition: TopicPartition,
       }
       listeners.clear()
     }
+    removeMetrics(topicPartition)
   }
 
   private def clear(): Unit = {
@@ -652,7 +665,6 @@ class Partition(val topicPartition: TopicPartition,
     partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
     leaderReplicaIdOpt = None
     leaderEpochStartOffsetOpt = None
-    Partition.removeMetrics(topicPartition)
   }
 
   def getLeaderEpoch: Int = this.leaderEpoch

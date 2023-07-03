@@ -558,6 +558,9 @@ class ReplicaManager(val config: KafkaConfig,
         }
         partitionsToDelete += topicPartition
       }
+      // Whether the `topicPartition` is deleted or the broker where the `topicPartition` is located is stopped,
+      // the metrics in `Partition` should be removed.
+      Partition.removeMetrics(topicPartition)
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
       completeDelayedFetchOrProduceRequests(topicPartition)

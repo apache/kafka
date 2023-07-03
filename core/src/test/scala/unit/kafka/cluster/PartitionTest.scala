@@ -2639,13 +2639,6 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testAddAndRemoveMetrics(): Unit = {
-    val metricsToCheck = List(
-      "UnderReplicated",
-      "UnderMinIsr",
-      "InSyncReplicasCount",
-      "ReplicasCount",
-      "LastStableOffsetLag",
-      "AtMinIsr")
 
     def getMetric(metric: String): Option[Metric] = {
       KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find { case (metricName, _) =>
@@ -2653,7 +2646,7 @@ class PartitionTest extends AbstractPartitionTest {
       }.map(_._2)
     }
 
-    assertTrue(metricsToCheck.forall(getMetric(_).isDefined))
+    assertTrue(Partition.MetricNames.forall(getMetric(_).isDefined))
 
     Partition.removeMetrics(topicPartition)
 
