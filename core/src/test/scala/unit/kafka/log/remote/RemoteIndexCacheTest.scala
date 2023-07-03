@@ -256,9 +256,9 @@ class RemoteIndexCacheTest {
     cache.internalCache.invalidate(internalIndexKey)
 
     // wait until entry is marked for deletion
-    TestUtils.waitUntilTrue(() => cacheEntry.markedForCleanup,
+    TestUtils.waitUntilTrue(() => cacheEntry.isMarkedForCleanup,
       "Failed to mark cache entry for cleanup after invalidation")
-    TestUtils.waitUntilTrue(() => cacheEntry.cleanStarted,
+    TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
 
     // first it will be marked for cleanup, second time markForCleanup is called when cleanup() is called
@@ -444,14 +444,14 @@ class RemoteIndexCacheTest {
     verifyNoMoreInteractions(rsm)
   }
 
-  private def generateSpyCacheEntry(): Entry = {
+  private def generateSpyCacheEntry(): RemoteIndexCache.Entry = {
     val remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition)
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
     val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
     val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
-    spy(new Entry(offsetIndex, timeIndex, txIndex))
+    spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txIndex))
   }
 
   private def assertAtLeastOnePresent(cache: RemoteIndexCache, uuids: Uuid*): Unit = {

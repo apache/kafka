@@ -1704,6 +1704,7 @@ project(':storage') {
     implementation project(':storage:api')
     implementation project(':server-common')
     implementation project(':clients')
+    implementation libs.caffeine
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
