@@ -38,8 +38,11 @@ import java.io.InputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -124,7 +127,7 @@ public class RemoteIndexCache implements Closeable {
      * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
      * @param logDir               log directory
      */
-    public RemoteIndexCache(int maxSize, RemoteStorageManager remoteStorageManager, String logDir) {
+    public RemoteIndexCache(int maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 
@@ -190,7 +193,7 @@ public class RemoteIndexCache implements Closeable {
         return thread;
     }
 
-    private void init() {
+    private void init() throws IOException {
         try {
             Files.createDirectory(cacheDir.toPath());
             log.info("Created new file {} for RemoteIndexCache", cacheDir);
@@ -201,76 +204,73 @@ public class RemoteIndexCache implements Closeable {
             throw new KafkaException(e);
         }
 
-        try {
-            // Delete any .deleted files remained from the earlier run of the broker.
-            try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
-                paths.forEach(path -> {
-                    if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (IOException e) {
-                            throw new KafkaException(e);
-                        }
+        // Delete any .deleted files remained from the earlier run of the broker.
+        try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
+            paths.forEach(path -> {
+                if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        throw new KafkaException(e);
                     }
-                });
-            }
+                }
+            });
+        }
 
-            try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
-                paths.forEach(path -> {
+        try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
+            Iterator<Path> iterator = paths.iterator();
+            while (iterator.hasNext()) {
+                Path path = iterator.next();
+                Path fileNamePath = path.getFileName();
+                if (fileNamePath == null)
+                    throw new KafkaException("Empty file name in remote index cache directory: " + cacheDir);
 
-                    String pathStr = path.getFileName().toString();
-                    String name = pathStr.substring(0, pathStr.lastIndexOf("_") + 1);
+                String fileNameStr = fileNamePath.toString();
+                String name = fileNameStr.substring(0, fileNameStr.lastIndexOf("_") + 1);
 
-                    // Create entries for each path if all the index files exist.
-                    int firstIndex = name.indexOf('_');
-                    int offset = Integer.parseInt(name.substring(0, firstIndex));
-                    Uuid uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')));
+                // Create entries for each path if all the index files exist.
+                int firstIndex = name.indexOf('_');
+                int offset = Integer.parseInt(name.substring(0, firstIndex));
+                Uuid uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')));
 
-                    // It is safe to update the internalCache non-atomically here since this function is always called by a single
-                    // thread only.
-                    if (!internalCache.asMap().containsKey(uuid)) {
-                        File offsetIndexFile = new File(cacheDir, name + INDEX_FILE_SUFFIX);
-                        File timestampIndexFile = new File(cacheDir, name + TIME_INDEX_FILE_SUFFIX);
-                        File txnIndexFile = new File(cacheDir, name + TXN_INDEX_FILE_SUFFIX);
+                // It is safe to update the internalCache non-atomically here since this function is always called by a single
+                // thread only.
+                if (!internalCache.asMap().containsKey(uuid)) {
+                    File offsetIndexFile = new File(cacheDir, name + INDEX_FILE_SUFFIX);
+                    File timestampIndexFile = new File(cacheDir, name + TIME_INDEX_FILE_SUFFIX);
+                    File txnIndexFile = new File(cacheDir, name + TXN_INDEX_FILE_SUFFIX);
 
-                        try {
-                            if (offsetIndexFile.exists() && timestampIndexFile.exists() && txnIndexFile.exists()) {
+                    if (offsetIndexFile.exists() && timestampIndexFile.exists() && txnIndexFile.exists()) {
 
-                                OffsetIndex offsetIndex = new OffsetIndex(offsetIndexFile, offset, Integer.MAX_VALUE, false);
-                                offsetIndex.sanityCheck();
+                        OffsetIndex offsetIndex = new OffsetIndex(offsetIndexFile, offset, Integer.MAX_VALUE, false);
+                        offsetIndex.sanityCheck();
 
-                                TimeIndex timeIndex = new TimeIndex(timestampIndexFile, offset, Integer.MAX_VALUE, false);
-                                timeIndex.sanityCheck();
+                        TimeIndex timeIndex = new TimeIndex(timestampIndexFile, offset, Integer.MAX_VALUE, false);
+                        timeIndex.sanityCheck();
 
-                                TransactionIndex txnIndex = new TransactionIndex(offset, txnIndexFile);
-                                txnIndex.sanityCheck();
+                        TransactionIndex txnIndex = new TransactionIndex(offset, txnIndexFile);
+                        txnIndex.sanityCheck();
 
-                                Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
-                                internalCache.put(uuid, entry);
-                            } else {
-                                // Delete all of them if any one of those indexes is not available for a specific segment id
-                                LogFileUtils.tryAll(Arrays.asList(
-                                        () -> {
-                                            Files.deleteIfExists(offsetIndexFile.toPath());
-                                            return null;
-                                        },
-                                        () -> {
-                                            Files.deleteIfExists(timestampIndexFile.toPath());
-                                            return null;
-                                        },
-                                        () -> {
-                                            Files.deleteIfExists(txnIndexFile.toPath());
-                                            return null;
-                                        }));
-                            }
-                        } catch (Exception e) {
-                            throw new KafkaException(e);
-                        }
+                        Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
+                        internalCache.put(uuid, entry);
+                    } else {
+                        // Delete all of them if any one of those indexes is not available for a specific segment id
+                        tryAll(Arrays.asList(
+                                () -> {
+                                    Files.deleteIfExists(offsetIndexFile.toPath());
+                                    return null;
+                                },
+                                () -> {
+                                    Files.deleteIfExists(timestampIndexFile.toPath());
+                                    return null;
+                                },
+                                () -> {
+                                    Files.deleteIfExists(txnIndexFile.toPath());
+                                    return null;
+                                }));
                     }
-                });
+                }
             }
-        } catch (IOException e) {
-            throw new KafkaException(e);
         }
     }
 
@@ -508,20 +508,19 @@ public class RemoteIndexCache implements Closeable {
             // no-op if clean is done already
             if (!cleanStarted) {
                 cleanStarted = true;
-                try {
-                    LogFileUtils.tryAll(Arrays.asList(() -> {
-                        offsetIndex.deleteIfExists();
-                        return null;
-                    }, () -> {
-                        timeIndex.deleteIfExists();
-                        return null;
-                    }, () -> {
-                        txnIndex.deleteIfExists();
-                        return null;
-                    }));
-                } catch (Exception e) {
-                    throw new IOException(e);
-                }
+
+                List<StorageAction<Void, Exception>> actions = Arrays.asList(() -> {
+                    offsetIndex.deleteIfExists();
+                    return null;
+                }, () -> {
+                    timeIndex.deleteIfExists();
+                    return null;
+                }, () -> {
+                    txnIndex.deleteIfExists();
+                    return null;
+                });
+
+                tryAll(actions);
             }
         }
 
@@ -529,6 +528,54 @@ public class RemoteIndexCache implements Closeable {
             Utils.closeQuietly(offsetIndex, "OffsetIndex");
             Utils.closeQuietly(timeIndex, "TimeIndex");
             Utils.closeQuietly(txnIndex, "TransactionIndex");
+        }
+    }
+
+    /**
+     * Executes each entry in `actions` list even if one or more throws an exception. If any of them throws
+     * an IOException, it will be rethrown and adds all other encountered exceptions as suppressed to that IOException.
+     * Otherwise, it throws KafkaException wrapped with the first exception and the remaining exceptions are added as
+     * suppressed to the KafkaException.
+     *
+     * @param actions actions to be executes
+     * @throws IOException Any IOException encountered while executing those actions.
+     */
+    private static void tryAll(List<StorageAction<Void, Exception>> actions) throws IOException {
+        IOException ioException = null;
+        List<Exception> exceptions = Collections.emptyList();
+        for (StorageAction<Void, Exception> action : actions) {
+            try {
+                action.execute();
+            } catch (IOException e) {
+                if (ioException == null) {
+                    ioException = e;
+                } else {
+                    if (exceptions.isEmpty()) {
+                        exceptions = new ArrayList<>();
+                    }
+                    exceptions.add(e);
+                }
+            } catch (Exception e) {
+                if (exceptions.isEmpty()) {
+                    exceptions = new ArrayList<>();
+                }
+                exceptions.add(e);
+            }
+        }
+
+        if (ioException != null) {
+            for (Exception exception : exceptions) {
+                ioException.addSuppressed(exception);
+            }
+            throw ioException;
+        } else if (!exceptions.isEmpty()) {
+            Iterator<Exception> iterator = exceptions.iterator();
+            KafkaException kafkaException = new KafkaException(iterator.next());
+            while (iterator.hasNext()) {
+                kafkaException.addSuppressed(iterator.next());
+            }
+
+            throw kafkaException;
         }
     }
 }

@@ -18,7 +18,6 @@ package org.apache.kafka.storage.internals.log;
 
 import java.io.File;
 import java.text.NumberFormat;
-import java.util.List;
 
 public final class LogFileUtils {
 
@@ -188,25 +187,4 @@ public final class LogFileUtils {
         return offsetFromFileName(file.getName());
     }
 
-    /**
-     * Invokes every function in `all` even if one or more functions throws an exception.
-     * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
-     * added as suppressed exceptions.
-     */
-    public static void tryAll(List<StorageAction<Void, Exception>> all) throws Exception {
-        Exception exception = null;
-
-        for (StorageAction<Void, Exception> runnable : all) {
-            try {
-                runnable.execute();
-            } catch (Exception ex) {
-                if (exception != null)
-                    exception.addSuppressed(ex);
-                else
-                    exception = ex;
-            }
-        }
-        if (exception != null)
-            throw exception;
-    }
 }

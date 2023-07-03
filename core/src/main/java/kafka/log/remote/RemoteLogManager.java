@@ -162,7 +162,7 @@ public class RemoteLogManager implements Closeable {
                             String logDir,
                             String clusterId,
                             Time time,
-                            Function<TopicPartition, Optional<UnifiedLog>> fetchLog) {
+                            Function<TopicPartition, Optional<UnifiedLog>> fetchLog) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
