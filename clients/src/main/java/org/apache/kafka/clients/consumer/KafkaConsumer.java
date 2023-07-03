@@ -65,13 +65,14 @@ import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayDeque;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -595,10 +596,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // Holds the key that this thread needs to access the consumer, it is used to prevent multi-threaded access.
     private final ThreadLocal<ThreadAccessKey> threadAccessKeyHolder = new ThreadLocal<>();
-    // The stack of allowed thread access keys. The top of the stack (head of the list) contains the access key of the
-    // thread that is currently allowed to use the consumer. When the stack is empty, any thread is allowed.
-    // Access is synchronized on the instance.
-    private final List<ThreadAccessKey> threadAccessStack = new LinkedList<>();
+    // The stack of allowed thread access keys. The top of the stack contains the access key of the thread that is
+    // currently allowed to use the consumer. When the stack is empty, any thread is allowed. Access is synchronized on
+    // the instance.
+    private final Deque<ThreadAccessKey> threadAccessStack = new ArrayDeque<>(4);
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
@@ -2585,14 +2586,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         synchronized (threadAccessStack) {
             // Access is granted when threadAccess is empty (consumer is currently not used), or
             // when the top value is the same as current key (consumer is used from callback)
-            if (threadAccessStack.isEmpty() || threadAccessStack.get(0) == threadAccessKey) {
+            if (threadAccessStack.isEmpty() || threadAccessStack.getFirst() == threadAccessKey) {
                 threadAccessKeyHolder.set(nextKey);
-                threadAccessStack.add(0, nextKey);
+                threadAccessStack.addFirst(nextKey);
             } else {
                 final Thread thread = Thread.currentThread();
                 throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
                         "currentThread(name: " + thread.getName() + ", id: " + thread.getId() + ")" +
-                        " could not provide access key (" + threadAccessStack.get(0) + ")"
+                        " could not provide access key (" + threadAccessStack.getFirst() + ")"
                 );
             }
         }
@@ -2607,18 +2608,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         synchronized (threadAccessStack) {
             if (threadAccessStack.isEmpty()) {
                 throw new AssertionError("KafkaConsumer invariant violated: `release` invoked without `acquire`");
-            } else if (threadAccessStack.get(0) == threadAccessKey) {
-                threadAccessStack.remove(0);
+            } else if (threadAccessStack.getFirst() == threadAccessKey) {
+                threadAccessStack.removeFirst();
                 if (threadAccessStack.isEmpty()) {
                     threadAccessKeyHolder.set(null);
                 } else {
-                    threadAccessKeyHolder.set(threadAccessStack.get(0));
+                    threadAccessKeyHolder.set(threadAccessStack.getFirst());
                 }
             } else {
                 final Thread thread = Thread.currentThread();
                 throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
                         "currentThread(name: " + thread.getName() + ", id: " + thread.getId() + ")" +
-                        " returned from callback but not provide access key (" + threadAccessStack.get(0) + ")"
+                        " returned from callback but not provide access key (" + threadAccessStack.getFirst() + ")"
                 );
             }
         }
