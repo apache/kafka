@@ -86,20 +86,20 @@ import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDir
  * Given the root directory of the storage, segments and associated files are organized as represented below.
  * </p>
  * <code>
- * / storage-directory  / LWgrMmVrT0a__7a4SasuPA-0-topic / bCqX9U--S-6U8XUM9II25Q-segment
- * .                                                     . bCqX9U--S-6U8XUM9II25Q-offset_index
- * .                                                     . bCqX9U--S-6U8XUM9II25Q-time_index
- * .                                                     . h956soEzTzi9a-NOQ-DvKA-segment
- * .                                                     . h956soEzTzi9a-NOQ-DvKA-offset_index
- * .                                                     . h956soEzTzi9a-NOQ-DvKA-segment
+ * / storage-directory  / LWgrMmVrT0a__7a4SasuPA-0-topic / bCqX9U--S-6U8XUM9II25Q.log
+ * .                                                     . bCqX9U--S-6U8XUM9II25Q.index
+ * .                                                     . bCqX9U--S-6U8XUM9II25Q.timeindex
+ * .                                                     . h956soEzTzi9a-NOQ-DvKA.log
+ * .                                                     . h956soEzTzi9a-NOQ-DvKA.index
+ * .                                                     . h956soEzTzi9a-NOQ-DvKA.timeindex
  * .
- * / LWgrMmVrT0a__7a4SasuPA-1-topic / o8CQPT86QQmbFmi3xRmiHA-segment
- * .                                . o8CQPT86QQmbFmi3xRmiHA-offset_index
- * .                                . o8CQPT86QQmbFmi3xRmiHA-time_index
+ * / LWgrMmVrT0a__7a4SasuPA-1-topic / o8CQPT86QQmbFmi3xRmiHA.log
+ * .                                . o8CQPT86QQmbFmi3xRmiHA.index
+ * .                                . o8CQPT86QQmbFmi3xRmiHA.timeindex
  * .
- * / DRagLm_PS9Wl8fz1X43zVg-3-btopic / jvj3vhliTGeU90sIosmp_g-segment
- * .                                 . jvj3vhliTGeU90sIosmp_g-offset_index
- * .                                 . jvj3vhliTGeU90sIosmp_g-time_index
+ * / DRagLm_PS9Wl8fz1X43zVg-3-btopic / jvj3vhliTGeU90sIosmp_g.log
+ * .                                 . jvj3vhliTGeU90sIosmp_g.index
+ * .                                 . jvj3vhliTGeU90sIosmp_g.timeindex
  * </code>
  */
 public final class LocalTieredStorage implements RemoteStorageManager {
@@ -173,7 +173,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
     /**
      * Used to notify users of this storage of internal updates - new topic-partition recorded (upon directory
-     * creation) and segment file written (upon segment file write(2)).
+     * creation) and segment file written (upon segment file write).
      */
     private final LocalTieredStorageListeners storageListeners = new LocalTieredStorageListeners();
 
@@ -268,15 +268,17 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                     storageDirectory.getAbsolutePath());
 
         } else {
-            storageDirectory = new File(storageDir + "/" + ROOT_STORAGES_DIR_NAME);
+            storageDirectory = new File(storageDir, ROOT_STORAGES_DIR_NAME);
             // NOTE: Provide the relative storage directory path to view the files in the same directory when running tests.
             // storageDirectory = new File(new File("."), ROOT_STORAGES_DIR_NAME + "/" + storageDir);
-            final boolean existed = storageDirectory.exists();
-
+            final boolean existed = Files.exists(storageDirectory.toPath());
             if (!existed) {
-                logger.info("Creating directory: [{}]", storageDirectory.getAbsolutePath());
-                storageDirectory.mkdirs();
-
+                try {
+                    logger.info("Creating directory: [{}]", storageDirectory.getAbsolutePath());
+                    Files.createDirectories(storageDirectory.toPath());
+                } catch (IOException e) {
+                    throw new RuntimeException(format("Not able to create the storage directory '%s'", storageDirectory.getAbsolutePath()), e);
+                }
             } else {
                 logger.warn("Remote storage with ID [{}] already exists on the file system. Any data already " +
                         "in the remote storage will not be deleted and may result in an inconsistent state and/or " +

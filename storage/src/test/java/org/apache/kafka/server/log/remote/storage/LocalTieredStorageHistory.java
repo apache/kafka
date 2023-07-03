@@ -57,7 +57,7 @@ public final class LocalTieredStorageHistory {
      * Returns the list of events accumulated by this instance of history from the {@link LocalTieredStorage}
      * it captures events from.
      *
-     * @param type The type of the events to retrieve ((e.g. offload or fetch a segment, fetch a time index, etc.)
+     * @param type The type of the events to retrieve (e.g. offload or fetch a segment, fetch a time index, etc.)
      * @param topicPartition The topic-partition which the events relate to.
      * @return The list of events accumulated in this instance.
      */
@@ -74,7 +74,7 @@ public final class LocalTieredStorageHistory {
     /**
      * Returns the latest event captured so far of the given type and relating to the given topic-partition.
      *
-     * @param type The type of the events to retrieve ((e.g. offload or fetch a segment, fetch a time index, etc.)
+     * @param type The type of the events to retrieve (e.g. offload or fetch a segment, fetch a time index, etc.)
      * @param topicPartition The topic-partition which the events relate to.
      * @return The latest event captured, if any. Otherwise, returns an empty value.
      */

@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,7 @@ import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot.takeSnapshot;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.LEADER_EPOCH_CHECKPOINT;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -234,7 +236,7 @@ public final class LocalTieredStorageTest {
         tieredStorage.copyLogSegmentData(newRemoteLogSegmentMetadata(id), segment);
         remoteStorageVerifier.verifyContainsLogSegmentFiles(id, path -> {
             String fileName = path.getFileName().toString();
-            if (!(fileName.contains("transaction_index") || fileName.contains("snapshot"))) {
+            if (!fileName.contains(LogFileUtils.TXN_INDEX_FILE_SUFFIX)) {
                 remoteStorageVerifier.assertFileExists(path);
             }
         });
@@ -339,10 +341,10 @@ public final class LocalTieredStorageTest {
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, OFFSET));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, TIMESTAMP));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, LEADER_EPOCH));
+        assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, PRODUCER_SNAPSHOT));
 
         try {
             assertArrayEquals(new byte[0], remoteStorageVerifier.readFully(tieredStorage.fetchIndex(metadata, TRANSACTION)));
-            assertArrayEquals(new byte[0], remoteStorageVerifier.readFully(tieredStorage.fetchIndex(metadata, PRODUCER_SNAPSHOT)));
         } catch (Exception ex) {
             fail("Shouldn't have thrown an exception when optional file doesn't exists in the remote store");
         }
@@ -404,12 +406,12 @@ public final class LocalTieredStorageTest {
             final String uuid = id.id().toString();
 
             return Arrays.asList(
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-segment"),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-offset_index"),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-time_index"),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-transaction_index"),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-leader_epoch_checkpoint"),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-producer_snapshot")
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + LogFileUtils.LOG_FILE_SUFFIX),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + LogFileUtils.INDEX_FILE_SUFFIX),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + LogFileUtils.TIME_INDEX_FILE_SUFFIX),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + LogFileUtils.TXN_INDEX_FILE_SUFFIX),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + LEADER_EPOCH_CHECKPOINT.getSuffix()),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX)
             );
         }
 
@@ -629,7 +631,7 @@ public final class LocalTieredStorageTest {
 
             try {
                 final FileChannel channel = FileChannel.open(
-                        segmentPath.resolve(offset + ".log"),
+                        segmentPath.resolve(offset + LogFileUtils.LOG_FILE_SUFFIX),
                         StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
 
                 final ByteBuffer buffer = ByteBuffer.allocate(128);
@@ -645,11 +647,11 @@ public final class LocalTieredStorageTest {
                 builder.build().writeFullyTo(channel);
                 channel.force(true);
 
-                final Path segment = segmentPath.resolve(offset + ".log");
-                final Path offsetIdx = segmentPath.resolve(offset + ".index");
-                final Path timeIdx = segmentPath.resolve(offset + ".time");
-                final Path txnIdx = segmentPath.resolve(offset + ".txn");
-                final Path producerIdSnapshot = segmentPath.resolve(offset + ".snapshot");
+                final Path segment = segmentPath.resolve(offset + LogFileUtils.LOG_FILE_SUFFIX);
+                final Path offsetIdx = segmentPath.resolve(offset + LogFileUtils.INDEX_FILE_SUFFIX);
+                final Path timeIdx = segmentPath.resolve(offset + LogFileUtils.TIME_INDEX_FILE_SUFFIX);
+                final Path txnIdx = segmentPath.resolve(offset + LogFileUtils.TXN_INDEX_FILE_SUFFIX);
+                final Path producerIdSnapshot = segmentPath.resolve(offset + LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
 
                 Files.write(offsetIdx, OFFSET_FILE_BYTES);
                 Files.write(timeIdx, TIME_FILE_BYTES);

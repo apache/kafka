@@ -66,7 +66,7 @@ public interface LocalTieredStorageListener {
                     listener.onStorageEvent(event);
 
                 } catch (Exception e) {
-                    LOGGER.error("Caught failure from listener", e);
+                    LOGGER.error("Caught failure from listener: {}", listener, e);
                 }
             }
         }

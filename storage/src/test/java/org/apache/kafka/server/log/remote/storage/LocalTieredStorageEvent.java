@@ -28,7 +28,7 @@ import static java.util.Optional.ofNullable;
  * Represents an interaction between a broker and a second-tier storage. This type of event is generated
  * by the {@link LocalTieredStorage} which is an implementation of the {@link RemoteStorageManager}
  * operating in Kafka's runtime as the interface between Kafka and external storage systems, through
- * which all such interactions go through.
+ * which all such {@link LocalTieredStorageEvent.EventType} interactions go through.
  */
 public final class LocalTieredStorageEvent implements Comparable<LocalTieredStorageEvent> {
 
@@ -104,14 +104,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
     @Override
     public int compareTo(LocalTieredStorageEvent other) {
         requireNonNull(other);
-
-        if (other.timestamp > timestamp) {
-            return -1;
-        }
-        if (other.timestamp < timestamp) {
-            return 1;
-        }
-        return 0;
+        return timestamp - other.timestamp;
     }
 
     @Override

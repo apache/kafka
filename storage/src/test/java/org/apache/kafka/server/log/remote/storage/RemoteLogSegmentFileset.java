@@ -19,13 +19,15 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -57,9 +59,9 @@ import static org.slf4j.LoggerFactory.getLogger;
  * the local tiered storage:
  *
  * <code>
- * / storage-directory / uuidBase64-partition-topic / oAtiIQ95REujbuzNd_lkLQ-segment
- *                                                  . oAtiIQ95REujbuzNd_lkLQ-offset_index
- *                                                  . oAtiIQ95REujbuzNd_lkLQ-time_index
+ * / storage-directory / uuidBase64-partition-topic / oAtiIQ95REujbuzNd_lkLQ.log
+ *                                                  . oAtiIQ95REujbuzNd_lkLQ.index
+ *                                                  . oAtiIQ95REujbuzNd_lkLQ.timeindex
  * </code>
  */
 public final class RemoteLogSegmentFileset {
@@ -71,8 +73,7 @@ public final class RemoteLogSegmentFileset {
      * The name of each of the files under the scope of a log segment (the log file, its indexes, etc.)
      * follows the structure UUID-FileType.
      */
-    private static final String UUID_LEGAL_CHARS = "[a-zA-Z0-9_-]{22}";
-    private static final Pattern FILENAME_FORMAT = compile("(" + UUID_LEGAL_CHARS + ")-([a-z_]+)");
+    private static final Pattern FILENAME_FORMAT = compile("([a-zA-Z0-9_-]{22})(\\.[a-z_]+)");
     private static final int GROUP_UUID = 1;
     private static final int GROUP_FILE_TYPE = 2;
 
@@ -80,37 +81,40 @@ public final class RemoteLogSegmentFileset {
      * Characterises the type of a file in the local tiered storage copied from Apache Kafka's standard storage.
      */
     public enum RemoteLogSegmentFileType {
-        SEGMENT(false),
-        OFFSET_INDEX(false),
-        TIME_INDEX(false),
-        TRANSACTION_INDEX(true),
-        LEADER_EPOCH_CHECKPOINT(false),
-        PRODUCER_SNAPSHOT(true);
+        SEGMENT(false, LogFileUtils.LOG_FILE_SUFFIX),
+        OFFSET_INDEX(false, LogFileUtils.INDEX_FILE_SUFFIX),
+        TIME_INDEX(false, LogFileUtils.TIME_INDEX_FILE_SUFFIX),
+        TRANSACTION_INDEX(true, LogFileUtils.TXN_INDEX_FILE_SUFFIX),
+        LEADER_EPOCH_CHECKPOINT(false, ".leader_epoch_checkpoint"),
+        PRODUCER_SNAPSHOT(false, LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
 
         private final boolean optional;
+        private final String suffix;
 
-        RemoteLogSegmentFileType(boolean optional) {
+        RemoteLogSegmentFileType(boolean optional, String suffix) {
             this.optional = optional;
+            this.suffix = suffix;
         }
 
         /**
          * Provides the name of the file of this type for the given UUID in the local tiered storage,
-         * e.g. uuid-segment.
+         * e.g. uuid.log.
          */
         public String toFilename(final Uuid uuid) {
-            return format("%s-%s", uuid.toString(), name().toLowerCase(Locale.ROOT));
+            return uuid.toString() + suffix;
         }
 
         /**
          * Returns the nature of the data stored in the file with the provided name.
          */
         public static RemoteLogSegmentFileType getFileType(final String filename) {
-            try {
-                return RemoteLogSegmentFileType.valueOf(substr(filename, GROUP_FILE_TYPE).toUpperCase(Locale.ROOT));
-
-            } catch (final RuntimeException e) {
-                throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename), e);
+            String fileSuffix = substr(filename, GROUP_FILE_TYPE);
+            for (RemoteLogSegmentFileType fileType : RemoteLogSegmentFileType.values()) {
+                if (fileType.getSuffix().equals(fileSuffix)) {
+                    return fileType;
+                }
             }
+            throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename));
         }
 
         /**
@@ -132,6 +136,10 @@ public final class RemoteLogSegmentFileset {
 
         public boolean isOptional() {
             return optional;
+        }
+
+        public String getSuffix() {
+            return suffix;
         }
     }
 
@@ -172,21 +180,25 @@ public final class RemoteLogSegmentFileset {
      */
     public static RemoteLogSegmentFileset openExistingFileset(final RemoteTopicPartitionDirectory tpDirectory,
                                                               final Uuid uuid) {
-        final Map<RemoteLogSegmentFileType, File> files =
-                stream(tpDirectory.getDirectory().listFiles())
-                        .filter(file -> file.getName().startsWith(uuid.toString()))
-                        .collect(toMap(file -> getFileType(file.getName()), identity()));
+        try {
+            final Map<RemoteLogSegmentFileType, File> files =
+                    Files.list(tpDirectory.getDirectory().toPath())
+                            .filter(path -> path.getFileName().toString().startsWith(uuid.toString()))
+                            .collect(toMap(path -> getFileType(path.getFileName().toString()), Path::toFile));
 
-        final Set<RemoteLogSegmentFileType> expectedFileTypes = stream(RemoteLogSegmentFileType.values())
-                .filter(x -> !x.isOptional()).collect(Collectors.toSet());
+            final Set<RemoteLogSegmentFileType> expectedFileTypes = stream(RemoteLogSegmentFileType.values())
+                    .filter(x -> !x.isOptional()).collect(Collectors.toSet());
 
-        if (!files.keySet().containsAll(expectedFileTypes)) {
-            expectedFileTypes.removeAll(files.keySet());
-            throw new IllegalStateException(format("Invalid fileset, missing files: %s", expectedFileTypes));
+            if (!files.keySet().containsAll(expectedFileTypes)) {
+                expectedFileTypes.removeAll(files.keySet());
+                throw new IllegalStateException(format("Invalid fileset, missing files: %s", expectedFileTypes));
+            }
+
+            final RemoteLogSegmentId id = new RemoteLogSegmentId(tpDirectory.getTopicIdPartition(), uuid);
+            return new RemoteLogSegmentFileset(tpDirectory, id, files);
+        } catch (IOException ex) {
+            throw new RuntimeException(format("Unable to list the files in the directory '%s'", tpDirectory.getDirectory()), ex);
         }
-
-        final RemoteLogSegmentId id = new RemoteLogSegmentId(tpDirectory.getTopicIdPartition(), uuid);
-        return new RemoteLogSegmentFileset(tpDirectory, id, files);
     }
 
     public RemoteLogSegmentId getRemoteLogSegmentId() {

@@ -20,6 +20,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * The implementation of the transfer of the data of the canonical segment and index files to
+ * this storage. The only reason the "transferer" abstraction exists is to be able to simulate
+ * file copy errors and exercise the associated failure modes.
+ */
 public interface Transferer {
 
     void transfer(File from, File to) throws IOException;
