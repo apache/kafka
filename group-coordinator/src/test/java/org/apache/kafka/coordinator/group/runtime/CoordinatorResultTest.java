@@ -34,7 +34,6 @@ public class CoordinatorResultTest {
 
     @Test
     public void testAttributesCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new CoordinatorResult<>(Collections.emptyList(), null));
         assertThrows(NullPointerException.class, () -> new CoordinatorResult<>(null, "response"));
     }
 

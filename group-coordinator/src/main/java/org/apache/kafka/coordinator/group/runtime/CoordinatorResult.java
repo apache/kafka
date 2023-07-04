@@ -48,7 +48,7 @@ public class CoordinatorResult<T, U> {
         T response
     ) {
         this.records = Objects.requireNonNull(records);
-        this.response = Objects.requireNonNull(response);
+        this.response = response;
     }
 
     /**
