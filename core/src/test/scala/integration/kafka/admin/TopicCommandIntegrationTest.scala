@@ -54,7 +54,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     * `testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress`.
     */
   override def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(
-    numConfigs = 6,
+    numConfigs = numBrokers,
     zkConnect = zkConnectOrNull,
     rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3"),
     numPartitions = numPartitions,
@@ -66,6 +66,8 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
   private val numPartitions = 1
   private val defaultReplicationFactor = 1.toShort
+  private val numBrokers = 6
+  private val lineSeparator = System.lineSeparator()
 
   private var topicService: TopicService = _
   private var adminClient: Admin = _
@@ -522,8 +524,8 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    val rows = output.split(System.lineSeparator())
-    assertEquals(3, rows.size)
+    val rows = output.split(lineSeparator)
+    assertEquals(3, rows.size, s"Unexpected output: $output")
     assertTrue(rows(0).startsWith(s"Topic: $testTopicName"), s"Unexpected output: ${rows(0)}")
   }
 
@@ -574,7 +576,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       val output = TestUtils.grabConsoleOutput(
           topicService.describeTopic(new TopicCommandOptions(
             Array("--topic", testTopicName, "--unavailable-partitions"))))
-      val rows = output.split(System.lineSeparator())
+      val rows = output.split(lineSeparator)
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"), s"Unexpected output: ${rows(0)}")
       assertTrue(rows(0).contains("Leader: none\tReplicas: 0\tIsr:"), s"Unexpected output: ${rows(0)}")
     } finally {
@@ -585,7 +587,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnderReplicatedPartitions(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, 6)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, numBrokers)
 
     try {
       killBroker(0)
@@ -596,7 +598,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       }
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
-      val rows = output.split(System.lineSeparator())
+      val rows = output.split(lineSeparator)
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"), s"Unexpected output: ${rows(0)}")
     } finally {
       restartDeadBrokers()
@@ -606,12 +608,11 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnderMinIsrPartitions(quorum: String): Unit = {
-    val replicationFactor: Short = 6
     val topicProps = new Properties()
-    topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, replicationFactor.toString)
+    topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, numBrokers.toString)
 
     // create topic
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, replicationFactor, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, numBrokers, topicConfig = topicProps)
 
     try {
       killBroker(0)
@@ -625,7 +626,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       }
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
-      val rows = output.split(System.lineSeparator())
+      val rows = output.split(lineSeparator)
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"), s"Unexpected output: ${rows(0)}")
     } finally {
       restartDeadBrokers()
@@ -666,9 +667,9 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     // describe the topic and test if it's under-replicated
     val simpleDescribeOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    val simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator())
+    val simpleDescribeOutputRows = simpleDescribeOutput.split(lineSeparator)
     assertTrue(simpleDescribeOutputRows(0).startsWith(s"Topic: $testTopicName"), s"Unexpected output: ${simpleDescribeOutputRows(0)}")
-    assertEquals(2, simpleDescribeOutputRows.size)
+    assertEquals(2, simpleDescribeOutputRows.size, s"Unexpected output: $simpleDescribeOutput")
 
     val underReplicatedOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
@@ -685,12 +686,11 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeAtMinIsrPartitions(quorum: String): Unit = {
-    val replicationFactor: Short = 6
     val topicProps = new Properties()
     topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4")
 
     // create topic
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, replicationFactor, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, numBrokers, topicConfig = topicProps)
 
     try {
       killBroker(0)
@@ -707,9 +707,9 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--at-min-isr-partitions"))))
-      val rows = output.split(System.lineSeparator())
+      val rows = output.split(lineSeparator)
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"), s"Unexpected output: ${rows(0)}")
-      assertEquals(1, rows.length)
+      assertEquals(1, rows.length, s"Unexpected output: $output")
     } finally {
       restartDeadBrokers()
     }
@@ -731,13 +731,12 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     val notUnderMinIsrTopic = "not-under-min-isr-topic"
     val offlineTopic = "offline-topic"
     val fullyReplicatedTopic = "fully-replicated-topic"
-    val replicationFactor: Short = 6
     val topicProps = new Properties()
-    topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, replicationFactor.toString)
+    topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, numBrokers.toString)
 
     // create topic
-    TestUtils.createTopicWithAdmin(adminClient, underMinIsrTopic, brokers, 1, replicationFactor, topicConfig = topicProps)
-    TestUtils.createTopicWithAdmin(adminClient, notUnderMinIsrTopic, brokers, 1, replicationFactor)
+    TestUtils.createTopicWithAdmin(adminClient, underMinIsrTopic, brokers, 1, numBrokers, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(adminClient, notUnderMinIsrTopic, brokers, 1, numBrokers)
     TestUtils.createTopicWithAdmin(adminClient, offlineTopic, brokers, 1, replicaAssignment = Map(0 -> Seq(0)))
     TestUtils.createTopicWithAdmin(adminClient, fullyReplicatedTopic, brokers, 1, replicaAssignment = Map(0 -> Seq(1, 2, 3)))
 
@@ -749,17 +748,17 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         TestUtils.waitUntilTrue(
           () => aliveBrokers.forall(
             broker =>
-              broker.metadataCache.getPartitionInfo(underMinIsrTopic, 0).get.isr().size() < 6 &&
+              broker.metadataCache.getPartitionInfo(underMinIsrTopic, 0).get.isr().size() < numBrokers &&
                 broker.metadataCache.getPartitionInfo(offlineTopic, 0).get.leader() == MetadataResponse.NO_LEADER_ID),
           "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
         )
       }
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
-      val rows = output.split(System.lineSeparator())
+      val rows = output.split(lineSeparator)
       assertTrue(rows(0).startsWith(s"\tTopic: $underMinIsrTopic"), s"Unexpected output: ${rows(0)}")
-      assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"), s"Unexpected output: ${rows(0)}")
-      assertEquals(2, rows.length)
+      assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"), s"Unexpected output: ${rows(1)}")
+      assertEquals(2, rows.length, s"Unexpected output: $output")
     } finally {
       restartDeadBrokers()
     }
@@ -816,15 +815,15 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    val rows = output.split(System.lineSeparator())
-    assertEquals(2, rows.size)
+    val rows = output.split(lineSeparator)
+    assertEquals(2, rows.size, s"Unexpected output: $output")
     assertTrue(rows(0).startsWith(s"Topic: $testTopicName"), s"Unexpected output: ${rows(0)}")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithTopicNameCollision(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, "foo_bar", brokers, 1, 6)
+    TestUtils.createTopicWithAdmin(adminClient, "foo_bar", brokers, 1, numBrokers)
 
     assertThrows(classOf[InvalidTopicException],
       () => topicService.createTopic(new TopicCommandOptions(Array("--topic", "foo.bar"))))
