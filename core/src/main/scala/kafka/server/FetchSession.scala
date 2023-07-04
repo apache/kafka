@@ -357,12 +357,19 @@ class SessionErrorContext(val error: Errors,
   }
 }
 
+object SessionlessFetchContext {
+  private final val logger = Logger(classOf[SessionlessFetchContext])
+}
+
 /**
   * The fetch context for a sessionless fetch request.
   *
   * @param fetchData          The partition data from the fetch request.
   */
 class SessionlessFetchContext(val fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData]) extends FetchContext {
+
+  override lazy val logger = SessionlessFetchContext.logger
+
   override def getFetchOffset(part: TopicIdPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
