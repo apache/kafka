@@ -90,13 +90,13 @@ class LogCleanerTest {
       // verify that each metric in `LogCleanerManager` is removed
       val mockLogCleanerManagerMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
       LogCleanerManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
-      LogCleanerManager.GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
+      logCleaner.cleanerManager.gaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
         metricNameAndTags._2.asScala.foreach(tags => {
           verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameAndTags._1), any(), ArgumentMatchers.eq(tags))
         })
       })
       LogCleanerManager.GaugeMetricNameNoTag.foreach(verify(mockLogCleanerManagerMetricsGroup).removeMetric(_))
-      LogCleanerManager.GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
+      logCleaner.cleanerManager.gaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
         metricNameAndTags._2.asScala.foreach(tags => {
           verify(mockLogCleanerManagerMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameAndTags._1), ArgumentMatchers.eq(tags))
         })
