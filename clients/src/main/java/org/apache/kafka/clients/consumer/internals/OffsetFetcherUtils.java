@@ -224,7 +224,7 @@ class OffsetFetcherUtils {
         return offsetResetTimestamps;
     }
 
-    Map<TopicPartition, OffsetAndTimestamp> buildOffsetsForTimesResult(final Map<TopicPartition, Long> timestampsToSearch,
+    static Map<TopicPartition, OffsetAndTimestamp> buildOffsetsForTimesResult(final Map<TopicPartition, Long> timestampsToSearch,
                                                                        final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
         HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
@@ -250,7 +250,7 @@ class OffsetFetcherUtils {
             return null;
     }
 
-    Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
+    static Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
         return partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
     }
 
@@ -276,7 +276,7 @@ class OffsetFetcherUtils {
         }
     }
 
-    OffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
+    static OffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
         if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP)
             return OffsetResetStrategy.EARLIEST;
         else if (timestamp == ListOffsetsRequest.LATEST_TIMESTAMP)
@@ -326,7 +326,7 @@ class OffsetFetcherUtils {
         subscriptionState.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
 
-    Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(
+    static Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(
             Map<TopicPartition, SubscriptionState.FetchPosition> partitionMap) {
         return partitionMap.entrySet()
                 .stream()

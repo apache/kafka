@@ -53,7 +53,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.buildOffsetsForTimesResult;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
+import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.regroupFetchPositionsByLeader;
+import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.topicsForPartitions;
 
 /**
  * {@link OffsetFetcher} is responsible for fetching the {@link OffsetAndTimestamp offsets} for
@@ -124,13 +127,13 @@ public class OffsetFetcher {
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                    Timer timer) {
-        metadata.addTransientTopics(offsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
+        metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
 
         try {
             Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
                     timer, true).fetchedOffsets;
 
-            return offsetFetcherUtils.buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
+            return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
         } finally {
             metadata.clearTransientTopics();
         }
@@ -197,7 +200,7 @@ public class OffsetFetcher {
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
                                                            Timer timer) {
-        metadata.addTransientTopics(offsetFetcherUtils.topicsForPartitions(partitions));
+        metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
                     .distinct()
@@ -244,8 +247,7 @@ public class OffsetFetcher {
      * Requests are grouped by Node for efficiency.
      */
     private void validatePositionsAsync(Map<TopicPartition, FetchPosition> partitionsToValidate) {
-        final Map<Node, Map<TopicPartition, FetchPosition>> regrouped =
-                offsetFetcherUtils.regroupFetchPositionsByLeader(partitionsToValidate);
+        final Map<Node, Map<TopicPartition, FetchPosition>> regrouped = regroupFetchPositionsByLeader(partitionsToValidate);
 
         long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
         regrouped.forEach((node, fetchPositions) -> {
