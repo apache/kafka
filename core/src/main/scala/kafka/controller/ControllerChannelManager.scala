@@ -47,6 +47,7 @@ import scala.jdk.CollectionConverters._
 object ControllerChannelManager {
   val QueueSizeMetricName = "QueueSize"
   val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
+  val TotalQueueSizeMetricName = "TotalQueueSize"
 }
 
 class ControllerChannelManager(controllerEpoch: () => Int,
@@ -63,7 +64,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  metricsGroup.newGauge("TotalQueueSize",
+  metricsGroup.newGauge(TotalQueueSizeMetricName,
     () => brokerLock synchronized {
       brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
     }
@@ -81,6 +82,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     brokerLock synchronized {
       brokerStateInfo.values.toList.foreach(removeExistingBroker)
     }
+    metricsGroup.removeMetric(TotalQueueSizeMetricName)
   }
 
   def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
