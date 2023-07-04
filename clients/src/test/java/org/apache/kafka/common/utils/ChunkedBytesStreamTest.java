@@ -22,6 +22,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.spy;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -30,12 +36,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
-
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.spy;
 
 public class ChunkedBytesStreamTest {
     private static final Random RANDOM = new Random(1337);
@@ -66,8 +66,8 @@ public class ChunkedBytesStreamTest {
     }
 
     @ParameterizedTest
-    @MethodSource("provideEdgeCaseInputsForMethodRead")
-    public void testEdgeCaseInputsForMethodRead(byte[] b, int off, int len) throws IOException {
+    @MethodSource("provideCasesWithInvalidInputsForMethodRead")
+    public void testInvalidInputsForMethodRead(byte[] b, int off, int len) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(16);
 
         try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(buffer.duplicate()), supplier, 10, false)) {
@@ -165,18 +165,26 @@ public class ChunkedBytesStreamTest {
         int bufferLength = 16;
         ByteBuffer inputBuf = ByteBuffer.allocate(bufferLength);
         RANDOM.nextBytes(inputBuf.array());
-        inputBuf.position(inputBuf.capacity());
-        inputBuf.flip();
+        inputBuf.rewind();
 
+        // delegateSkipToSourceStream true
         try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(inputBuf.duplicate()), supplier, 10, true)) {
-            // larger than int input
+            // toSkip larger than int
             assertEquals(bufferLength, is.skip(Integer.MAX_VALUE + 1000L));
-            // negative input
+            // toSkip negative
+            assertEquals(0, is.skip(-1));
+        }
+
+        // delegateSkipToSourceStream false
+        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(inputBuf.duplicate()), supplier, 10, false)) {
+            // toSkip larger than int
+            assertEquals(bufferLength, is.skip(Integer.MAX_VALUE + 1000L));
+            // toSkip negative
             assertEquals(0, is.skip(-1));
         }
     }
 
-    private static Stream<Arguments> provideEdgeCaseInputsForMethodRead() {
+    private static Stream<Arguments> provideCasesWithInvalidInputsForMethodRead() {
         byte[] b = new byte[16];
         return Stream.of(
             // negative off
