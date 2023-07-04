@@ -545,7 +545,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnavailablePartitions(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 6, 1)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, numBrokers, 1)
 
     try {
       // check which partition is on broker 0 which we'll kill
