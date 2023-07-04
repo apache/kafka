@@ -33,7 +33,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   // Visible for test
-  private[server] var MetricNames: Map[String, java.util.Map[String, String]] = Map.empty
+  private[server] var MetricNamesToTags: Map[String, java.util.Map[String, String]] = Map.empty
 
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
@@ -67,7 +67,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
     metricsGroup.newGauge(DeadThreadCountMetricName, () => deadThreadCount, tags)
 
-    MetricNames = Map(
+    MetricNamesToTags = Map(
       MaxLagMetricName -> tags,
       MinFetchRateMetricName -> tags,
       FailedPartitionsCountMetricName -> tags,
@@ -241,10 +241,20 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }
 
-  def removeMetrics(): Unit = {
-    MetricNames.foreach(metricTags => {
+  def shutdown(): Unit = {
+    info("shutting down")
+    try {
+      closeAllFetchers()
+    } finally {
+      removeMetrics()
+    }
+    info("shutdown completed")
+  }
+
+  private[server] def removeMetrics(): Unit = {
+    MetricNamesToTags.foreach(metricTags => {
       metricsGroup.removeMetric(metricTags._1, metricTags._2)
-    })
+    }
   }
 }
 

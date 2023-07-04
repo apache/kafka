@@ -50,11 +50,4 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
       info(s"Failed to add log dir fetch for partitions ${notAddedInitialOffsets.keySet} " +
         s"since the log dir reassignment has already completed")
   }
-
-  def shutdown(): Unit = {
-    info("shutting down")
-    closeAllFetchers()
-    removeMetrics()
-    info("shutdown completed")
-  }
 }

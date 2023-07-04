@@ -49,11 +49,4 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
     new ReplicaFetcherThread(threadName, leader, brokerConfig, failedPartitions, replicaManager,
       quotaManager, logContext.logPrefix, metadataVersionSupplier)
   }
-
-  def shutdown(): Unit = {
-    info("shutting down")
-    closeAllFetchers()
-    removeMetrics()
-    info("shutdown completed")
-  }
 }
