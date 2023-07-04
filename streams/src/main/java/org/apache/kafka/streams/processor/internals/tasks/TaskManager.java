@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
@@ -98,4 +100,25 @@ public interface TaskManager {
      * @return set of all managed active tasks
      */
     Set<ReadOnlyTask> getTasks();
+
+    /**
+     * Called whenever an existing task has thrown an uncaught exception.
+     *
+     * Setting an uncaught exception for a task prevents it from being reassigned until the
+     * corresponding exception has been handled in the polling thread.
+     *
+     */
+    void setUncaughtException(StreamsException exception, TaskId taskId);
+
+    /**
+     * Returns and clears all uncaught exceptions that were fell through to the processing
+     * threads and need to be handled in the polling thread.
+     *
+     * Called by the polling thread to handle processing exceptions, e.g. to abort
+     * transactions or shut down the application.
+     *
+     * @return A map from task ID to the exception that occurred.
+     */
+    Map<TaskId, StreamsException> drainUncaughtExceptions();
+
 }
