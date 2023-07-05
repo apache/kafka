@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopi
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError
 import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
@@ -34,9 +35,15 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_10_2_IV0, IBP_0_9_0, IBP_1_0_IV0, IBP_2_2_IV0, IBP_2_4_IV0, IBP_2_4_IV1, IBP_2_6_IV0, IBP_2_8_IV1, IBP_3_2_IV0, IBP_3_4_IV0}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{ mockConstruction, verify, verifyNoMoreInteractions}
 
+import java.net.ServerSocket
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -48,6 +55,76 @@ class ControllerChannelManagerTest {
   private val logger = new StateChangeLogger(controllerId, true, None)
 
   type ControlRequest = AbstractControlRequest.Builder[_ <: AbstractControlRequest]
+  type MetricNameWithTagData = java.util.HashMap[String, java.util.Set[java.util.Map[String, String]]]
+
+  @Test
+  def testRemoveMetricsOnShutdown(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    val metrics = new Metrics
+    val serverSocket = new ServerSocket(0)
+    try {
+      // Start a ControllerChannelManager
+      val securityProtocol = SecurityProtocol.PLAINTEXT
+      val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+      val brokerAndEpochs = Map(
+        (new Broker(2, "localhost2", serverSocket.getLocalPort, listenerName, securityProtocol), 0L),
+        (new Broker(3, "localhost3", serverSocket.getLocalPort, listenerName, securityProtocol), 0L)
+      )
+      val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, ""))
+      val controllerContext = new ControllerContext
+      controllerContext.setLiveBrokers(brokerAndEpochs)
+      val controllerChannelManager = new ControllerChannelManager(
+        () => controllerContext.epoch,
+        controllerConfig,
+        new MockTime,
+        metrics,
+        new StateChangeLogger(controllerId, inControllerContext = true, None))
+      controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
+
+      // The first mockMetricsGroup is initialized in `ControllerContext`
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
+      ControllerChannelManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      controllerChannelManager.gaugeMetricNameWithTag.asScala.foreach(metricNameTags => {
+        metricNameTags._2.asScala.foreach(tag => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), ArgumentMatchers.eq(tag)))
+      })
+      controllerChannelManager.timerMetricNameWithTag.asScala.foreach(metricNameTags => {
+        metricNameTags._2.asScala.foreach(tag => verify(mockMetricsGroup).newTimer(ArgumentMatchers.eq(metricNameTags._1), any(), any(), ArgumentMatchers.eq(tag)))
+      })
+
+      // Since `gaugeMetricNameWithTag` and `timerMetricNameWithTag` will clean up the related tags when `controllerChannelManager`
+      // is shut down, so we need to save it here and use it to verify the tags later.
+      val gaugeMetricNameWithTagToVerify = new MetricNameWithTagData
+      val timerMetricNameWithTagToVerify = new MetricNameWithTagData
+      controllerChannelManager.gaugeMetricNameWithTag.asScala.foreach(metricNameTags => {
+        val tagsToVerify = new java.util.HashSet[java.util.Map[String, String]]()
+        metricNameTags._2.asScala.foreach(tagsToVerify.add)
+        gaugeMetricNameWithTagToVerify.put(metricNameTags._1, tagsToVerify)
+      })
+      controllerChannelManager.timerMetricNameWithTag.asScala.foreach(metricNameTags => {
+        val tagsToVerify = new java.util.HashSet[java.util.Map[String, String]]()
+        metricNameTags._2.asScala.foreach(tagsToVerify.add)
+        timerMetricNameWithTagToVerify.put(metricNameTags._1, tagsToVerify)
+      })
+
+      controllerChannelManager.shutdown()
+      controllerChannelManager.removeMetrics()
+
+      // We can not use `gaugeMetricNameWithTag` to verify, because it is cleared.
+      gaugeMetricNameWithTagToVerify.asScala.foreach(metricNameTags => {
+        metricNameTags._2.asScala.foreach(tag => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), ArgumentMatchers.eq(tag)))
+      })
+      timerMetricNameWithTagToVerify.asScala.foreach(metricNameTags => {
+        metricNameTags._2.asScala.foreach(tag => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), ArgumentMatchers.eq(tag)))
+      })
+      ControllerChannelManager.GaugeMetricNameNoTag.foreach(verify(mockMetricsGroup).removeMetric(_))
+
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+      metrics.close()
+      serverSocket.close()
+    }
+  }
 
   @Test
   def testLeaderAndIsrRequestSent(): Unit = {

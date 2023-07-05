@@ -84,6 +84,7 @@ class MigrationPropagator(
   def shutdown(): Unit = {
     clear()
     channelManager.shutdown()
+    channelManager.removeMetrics()
   }
 
   override def publishMetadata(image: MetadataImage): Unit = {

@@ -57,16 +57,23 @@ class KafkaControllerTest {
       // shutdown kafkaController so that metrics are removed
       kafkaController.shutdown()
 
-      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      val mockMetricsGroupForController = mockMetricsGroupCtor.constructed.get(0)
       val numMetricsRegistered = KafkaController.MetricNames.size
-      verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
-      KafkaController.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      verify(mockMetricsGroupForController, times(numMetricsRegistered)).newGauge(anyString(), any())
+      KafkaController.MetricNames.foreach(metricName => verify(mockMetricsGroupForController).newGauge(ArgumentMatchers.eq(metricName), any()))
       // verify that each metric is removed
-      verify(mockMetricsGroup, times(numMetricsRegistered)).removeMetric(anyString())
-      KafkaController.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      verify(mockMetricsGroupForController, times(numMetricsRegistered)).removeMetric(anyString())
+      KafkaController.MetricNames.foreach(verify(mockMetricsGroupForController).removeMetric(_))
+
+      // The first is in `KafkaController`, the second is in `ControllerStats`, the third is in `ControllerChannelManager`, and
+      // verify the metrics in `ControllerChannelManager` can be also removed when controller shutdown.
+      val mockMetricsGroupForControllerChannelManager = mockMetricsGroupCtor.constructed.get(2)
+      ControllerChannelManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockMetricsGroupForControllerChannelManager).newGauge(ArgumentMatchers.eq(metricName), any()))
+      ControllerChannelManager.GaugeMetricNameNoTag.foreach(verify(mockMetricsGroupForControllerChannelManager).removeMetric(_))
 
       // assert that we have verified all invocations on
-      verifyNoMoreInteractions(mockMetricsGroup)
+      verifyNoMoreInteractions(mockMetricsGroupForController)
+      verifyNoMoreInteractions(mockMetricsGroupForControllerChannelManager)
     } finally {
       mockMetricsGroupCtor.close()
     }

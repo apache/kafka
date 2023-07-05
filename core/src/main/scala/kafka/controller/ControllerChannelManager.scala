@@ -45,9 +45,14 @@ import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 
 object ControllerChannelManager {
-  val QueueSizeMetricName = "QueueSize"
-  val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
-  val TotalQueueSizeMetricName = "TotalQueueSize"
+  private val QueueSizeMetricName = "QueueSize"
+  private val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
+  private val TotalQueueSizeMetricName = "TotalQueueSize"
+
+  // Visible for testing
+  private[controller] val GaugeMetricNameNoTag = Set(
+    TotalQueueSizeMetricName
+  )
 }
 
 class ControllerChannelManager(controllerEpoch: () => Int,
@@ -58,7 +63,13 @@ class ControllerChannelManager(controllerEpoch: () => Int,
                                threadNamePrefix: Option[String] = None) extends Logging {
   import ControllerChannelManager._
 
+  type MetricNameWithTagData = java.util.HashMap[String, java.util.Set[java.util.Map[String, String]]]
+
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Visible for testing
+  private[controller] val gaugeMetricNameWithTag = new MetricNameWithTagData
+  // Visible for testing
+  private[controller] val timerMetricNameWithTag = new MetricNameWithTagData
 
   protected val brokerStateInfo = new mutable.HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
@@ -82,7 +93,12 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     brokerLock synchronized {
       brokerStateInfo.values.toList.foreach(removeExistingBroker)
     }
-    metricsGroup.removeMetric(TotalQueueSizeMetricName)
+  }
+
+  // Only remove global metric in `ControllerChannelManager` when controller shutdown, because metrics in `metricNameWithTag`
+  // has been removed in `shutdown` when controller `onControllerResignation`
+  def removeMetrics(): Unit = {
+    GaugeMetricNameNoTag.foreach(metricsGroup.removeMetric(_))
   }
 
   def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
@@ -173,21 +189,28 @@ class ControllerChannelManager(controllerEpoch: () => Int,
       case Some(name) => s"$name:Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
     }
 
+    val brokerMetricTag = brokerMetricTags(broker.id)
     val requestRateAndQueueTimeMetrics = metricsGroup.newTimer(
-      RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTags(broker.id)
+      RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTag
     )
+    timerMetricNameWithTag.computeIfAbsent(RequestRateAndQueueTimeMetricName, k => new java.util.HashSet[java.util.Map[String, String]]())
+      .add(brokerMetricTag)
 
     val requestThread = new RequestSendThread(config.brokerId, controllerEpoch, messageQueue, networkClient,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
-    val queueSizeGauge = metricsGroup.newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
+    val queueSizeGauge = metricsGroup.newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTag)
+    gaugeMetricNameWithTag.computeIfAbsent(QueueSizeMetricName, k => new java.util.HashSet[java.util.Map[String, String]]())
+      .add(brokerMetricTag)
 
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
   }
 
-  private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString).asJava
+  private val BrokerMetricTagKeyName = "broker-id"
+
+  private def brokerMetricTags(brokerId: Int) = Map(BrokerMetricTagKeyName -> brokerId.toString).asJava
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo): Unit = {
     try {
@@ -199,12 +222,27 @@ class ControllerChannelManager(controllerEpoch: () => Int,
       brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
-      metricsGroup.removeMetric(QueueSizeMetricName, brokerMetricTags(brokerState.brokerNode.id))
-      metricsGroup.removeMetric(RequestRateAndQueueTimeMetricName, brokerMetricTags(brokerState.brokerNode.id))
+      removeMetricsForBroker(brokerState)
       brokerStateInfo.remove(brokerState.brokerNode.id)
     } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)
     }
+  }
+
+  private def removeMetricsForBroker(brokerState: ControllerBrokerStateInfo): Unit = {
+    val removeTagSet = new java.util.HashSet[java.util.Map[String, String]]()
+    val metricNameWithTag = new MetricNameWithTagData
+    metricNameWithTag.putAll(gaugeMetricNameWithTag)
+    metricNameWithTag.putAll(timerMetricNameWithTag)
+    metricNameWithTag.asScala.foreach(metricNameAndTags => {
+      metricNameAndTags._2.asScala.filter(tag => tag.get(BrokerMetricTagKeyName).equals(brokerState.brokerNode.id.toString))
+        .foreach(metricTag => {
+          metricsGroup.removeMetric(metricNameAndTags._1, metricTag)
+          removeTagSet.add(metricTag)
+        })
+    })
+    gaugeMetricNameWithTag.values().asScala.foreach(tagSet => tagSet.removeAll(removeTagSet))
+    timerMetricNameWithTag.values().asScala.foreach(tagSet => tagSet.removeAll(removeTagSet))
   }
 
   protected def startRequestSendThread(brokerId: Int): Unit = {

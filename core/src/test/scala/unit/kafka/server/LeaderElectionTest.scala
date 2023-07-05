@@ -171,6 +171,7 @@ class LeaderElectionTest extends QuorumTestHarness {
       assertTrue(staleControllerEpochDetected, "Stale controller epoch not detected by the broker")
     } finally {
       controllerChannelManager.shutdown()
+      controllerChannelManager.removeMetrics()
       metrics.close()
     }
   }

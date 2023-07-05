@@ -297,15 +297,20 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
       // Shutdown controller. Request timeout is 30s, verify that shutdown completed well before that
       val shutdownFuture = executor.submit(new Runnable {
-        override def run(): Unit = controllerChannelManager.shutdown()
+        override def run(): Unit = {
+          controllerChannelManager.shutdown()
+          controllerChannelManager.removeMetrics()
+        }
       })
       shutdownFuture.get(10, TimeUnit.SECONDS)
 
     } finally {
       if (serverSocket != null)
         serverSocket.close()
-      if (controllerChannelManager != null)
+      if (controllerChannelManager != null) {
         controllerChannelManager.shutdown()
+        controllerChannelManager.removeMetrics()
+      }
       executor.shutdownNow()
       metrics.close()
     }

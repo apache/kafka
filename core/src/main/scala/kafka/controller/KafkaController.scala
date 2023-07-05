@@ -537,6 +537,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def removeMetrics(): Unit = {
     KafkaController.MetricNames.foreach(metricsGroup.removeMetric)
+    controllerChannelManager.removeMetrics()
   }
 
   /*
