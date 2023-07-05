@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -50,6 +51,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
@@ -69,6 +71,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -98,6 +101,7 @@ public class GroupMetadataManager {
         private CoordinatorTimer<Record> timer = null;
         private List<PartitionAssignor> assignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
+        private int consumerGroupSessionTimeoutMs = 45000;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private MetadataImage metadataImage = null;
@@ -129,6 +133,11 @@ public class GroupMetadataManager {
 
         Builder withConsumerGroupMaxSize(int consumerGroupMaxSize) {
             this.consumerGroupMaxSize = consumerGroupMaxSize;
+            return this;
+        }
+
+        Builder withConsumerGroupSessionTimeout(int consumerGroupSessionTimeoutMs) {
+            this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
             return this;
         }
 
@@ -166,6 +175,7 @@ public class GroupMetadataManager {
                 assignors,
                 metadataImage,
                 consumerGroupMaxSize,
+                consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
                 consumerGroupMetadataRefreshIntervalMs
             );
@@ -223,6 +233,11 @@ public class GroupMetadataManager {
     private final int consumerGroupHeartbeatIntervalMs;
 
     /**
+     * The session timeout for consumer groups.
+     */
+    private final int consumerGroupSessionTimeoutMs;
+
+    /**
      * The metadata refresh interval.
      */
     private final int consumerGroupMetadataRefreshIntervalMs;
@@ -240,6 +255,7 @@ public class GroupMetadataManager {
         List<PartitionAssignor> assignors,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
+        int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMetadataRefreshIntervalMs
     ) {
@@ -253,6 +269,7 @@ public class GroupMetadataManager {
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.consumerGroupMaxSize = consumerGroupMaxSize;
+        this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
         this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
     }
@@ -665,11 +682,20 @@ public class GroupMetadataManager {
                 log.info("[GroupId " + groupId + "] Member " + memberId + " transitioned from " +
                     member.currentAssignmentSummary() + " to " + updatedMember.currentAssignmentSummary() + ".");
 
-                // TODO(dajac) Starts or restarts the timer for the revocation timeout.
+                if (updatedMember.state() == ConsumerGroupMember.MemberState.REVOKING) {
+                    scheduleConsumerGroupRevocationTimeout(
+                        groupId,
+                        memberId,
+                        member.rebalanceTimeoutMs(),
+                        member.memberEpoch()
+                    );
+                } else {
+                    cancelConsumerGroupRevocationTimeout(groupId, memberId);
+                }
             }
         }
 
-        // TODO(dajac) Starts or restarts the timer for the session timeout.
+        scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
         // Prepare the response.
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
@@ -700,17 +726,36 @@ public class GroupMetadataManager {
         String groupId,
         String memberId
     ) throws ApiException {
-        List<Record> records = new ArrayList<>();
-
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
         ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
         log.info("[GroupId " + groupId + "] Member " + memberId + " left the consumer group.");
 
+        List<Record> records = consumerGroupFenceMember(group, member);
+        cancelConsumerGroupSessionTimeout(groupId, memberId);
+        return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
+            .setMemberId(memberId)
+            .setMemberEpoch(-1));
+    }
+
+    /**
+     * Fences a member from a consumer group.
+     *
+     * @param group       The group.
+     * @param member      The member.
+     *
+     * @return A list of records to be applied to the state.
+     */
+    private List<Record> consumerGroupFenceMember(
+        ConsumerGroup group,
+        ConsumerGroupMember member
+    ) {
+        List<Record> records = new ArrayList<>();
+
         // Write tombstones for the member. The order matters here.
-        records.add(newCurrentAssignmentTombstoneRecord(groupId, memberId));
-        records.add(newTargetAssignmentTombstoneRecord(groupId, memberId));
-        records.add(newMemberSubscriptionTombstoneRecord(groupId, memberId));
+        records.add(newCurrentAssignmentTombstoneRecord(group.groupId(), member.memberId()));
+        records.add(newTargetAssignmentTombstoneRecord(group.groupId(), member.memberId()));
+        records.add(newMemberSubscriptionTombstoneRecord(group.groupId(), member.memberId()));
 
         // We update the subscription metadata without the leaving member.
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
@@ -720,19 +765,116 @@ public class GroupMetadataManager {
         );
 
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId " + groupId + "] Computed new subscription metadata: "
+            log.info("[GroupId " + group.groupId() + "] Computed new subscription metadata: "
                 + subscriptionMetadata + ".");
-            records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
         }
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newGroupEpochRecord(groupId, groupEpoch));
+        records.add(newGroupEpochRecord(group.groupId(), groupEpoch));
 
-        return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
-            .setMemberId(memberId)
-            .setMemberEpoch(-1)
-        );
+        return records;
+    }
+
+    /**
+     * Schedules (or reschedules) the session timeout for the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void scheduleConsumerGroupSessionTimeout(
+        String groupId,
+        String memberId
+    ) {
+        String key = consumerGroupSessionTimeoutKey(groupId, memberId);
+        timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+            try {
+                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+
+                log.info("[GroupId " + groupId + "] Member " + memberId + " fenced from the group because " +
+                    "its session expired.");
+
+                return consumerGroupFenceMember(group, member);
+            } catch (GroupIdNotFoundException ex) {
+                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the group " +
+                    "does not exist.");
+            } catch (UnknownMemberIdException ex) {
+                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the member " +
+                    "does not exist.");
+            }
+
+            return Collections.emptyList();
+        });
+    }
+
+    /**
+     * Cancels the session timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelConsumerGroupSessionTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(consumerGroupSessionTimeoutKey(groupId, memberId));
+    }
+
+    /**
+     * Schedules a revocation timeout for the member.
+     *
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param revocationTimeoutMs   The revocation timeout.
+     * @param expectedMemberEpoch   The expected member epoch.
+     */
+    private void scheduleConsumerGroupRevocationTimeout(
+        String groupId,
+        String memberId,
+        long revocationTimeoutMs,
+        int expectedMemberEpoch
+    ) {
+        String key = consumerGroupRevocationTimeoutKey(groupId, memberId);
+        timer.schedule(key, revocationTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+            try {
+                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+
+                if (member.state() != ConsumerGroupMember.MemberState.REVOKING &&
+                    member.memberEpoch() != expectedMemberEpoch) {
+                    log.debug("[GroupId " + groupId + "] Ignoring revocation timeout for " + memberId + " because the member " +
+                        "state does not match the expected state.");
+                }
+
+                log.info("[GroupId " + groupId + "] Member " + memberId + " fenced from the group because " +
+                    "it failed to revoke partitions within {}ms.", revocationTimeoutMs);
+
+                return consumerGroupFenceMember(group, member);
+            } catch (GroupIdNotFoundException ex) {
+                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the group " +
+                    "does not exist.");
+            } catch (UnknownMemberIdException ex) {
+                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the member " +
+                    "does not exist.");
+            }
+
+            return Collections.emptyList();
+        });
+    }
+
+    /**
+     * Schedules the revocation timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelConsumerGroupRevocationTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(consumerGroupRevocationTimeoutKey(groupId, memberId));
     }
 
     /**
@@ -1058,5 +1200,45 @@ public class GroupMetadataManager {
                 ((ConsumerGroup) group).requestMetadataRefresh();
             }
         });
+    }
+
+    /**
+     * The coordinator has been loaded. Session timeouts are registered
+     * for all members.
+     */
+    public void onLoaded() {
+        groups.forEach((groupId, group) -> {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    log.info("Loaded consumer group {} with {} members.", groupId, consumerGroup.members().size());
+                    consumerGroup.members().forEach((memberId, member) -> {
+                        log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
+                        scheduleConsumerGroupSessionTimeout(groupId, memberId);
+                        if (member.state() == ConsumerGroupMember.MemberState.REVOKING) {
+                            scheduleConsumerGroupRevocationTimeout(
+                                groupId,
+                                memberId,
+                                member.rebalanceTimeoutMs(),
+                                member.memberEpoch()
+                            );
+                        }
+                    });
+                    break;
+
+                case GENERIC:
+                    GenericGroup genericGroup = (GenericGroup) group;
+                    log.info("Loaded generic group {} with {} members.", groupId, genericGroup.allMembers().size());
+                    break;
+            }
+        });
+    }
+
+    public static String consumerGroupSessionTimeoutKey(String groupId, String memberId) {
+        return "session-timeout-" + groupId + "-" + memberId;
+    }
+
+    public static String consumerGroupRevocationTimeoutKey(String groupId, String memberId) {
+        return "revocation-timeout-" + groupId + "-" + memberId;
     }
 }
