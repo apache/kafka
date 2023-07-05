@@ -23,11 +23,13 @@ import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -69,11 +71,64 @@ class AbstractFetcherManagerTest {
       fetcherManager.removeMetrics()
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
       // verify that each metric in `AbstractFetcherManager` is registered when initialized.
-      fetcherManager.MetricNames.foreach(metricNameTags => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
+      fetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
       // verify that each metric in `AbstractFetcherManager` is removed.
-      fetcherManager.MetricNames.foreach(metricNameTags => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
+      fetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
+  }
+
+  @Test
+  def testRemoveMetricsOnCloseForSubclassInstance(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val mockBrokerConfig = mock(classOf[KafkaConfig])
+      val mockReplicaManager = mock(classOf[ReplicaManager])
+      val mockMetrics = mock(classOf[Metrics])
+      val mockTime = new MockTime
+      val mockQuotaManager = mock(classOf[ReplicationQuotaManager])
+      val mockMetadataVersionSupplier = () => mock(classOf[MetadataVersion])
+      val mockBrokerEpochSupplier = () => 1L
+      val mockBrokerTopicStats = mock(classOf[BrokerTopicStats])
+
+      // Verify `ReplicaFetcherManager` first
+      val replicaFetcherManager = new ReplicaFetcherManager(
+        mockBrokerConfig,
+        mockReplicaManager,
+        mockMetrics,
+        mockTime,
+        None,
+        mockQuotaManager,
+        mockMetadataVersionSupplier,
+        mockBrokerEpochSupplier
+      )
+      replicaFetcherManager.shutdown()
+      val mockMetricsGroupForFetcherManager = mockMetricsGroupCtor.constructed.get(0)
+      // verify that each metric in `ReplicaFetcherManager` is registered when initialized.
+      replicaFetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForFetcherManager).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
+      // verify that each metric in `ReplicaFetcherManager` is removed.
+      replicaFetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForFetcherManager).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
+      // assert that we have verified all invocations in `ReplicaFetcherManager`
+      verifyNoMoreInteractions(mockMetricsGroupForFetcherManager)
+
+      // Next verify `ReplicaAlterLogDirsManager`
+      val replicaAlterLogDirsManager = new ReplicaAlterLogDirsManager(
+        mockBrokerConfig,
+        mockReplicaManager,
+        mockQuotaManager,
+        mockBrokerTopicStats
+      )
+      replicaAlterLogDirsManager.shutdown()
+      val mockMetricsGroupForAlterLogDirsManager = mockMetricsGroupCtor.constructed.get(1)
+      // verify that each metric in `ReplicaAlterLogDirsManager` is registered when initialized.
+      replicaAlterLogDirsManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForAlterLogDirsManager).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
+      // verify that each metric in `ReplicaAlterLogDirsManager` is removed.
+      replicaAlterLogDirsManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForAlterLogDirsManager).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
+      // assert that we have verified all invocations in `ReplicaAlterLogDirsManager`
+      verifyNoMoreInteractions(mockMetricsGroupForAlterLogDirsManager)
     } finally {
       mockMetricsGroupCtor.close()
     }
