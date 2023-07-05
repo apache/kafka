@@ -20,9 +20,13 @@ package org.apache.kafka.connect.runtime.isolation;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -30,10 +34,37 @@ import java.util.Set;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 
-public class DelegatingClassLoaderTest {
+@RunWith(Parameterized.class)
+public class PluginScannerTest {
+
+    private enum ScannerType { Reflection, ServiceLoader };
 
     @Rule
     public TemporaryFolder pluginDir = new TemporaryFolder();
+
+    public PluginScanner scanner;
+
+    @Parameterized.Parameters
+    public static Collection<Object[]> parameters() {
+        List<Object[]> values = new ArrayList<>();
+        for (ScannerType type : ScannerType.values()) {
+            values.add(new Object[]{type});
+        }
+        return values;
+    }
+
+    public PluginScannerTest(ScannerType scannerType) {
+        switch (scannerType) {
+            case Reflection:
+                this.scanner = new ReflectionScanner();
+                break;
+            case ServiceLoader:
+                this.scanner = new ServiceLoaderScanner();
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown type " + scannerType);
+        }
+    }
 
     @Test
     public void testLoadingUnloadedPluginClass() {
@@ -115,7 +146,7 @@ public class DelegatingClassLoaderTest {
         ClassLoaderFactory factory = new ClassLoaderFactory();
         DelegatingClassLoader classLoader = factory.newDelegatingClassLoader(DelegatingClassLoader.class.getClassLoader());
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, classLoader, factory);
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(pluginSources);
+        PluginScanResult scanResult = scanner.discoverPlugins(pluginSources);
         classLoader.installDiscoveredPlugins(scanResult);
         return classLoader;
     }
