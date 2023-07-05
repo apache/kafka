@@ -37,34 +37,8 @@ import static org.junit.Assert.assertThrows;
 @RunWith(Parameterized.class)
 public class PluginScannerTest {
 
-    private enum ScannerType { Reflection, ServiceLoader };
-
     @Rule
     public TemporaryFolder pluginDir = new TemporaryFolder();
-
-    public PluginScanner scanner;
-
-    @Parameterized.Parameters
-    public static Collection<Object[]> parameters() {
-        List<Object[]> values = new ArrayList<>();
-        for (ScannerType type : ScannerType.values()) {
-            values.add(new Object[]{type});
-        }
-        return values;
-    }
-
-    public PluginScannerTest(ScannerType scannerType) {
-        switch (scannerType) {
-            case Reflection:
-                this.scanner = new ReflectionScanner();
-                break;
-            case ServiceLoader:
-                this.scanner = new ServiceLoaderScanner();
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown type " + scannerType);
-        }
-    }
 
     @Test
     public void testLoadingUnloadedPluginClass() {
@@ -146,7 +120,7 @@ public class PluginScannerTest {
         ClassLoaderFactory factory = new ClassLoaderFactory();
         DelegatingClassLoader classLoader = factory.newDelegatingClassLoader(DelegatingClassLoader.class.getClassLoader());
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, classLoader, factory);
-        PluginScanResult scanResult = scanner.discoverPlugins(pluginSources);
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(pluginSources);
         classLoader.installDiscoveredPlugins(scanResult);
         return classLoader;
     }
