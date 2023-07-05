@@ -62,7 +62,8 @@ import java.util.TreeSet;
  *     </li>
  * </ul>
  * <p>Note: This scanner has a runtime proportional to the number of overall classes in the passed-in
- * {@link PluginSource} objects, which may be significant for plugins with large dependencies.
+ * {@link PluginSource} objects, which may be significant for plugins with large dependencies. For a more performant
+ * implementation, consider using {@link ServiceLoaderScanner} and follow migration instructions for KIP-898.
  */
 public class ReflectionScanner extends PluginScanner {
 
