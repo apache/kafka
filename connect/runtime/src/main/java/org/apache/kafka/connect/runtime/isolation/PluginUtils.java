@@ -328,7 +328,7 @@ public class PluginUtils {
         return Arrays.asList(archives.toArray(new Path[0]));
     }
 
-    public static Set<PluginSource> pluginSources(List<Path> pluginLocations, DelegatingClassLoader classLoader, ClassLoaderFactory factory) {
+    public static Set<PluginSource> pluginSources(List<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
         Set<PluginSource> pluginSources = new HashSet<>();
         for (Path pluginLocation : pluginLocations) {
 

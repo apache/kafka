@@ -17,25 +17,13 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import java.net.URL;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 
 /**
- * Factory for {@link DelegatingClassLoader} and {@link PluginClassLoader} instances.
+ * Factory for {@link PluginClassLoader} instances.
  * Used for mocking classloader initialization in tests.
  */
-public class ClassLoaderFactory implements PluginClassLoaderFactory {
+public interface PluginClassLoaderFactory {
 
-    public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
-        return AccessController.doPrivileged(
-                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(parent)
-        );
-    }
-
-    public PluginClassLoader newPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
-        return AccessController.doPrivileged(
-                (PrivilegedAction<PluginClassLoader>) () -> new PluginClassLoader(pluginLocation, urls, parent)
-        );
-    }
+    PluginClassLoader newPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent);
 
 }

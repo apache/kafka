@@ -159,7 +159,7 @@ public class SynchronizationTest {
 
     private class SynchronizedClassLoaderFactory extends ClassLoaderFactory {
         @Override
-        protected DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
+        public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
             return AccessController.doPrivileged(
                     (PrivilegedAction<DelegatingClassLoader>) () ->
                             new SynchronizedDelegatingClassLoader(parent)
@@ -167,7 +167,7 @@ public class SynchronizationTest {
         }
 
         @Override
-        protected PluginClassLoader newPluginClassLoader(
+        public PluginClassLoader newPluginClassLoader(
                 URL pluginLocation,
                 URL[] urls,
                 ClassLoader parent
