@@ -251,7 +251,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     info("shutdown completed")
   }
 
-  private[server] def removeMetrics(): Unit = {
+  private def removeMetrics(): Unit = {
     metricNamesToTags.foreach(metricTags => {
       metricsGroup.removeMetric(metricTags._1, metricTags._2)
     })
