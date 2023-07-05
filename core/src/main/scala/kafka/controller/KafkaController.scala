@@ -23,6 +23,7 @@ import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
 import kafka.cluster.Broker
+import kafka.controller.ControllerStats.{MeterMetricNames, UncleanLeaderElectionsPerSecMetricName}
 import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback}
 import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.server._
@@ -537,6 +538,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def removeMetrics(): Unit = {
     KafkaController.MetricNames.foreach(metricsGroup.removeMetric)
+    controllerContext.stats.removeMetrics()
   }
 
   /*
@@ -2776,10 +2778,16 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 private[controller] class ControllerStats {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  val uncleanLeaderElectionRate = metricsGroup.newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+  // Visible for testing
+  private[controller] val timerMetricNames = new java.util.ArrayList[String]()
+
+  val uncleanLeaderElectionRate = metricsGroup.newMeter(UncleanLeaderElectionsPerSecMetricName, "elections", TimeUnit.SECONDS)
 
   val rateAndTimeMetrics: Map[ControllerState, Timer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>
+      if (metricName.nonEmpty) {
+        timerMetricNames.add(metricName)
+      }
       state -> metricsGroup.newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
     }
   }.toMap
@@ -2788,6 +2796,20 @@ private[controller] class ControllerStats {
   def removeMetric(name: String): Unit = {
     metricsGroup.removeMetric(name)
   }
+
+  def removeMetrics(): Unit = {
+    MeterMetricNames.foreach(metricsGroup.removeMetric(_))
+    timerMetricNames.asScala.foreach(metricsGroup.removeMetric(_))
+  }
+}
+
+object ControllerStats {
+  private val UncleanLeaderElectionsPerSecMetricName = "UncleanLeaderElectionsPerSec"
+
+  // Visible for testing
+  private[controller] val MeterMetricNames = Set(
+    UncleanLeaderElectionsPerSecMetricName
+  )
 }
 
 sealed trait ControllerEvent {

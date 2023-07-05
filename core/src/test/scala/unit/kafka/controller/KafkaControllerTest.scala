@@ -29,6 +29,8 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions}
 
+import scala.jdk.CollectionConverters._
+
 class KafkaControllerTest {
   var config: KafkaConfig = _
 
@@ -65,8 +67,14 @@ class KafkaControllerTest {
       verify(mockMetricsGroup, times(numMetricsRegistered)).removeMetric(anyString())
       KafkaController.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
 
+      val mockMetricsGroupForControllerStats = mockMetricsGroupCtor.constructed().get(1)
+      ControllerStats.MeterMetricNames.foreach(metricName => verify(mockMetricsGroupForControllerStats).newMeter(ArgumentMatchers.eq(metricName), any(), any()))
+      kafkaController.controllerContext.stats.timerMetricNames.asScala.foreach(metricName => verify(mockMetricsGroupForControllerStats).newTimer(ArgumentMatchers.eq(metricName), any(), any()))
+      ControllerStats.MeterMetricNames.foreach(metricName => verify(mockMetricsGroupForControllerStats).removeMetric(ArgumentMatchers.eq(metricName)))
+      kafkaController.controllerContext.stats.timerMetricNames.asScala.foreach(metricName => verify(mockMetricsGroupForControllerStats).removeMetric(ArgumentMatchers.eq(metricName)))
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
+      verifyNoMoreInteractions(mockMetricsGroupForControllerStats)
     } finally {
       mockMetricsGroupCtor.close()
     }
