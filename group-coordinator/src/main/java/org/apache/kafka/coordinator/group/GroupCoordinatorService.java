@@ -531,6 +531,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         MetadataDelta delta
     ) {
         throwIfNotActive();
+        runtime.onNewMetadataImage(newImage, delta);
     }
 
     /**

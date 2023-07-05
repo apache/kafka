@@ -24,6 +24,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -349,7 +351,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                     state = CoordinatorState.ACTIVE;
                     snapshotRegistry.getOrCreateSnapshot(0);
                     partitionWriter.registerListener(tp, highWatermarklistener);
-                    coordinator.onLoaded();
+                    coordinator.onLoaded(metadataImage);
                     break;
 
                 case FAILED:
@@ -808,6 +810,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
 
     /**
+     * The latest known metadata image.
+     */
+    private volatile MetadataImage metadataImage = MetadataImage.EMPTY;
+
+    /**
      * Constructor.
      *
      * @param logPrefix                     The log prefix.
@@ -1080,6 +1087,37 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                 log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
                     tp, partitionEpoch, context.epoch);
             }
+        });
+    }
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The metadata delta.
+     */
+    public void onNewMetadataImage(
+        MetadataImage newImage,
+        MetadataDelta delta
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduling applying of a new metadata image with offset {}.", newImage.offset());
+
+        // Update global image.
+        metadataImage = newImage;
+
+        // Push an event for each coordinator.
+        coordinators.keySet().forEach(tp -> {
+            scheduleInternalOperation("UpdateImage(tp=" + tp + ", offset=" + newImage.offset() + ")", tp, () -> {
+                CoordinatorContext context = contextOrThrow(tp);
+                if (context.state == CoordinatorState.ACTIVE) {
+                    log.debug("Applying new metadata image with offset {} to {}.", newImage.offset(), tp);
+                    context.coordinator.onNewMetadataImage(newImage, delta);
+                } else {
+                    log.debug("Ignoring new metadata image with offset {} for {} because the coordinator is not active.",
+                        newImage.offset(), tp);
+                }
+            });
         });
     }
 
