@@ -28,11 +28,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 public class PluginScannerTest {
@@ -67,63 +67,67 @@ public class PluginScannerTest {
     }
 
     @Test
-    public void testLoadingUnloadedPluginClass() {
-        DelegatingClassLoader classLoader = initClassLoader(
+    public void testScanningEmptyPluginPath() {
+        PluginScanResult result = scan(
                 Collections.emptyList()
         );
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
-        }
+        assertTrue(result.isEmpty());
     }
 
     @Test
-    public void testLoadingPluginClass() throws ClassNotFoundException {
-        DelegatingClassLoader classLoader = initClassLoader(
+    public void testScanningPluginClasses() {
+        PluginScanResult result = scan(
                 TestPlugins.pluginPath()
         );
+        Set<String> classes = new HashSet<>();
+        result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
         for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertNotNull(classLoader.loadClass(pluginClassName));
-            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+            assertTrue("Expected " + pluginClassName + "to be discovered but it was not",
+                    classes.contains(pluginClassName));
         }
     }
 
     @Test
-    public void testLoadingInvalidUberJar() throws Exception {
+    public void testScanningInvalidUberJar() throws Exception {
         pluginDir.newFile("invalid.jar");
 
-        initClassLoader(
+        PluginScanResult result = scan(
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
+        assertTrue(result.isEmpty());
     }
 
     @Test
-    public void testLoadingPluginDirContainsInvalidJarsOnly() throws Exception {
+    public void testScanningPluginDirContainsInvalidJarsOnly() throws Exception {
         pluginDir.newFolder("my-plugin");
         pluginDir.newFile("my-plugin/invalid.jar");
 
-        initClassLoader(
+        PluginScanResult result = scan(
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
+        assertTrue(result.isEmpty());
     }
 
     @Test
-    public void testLoadingNoPlugins() {
-        initClassLoader(
+    public void testScanningNoPlugins() {
+        PluginScanResult result = scan(
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
+        assertTrue(result.isEmpty());
     }
 
     @Test
-    public void testLoadingPluginDirEmpty() throws Exception {
+    public void testScanningPluginDirEmpty() throws Exception {
         pluginDir.newFolder("my-plugin");
 
-        initClassLoader(
+        PluginScanResult result = scan(
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
+        assertTrue(result.isEmpty());
     }
 
     @Test
-    public void testLoadingMixOfValidAndInvalidPlugins() throws Exception {
+    public void testScanningMixOfValidAndInvalidPlugins() throws Exception {
         pluginDir.newFile("invalid.jar");
         pluginDir.newFolder("my-plugin");
         pluginDir.newFile("my-plugin/invalid.jar");
@@ -133,22 +137,21 @@ public class PluginScannerTest {
             Files.copy(source, pluginPath.resolve(source.getFileName()));
         }
 
-        DelegatingClassLoader classLoader = initClassLoader(
+        PluginScanResult result = scan(
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
+        Set<String> classes = new HashSet<>();
+        result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
         for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertNotNull(classLoader.loadClass(pluginClassName));
-            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+            assertTrue("Expected " + pluginClassName + "to be discovered but it was not",
+                    classes.contains(pluginClassName));
         }
     }
 
-    private DelegatingClassLoader initClassLoader(List<Path> pluginLocations) {
+    private PluginScanResult scan(List<Path> pluginLocations) {
         ClassLoaderFactory factory = new ClassLoaderFactory();
-        DelegatingClassLoader classLoader = factory.newDelegatingClassLoader(DelegatingClassLoader.class.getClassLoader());
-        Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, classLoader, factory);
-        PluginScanResult scanResult = scanner.discoverPlugins(pluginSources);
-        classLoader.installDiscoveredPlugins(scanResult);
-        return classLoader;
+        Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, PluginScannerTest.class.getClassLoader(), factory);
+        return scanner.discoverPlugins(pluginSources);
     }
 
 }
