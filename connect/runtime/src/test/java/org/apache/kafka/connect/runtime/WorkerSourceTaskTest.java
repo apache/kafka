@@ -434,7 +434,7 @@ public class WorkerSourceTaskTest {
         final RuntimeException exception = new RuntimeException();
         when(sourceTask.poll()).thenAnswer(invocation -> {
             pollLatch.countDown();
-            ConcurrencyUtils.awaitLatch(workerStopLatch, "Timeout waiting for task to stop");
+            ConcurrencyUtils.awaitLatch(workerStopLatch, "Timeout waiting for main test thread to stop task");
             throw exception;
         });
         expectOffsetFlush();
