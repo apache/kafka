@@ -22,11 +22,10 @@ import java.util.Comparator;
 import java.util.PriorityQueue;
 
 public class MockTimer implements Timer {
+    private final MockTime time;
     private final PriorityQueue<TimerTaskEntry> taskQueue = new PriorityQueue<>(
         Comparator.comparingLong(entry -> entry.expirationMs)
     );
-
-    public final MockTime time;
 
     public MockTimer() {
         this(new MockTime());
@@ -75,6 +74,10 @@ public class MockTimer implements Timer {
         }
 
         return executed;
+    }
+
+    public MockTime time() {
+        return time;
     }
 
     public int size() {
