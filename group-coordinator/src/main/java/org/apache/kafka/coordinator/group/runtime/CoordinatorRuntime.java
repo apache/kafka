@@ -217,14 +217,19 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
     }
 
     /**
-     * Implements the CoordinatorTimer interface. This class keeps track of all the
-     * schedule timers for a coordinator/partition.
+     * The InternalCoordinatorTimer implements the CoordinatorTimer interface and provides an event based
+     * timer which turns timeouts of a regular {@link Timer} into {@link CoordinatorWriteEvent} events which
+     * are executed by the {@link CoordinatorEventProcessor} used by this coordinator runtime. This is done
+     * to ensure that the timer respects the threading model of the coordinator runtime.
      *
-     * When a timer is cancelled or overridden, the previous timer is guaranteed to
+     * The {@link CoordinatorWriteEvent} events pushed by the coordinator timer wraps the
+     * {@link TimeoutOperation} operations scheduled by the coordinators.
+     *
+     * It also keeps track of all the scheduled {@link TimerTask}. This allows timeout operations to be
+     * cancelled or rescheduled. When a timer is cancelled or overridden, the previous timer is guaranteed to
      * not be executed even if it already expired and got pushed to the event processor.
      *
-     * When a timer fails with an unexpected exception, the timer is rescheduled with
-     * a backoff.
+     * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
      */
     class InternalCoordinatorTimer implements CoordinatorTimer<U> {
         /**
