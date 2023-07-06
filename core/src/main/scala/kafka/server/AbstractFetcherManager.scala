@@ -252,9 +252,10 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   private[server] def removeMetrics(): Unit = {
-    metricNamesToTags.foreach(metricTags => {
+    metricNamesToTags.foreach { metricTags =>
       metricsGroup.removeMetric(metricTags._1, metricTags._2)
-    })
+    }
+    metricNamesToTags = Map.empty
   }
 }
 

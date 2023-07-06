@@ -68,12 +68,14 @@ class AbstractFetcherManagerTest {
           fetcher
         }
       }
+      val metricsToVerify = new java.util.HashMap[String, java.util.Map[String, String]]()
+      fetcherManager.metricNamesToTags.foreach(metricNameTags => metricsToVerify.put(metricNameTags._1, metricNameTags._2))
       fetcherManager.removeMetrics()
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
       // verify that each metric in `AbstractFetcherManager` is registered when initialized.
-      fetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
+      metricsToVerify.asScala.foreach(metricNameTags => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
       // verify that each metric in `AbstractFetcherManager` is removed.
-      fetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
+      metricsToVerify.asScala.foreach(metricNameTags => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
     } finally {
@@ -105,12 +107,14 @@ class AbstractFetcherManagerTest {
         mockMetadataVersionSupplier,
         mockBrokerEpochSupplier
       )
+      val metricsToVerifyForFetcherManager = new java.util.HashMap[String, java.util.Map[String, String]]()
+      replicaFetcherManager.metricNamesToTags.foreach(metricNameTags => metricsToVerifyForFetcherManager.put(metricNameTags._1, metricNameTags._2))
       replicaFetcherManager.shutdown()
       val mockMetricsGroupForFetcherManager = mockMetricsGroupCtor.constructed.get(0)
       // verify that each metric in `ReplicaFetcherManager` is registered when initialized.
-      replicaFetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForFetcherManager).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
+      metricsToVerifyForFetcherManager.asScala.foreach(metricNameTags => verify(mockMetricsGroupForFetcherManager).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
       // verify that each metric in `ReplicaFetcherManager` is removed.
-      replicaFetcherManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForFetcherManager).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
+      metricsToVerifyForFetcherManager.asScala.foreach(metricNameTags => verify(mockMetricsGroupForFetcherManager).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
       // assert that we have verified all invocations in `ReplicaFetcherManager`
       verifyNoMoreInteractions(mockMetricsGroupForFetcherManager)
 
@@ -121,12 +125,14 @@ class AbstractFetcherManagerTest {
         mockQuotaManager,
         mockBrokerTopicStats
       )
+      val metricsToVerifyForAlterLogDirsManager = new java.util.HashMap[String, java.util.Map[String, String]]()
+      replicaAlterLogDirsManager.metricNamesToTags.foreach(metricNameTags => metricsToVerifyForAlterLogDirsManager.put(metricNameTags._1, metricNameTags._2))
       replicaAlterLogDirsManager.shutdown()
       val mockMetricsGroupForAlterLogDirsManager = mockMetricsGroupCtor.constructed.get(1)
       // verify that each metric in `ReplicaAlterLogDirsManager` is registered when initialized.
-      replicaAlterLogDirsManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForAlterLogDirsManager).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
+      metricsToVerifyForAlterLogDirsManager.asScala.foreach(metricNameTags => verify(mockMetricsGroupForAlterLogDirsManager).newGauge(ArgumentMatchers.eq(metricNameTags._1), any(), any()))
       // verify that each metric in `ReplicaAlterLogDirsManager` is removed.
-      replicaAlterLogDirsManager.metricNamesToTags.foreach(metricNameTags => verify(mockMetricsGroupForAlterLogDirsManager).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
+      metricsToVerifyForAlterLogDirsManager.asScala.foreach(metricNameTags => verify(mockMetricsGroupForAlterLogDirsManager).removeMetric(ArgumentMatchers.eq(metricNameTags._1), any()))
       // assert that we have verified all invocations in `ReplicaAlterLogDirsManager`
       verifyNoMoreInteractions(mockMetricsGroupForAlterLogDirsManager)
     } finally {
