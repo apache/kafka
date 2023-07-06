@@ -217,7 +217,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
     }
 
     /**
-     * The InternalCoordinatorTimer implements the CoordinatorTimer interface and provides an event based
+     * The EventBasedCoordinatorTimer implements the CoordinatorTimer interface and provides an event based
      * timer which turns timeouts of a regular {@link Timer} into {@link CoordinatorWriteEvent} events which
      * are executed by the {@link CoordinatorEventProcessor} used by this coordinator runtime. This is done
      * to ensure that the timer respects the threading model of the coordinator runtime.
@@ -231,7 +231,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      *
      * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
      */
-    class InternalCoordinatorTimer implements CoordinatorTimer<U> {
+    class EventBasedCoordinatorTimer implements CoordinatorTimer<U> {
         /**
          * The logger.
          */
@@ -247,9 +247,9 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
          */
         final Map<String, TimerTask> tasks = new HashMap<>();
 
-        InternalCoordinatorTimer(TopicPartition tp, LogContext logContext) {
+        EventBasedCoordinatorTimer(TopicPartition tp, LogContext logContext) {
             this.tp = tp;
-            this.log = logContext.logger(InternalCoordinatorTimer.class);
+            this.log = logContext.logger(EventBasedCoordinatorTimer.class);
         }
 
         @Override
@@ -259,6 +259,9 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             TimeUnit unit,
             TimeoutOperation<U> operation
         ) {
+            // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
+            // expires, the event is push to the queue of the coordinator runtime to be executed. This
+            // ensure that the threading model of the runtime is respected.
             TimerTask task = new TimerTask(unit.toMillis(delay)) {
                 @Override
                 public void run() {
@@ -276,8 +279,9 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                         return new CoordinatorResult<>(operation.generateRecords(), null);
                     });
 
+                    // If the write event fails, it is rescheduled with a small backoff except if the
+                    // error is fatal.
                     event.future.exceptionally(ex -> {
-                        // Otherwise, we handle the error if the timer is still active.
                         if (ex instanceof RejectedExecutionException) {
                             log.debug("The delayed write event {} for the timer {} was not executed because it was " +
                                 "cancelled or overridden.", event.name, key);
@@ -361,7 +365,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         /**
          * The coordinator timer.
          */
-        final InternalCoordinatorTimer timer;
+        final EventBasedCoordinatorTimer timer;
 
         /**
          * The current state.
@@ -406,7 +410,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             ));
             this.snapshotRegistry = new SnapshotRegistry(logContext);
             this.deferredEventQueue = new DeferredEventQueue(logContext);
-            this.timer = new InternalCoordinatorTimer(tp, logContext);
+            this.timer = new EventBasedCoordinatorTimer(tp, logContext);
             this.state = CoordinatorState.INITIAL;
             this.epoch = -1;
             this.lastWrittenOffset = 0L;
