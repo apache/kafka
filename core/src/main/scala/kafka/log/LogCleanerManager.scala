@@ -550,9 +550,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   def removeMetrics(): Unit = {
     GaugeMetricNameNoTag.foreach(metricsGroup.removeMetric)
-    gaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
-      metricNameAndTags._2.asScala.foreach(tag => metricsGroup.removeMetric(metricNameAndTags._1, tag))
-    })
+    gaugeMetricNameWithTag.asScala.foreach { metricNameAndTags =>
+      metricNameAndTags._2.asScala.foreach { tag =>
+        metricsGroup.removeMetric(metricNameAndTags._1, tag)
+      }
+    }
+    gaugeMetricNameWithTag.clear()
   }
 }
 
