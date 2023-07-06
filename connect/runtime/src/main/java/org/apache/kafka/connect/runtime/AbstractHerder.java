@@ -44,6 +44,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -902,4 +903,26 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             cb.onCompletion(t, null);
         }
     }
+
+    @Override
+    public void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
+        if (offsets == null || offsets.isEmpty()) {
+            callback.onCompletion(new ConnectException("The offsets to be altered may not be null or empty"), null);
+            return;
+        }
+        modifyConnectorOffsets(connName, offsets, callback);
+    }
+
+    @Override
+    public void resetConnectorOffsets(String connName, Callback<Message> callback) {
+        modifyConnectorOffsets(connName, null, callback);
+    }
+
+    /**
+     * Service external requests to alter or reset connector offsets.
+     * @param connName the name of the connector whose offsets are to be modified
+     * @param offsets the offsets to be written; this should be {@code null} for offsets reset requests
+     * @param cb callback to invoke upon completion
+     */
+    protected abstract void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
 }

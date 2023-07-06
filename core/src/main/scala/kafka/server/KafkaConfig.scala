@@ -2305,8 +2305,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else {
       // ZK-based
       if (migrationEnabled) {
-        require(!originals.containsKey(KafkaConfig.AuthorizerClassNameProp),
-          s"ZooKeeper migration does not yet support authorizers. Remove ${KafkaConfig.AuthorizerClassNameProp} before performing a migration.")
         validateNonEmptyQuorumVotersForMigration()
         require(controllerListenerNames.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")

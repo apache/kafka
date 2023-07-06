@@ -122,12 +122,12 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     }
 
     @Override
-    public void put(final long time, final Record<K, V> record, final ProcessorRecordContext recordContext) {
+    public boolean put(final long time, final Record<K, V> record, final ProcessorRecordContext recordContext) {
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(record.key(), "key cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
         if (wrapped().observedStreamTime - gracePeriod > record.timestamp()) {
-            return;
+            return false;
         }
         maybeUpdateSeqnumForDups();
         final Bytes serializedKey = Bytes.wrap(
@@ -142,6 +142,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         if (minTimestamp() > record.timestamp()) {
             minTimestamp = record.timestamp();
         }
+        return true;
     }
 
     @Override

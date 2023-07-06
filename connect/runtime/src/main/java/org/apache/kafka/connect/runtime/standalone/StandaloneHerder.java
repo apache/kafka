@@ -374,19 +374,34 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public synchronized void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
+    protected synchronized void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
+        if (!modifyConnectorOffsetsChecks(connName, cb)) {
+            return;
+        }
+
+        worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, cb);
+    }
+
+    /**
+     * This method performs a few checks for external requests to modify (alter or reset) connector offsets and
+     * completes the callback exceptionally if any check fails.
+     * @param connName the name of the connector whose offsets are to be modified
+     * @param cb callback to invoke upon completion
+     * @return true if all the checks passed, false otherwise
+     */
+    private boolean modifyConnectorOffsetsChecks(String connName, Callback<Message> cb) {
         if (!configState.contains(connName)) {
             cb.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
-            return;
+            return false;
         }
 
         if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
-            cb.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be altered. " +
-                    "This can be done for the specified connector by issuing a PUT request to the /connectors/" + connName + "/stop endpoint"), null);
-            return;
+            cb.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be modified. This can be done " +
+                    "for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
+            return false;
         }
 
-        worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, cb);
+        return true;
     }
 
     private void startConnector(String connName, Callback<TargetState> onStart) {

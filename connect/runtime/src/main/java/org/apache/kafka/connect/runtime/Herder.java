@@ -311,6 +311,13 @@ public interface Herder {
      */
     void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
 
+    /**
+     * Reset a connector's offsets.
+     * @param connName the name of the connector whose offsets are to be reset
+     * @param cb callback to invoke upon completion
+     */
+    void resetConnectorOffsets(String connName, Callback<Message> cb);
+
     enum ConfigReloadAction {
         NONE,
         RESTART

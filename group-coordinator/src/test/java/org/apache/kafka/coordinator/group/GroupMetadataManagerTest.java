@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -37,6 +38,8 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
@@ -59,8 +62,10 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -78,13 +83,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -113,10 +121,10 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    public static class TopicsImageBuilder {
-        private TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
+    public static class MetadataImageBuilder {
+        private MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
 
-        public TopicsImageBuilder addTopic(
+        public MetadataImageBuilder addTopic(
             Uuid topicId,
             String topicName,
             int numPartitions
@@ -130,8 +138,8 @@ public class GroupMetadataManagerTest {
             return this;
         }
 
-        public TopicsImage build() {
-            return delta.apply();
+        public MetadataImage build() {
+            return delta.apply(MetadataProvenance.EMPTY);
         }
     }
 
@@ -141,6 +149,7 @@ public class GroupMetadataManagerTest {
         private int assignmentEpoch;
         private final Map<String, ConsumerGroupMember> members = new HashMap<>();
         private final Map<String, Assignment> assignments = new HashMap<>();
+        private Map<String, TopicMetadata> subscriptionMetadata;
 
         public ConsumerGroupBuilder(String groupId, int groupEpoch) {
             this.groupId = groupId;
@@ -150,6 +159,11 @@ public class GroupMetadataManagerTest {
 
         public ConsumerGroupBuilder withMember(ConsumerGroupMember member) {
             this.members.put(member.memberId(), member);
+            return this;
+        }
+
+        public ConsumerGroupBuilder withSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
+            this.subscriptionMetadata = subscriptionMetadata;
             return this;
         }
 
@@ -172,19 +186,21 @@ public class GroupMetadataManagerTest {
             });
 
             // Add subscription metadata.
-            Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            members.forEach((memberId, member) -> {
-                member.subscribedTopicNames().forEach(topicName -> {
-                    TopicImage topicImage = topicsImage.getTopic(topicName);
-                    if (topicImage != null) {
-                        subscriptionMetadata.put(topicName, new TopicMetadata(
-                            topicImage.id(),
-                            topicImage.name(),
-                            topicImage.partitions().size()
-                        ));
-                    }
+            if (subscriptionMetadata == null) {
+                subscriptionMetadata = new HashMap<>();
+                members.forEach((memberId, member) -> {
+                    member.subscribedTopicNames().forEach(topicName -> {
+                        TopicImage topicImage = topicsImage.getTopic(topicName);
+                        if (topicImage != null) {
+                            subscriptionMetadata.put(topicName, new TopicMetadata(
+                                topicImage.id(),
+                                topicImage.name(),
+                                topicImage.partitions().size()
+                            ));
+                        }
+                    });
                 });
-            });
+            }
 
             if (!subscriptionMetadata.isEmpty()) {
                 records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
@@ -212,15 +228,17 @@ public class GroupMetadataManagerTest {
 
     static class GroupMetadataManagerTestContext {
         static class Builder {
+            final private Time time = new MockTime();
             final private LogContext logContext = new LogContext();
             final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-            private TopicsImage topicsImage;
+            private MetadataImage metadataImage;
             private List<PartitionAssignor> assignors;
             private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
             private int consumerGroupMaxSize = Integer.MAX_VALUE;
+            private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
 
-            public Builder withTopicsImage(TopicsImage topicsImage) {
-                this.topicsImage = topicsImage;
+            public Builder withMetadataImage(MetadataImage metadataImage) {
+                this.metadataImage = metadataImage;
                 return this;
             }
 
@@ -239,24 +257,32 @@ public class GroupMetadataManagerTest {
                 return this;
             }
 
+            public Builder withConsumerGroupMetadataRefreshIntervalMs(int consumerGroupMetadataRefreshIntervalMs) {
+                this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+                return this;
+            }
+
             public GroupMetadataManagerTestContext build() {
-                if (topicsImage == null) topicsImage = TopicsImage.EMPTY;
+                if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
                 if (assignors == null) assignors = Collections.emptyList();
 
                 GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext(
+                    time,
                     snapshotRegistry,
                     new GroupMetadataManager.Builder()
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
-                        .withTopicsImage(topicsImage)
+                        .withTime(time)
+                        .withMetadataImage(metadataImage)
                         .withConsumerGroupHeartbeatInterval(5000)
                         .withConsumerGroupMaxSize(consumerGroupMaxSize)
                         .withAssignors(assignors)
+                        .withConsumerGroupMetadataRefreshIntervalMs(consumerGroupMetadataRefreshIntervalMs)
                         .build()
                 );
 
                 consumerGroupBuilders.forEach(builder -> {
-                    builder.build(topicsImage).forEach(context::replay);
+                    builder.build(metadataImage.topics()).forEach(context::replay);
                 });
 
                 context.commit();
@@ -265,6 +291,7 @@ public class GroupMetadataManagerTest {
             }
         }
 
+        final Time time;
         final SnapshotRegistry snapshotRegistry;
         final GroupMetadataManager groupMetadataManager;
 
@@ -272,9 +299,11 @@ public class GroupMetadataManagerTest {
         long lastWrittenOffset = 0L;
 
         public GroupMetadataManagerTestContext(
+            Time time,
             SnapshotRegistry snapshotRegistry,
             GroupMetadataManager groupMetadataManager
         ) {
+            this.time = time;
             this.snapshotRegistry = snapshotRegistry;
             this.groupMetadataManager = groupMetadataManager;
         }
@@ -486,7 +515,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(TopicsImage.EMPTY)
+            .withMetadataImage(MetadataImage.EMPTY)
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -675,7 +704,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .build())
@@ -764,7 +793,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .build())
@@ -865,7 +894,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .build())
@@ -1009,7 +1038,7 @@ public class GroupMetadataManagerTest {
         // Consumer group with two members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .addTopic(zarTopicId, zarTopicName, 1)
@@ -1100,7 +1129,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .build())
@@ -1546,7 +1575,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
@@ -1794,7 +1823,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .build())
@@ -1912,7 +1941,7 @@ public class GroupMetadataManagerTest {
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
+            .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .build())
@@ -1930,6 +1959,435 @@ public class GroupMetadataManagerTest {
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignor("range")
                     .setTopicPartitions(Collections.emptyList())));
+    }
+
+    @Test
+    public void testSubscriptionMetadataRefreshedAfterGroupIsLoaded() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        // Create a context with one consumer group containing one member.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                    .build())
+                .withAssignment(memberId, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignmentEpoch(10)
+                .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
+                    {
+                        // foo only has 3 partitions stored in the metadata but foo has
+                        // 6 partitions the metadata image.
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3));
+                    }
+                }))
+            .build();
+
+        // The metadata refresh flag should be true.
+        ConsumerGroup consumerGroup = context.groupMetadataManager
+            .getOrMaybeCreateConsumerGroup(groupId, false);
+        assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+
+        // Prepare the assignment result.
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+            )))
+        ));
+
+        // Heartbeat.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10));
+
+        // The member gets partitions 3, 4 and 5 assigned.
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setAssignedTopicPartitions(Arrays.asList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5))
+                    ))),
+            result.response()
+        );
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setTargetMemberEpoch(11)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+            .build();
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                }
+            }),
+            RecordHelpers.newGroupEpochRecord(groupId, 11),
+            RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+            )),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
+            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+
+        // Check next refresh time.
+        assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.metadataRefreshDeadline().deadlineMs);
+        assertEquals(11, consumerGroup.metadataRefreshDeadline().epoch);
+    }
+
+    @Test
+    public void testSubscriptionMetadataRefreshedAgainAfterWriteFailure() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        // Create a context with one consumer group containing one member.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                    .build())
+                .withAssignment(memberId, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignmentEpoch(10)
+                .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
+                    {
+                        // foo only has 3 partitions stored in the metadata but foo has
+                        // 6 partitions the metadata image.
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3));
+                    }
+                }))
+            .build();
+
+        // The metadata refresh flag should be true.
+        ConsumerGroup consumerGroup = context.groupMetadataManager
+            .getOrMaybeCreateConsumerGroup(groupId, false);
+        assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+
+        // Prepare the assignment result.
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+            )))
+        ));
+
+        // Heartbeat.
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10));
+
+        // The metadata refresh flag is set to a future time.
+        assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.metadataRefreshDeadline().deadlineMs);
+        assertEquals(11, consumerGroup.metadataRefreshDeadline().epoch);
+
+        // Rollback the uncommitted changes. This does not rollback the metadata flag
+        // because it is not using a timeline data structure.
+        context.rollback();
+
+        // However, the next heartbeat should detect the divergence based on the epoch and trigger
+        // a metadata refresh.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10));
+
+
+        // The member gets partitions 3, 4 and 5 assigned.
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setAssignedTopicPartitions(Arrays.asList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5))
+                    ))),
+            result.response()
+        );
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setTargetMemberEpoch(11)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+            .build();
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                }
+            }),
+            RecordHelpers.newGroupEpochRecord(groupId, 11),
+            RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+            )),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
+            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+
+        // Check next refresh time.
+        assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+        assertEquals(context.time.milliseconds() + 5 * 60 * 1000, consumerGroup.metadataRefreshDeadline().deadlineMs);
+        assertEquals(11, consumerGroup.metadataRefreshDeadline().epoch);
+    }
+
+    @Test
+    public void testGroupIdsByTopics() {
+        String groupId1 = "group1";
+        String groupId2 = "group2";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M1 in group 1 subscribes to foo and bar.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId1,
+            new ConsumerGroupMember.Builder("group1-m1")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .build()));
+
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M1 in group 2 subscribes to foo, bar and zar.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId2,
+            new ConsumerGroupMember.Builder("group2-m1")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                .build()));
+
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M2 in group 1 subscribes to bar and zar.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId1,
+            new ConsumerGroupMember.Builder("group1-m2")
+                .setSubscribedTopicNames(Arrays.asList("bar", "zar"))
+                .build()));
+
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M2 in group 2 subscribes to foo and bar.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId2,
+            new ConsumerGroupMember.Builder("group2-m2")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .build()));
+
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M1 in group 1 is removed.
+        context.replay(RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId1, "group1-m1"));
+        context.replay(RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId1, "group1-m1"));
+
+        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M1 in group 2 subscribes to nothing.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId2,
+            new ConsumerGroupMember.Builder("group2-m1")
+                .setSubscribedTopicNames(Collections.emptyList())
+                .build()));
+
+        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M2 in group 2 subscribes to foo.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId2,
+            new ConsumerGroupMember.Builder("group2-m2")
+                .setSubscribedTopicNames(Arrays.asList("foo"))
+                .build()));
+
+        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M2 in group 2 subscribes to nothing.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId2,
+            new ConsumerGroupMember.Builder("group2-m2")
+                .setSubscribedTopicNames(Collections.emptyList())
+                .build()));
+
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M2 in group 1 subscribes to nothing.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId1,
+            new ConsumerGroupMember.Builder("group1-m2")
+                .setSubscribedTopicNames(Collections.emptyList())
+                .build()));
+
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+    }
+
+    @Test
+    public void testOnNewMetadataImage() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .build();
+
+        // M1 in group 1 subscribes to a and b.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord("group1",
+            new ConsumerGroupMember.Builder("group1-m1")
+                .setSubscribedTopicNames(Arrays.asList("a", "b"))
+                .build()));
+
+        // M1 in group 2 subscribes to b and c.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord("group2",
+            new ConsumerGroupMember.Builder("group2-m1")
+                .setSubscribedTopicNames(Arrays.asList("b", "c"))
+                .build()));
+
+        // M1 in group 3 subscribes to d.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord("group3",
+            new ConsumerGroupMember.Builder("group3-m1")
+                .setSubscribedTopicNames(Arrays.asList("d"))
+                .build()));
+
+        // M1 in group 4 subscribes to e.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord("group4",
+            new ConsumerGroupMember.Builder("group4-m1")
+                .setSubscribedTopicNames(Arrays.asList("e"))
+                .build()));
+
+        // M1 in group 5 subscribes to f.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord("group5",
+            new ConsumerGroupMember.Builder("group5-m1")
+                .setSubscribedTopicNames(Arrays.asList("f"))
+                .build()));
+
+        // Ensures that all refresh flags are set to the future.
+        Arrays.asList("group1", "group2", "group3", "group4", "group5").forEach(groupId -> {
+            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            group.setMetadataRefreshDeadline(context.time.milliseconds() + 5000L, 0);
+            assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
+        });
+
+        // Update the metadata image.
+        Uuid topicA = Uuid.randomUuid();
+        Uuid topicB = Uuid.randomUuid();
+        Uuid topicC = Uuid.randomUuid();
+        Uuid topicD = Uuid.randomUuid();
+        Uuid topicE = Uuid.randomUuid();
+
+        // Create a first base image with topic a, b, c and d.
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        delta.replay(new TopicRecord().setTopicId(topicA).setName("a"));
+        delta.replay(new PartitionRecord().setTopicId(topicA).setPartitionId(0));
+        delta.replay(new TopicRecord().setTopicId(topicB).setName("b"));
+        delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(0));
+        delta.replay(new TopicRecord().setTopicId(topicC).setName("c"));
+        delta.replay(new PartitionRecord().setTopicId(topicC).setPartitionId(0));
+        delta.replay(new TopicRecord().setTopicId(topicD).setName("d"));
+        delta.replay(new PartitionRecord().setTopicId(topicD).setPartitionId(0));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Create a delta which updates topic B, deletes topic D and creates topic E.
+        delta = new MetadataDelta(image);
+        delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(2));
+        delta.replay(new RemoveTopicRecord().setTopicId(topicD));
+        delta.replay(new TopicRecord().setTopicId(topicE).setName("e"));
+        delta.replay(new PartitionRecord().setTopicId(topicE).setPartitionId(1));
+        image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Update metadata image with the delta.
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        // Verify the groups.
+        Arrays.asList("group1", "group2", "group3", "group4").forEach(groupId -> {
+            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            assertTrue(group.hasMetadataExpired(context.time.milliseconds()));
+        });
+
+        Arrays.asList("group5").forEach(groupId -> {
+            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
+        });
+
+        // Verify image.
+        assertEquals(image, context.groupMetadataManager.image());
     }
 
     private <T> void assertUnorderedListEquals(

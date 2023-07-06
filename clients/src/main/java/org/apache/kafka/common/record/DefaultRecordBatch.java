@@ -428,7 +428,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (isControl)
             attributes |= CONTROL_FLAG_MASK;
         if (type.id > 0)
-            attributes |= COMPRESSION_CODEC_MASK & type.id;
+            attributes |= (byte) (COMPRESSION_CODEC_MASK & type.id);
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             attributes |= TIMESTAMP_TYPE_MASK;
         if (isDeleteHorizonSet)
