@@ -291,7 +291,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         // then to primary stores.
         if (secondaryStore != null && containsTombstones) {
             AtomicReference<Throwable> secondaryStoreTombstoneWriteError = new AtomicReference<>();
-            Future<Void> secondaryWriteFuture = secondaryStore.set(values, (secondaryWriteError, ignored) -> {
+            FutureCallback<Void> secondaryWriteFuture = new FutureCallback<>((secondaryWriteError, ignored) -> {
                 try (LoggingContext context = loggingContext()) {
                     if (secondaryWriteError != null) {
                         log.warn("Failed to write offsets with tombstone records to secondary backing store", secondaryWriteError);
@@ -301,6 +301,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                     }
                 }
             });
+            secondaryStore.set(values, secondaryWriteFuture);
             try {
                 // For EOS, there is no timeout for offset commit and it is allowed to take as much time as needed for
                 // commits. We still need to wait because we want to fail the offset commit for cases when
@@ -318,7 +319,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             } catch (ExecutionException e) {
                 log.error("{} Flush of tombstone(s)-containing offsets to secondary store threw an unexpected exception: ", this, e);
-                secondaryStoreTombstoneWriteError.compareAndSet(null, e);
+                secondaryStoreTombstoneWriteError.compareAndSet(null, e.getCause());
             } catch (TimeoutException e) {
                 log.error("{} Timed out waiting to flush offsets with tombstones to secondary storage ", this);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
