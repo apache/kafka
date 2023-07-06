@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.network;
 
+import java.util.Objects;
+
 public class DefaultChannelMetadataRegistry implements ChannelMetadataRegistry {
     private CipherInformation cipherInformation;
     private ClientInformation clientInformation;
 
     @Override
     public void registerCipherInformation(final CipherInformation cipherInformation) {
-        if (this.cipherInformation != null) {
-            this.cipherInformation = cipherInformation;
-        }
+        this.cipherInformation =  Objects.requireNonNull(cipherInformation);
     }
 
     @Override
