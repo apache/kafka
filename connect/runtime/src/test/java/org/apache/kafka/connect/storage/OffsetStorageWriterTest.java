@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -32,7 +37,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.powermock.reflect.Whitebox;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -40,7 +44,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -213,7 +216,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushFailureWhenWriteToSecondaryStoreFailsForTombstoneOffsets() throws InterruptedException, TimeoutException, ExecutionException {
+    public void testFlushFailureWhenWriteToSecondaryStoreFailsForTombstoneOffsets() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", true);
@@ -239,7 +242,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushSuccessWhenWritesSucceedToBothPrimaryAndSecondaryStoresForTombstoneOffsets() throws InterruptedException, TimeoutException, ExecutionException {
+    public void testFlushSuccessWhenWritesSucceedToBothPrimaryAndSecondaryStoresForTombstoneOffsets() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
@@ -264,7 +267,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushSuccessWhenWriteToSecondaryStoreFailsForNonTombstoneOffsets() throws InterruptedException, TimeoutException, ExecutionException {
+    public void testFlushSuccessWhenWriteToSecondaryStoreFailsForNonTombstoneOffsets() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", true);
@@ -289,7 +292,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushSuccessWhenWritesToPrimaryAndSecondaryStoreSucceeds() throws InterruptedException, TimeoutException, ExecutionException {
+    public void testFlushSuccessWhenWritesToPrimaryAndSecondaryStoreSucceeds() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
@@ -314,7 +317,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceeds() throws InterruptedException, TimeoutException {
+    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceeds() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
@@ -340,7 +343,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceedsForTombstoneRecords() throws InterruptedException, TimeoutException {
+    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceedsForTombstoneRecords() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
@@ -366,7 +369,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushSuccessWhenWritesToPrimaryStoreSucceedsWithNoSecondaryStore() throws InterruptedException, TimeoutException, ExecutionException {
+    public void testFlushSuccessWhenWritesToPrimaryStoreSucceedsWithNoSecondaryStore() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
 
@@ -389,7 +392,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsWithNoSecondaryStore() throws InterruptedException, TimeoutException {
+    public void testFlushFailureWhenWritesToPrimaryStoreFailsWithNoSecondaryStore() throws Exception {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
 
@@ -415,15 +418,30 @@ public class OffsetStorageWriterTest {
     @SuppressWarnings("unchecked")
     private KafkaOffsetBackingStore setupOffsetBackingStoreWithProducer(String topic, boolean throwingProducer) {
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(() -> mock(TopicAdmin.class), () -> "connect",  mock(Converter.class));
-        KafkaBasedLog<byte[], byte[]> kafkaBasedLog = new KafkaBasedLog<byte[], byte[]>(topic, new HashMap<>(), new HashMap<>(),
-                () -> mock(TopicAdmin.class), mock(Callback.class), new MockTime(), null);
-        Whitebox.setInternalState(kafkaBasedLog, "producer", Optional.of(createProducer(throwingProducer)));
+        MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        Node noNode = Node.noNode();
+        Node[] nodes = new Node[]{noNode};
+        consumer.updatePartitions(topic, Collections.singletonList(new PartitionInfo(topic, 0, noNode, nodes, nodes)));
+        KafkaBasedLog<byte[], byte[]> kafkaBasedLog = new KafkaBasedLog<byte[], byte[]>(
+                topic, new HashMap<>(), new HashMap<>(),
+                () -> mock(TopicAdmin.class), mock(Callback.class), new MockTime(), null) {
+            @Override
+            protected Producer<byte[], byte[]> createProducer() {
+                return createMockProducer(throwingProducer);
+            }
+
+            @Override
+            protected Consumer<byte[], byte[]> createConsumer() {
+                return consumer;
+            }
+        };
+        kafkaBasedLog.start();
         offsetBackingStore.offsetLog = kafkaBasedLog;
         return offsetBackingStore;
     }
 
 
-    private Producer<byte[], byte[]> createProducer(boolean throwingProducer) {
+    private Producer<byte[], byte[]> createMockProducer(boolean throwingProducer) {
         if (throwingProducer) {
             return new MockProducer<byte[], byte[]>() {
                 @Override
