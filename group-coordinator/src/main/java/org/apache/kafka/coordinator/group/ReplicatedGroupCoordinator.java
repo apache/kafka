@@ -36,6 +36,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.runtime.Coordinator;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilder;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -128,6 +130,28 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         ConsumerGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
+    }
+
+    /**
+     * The coordinator has been loaded. This is used to apply any
+     * post loading operations (e.g. registering timers).
+     *
+     * @param newImage  The metadata image.
+     */
+    @Override
+    public void onLoaded(MetadataImage newImage) {
+        groupMetadataManager.onNewMetadataImage(newImage, new MetadataDelta(newImage));
+    }
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The delta image.
+     */
+    @Override
+    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+        groupMetadataManager.onNewMetadataImage(newImage, delta);
     }
 
     /**

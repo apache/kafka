@@ -14,24 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.entities;
+package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.connect.runtime.isolation.PluginDesc;
-import org.junit.Test;
+import java.net.URL;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+/**
+ * Factory for {@link PluginClassLoader} instances.
+ * Used for mocking classloader initialization in tests.
+ */
+public interface PluginClassLoaderFactory {
 
-public class PluginInfoTest {
+    PluginClassLoader newPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent);
 
-    @Test
-    public void testNoVersionFilter() {
-        PluginInfo.NoVersionFilter filter = new PluginInfo.NoVersionFilter();
-        // We intentionally refrain from using assertEquals and assertNotEquals
-        // here to ensure that the filter's equals() method is used
-        assertFalse(filter.equals("1.0"));
-        assertFalse(filter.equals(new Object()));
-        assertFalse(filter.equals(null));
-        assertTrue(filter.equals(PluginDesc.UNDEFINED_VERSION));
-    }
 }

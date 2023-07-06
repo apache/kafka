@@ -20,6 +20,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashSet;
 import org.junit.jupiter.api.Test;
@@ -222,7 +225,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(CoordinatorRuntime.CoordinatorState.ACTIVE, ctx.state);
 
         // Verify that onLoaded is called.
-        verify(coordinator, times(1)).onLoaded();
+        verify(coordinator, times(1)).onLoaded(MetadataImage.EMPTY);
 
         // Verify that the listener is registered.
         verify(writer, times(1)).registerListener(
@@ -833,5 +836,61 @@ public class CoordinatorRuntimeTest {
 
         // Verify that the loader was closed.
         verify(loader).close();
+    }
+
+    @Test
+    public void testOnNewMetadataImage() {
+        TopicPartition tp0 = new TopicPartition("__consumer_offsets", 0);
+        TopicPartition tp1 = new TopicPartition("__consumer_offsets", 1);
+
+        MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
+        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorBuilder builder = mock(MockCoordinatorBuilder.class);
+
+        CoordinatorRuntime<MockCoordinator, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withLoader(loader)
+                .withEventProcessor(new MockEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorBuilderSupplier(supplier)
+                .build();
+
+        MockCoordinator coordinator0 = mock(MockCoordinator.class);
+        MockCoordinator coordinator1 = mock(MockCoordinator.class);
+
+        when(supplier.get()).thenReturn(builder);
+        when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.build())
+            .thenReturn(coordinator0)
+            .thenReturn(coordinator1);
+
+        CompletableFuture<Void> future0 = new CompletableFuture<>();
+        when(loader.load(tp0, coordinator0)).thenReturn(future0);
+
+        CompletableFuture<Void> future1 = new CompletableFuture<>();
+        when(loader.load(tp1, coordinator1)).thenReturn(future1);
+
+        runtime.scheduleLoadOperation(tp0, 0);
+        runtime.scheduleLoadOperation(tp1, 0);
+
+        // Coordinator 0 is loaded. It should get the current image
+        // that is the empty one.
+        future0.complete(null);
+        verify(coordinator0).onLoaded(MetadataImage.EMPTY);
+
+        // Publish a new image.
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataImage newImage = delta.apply(MetadataProvenance.EMPTY);
+        runtime.onNewMetadataImage(newImage, delta);
+
+        // Coordinator 0 should be notified about it.
+        verify(coordinator0).onNewMetadataImage(newImage, delta);
+
+        // Coordinator 1 is loaded. It should get the current image
+        // that is the new image.
+        future1.complete(null);
+        verify(coordinator1).onLoaded(newImage);
     }
 }
