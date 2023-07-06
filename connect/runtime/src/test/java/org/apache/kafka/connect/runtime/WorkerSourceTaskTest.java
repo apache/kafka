@@ -707,7 +707,7 @@ public class WorkerSourceTaskTest {
         // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
         // exiting the work thread immediately, and the stop() method will be invoked in the background thread since it
         // cannot be invoked immediately in the thread trying to stop the task.
-        ConcurrencyUtils.awaitLatch(startupLatch, "Timeout waiting for task to start");
+        ConcurrencyUtils.awaitLatch(startupLatch, "Timeout waiting for task to begin startup");
         workerTask.stop();
         finishStartupLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
