@@ -55,6 +55,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -81,6 +82,7 @@ import static org.hamcrest.Matchers.greaterThan;
  */
 @Timeout(600)
 @Category({IntegrationTest.class})
+@Tag("integration")
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);

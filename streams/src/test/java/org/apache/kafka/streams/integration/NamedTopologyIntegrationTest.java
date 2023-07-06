@@ -72,6 +72,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -105,6 +106,7 @@ import static java.util.Collections.singletonList;
 
 @Timeout(600)
 @Category(IntegrationTest.class)
+@Tag("integration")
 public class NamedTopologyIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 

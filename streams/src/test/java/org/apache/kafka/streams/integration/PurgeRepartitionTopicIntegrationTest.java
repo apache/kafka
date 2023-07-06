@@ -44,6 +44,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -56,6 +57,7 @@ import java.util.Set;
 
 @Timeout(600)
 @Category({IntegrationTest.class})
+@Tag("integration")
 public class PurgeRepartitionTopicIntegrationTest {
     private static final int NUM_BROKERS = 1;
 

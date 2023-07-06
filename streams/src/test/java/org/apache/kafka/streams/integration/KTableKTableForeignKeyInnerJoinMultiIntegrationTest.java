@@ -49,6 +49,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -65,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Category({IntegrationTest.class})
+@Tag("integration")
 public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private final static int NUM_BROKERS = 1;
 

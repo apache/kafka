@@ -41,6 +41,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -50,6 +51,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 
 @Timeout(600)
 @Category({IntegrationTest.class})
+@Tag("integration")
 public class StandbyTaskCreationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
