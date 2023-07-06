@@ -43,7 +43,7 @@ class RemoteIndexCacheTest {
   private val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
   private val time = new MockTime()
   private val brokerId = 1
-  private val baseOffset: Long = Int.MaxValue.toLong + 10_1337L // start with a base offset which is a long
+  private val baseOffset: Long = Int.MaxValue.toLong + 101337 // start with a base offset which is a long
   private val lastOffset: Long = baseOffset + 30L
   private val segmentSize: Int = 1024
   private val rsm: RemoteStorageManager = mock(classOf[RemoteStorageManager])
