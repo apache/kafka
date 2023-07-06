@@ -36,7 +36,7 @@ public interface ChannelMetadataRegistry extends Closeable {
     CipherInformation cipherInformation();
 
     /**
-     * Register information about the client client we are using.
+     * Register information about the client we are using.
      * Depending on the clients, the ApiVersionsRequest could be received
      * multiple times or not at all. Re-registering the information will
      * overwrite the previous one.
