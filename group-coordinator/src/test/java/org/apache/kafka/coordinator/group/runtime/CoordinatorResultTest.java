@@ -33,7 +33,7 @@ public class CoordinatorResultTest {
     }
 
     @Test
-    public void testAttributesCannotBeNull() {
+    public void testRecordsCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new CoordinatorResult<>(null, "response"));
     }
 

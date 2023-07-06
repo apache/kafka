@@ -156,7 +156,7 @@ public class GroupMetadataManager {
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
             if (assignors == null || assignors.isEmpty())
-                throw new IllegalStateException("Assignors must be set before building.");
+                throw new IllegalArgumentException("Assignors must be set before building.");
 
             return new GroupMetadataManager(
                 snapshotRegistry,

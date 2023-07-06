@@ -221,9 +221,9 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      * schedule timers for a coordinator/partition.
      *
      * When a timer is cancelled or overridden, the previous timer is guaranteed to
-     * not be executed even if it already expired and got push to the event processor.
+     * not be executed even if it already expired and got pushed to the event processor.
      *
-     * When a timer fails with an unexpected exception, the timer is reschedule with
+     * When a timer fails with an unexpected exception, the timer is rescheduled with
      * a backoff.
      */
     class InternalCoordinatorTimer implements CoordinatorTimer<U> {
@@ -267,7 +267,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                             throw new RejectedExecutionException("Timer " + key + " was overridden or cancelled");
                         }
 
-                        // Execute the real operation.
+                        // Execute the timeout operation.
                         return new CoordinatorResult<>(operation.generateRecords(), null);
                     });
 
