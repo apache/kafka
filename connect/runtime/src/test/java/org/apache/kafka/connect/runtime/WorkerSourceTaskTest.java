@@ -395,7 +395,7 @@ public class WorkerSourceTaskTest {
         final RuntimeException exception = new RuntimeException();
         when(sourceTask.poll()).thenAnswer(invocation -> {
             pollLatch.countDown();
-            ConcurrencyUtils.awaitLatch(workerCancelLatch, "Timeout waiting for task cancellation.");
+            ConcurrencyUtils.awaitLatch(workerCancelLatch, "Timeout waiting for main test thread to cancel task.");
             throw exception;
         });
 
