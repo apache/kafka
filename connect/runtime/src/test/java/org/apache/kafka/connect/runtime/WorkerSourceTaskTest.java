@@ -695,7 +695,7 @@ public class WorkerSourceTaskTest {
 
         doAnswer((Answer<Object>) invocation -> {
             startupLatch.countDown();
-            ConcurrencyUtils.awaitLatch(finishStartupLatch, "Timeout waiting for task to finish");
+            ConcurrencyUtils.awaitLatch(finishStartupLatch, "Timeout waiting for main test thread to allow task startup to complete");
             return null;
         }).when(sourceTask).start(TASK_PROPS);
 
