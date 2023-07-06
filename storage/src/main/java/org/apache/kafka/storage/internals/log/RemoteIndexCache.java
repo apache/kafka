@@ -108,7 +108,7 @@ public class RemoteIndexCache implements Closeable {
      * 3. Only one thread should fetch for a specific key.
      * 4. Should support LRU-like policy.
      *
-     * We use [[Caffeine]] cache instead of implementing a thread safe LRU cache on our own.
+     * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
      *
      * Visible for testing.
      */
@@ -172,7 +172,7 @@ public class RemoteIndexCache implements Closeable {
                 while (!isRemoteIndexCacheClosed.get()) {
                     try {
                         Entry entry = expiredIndexes.take();
-                        log.info("Cleaning up index entry {}", entry);
+                        log.debug("Cleaning up index entry {}", entry);
                         entry.cleanup();
                     } catch (InterruptedException ex) {
                         // cleaner thread should only be interrupted when cache is being closed, else it's an error
@@ -230,7 +230,7 @@ public class RemoteIndexCache implements Closeable {
 
                 // Create entries for each path if all the index files exist.
                 int firstIndex = name.indexOf('_');
-                int offset = Integer.parseInt(name.substring(0, firstIndex));
+                long offset = Long.parseLong(name.substring(0, firstIndex));
                 Uuid uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')));
 
                 // It is safe to update the internalCache non-atomically here since this function is always called by a single
@@ -539,6 +539,7 @@ public class RemoteIndexCache implements Closeable {
      *
      * @param actions actions to be executes
      * @throws IOException Any IOException encountered while executing those actions.
+     * @throws KafkaException Any other non IOExceptions are wrapped and thrown as KafkaException
      */
     private static void tryAll(List<StorageAction<Void, Exception>> actions) throws IOException {
         IOException ioException = null;
