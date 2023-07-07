@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 candidates.append((reviewer, email, count))
             if len(candidates) == 10:
                 break
-        if len(candidates) == 0:
+        if not candidates:
             continue
 
         print("\nPossible matches (in order of most recent):")
