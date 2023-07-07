@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -100,134 +101,83 @@ public class RackAwareTaskAssignorTest {
 
     @Test
     public void disableActiveSinceMissingClusterInfo() {
-        final Cluster metadata = new Cluster(
-            "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2)),
-            new HashSet<>(Arrays.asList(partitionInfo00, partitionInfo01)),
-            Collections.emptySet(),
-            Collections.emptySet()
-        );
-
-        final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
-
-        processRacks.put(process0UUID, Collections.singletonMap("consumer1", Optional.of("rack1")));
-
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            metadata,
-            Collections.singletonMap(new TaskId(1, 1), new HashSet<>(Arrays.asList(partitionWithoutInfo00, partitionWithoutInfo10))),
-            Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1))),
-            processRacks,
+            getClusterForTopic0(),
+            getTaskTopicPartitionMapForTask1(true),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
         assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertFalse(assignor.populateTopicsToDiscribe(new HashSet<>()));
+        assertTrue(assignor.validateClientRack());
     }
+
     @Test
     public void disableActiveSinceRackMissingInNode() {
-        final Node[] nodeMissingRack = new Node[]{node0, noRackNode};
-        final PartitionInfo partitionInfoMissingNode = new PartitionInfo(TOPIC0, 0, node0, nodeMissingRack, nodeMissingRack);
-        final Cluster metadata = new Cluster(
-            "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2)),
-            new HashSet<>(Arrays.asList(partitionInfoMissingNode, partitionInfo01)),
-            Collections.emptySet(),
-            Collections.emptySet()
-        );
-
-        final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
-
-        processRacks.put(process0UUID, Collections.singletonMap("consumer1", Optional.of("rack1")));
-
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            metadata,
-            Collections.singletonMap(new TaskId(1, 1), Collections.singleton(partitionWithoutInfo00)),
-            Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1))),
-            processRacks,
+            getClusterWithPartitionMissingRack(),
+            getTaskTopicPartitionMapForTask1(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
+        assertTrue(assignor.validateClientRack());
+        assertFalse(assignor.populateTopicsToDiscribe(new HashSet<>()));
         // False since nodeMissingRack has one node which doesn't have rack
         assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
     }
 
     @Test
-    public void disableActiveSinceRackMissingIn() {
-        final Cluster metadata = new Cluster(
-            "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2)),
-            new HashSet<>(Arrays.asList(partitionInfo00, partitionInfo01)),
-            Collections.emptySet(),
-            Collections.emptySet()
-        );
-
-        final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
-
-        // Missing rackId config in client
-        processRacks.put(process0UUID, Collections.singletonMap("consumer1", Optional.empty()));
-
+    public void disableActiveSinceRackMissingInClient() {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            metadata,
-            Collections.singletonMap(new TaskId(1, 1), Collections.singleton(partitionWithoutInfo00)),
-            Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1))),
-            processRacks,
+            getClusterForTopic0(),
+            getTaskTopicPartitionMapForTask1(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(true),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
         // False since process1 doesn't have rackId
+        assertFalse(assignor.validateClientRack());
         assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
     }
 
     @Test
     public void disableActiveSinceRackDiffersInSameProcess() {
-        final Cluster metadata = new Cluster(
-            "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2)),
-            new HashSet<>(Arrays.asList(partitionInfo00, partitionInfo01)),
-            Collections.emptySet(),
-            Collections.emptySet()
-        );
-
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
 
-        // Different rackId for same process
+        // Different consumers in same process have different rack ID. This shouldn't happen.
+        // If happens, there's a bug somewhere
         processRacks.computeIfAbsent(process0UUID, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
         processRacks.computeIfAbsent(process0UUID, k -> new HashMap<>()).put("consumer2", Optional.of("rack2"));
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            metadata,
-            Collections.singletonMap(new TaskId(1, 1), Collections.singleton(partitionWithoutInfo00)),
-            Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1))),
+            getClusterForTopic0(),
+            getTaskTopicPartitionMapForTask1(),
+            getTopologyGroupTaskMap(),
             processRacks,
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
+        assertFalse(assignor.validateClientRack());
         assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
     }
 
     @Test
     public void enableRackAwareAssignorForActiveWithoutDescribingTopics() {
-        final Cluster metadata = new Cluster(
-            "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2)),
-            new HashSet<>(Arrays.asList(partitionInfo00, partitionInfo01)),
-            Collections.emptySet(),
-            Collections.emptySet()
-        );
-
-        final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
-
-        processRacks.computeIfAbsent(process0UUID, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
-
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            metadata,
-            Collections.singletonMap(new TaskId(1, 1), Collections.singleton(partitionWithoutInfo00)),
-            Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1))),
-            processRacks,
+            getClusterForTopic0(),
+            getTaskTopicPartitionMapForTask1(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
@@ -238,16 +188,6 @@ public class RackAwareTaskAssignorTest {
 
     @Test
     public void enableRackAwareAssignorForActiveWithDescribingTopics() {
-        final PartitionInfo noNodeInfo = new PartitionInfo(TOPIC0, 0, null, new Node[0], new Node[0]);
-
-        final Cluster metadata = new Cluster(
-            "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2, Node.noNode())), // mockClientSupplier.setCluster requires noNode
-            Collections.singleton(noNodeInfo),
-            Collections.emptySet(),
-            Collections.emptySet()
-        );
-
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doReturn(
             Collections.singletonMap(
@@ -258,15 +198,11 @@ public class RackAwareTaskAssignorTest {
             )
         ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TOPIC0));
 
-        final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
-
-        processRacks.computeIfAbsent(process0UUID, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
-
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            metadata,
-            Collections.singletonMap(new TaskId(1, 1), Collections.singleton(partitionWithoutInfo00)),
-            Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1))),
-            processRacks,
+            getClusterWithNoNode(),
+            getTaskTopicPartitionMapForTask1(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
             spyTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
@@ -275,33 +211,82 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void enableRackAwareAssignorForActiveWithDescribingTopicsFailure() {
+    public void disableRackAwareAssignorForActiveWithDescribingTopicsFailure() {
+        final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
+        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TOPIC0));
+
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+            getClusterWithNoNode(),
+            getTaskTopicPartitionMapForTask1(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
+            spyTopicManager,
+            new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
+        );
+
+        assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertTrue(assignor.populateTopicsToDiscribe(new HashSet<>()));
+    }
+
+    private Cluster getClusterForTopic0() {
+        return new Cluster(
+            "cluster",
+            new HashSet<>(Arrays.asList(node0, node1, node2)),
+            new HashSet<>(Arrays.asList(partitionInfo00, partitionInfo01)),
+            Collections.emptySet(),
+            Collections.emptySet()
+        );
+    }
+
+    private Cluster getClusterWithPartitionMissingRack() {
+        final Node[] nodeMissingRack = new Node[]{node0, noRackNode};
+        final PartitionInfo partitionInfoMissingNode = new PartitionInfo(TOPIC0, 0, node0, nodeMissingRack, nodeMissingRack);
+        return new Cluster(
+            "cluster",
+            new HashSet<>(Arrays.asList(node0, node1, node2)),
+            new HashSet<>(Arrays.asList(partitionInfoMissingNode, partitionInfo01)),
+            Collections.emptySet(),
+            Collections.emptySet()
+        );
+    }
+
+    private Cluster getClusterWithNoNode() {
         final PartitionInfo noNodeInfo = new PartitionInfo(TOPIC0, 0, null, new Node[0], new Node[0]);
 
-        final Cluster metadata = new Cluster(
+        return new Cluster(
             "cluster",
             new HashSet<>(Arrays.asList(node0, node1, node2, Node.noNode())), // mockClientSupplier.setCluster requires noNode
             Collections.singleton(noNodeInfo),
             Collections.emptySet(),
             Collections.emptySet()
         );
+    }
 
-        final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
-        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TOPIC0));
+    private Map<UUID, Map<String, Optional<String>>> getProcessRacksForProcess0() {
+        return getProcessRacksForProcess0(false);
+    }
 
+    private Map<UUID, Map<String, Optional<String>>> getProcessRacksForProcess0(final boolean missingRack) {
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
+        final Optional<String> rack = missingRack ? Optional.empty() : Optional.of("rack1");
+        processRacks.put(process0UUID, Collections.singletonMap("consumer1", rack));
+        return processRacks;
+    }
 
-        processRacks.computeIfAbsent(process0UUID, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
+    private Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForTask1() {
+        return getTaskTopicPartitionMapForTask1(false);
+    }
 
-        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            metadata,
-            Collections.singletonMap(new TaskId(1, 1), Collections.singleton(partitionWithoutInfo00)),
-            Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1))),
-            processRacks,
-            spyTopicManager,
-            new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        );
+    private Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForTask1(final boolean extraTopic) {
+        final Set<TopicPartition> topicPartitions = new HashSet<>();
+        topicPartitions.add(partitionWithoutInfo00);
+        if (extraTopic) {
+            topicPartitions.add(partitionWithoutInfo10);
+        }
+        return Collections.singletonMap(new TaskId(1, 1), topicPartitions);
+    }
 
-        assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+    private Map<Subtopology, Set<TaskId>> getTopologyGroupTaskMap() {
+        return Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1)));
     }
 }

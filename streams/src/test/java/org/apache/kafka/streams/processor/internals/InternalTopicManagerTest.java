@@ -282,9 +282,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldThrowTimeoutExceptionInGetPartitionInfo() {
         setupTopicInMockAdminClient(topic1, Collections.emptyMap());
-        final MockTime time = new MockTime(
-            (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 15
-        );
+        final MockTime time = new MockTime(5);
         mockAdminClient.timeoutNextRequest(Integer.MAX_VALUE);
 
         final InternalTopicManager internalTopicManager =

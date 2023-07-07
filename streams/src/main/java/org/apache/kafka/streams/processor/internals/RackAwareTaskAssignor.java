@@ -80,11 +80,11 @@ public class RackAwareTaskAssignor {
         return false;
     }
 
-    private boolean validateTopicPartitionRack() {
+    // Visible for testing. This method also checks if all TopicPartitions exist in cluster
+    public boolean populateTopicsToDiscribe(final Set<String> topicsToDescribe) {
         // Make sure rackId exist for all TopicPartitions needed
-        final Set<String> topicsToDescribe = new HashSet<>();
         for (final Set<TopicPartition> topicPartitions : partitionsForTask.values()) {
-            for (TopicPartition topicPartition : topicPartitions) {
+            for (final TopicPartition topicPartition : topicPartitions) {
                 final PartitionInfo partitionInfo = fullMetadata.partition(topicPartition);
                 if (partitionInfo == null) {
                     log.error("TopicPartition {} doesn't exist in cluster", topicPartition);
@@ -105,6 +105,15 @@ public class RackAwareTaskAssignor {
                 }
             }
         }
+        return true;
+    }
+
+    private boolean validateTopicPartitionRack() {
+        // Make sure rackId exist for all TopicPartitions needed
+        final Set<String> topicsToDescribe = new HashSet<>();
+        if(!populateTopicsToDiscribe(topicsToDescribe)) {
+            return false;
+        }
 
         if (!topicsToDescribe.isEmpty()) {
             log.info("Fetching PartitionInfo for topics {}", topicsToDescribe);
@@ -116,35 +125,34 @@ public class RackAwareTaskAssignor {
                     return false;
                 }
                 for (final Map.Entry<String, List<TopicPartitionInfo>> entry : topicPartitionInfo.entrySet()) {
-                  final List<TopicPartitionInfo> partitionInfos = entry.getValue();
-                  for (final TopicPartitionInfo partitionInfo : partitionInfos) {
-                    final int partition = partitionInfo.partition();
-                    final List<Node> replicas = partitionInfo.replicas();
-                    if (replicas == null || replicas.isEmpty()) {
-                        log.error("No replicas found for topic partition {}: {}", entry.getKey(), partition);
-                        return false;
-                    }
-                    final TopicPartition topicPartition = new TopicPartition(entry.getKey(), partition);
-                    for (final Node node : replicas) {
-                        if (node.hasRack()) {
-                            racksForPartition.computeIfAbsent(topicPartition, k -> new HashSet<>())
-                                .add(node.rack());
-                        } else {
+                    final List<TopicPartitionInfo> partitionInfos = entry.getValue();
+                    for (final TopicPartitionInfo partitionInfo : partitionInfos) {
+                        final int partition = partitionInfo.partition();
+                        final List<Node> replicas = partitionInfo.replicas();
+                        if (replicas == null || replicas.isEmpty()) {
+                            log.error("No replicas found for topic partition {}: {}", entry.getKey(), partition);
                             return false;
                         }
+                        final TopicPartition topicPartition = new TopicPartition(entry.getKey(), partition);
+                        for (final Node node : replicas) {
+                            if (node.hasRack()) {
+                                racksForPartition.computeIfAbsent(topicPartition, k -> new HashSet<>()).add(node.rack());
+                            } else {
+                                return false;
+                            }
+                        }
                     }
-                  }
                 }
             } catch (final Exception e) {
                 log.error("Failed to describe topics {}", topicsToDescribe, e);
                 return false;
             }
         }
-
         return true;
     }
 
-    private boolean validateClientRack() {
+    // Visible for testing
+    public boolean validateClientRack() {
         /*
          * Check rack information is populated correctly in clients
          * 1. RackId exist for all clients
