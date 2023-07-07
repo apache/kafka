@@ -477,7 +477,7 @@ public class PluginsTest {
     }
 
     private void assertClassLoaderReadsVersionFromResource(
-            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws ClassNotFoundException {
+            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) {
         URL[] systemPath = TestPlugins.pluginPath(parentResource)
                 .stream()
                 .map(Path::toFile)
