@@ -17,16 +17,20 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.TopicPartition;
-
-import java.util.Map;
-
 /**
  * Event for resetting offsets for all assigned partitions that require it.
  */
-public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, Long>> {
+public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public ResetPositionsApplicationEvent() {
         super(Type.RESET_POSITIONS);
+    }
+
+    @Override
+    public String toString() {
+        return "ResetPositions{" +
+                "future=" + future +
+                ", type=" + type +
+                '}';
     }
 }

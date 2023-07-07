@@ -158,13 +158,21 @@ public class ListOffsetsRequestManager implements RequestManager, ClusterResourc
                 offsetFetcherUtils.buildOffsetsForTimesResult(timestampsToSearch, result.fetchedOffsets));
     }
 
+    /**
+     * Reset offsets for all assigned partitions that require it. Offsets will be reset
+     * with timestamps according to the reset strategy defined for each partition.
+     * <p>
+     * This may throw exception from previous offset fetch if there is one, ex.
+     * TopicAuthorizationException
+     */
     public void resetPositionsIfNeeded() {
         Map<TopicPartition, Long> offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
 
         if (offsetResetTimestamps.isEmpty())
             return;
 
-        sendListOffsetsRequestsAndResetPositions(offsetResetTimestamps);
+        List<NetworkClientDelegate.UnsentRequest> unsentRequests = sendListOffsetsRequestsAndResetPositions(offsetResetTimestamps);
+        requestsToSend.addAll(unsentRequests);
     }
 
     /**

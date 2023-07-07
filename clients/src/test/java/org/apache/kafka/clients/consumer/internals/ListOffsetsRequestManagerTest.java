@@ -65,7 +65,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -478,7 +481,7 @@ public class ListOffsetsRequestManagerTest {
     }
 
     @Test
-    public void testResetPartitionsSendNoRequestIfNoPartitionsNeedingReset() {
+    public void testResetPositionsSendsNoRequestIfNoPartitionsNeedingReset() {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.emptySet());
         requestManager.resetPositionsIfNeeded();
         assertEquals(0, requestManager.requestsToSend());
@@ -491,6 +494,72 @@ public class ListOffsetsRequestManagerTest {
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         requestManager.resetPositionsIfNeeded();
         verify(metadata).requestUpdate();
+        assertEquals(0, requestManager.requestsToSend());
+    }
+
+    @Test
+    public void testResetPositionsSuccess_NoLeaderEpochInResponse() {
+        testResetPositionsSuccessWithLeaderEpoch(Metadata.LeaderAndEpoch.noLeaderOrEpoch());
+        verify(metadata, never()).updateLastSeenEpochIfNewer(any(), anyInt());
+    }
+
+    @Test
+    public void testResetPositionsSuccess_LeaderEpochInResponse() {
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
+                Optional.of(5));
+        testResetPositionsSuccessWithLeaderEpoch(leaderAndEpoch);
+        verify(metadata).updateLastSeenEpochIfNewer(TEST_PARTITION_1, leaderAndEpoch.epoch.get());
+    }
+
+    private void testResetPositionsSuccessWithLeaderEpoch(Metadata.LeaderAndEpoch leaderAndEpoch) {
+        TopicPartition tp = TEST_PARTITION_1;
+        Node leader = LEADER_1;
+        OffsetResetStrategy strategy = OffsetResetStrategy.EARLIEST;
+        long offset = 5L;
+        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(tp,
+                new OffsetAndTimestamp(offset, 1L, leaderAndEpoch.epoch));
+        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(tp));
+        when(subscriptionState.resetStrategy(any())).thenReturn(strategy);
+        expectSuccessfulRequest(Collections.singletonMap(tp, leader));
+
+        requestManager.resetPositionsIfNeeded();
+        assertEquals(1, requestManager.requestsToSend());
+
+        // Reset positions response with offsets
+        when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(leader, leaderAndEpoch.epoch));
+        NetworkClientDelegate.PollResult pollResult = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
+        ClientResponse clientResponse = buildClientResponse(unsentRequest, expectedOffsets);
+        clientResponse.onComplete();
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
+    }
+
+    @Test
+    public void testResetPositionsThrowsPreviousException() {
+        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
+        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+
+        requestManager.resetPositionsIfNeeded();
+
+        // Reset positions response with TopicAuthorizationException
+        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        ClientResponse clientResponse = buildClientResponseWithErrors(
+                unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
+        clientResponse.onComplete();
+
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
+
+        verify(subscriptionState).requestFailed(any(), anyLong());
+        verify(metadata).requestUpdate();
+
+        // Following resetPositions should raise the previous exception without performing any
+        // request
+        assertThrows(TopicAuthorizationException.class,
+                () -> requestManager.resetPositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
     }
 
@@ -535,7 +604,8 @@ public class ListOffsetsRequestManagerTest {
 
     private void expectSuccessfulRequest(Map<TopicPartition, Node> partitionLeaders) {
         partitionLeaders.forEach((tp, broker) -> {
-            when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(broker));
+            when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(broker,
+                    Metadata.LeaderAndEpoch.noLeaderOrEpoch().epoch));
             when(subscriptionState.isAssigned(tp)).thenReturn(true);
         });
         when(metadata.fetch()).thenReturn(testClusterMetadata(partitionLeaders));
@@ -602,9 +672,8 @@ public class ListOffsetsRequestManagerTest {
         assertEquals(expectedFailure, failure.getCause().getClass());
     }
 
-    private Metadata.LeaderAndEpoch testLeaderEpoch(Node leader) {
-        return new Metadata.LeaderAndEpoch(Optional.of(leader),
-                Optional.of(1));
+    private Metadata.LeaderAndEpoch testLeaderEpoch(Node leader, Optional<Integer> epoch) {
+        return new Metadata.LeaderAndEpoch(Optional.of(leader), epoch);
     }
 
     private Cluster testClusterMetadata(Map<TopicPartition, Node> partitionLeaders) {
