@@ -239,6 +239,7 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -388,7 +389,7 @@ public class RequestResponseTest {
     public void testApiVersionsSerialization() {
         for (short version : API_VERSIONS.allVersions()) {
             checkErrorResponse(createApiVersionRequest(version), new UnsupportedVersionException("Not Supported"));
-            checkResponse(ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER), version);
+            checkResponse(TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER), version);
         }
     }
 
@@ -874,7 +875,7 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
-        return ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     @Test

@@ -3324,8 +3324,8 @@ SlidingWindows.ofTimeDifferenceAndGrace(timeDifference, gracePeriod);</code></pr
                          <div class="figure align-center" id="id35">
                              <img class="centered" src="/{{version}}/images/streams-sliding-windows.png">
                              <p class="caption"><span class="caption-text">This diagram shows windowing a stream of data records with sliding windows. The overlap of
-                                 the sliding window snapshots varies depending on the record times. In this diagram, the time numbers represent miliseconds. For example,
-                                 t=5 means &#8220;at the five milisecond mark&#8220;.</span></p>
+                                 the sliding window snapshots varies depending on the record times. In this diagram, the time numbers represent milliseconds. For example,
+                                 t=5 means &#8220;at the five millisecond mark&#8220;.</span></p>
                          </div>
                          <p>Sliding windows are aligned to the data record timestamps, not to the epoch. In contrast to hopping and tumbling windows,
                              the lower and upper window time interval bounds of sliding windows are both inclusive.</p>
@@ -3385,7 +3385,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
 			       Common examples of this are sending alerts or delivering results to a system that doesn't support updates.
 			    </p>
 			    <p>Suppose that you have an hourly windowed count of events per user.
-			       If you want to send an alert when a user has <em>less than</em> three events in an hour, you have a real challange.
+			       If you want to send an alert when a user has <em>less than</em> three events in an hour, you have a real challenge.
 			       All users would match this condition at first, until they accrue enough events, so you cannot simply
 			       send an alert when someone matches the condition; you have to wait until you know you won't see any more events for a particular window
 			       and <em>then</em> send the alert.

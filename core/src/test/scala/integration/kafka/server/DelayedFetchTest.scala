@@ -188,7 +188,7 @@ class DelayedFetchTest {
     fetchPartitionData: FetchRequest.PartitionData,
     error: Errors
   ): Unit = {
-    when(replicaManager.readFromLocalLog(
+    when(replicaManager.readFromLog(
       fetchParams,
       readPartitionInfo = Seq((topicIdPartition, fetchPartitionData)),
       quota = replicaQuota,

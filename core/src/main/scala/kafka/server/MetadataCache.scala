@@ -22,15 +22,9 @@ import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import java.util
-
-case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) {
-  override def toString(): String = {
-    s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
-  }
-}
 
 /**
  * Used to represent the controller id cached in the metadata cache of the broker. This trait is
@@ -44,7 +38,6 @@ case class ZkCachedControllerId(id: Int) extends CachedControllerId
 case class KRaftCachedControllerId(id: Int) extends CachedControllerId
 
 trait MetadataCache {
-
   /**
    * Return topic metadata for a given set of topics and listener. See KafkaApis#handleTopicMetadataRequest for details
    * on the use of the two boolean flags.
@@ -113,9 +106,9 @@ trait MetadataCache {
 
   def metadataVersion(): MetadataVersion
 
-  def features(): FinalizedFeaturesAndEpoch
-
   def getRandomAliveBrokerId: Option[Int]
+
+  def features(): Features
 }
 
 object MetadataCache {

@@ -34,6 +34,8 @@ import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.mutable.BoundedList;
+import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -47,6 +49,8 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 /**
@@ -77,7 +81,8 @@ public class AclControlManager {
 
     ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
         List<AclCreateResult> results = new ArrayList<>(acls.size());
-        List<ApiMessageAndVersion> records = new ArrayList<>(acls.size());
+        List<ApiMessageAndVersion> records =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (AclBinding acl : acls) {
             try {
                 validateNewAcl(acl);
@@ -170,6 +175,10 @@ public class AclControlManager {
                 deleted.add(new AclBindingDeleteResult(binding));
                 records.add(new ApiMessageAndVersion(
                     new RemoveAccessControlEntryRecord().setId(id), (short) 0));
+                if (records.size() > MAX_RECORDS_PER_USER_OP) {
+                    throw new BoundedListTooLongException("Cannot remove more than " +
+                        MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.");
+                }
             }
         }
         return new AclDeleteResult(deleted);

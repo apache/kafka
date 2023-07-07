@@ -158,8 +158,8 @@
 
     <p>
       <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-904%3A+Kafka+Streams+-+Guarantee+subtractor+is+called+before+adder+if+key+has+not+changed">KIP-904</a>
-      improves the implemenation of KTable aggregations. In general, an input KTable update triggers a result refinent for two rows;
-      however, prior to KIP-904, if both refinements happend to the same result row, two independent updates to the same row are applied, resulting in spurious itermediate results.
+      improves the implementation of KTable aggregations. In general, an input KTable update triggers a result refinent for two rows;
+      however, prior to KIP-904, if both refinements happen to the same result row, two independent updates to the same row are applied, resulting in spurious itermediate results.
       KIP-904 allows us to detect this case, and to only apply a single update avoiding spurious intermediate results.
     </p>
 
@@ -284,7 +284,7 @@
     <p>
         The public <code>topicGroupId</code> and <code>partition</code> fields on TaskId have been deprecated and replaced with getters. Please migrate to using the new <code>TaskId.subtopology()</code>
         (which replaces <code>topicGroupId</code>) and <code>TaskId.partition()</code> APIs instead. Also, the <code>TaskId#readFrom</code> and <code>TaskId#writeTo</code> methods have been deprecated
-        and will be removed, as they were never intended for public use. We have also deprecated the <code>org.apache.kafka.streams.processsor.TaskMetadata</code> class and introduced a new interface
+        and will be removed, as they were never intended for public use. We have also deprecated the <code>org.apache.kafka.streams.processor.TaskMetadata</code> class and introduced a new interface
         <code>org.apache.kafka.streams.TaskMetadata</code> to be used instead. This change was introduced to better reflect the fact that <code>TaskMetadata</code> was not meant to be instantiated outside
         of Kafka codebase.
         Please note that the new <code>TaskMetadata</code> offers APIs that better represent the task id as an actual <code>TaskId</code> object instead of a String. Please migrate to the new
@@ -733,7 +733,7 @@
         Also, window sizes and retention times are now specified as <code>Duration</code> type in <code>Stores</code> class.
         The <code>Window</code> class has new methods <code>#startTime()</code> and <code>#endTime()</code> that return window start/end timestamp as <code>Instant</code>.
         For interactive queries, there are new <code>#fetch(...)</code> overloads taking <code>Instant</code> arguments.
-        Additionally, punctuations are now registerd via <code>ProcessorContext#schedule(Duration interval, ...)</code>.
+        Additionally, punctuations are now registered via <code>ProcessorContext#schedule(Duration interval, ...)</code>.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
     </p>
 

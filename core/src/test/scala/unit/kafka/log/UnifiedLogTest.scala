@@ -33,7 +33,7 @@ import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
@@ -59,7 +59,7 @@ class UnifiedLogTest {
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
-  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
   def metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @BeforeEach
@@ -484,7 +484,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
 
     // create a log
-    val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60))
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60, false))
     assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
     // Test the segment rolling behavior when messages do not have a timestamp.
     mockTime.sleep(log.config.segmentMs + 1)
@@ -1174,7 +1174,7 @@ class UnifiedLogTest {
 
   @Test
   def testPeriodicProducerIdExpiration(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(200)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(200, false)
     val producerIdExpirationCheckIntervalMs = 100
 
     val pid = 23L
@@ -2036,7 +2036,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true, remoteLogManager = Some(remoteLogManager))
     when(remoteLogManager.findOffsetByTimestamp(log.topicPartition, 0, 0, log.leaderEpochCache.get))
       .thenReturn(Optional.empty[TimestampAndOffset]())
-    assertEquals(None, log.fetchOffsetByTimestamp(0L))
+    assertEquals(None, log.fetchOffsetByTimestamp(0L, Some(remoteLogManager)))
 
     val firstTimestamp = mockTime.milliseconds
     val firstLeaderEpoch = 0
@@ -2063,23 +2063,23 @@ class UnifiedLogTest {
     log._localLogStartOffset = 1
 
     assertEquals(Some(new TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))),
-      log.fetchOffsetByTimestamp(firstTimestamp))
+      log.fetchOffsetByTimestamp(firstTimestamp, Some(remoteLogManager)))
     assertEquals(Some(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))),
-      log.fetchOffsetByTimestamp(secondTimestamp))
+      log.fetchOffsetByTimestamp(secondTimestamp, Some(remoteLogManager)))
 
     assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP))
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(remoteLogManager)))
     assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP))
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
     assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP))
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
 
     // The cache can be updated directly after a leader change.
     // The new latest offset should reflect the updated epoch.
     log.maybeAssignEpochStartOffset(2, 2L)
 
     assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP))
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
   }
 
   /**

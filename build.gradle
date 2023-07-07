@@ -147,7 +147,9 @@ allprojects {
           // be explicit about the Netty dependency version instead of relying on the version set by
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
-          libs.nettyTransportNativeEpoll
+          libs.nettyTransportNativeEpoll,
+	  // be explicit about the reload4j version instead of relying on the transitive versions
+	  libs.log4j
         )
       }
     }
@@ -178,6 +180,12 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
+    dependsOn subprojects.collect {
+      it.tasks.matching {
+        it.name == "processMessages" || it.name == "processTestMessages"
+      }
+    }
+
     verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
@@ -268,8 +276,11 @@ subprojects {
     // set --source and --target via `sourceCompatibility` and `targetCompatibility` a couple of lines below
     if (JavaVersion.current().isJava9Compatible())
       options.release = minJavaVersion
+    // --source/--target 8 is deprecated in Java 20, suppress warning until Java 8 support is dropped in Kafka 4.0
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
+      options.compilerArgs << "-Xlint:-options"
   }
-  
+
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
   sourceCompatibility = minJavaVersion
@@ -560,6 +571,7 @@ subprojects {
     options.charSet = 'UTF-8'
     options.docEncoding = 'UTF-8'
     options.encoding = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
     options.addStringOption('Xdoclint:none', '-quiet')
 
@@ -864,6 +876,8 @@ project(':core') {
 
 
     implementation libs.argparse4j
+    implementation libs.caffeine
+
     implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
@@ -2534,8 +2548,11 @@ project(':jmh-benchmarks') {
     implementation project(':storage')
     implementation project(':streams')
     implementation project(':core')
+    implementation project(':connect:api')
+    implementation project(':connect:transforms')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
+    implementation project(':server-common').sourceSets.test.output
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess

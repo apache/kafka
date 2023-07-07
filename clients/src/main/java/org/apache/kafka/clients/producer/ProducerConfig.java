@@ -320,7 +320,7 @@ public class ProducerConfig extends AbstractConfig {
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
     public static final String TRANSACTION_TIMEOUT_DOC = "The maximum amount of time in milliseconds that a transaction will remain open before the coordinator proactively aborts it. " +
             "The start of the transaction is set at the time that the first partition is added to it. " +
-            "If this value is larger than the <code>transaction.max.timeout.ms<code> setting in the broker, the request will fail with a <code>InvalidTxnTimeoutException</code> error.";
+            "If this value is larger than the <code>transaction.max.timeout.ms</code> setting in the broker, the request will fail with a <code>InvalidTxnTimeoutException</code> error.";
 
     /** <code> transactional.id </code> */
     public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
@@ -459,7 +459,8 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                                        in(Utils.enumOptions(SecurityProtocol.class)),
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(Utils.enumOptions(SecurityProtocol.class)),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .define(SECURITY_PROVIDERS_CONFIG,

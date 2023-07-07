@@ -238,6 +238,9 @@ public class Sender implements Runnable {
     public void run() {
         log.debug("Starting Kafka producer I/O thread.");
 
+        if (transactionManager != null)
+            transactionManager.setPoisonStateOnInvalidTransition(true);
+
         // main loop, runs until close is called
         while (running) {
             try {
@@ -264,7 +267,14 @@ public class Sender implements Runnable {
         while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
             if (!transactionManager.isCompleting()) {
                 log.info("Aborting incomplete transaction due to shutdown");
-                transactionManager.beginAbort();
+
+                try {
+                    // It is possible for the transaction manager to throw errors when aborting. Catch these
+                    // so as not to interfere with the rest of the shutdown logic.
+                    transactionManager.beginAbort();
+                } catch (Exception e) {
+                    log.error("Error in kafka producer I/O thread while aborting transaction: ", e);
+                }
             }
             try {
                 runOnce();
@@ -784,7 +794,13 @@ public class Sender implements Runnable {
         boolean adjustSequenceNumbers
     ) {
         if (transactionManager != null) {
-            transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
+            try {
+                // This call can throw an exception in the rare case that there's an invalid state transition
+                // attempted. Catch these so as not to interfere with the rest of the logic.
+                transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
+            } catch (Exception e) {
+                log.debug("Encountered error when handling a failed batch", e);
+            }
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);

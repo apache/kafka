@@ -30,6 +30,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -1219,6 +1220,26 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testInvalidTxnStateFailureInAddOffsetsToTxn() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.INVALID_TXN_STATE, consumerGroupId, producerId, epoch);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof InvalidTxnStateException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof InvalidTxnStateException);
+
+        assertFatalError(InvalidTxnStateException.class);
+    }
+
+    @Test
     public void testTransactionalIdAuthorizationFailureInTxnOffsetCommit() {
         final TopicPartition tp = new TopicPartition("foo", 0);
 
@@ -1604,6 +1625,22 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
 
         assertFatalError(TransactionalIdAuthorizationException.class);
+    }
+
+    @Test
+    public void testInvalidTxnStateInAddPartitions() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp);
+
+        prepareAddPartitionsToTxn(tp, Errors.INVALID_TXN_STATE);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof InvalidTxnStateException);
+
+        assertFatalError(InvalidTxnStateException.class);
     }
 
     @Test
@@ -2241,7 +2278,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testHandlingOfInvalidProducerEpochErrorOnTxnOffsetCommit() {
-        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH);
+        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH, Errors.PRODUCER_FENCED);
     }
 
     @Test
@@ -2250,6 +2287,10 @@ public class TransactionManagerTest {
     }
 
     private void testFatalErrorInTxnOffsetCommit(final Errors error) {
+        testFatalErrorInTxnOffsetCommit(error, error);
+    }
+
+    private void testFatalErrorInTxnOffsetCommit(final Errors triggeredError, final Errors resultingError) {
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -2266,14 +2307,14 @@ public class TransactionManagerTest {
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp0, Errors.NONE);
-        txnOffsetCommitResponse.put(tp1, error);
+        txnOffsetCommitResponse.put(tp1, triggeredError);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
         runUntil(addOffsetsResult::isCompleted);
         assertFalse(addOffsetsResult.isSuccessful());
-        assertEquals(error.exception().getClass(), addOffsetsResult.error().getClass());
+        assertEquals(resultingError.exception().getClass(), addOffsetsResult.error().getClass());
     }
 
     @Test
@@ -3403,6 +3444,59 @@ public class TransactionManagerTest {
 
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
+    }
+
+    @Test
+    public void testBackgroundInvalidStateTransitionIsFatal() {
+        doInitTransactions();
+        assertTrue(transactionManager.isTransactional());
+
+        transactionManager.setPoisonStateOnInvalidTransition(true);
+
+        // Intentionally perform an operation that will cause an invalid state transition. The detection of this
+        // will result in a poisoning of the transaction manager for all subsequent transactional operations since
+        // it was performed in the background.
+        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new KafkaException(), false));
+        assertTrue(transactionManager.hasFatalError());
+
+        // Validate that all of these operations will fail after the invalid state transition attempt above.
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginTransaction());
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort());
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginCommit());
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions());
+        assertThrows(IllegalStateException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
+    }
+
+    @Test
+    public void testForegroundInvalidStateTransitionIsRecoverable() {
+        // Intentionally perform an operation that will cause an invalid state transition. The detection of this
+        // will not poison the transaction manager since it was performed in the foreground.
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort());
+        assertFalse(transactionManager.hasFatalError());
+
+        // Validate that the transactions can still run after the invalid state transition attempt above.
+        doInitTransactions();
+        assertTrue(transactionManager.isTransactional());
+
+        transactionManager.beginTransaction();
+        assertFalse(transactionManager.hasFatalError());
+
+        transactionManager.maybeAddPartition(tp1);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(tp1, Errors.NONE);
+        runUntil(() -> transactionManager.isPartitionAdded(tp1));
+
+        TransactionalRequestResult retryResult = transactionManager.beginCommit();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(() -> !transactionManager.hasOngoingTransaction());
+        runUntil(retryResult::isCompleted);
+        retryResult.await();
+        runUntil(retryResult::isAcked);
+        assertFalse(transactionManager.hasOngoingTransaction());
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {

@@ -339,7 +339,7 @@
     and mark the broker offline.
     <p>
     We refer to nodes satisfying these two conditions as being "in sync" to avoid the vagueness of "alive" or "failed". The leader keeps track of the set of "in sync" replicas,
-    which is known as the ISR. If either of these conditions fail to be satisified, then the broker will be removed from the ISR. For example,
+    which is known as the ISR. If either of these conditions fail to be satisfied, then the broker will be removed from the ISR. For example,
     if a follower dies, then the controller will notice the failure through the loss of its session, and will remove the broker from the ISR.
     On the other hand, if the follower lags too far behind the leader but still has an active session, then the leader can also remove it from the ISR.
     The determination of lagging replicas is controlled through the <code>replica.lag.time.max.ms</code> configuration. 

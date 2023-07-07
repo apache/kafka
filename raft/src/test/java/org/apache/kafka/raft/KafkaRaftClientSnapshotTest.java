@@ -37,6 +37,8 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -87,19 +89,24 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Optional.empty(), context.client.latestSnapshotId());
     }
 
-    @Test
-    public void testLeaderListenerNotified() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeaderListenerNotified(boolean entireLog) throws Exception {
         int localId = 0;
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
-            .withEmptySnapshot(snapshotId)
-            .deleteBeforeSnapshot(snapshotId)
-            .build();
+            .withEmptySnapshot(snapshotId);
+
+        if (!entireLog) {
+            contextBuilder.deleteBeforeSnapshot(snapshotId);
+        }
+
+        RaftClientTestContext context = contextBuilder.build();
 
         context.becomeLeader();
         int epoch = context.currentEpoch();
@@ -118,21 +125,26 @@ final public class KafkaRaftClientSnapshotTest {
         }
     }
 
-    @Test
-    public void testFollowerListenerNotified() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFollowerListenerNotified(boolean entireLog) throws Exception {
         int localId = 0;
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
             .withEmptySnapshot(snapshotId)
-            .deleteBeforeSnapshot(snapshotId)
-            .withElectedLeader(epoch, leaderId)
-            .build();
+            .withElectedLeader(epoch, leaderId);
+
+        if (!entireLog) {
+            contextBuilder.deleteBeforeSnapshot(snapshotId);
+        }
+
+        RaftClientTestContext context = contextBuilder.build();
 
         // Advance the highWatermark
         long localLogEndOffset = context.log.endOffset().offset;
@@ -155,21 +167,26 @@ final public class KafkaRaftClientSnapshotTest {
         }
     }
 
-    @Test
-    public void testSecondListenerNotified() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testSecondListenerNotified(boolean entireLog) throws Exception {
         int localId = 0;
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
             .withEmptySnapshot(snapshotId)
-            .deleteBeforeSnapshot(snapshotId)
-            .withElectedLeader(epoch, leaderId)
-            .build();
+            .withElectedLeader(epoch, leaderId);
+
+        if (!entireLog) {
+            contextBuilder.deleteBeforeSnapshot(snapshotId);
+        }
+
+        RaftClientTestContext context = contextBuilder.build();
 
         // Advance the highWatermark
         long localLogEndOffset = context.log.endOffset().offset;
@@ -286,7 +303,53 @@ final public class KafkaRaftClientSnapshotTest {
         context.client.poll();
 
         // Send Fetch request less than start offset
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0, epoch, 0));
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, snapshotId.offset() - 2, snapshotId.epoch(), 0));
+        context.pollUntilResponse();
+        FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(snapshotId.epoch(), partitionResponse.snapshotId().epoch());
+        assertEquals(snapshotId.offset(), partitionResponse.snapshotId().endOffset());
+    }
+
+    @Test
+    public void testFetchRequestOffsetAtZero() throws Exception {
+        // When the follower sends a FETCH request at offset 0, reply with snapshot id if it exists
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withAppendLingerMs(1)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        List<String> appendRecords = Arrays.asList("a", "b", "c");
+        context.client.scheduleAppend(epoch, appendRecords);
+        context.time.sleep(context.appendLingerMs());
+        context.client.poll();
+
+        long localLogEndOffset = context.log.endOffset().offset;
+        assertTrue(
+            appendRecords.size() <= localLogEndOffset,
+            String.format("Record length = %s, log end offset = %s", appendRecords.size(), localLogEndOffset)
+        );
+
+        // Advance the highWatermark
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        // Generate a snapshot at the LEO
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            snapshot.freeze();
+        }
+
+        // Send Fetch request for offset 0
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0, 0, 0));
         context.pollUntilResponse();
         FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));

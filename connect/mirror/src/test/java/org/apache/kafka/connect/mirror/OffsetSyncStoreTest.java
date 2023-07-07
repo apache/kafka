@@ -110,7 +110,7 @@ public class OffsetSyncStoreTest {
     @Test
     public void testPastOffsetTranslation() {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            long maxOffsetLag = 10;
+            int maxOffsetLag = 10;
             int offset = 0;
             for (; offset <= 1000; offset += maxOffsetLag) {
                 store.sync(tp, offset, offset);

@@ -34,7 +34,7 @@ public class ShortDeserializer implements Deserializer<Short> {
         short value = 0;
         for (byte b : data) {
             value <<= 8;
-            value |= b & 0xFF;
+            value |= (short) (b & 0xFF);
         }
         return value;
     }

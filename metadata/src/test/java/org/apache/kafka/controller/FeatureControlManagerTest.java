@@ -369,7 +369,7 @@ public class FeatureControlManagerTest {
     }
 
     @Test
-    public void testCanotDowngradeBefore3_3_IV0() {
+    public void testCannotDowngradeBefore3_3_IV0() {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                 MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).

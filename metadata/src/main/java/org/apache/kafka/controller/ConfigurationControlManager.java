@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -49,6 +50,7 @@ import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class ConfigurationControlManager {
@@ -169,7 +171,8 @@ public class ConfigurationControlManager {
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
         boolean newlyCreatedResource
     ) {
-        List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
+        List<ApiMessageAndVersion> outputRecords =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<OpType, String>>> resourceEntry :
                 configChanges.entrySet()) {
@@ -187,7 +190,8 @@ public class ConfigurationControlManager {
         Map<String, Entry<OpType, String>> keyToOps,
         boolean newlyCreatedResource
     ) {
-        List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
+        List<ApiMessageAndVersion> outputRecords =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         ApiError apiError = incrementalAlterConfigResource(configResource,
             keyToOps,
             newlyCreatedResource,
@@ -316,7 +320,8 @@ public class ConfigurationControlManager {
         Map<ConfigResource, Map<String, String>> newConfigs,
         boolean newlyCreatedResource
     ) {
-        List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
+        List<ApiMessageAndVersion> outputRecords =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, String>> resourceEntry :
             newConfigs.entrySet()) {

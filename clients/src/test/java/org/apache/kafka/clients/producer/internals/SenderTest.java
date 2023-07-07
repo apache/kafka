@@ -291,7 +291,7 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
-        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
+        ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 
@@ -3035,6 +3035,28 @@ public class SenderTest {
         verifyErrorMessage(produceResponse(tp0, 0L, Errors.INVALID_REQUEST, 0, -1, errorMessage), errorMessage);
     }
 
+    @Test
+    public void testSenderShouldRetryWithBackoffOnRetriableError() {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        long start = time.milliseconds();
+
+        // first request is sent immediately
+        prepareAndReceiveInitProducerId(producerId, (short) -1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+        long request1 = time.milliseconds();
+        assertEquals(start, request1);
+
+        // backoff before sending second request
+        prepareAndReceiveInitProducerId(producerId, (short) -1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+        long request2 = time.milliseconds();
+        assertEquals(RETRY_BACKOFF_MS, request2 - request1);
+
+        // third request should also backoff
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertEquals(RETRY_BACKOFF_MS, time.milliseconds() - request2);
+    }
+
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
         sender.runOnce(); // connect
@@ -3191,7 +3213,7 @@ public class SenderTest {
     }
 
     private TransactionManager createTransactionManager() {
-        return new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions());
+        return new TransactionManager(new LogContext(), null, 0, RETRY_BACKOFF_MS, new ApiVersions());
     }
     
     private void setupWithTransactionState(TransactionManager transactionManager) {
