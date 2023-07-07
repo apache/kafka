@@ -291,16 +291,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         // then to primary stores.
         if (secondaryStore != null && containsTombstones) {
             AtomicReference<Throwable> secondaryStoreTombstoneWriteError = new AtomicReference<>();
-            FutureCallback<Void> secondaryWriteFuture = new FutureCallback<>((secondaryWriteError, ignored) -> {
-                try (LoggingContext context = loggingContext()) {
-                    if (secondaryWriteError != null) {
-                        log.warn("Failed to write offsets with tombstone records to secondary backing store", secondaryWriteError);
-                        secondaryStoreTombstoneWriteError.compareAndSet(null, secondaryWriteError);
-                    } else {
-                        log.debug("Successfully flushed tombstone(s)-containing to secondary backing store");
-                    }
-                }
-            });
+            FutureCallback<Void> secondaryWriteFuture = new FutureCallback<>();
             secondaryStore.set(values, secondaryWriteFuture);
             try {
                 // For EOS, there is no timeout for offset commit and it is allowed to take as much time as needed for
@@ -315,10 +306,10 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                     secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
                 }
             } catch (InterruptedException e) {
-                log.warn("{} Flush of tombstone(s)-containing to secondary store interrupted, cancelling", this);
+                log.warn("{} Flush of tombstone(s)-containing offsets to secondary store interrupted, cancelling", this);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             } catch (ExecutionException e) {
-                log.error("{} Flush of tombstone(s)-containing offsets to secondary store threw an unexpected exception: ", this, e);
+                log.error("{} Flush of tombstone(s)-containing offsets to secondary store threw an unexpected exception: ", this, e.getCause());
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e.getCause());
             } catch (TimeoutException e) {
                 log.error("{} Timed out waiting to flush offsets with tombstones to secondary storage ", this);
