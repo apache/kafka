@@ -101,14 +101,13 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
         this.state = Objects.requireNonNull(state, "state can not be null");
 
         if (startOffset < 0) {
-            throw new IllegalArgumentException(
-                String.format("Unexpected start offset = %d. StartOffset for a remote segment cannot negative", startOffset));
+            throw new IllegalArgumentException("Unexpected start offset = " + startOffset + ". StartOffset for a remote segment cannot be negative");
         }
         this.startOffset = startOffset;
 
         if (endOffset < startOffset) {
-            throw new IllegalArgumentException(
-                String.format("Unexpected end offset = %d. EndOffset for a remote segment cannot be less than startOffset %d", endOffset, startOffset));
+            throw new IllegalArgumentException("Unexpected end offset = " + endOffset + 
+                                               ". EndOffset for a remote segment cannot be less than startOffset = " + startOffset);
         }
         this.endOffset = endOffset;
         this.maxTimestampMs = maxTimestampMs;
