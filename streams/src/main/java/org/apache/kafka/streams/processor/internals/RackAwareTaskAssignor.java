@@ -111,7 +111,7 @@ public class RackAwareTaskAssignor {
     private boolean validateTopicPartitionRack() {
         // Make sure rackId exist for all TopicPartitions needed
         final Set<String> topicsToDescribe = new HashSet<>();
-        if(!populateTopicsToDiscribe(topicsToDescribe)) {
+        if (!populateTopicsToDiscribe(topicsToDescribe)) {
             return false;
         }
 
