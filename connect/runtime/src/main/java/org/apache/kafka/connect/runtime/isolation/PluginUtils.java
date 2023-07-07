@@ -350,8 +350,10 @@ public class PluginUtils {
                 log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
             }
         }
-        URL[] classpathUrls = ClasspathHelper.forJavaClassPath().toArray(new URL[0]);
-        pluginSources.add(new PluginSource(null, classLoader.getParent(), classpathUrls));
+        List<URL> parentUrls = new ArrayList<>();
+        parentUrls.addAll(ClasspathHelper.forJavaClassPath());
+        parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader.getParent()));
+        pluginSources.add(new PluginSource(null, classLoader.getParent(), parentUrls.toArray(new URL[0])));
         return pluginSources;
     }
 
