@@ -48,11 +48,10 @@ public class ReadVersionFromResource implements Converter, Versioned {
 
     private String version(InputStream stream) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
-            String s1 = reader.lines()
+            return reader.lines()
                     .filter(s -> !s.isEmpty() && !s.startsWith("#"))
                     .collect(Collectors.toList())
                     .get(0);
-            return s1;
         }
     }
 
