@@ -107,18 +107,10 @@ public class AclsImageTest {
 
     private static void testToImage(AclsImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
-
-            @Override
-            public Object getEmptyImage() {
-                return AclsImage.EMPTY;
-            }
-
-            @Override
-            public Object createDeltaUponImage(Object image) {
-                return new AclsDelta((AclsImage) image);
-            }
-        }.test(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> AclsImage.EMPTY,
+            AclsDelta::new
+        ).test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(AclsImage image) {

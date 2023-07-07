@@ -123,18 +123,10 @@ public class ClientQuotasImageTest {
 
     private static void testToImage(ClientQuotasImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
-
-            @Override
-            public Object getEmptyImage() {
-                return ClientQuotasImage.EMPTY;
-            }
-
-            @Override
-            public Object createDeltaUponImage(Object image) {
-                return new ClientQuotasDelta((ClientQuotasImage) image);
-            }
-        }.test(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> ClientQuotasImage.EMPTY,
+            ClientQuotasDelta::new
+        ).test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(ClientQuotasImage image) {

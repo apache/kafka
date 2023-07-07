@@ -95,18 +95,10 @@ public class ProducerIdsImageTest {
 
     private static void testToImage(ProducerIdsImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
-
-            @Override
-            public Object getEmptyImage() {
-                return ProducerIdsImage.EMPTY;
-            }
-
-            @Override
-            public Object createDeltaUponImage(Object image) {
-                return new ProducerIdsDelta((ProducerIdsImage) image);
-            }
-        }.test(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> ProducerIdsImage.EMPTY,
+            ProducerIdsDelta::new
+        ).test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(ProducerIdsImage image) {

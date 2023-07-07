@@ -160,18 +160,10 @@ public class ClusterImageTest {
 
     private static void testToImage(ClusterImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
-
-            @Override
-            public Object getEmptyImage() {
-                return ClusterImage.EMPTY;
-            }
-
-            @Override
-            public Object createDeltaUponImage(Object image) {
-                return new ClusterDelta((ClusterImage) image);
-            }
-        }.test(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> ClusterImage.EMPTY,
+            ClusterDelta::new
+        ).test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(ClusterImage image) {

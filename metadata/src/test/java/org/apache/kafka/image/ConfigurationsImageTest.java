@@ -118,18 +118,10 @@ public class ConfigurationsImageTest {
 
     private static void testToImage(ConfigurationsImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
-
-            @Override
-            public Object getEmptyImage() {
-                return ConfigurationsImage.EMPTY;
-            }
-
-            @Override
-            public Object createDeltaUponImage(Object image) {
-                return new ConfigurationsDelta((ConfigurationsImage) image);
-            }
-        }.test(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> ConfigurationsImage.EMPTY,
+            ConfigurationsDelta::new
+        ).test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(ConfigurationsImage image) {

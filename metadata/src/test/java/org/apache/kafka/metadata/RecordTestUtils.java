@@ -38,8 +38,11 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -95,17 +98,31 @@ public class RecordTestUtils {
         replayAll(target, Collections.singletonList(recordAndVersion));
     }
 
-    public interface TestThroughAllIntermediateImagesLeadingToFinalImageHelper {
+    public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {
+        private final Supplier<I> emptyImageSupplier;
+        private final Function<I, D> deltaUponImageCreator;
 
-        Object getEmptyImage(); // e.g. AclsImage.EMPTY
+        public TestThroughAllIntermediateImagesLeadingToFinalImageHelper(
+            Supplier<I> emptyImageSupplier, Function<I, D> deltaUponImageCreator
+        ) {
+            this.emptyImageSupplier = Objects.requireNonNull(emptyImageSupplier);
+            this.deltaUponImageCreator = Objects.requireNonNull(deltaUponImageCreator);
+        }
 
-        Object createDeltaUponImage(Object image); // e.g. new AclsDelta((AclsImage) image)
+        public I getEmptyImage() {
+            return this.emptyImageSupplier.get();
+        }
 
-        default Object createImageByApplyingDelta(Object delta) {
+        public D createDeltaUponImage(I image) {
+            return this.deltaUponImageCreator.apply(image);
+        }
+
+        @SuppressWarnings("unchecked")
+        public I createImageByApplyingDelta(D delta) {
             try {
                 try {
                     Method method = delta.getClass().getMethod("apply");
-                    return method.invoke(delta);
+                    return (I) method.invoke(delta);
                 } catch (NoSuchMethodException e) {
                     throw new RuntimeException(e);
                 }
@@ -116,12 +133,12 @@ public class RecordTestUtils {
             }
         }
 
-        default void test(Object finalImage, List<ApiMessageAndVersion> fromRecords) {
+        public void test(I finalImage, List<ApiMessageAndVersion> fromRecords) {
             for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {
                 // create first image from first numRecordsForfirstImage records
-                Object delta = createDeltaUponImage(getEmptyImage());
+                D delta = createDeltaUponImage(getEmptyImage());
                 RecordTestUtils.replayAll(delta, fromRecords.subList(0, numRecordsForfirstImage));
-                Object firstImage = createImageByApplyingDelta(delta);
+                I firstImage = createImageByApplyingDelta(delta);
                 // for all possible further batch sizes, apply as many batches as it takes to get to the final image
                 int remainingRecords = fromRecords.size() - numRecordsForfirstImage;
                 if (remainingRecords == 0) {
@@ -129,7 +146,7 @@ public class RecordTestUtils {
                 } else {
                     // for all possible further batch sizes...
                     for (int maxRecordsForSuccessiveBatches = 1; maxRecordsForSuccessiveBatches <= remainingRecords; ++maxRecordsForSuccessiveBatches) {
-                        Object latestIntermediateImage = firstImage;
+                        I latestIntermediateImage = firstImage;
                         // ... apply as many batches as it takes to get to the final image
                         int numAdditionalBatches = (int) Math.ceil(remainingRecords * 1.0 / maxRecordsForSuccessiveBatches);
                         for (int additionalBatchNum = 0; additionalBatchNum < numAdditionalBatches; ++additionalBatchNum) {

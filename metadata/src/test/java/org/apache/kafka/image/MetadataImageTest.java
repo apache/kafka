@@ -88,7 +88,10 @@ public class MetadataImageTest {
     public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply(IMAGE2.provenance()));
         // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
-        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        ImageWriterOptions options = new ImageWriterOptions.Builder()
+            .setMetadataVersion(IMAGE1.features().metadataVersion())
+            .build();
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1, options);
         records.addAll(FeaturesImageTest.DELTA1_RECORDS);
         records.addAll(ClusterImageTest.DELTA1_RECORDS);
         records.addAll(TopicsImageTest.DELTA1_RECORDS);
@@ -106,37 +109,35 @@ public class MetadataImageTest {
     }
 
     private static void testToImage(MetadataImage image) {
-        testToImage(image, Optional.empty());
+        testToImage(image, new ImageWriterOptions.Builder()
+            .setMetadataVersion(image.features().metadataVersion())
+            .build(), Optional.empty());
     }
 
-    private static void testToImage(MetadataImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
-        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    private static void testToImage(MetadataImage image, ImageWriterOptions options) {
+        testToImage(image, options, Optional.empty());
+    }
+
+    static void testToImage(MetadataImage image, ImageWriterOptions options, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image, options)));
     }
 
     private static void testToImage(MetadataImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
-
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<MetadataDelta, MetadataImage>(
+            () -> MetadataImage.EMPTY,
+            MetadataDelta::new
+        ) {
             @Override
-            public Object getEmptyImage() {
-                return MetadataImage.EMPTY;
-            }
-
-            @Override
-            public Object createDeltaUponImage(Object image) {
-                return new MetadataDelta((MetadataImage) image);
-            }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((MetadataDelta) delta).apply(image.provenance());
+            public MetadataImage createImageByApplyingDelta(MetadataDelta delta) {
+                return delta.apply(image.provenance());
             }
         }.test(image, fromRecords);
     }
 
-    private static List<ApiMessageAndVersion> getImageRecords(MetadataImage image) {
+    private static List<ApiMessageAndVersion> getImageRecords(MetadataImage image, ImageWriterOptions options) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder(image).build());
+        image.write(writer, options);
         return writer.records();
     }
 }
