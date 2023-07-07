@@ -291,8 +291,8 @@ public class KRaftMigrationZkWriter {
                             topicId,
                             topicsImage.getTopic(topicId).partitions(),
                             migrationState));
-                Map<Integer, PartitionRegistration> newPartitions = topicDelta.newPartitions();
-                Map<Integer, PartitionRegistration> changedPartitions = topicDelta.partitionChanges();
+                Map<Integer, PartitionRegistration> newPartitions = new HashMap<>(topicDelta.newPartitions());
+                Map<Integer, PartitionRegistration> changedPartitions = new HashMap<>(topicDelta.partitionChanges());
                 if (!newPartitions.isEmpty()) {
                     operationConsumer.accept(
                         UPDATE_PARTITION,
