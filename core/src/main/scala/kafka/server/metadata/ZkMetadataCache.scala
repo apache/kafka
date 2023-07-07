@@ -67,16 +67,18 @@ class ZkMetadataCache(
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
   private val partitionMetadataLock = new ReentrantReadWriteLock()
-  //this is the cache state. every MetadataSnapshot instance is immutable, and updates (performed under a lock)
-  //replace the value with a completely new one. this means reads (which are not under any lock) need to grab
-  //the value of this var (into a val) ONCE and retain that read copy for the duration of their operation.
-  //multiple reads of this value risk getting different snapshots.
-  @volatile private var metadataSnapshot: MetadataSnapshot = MetadataSnapshot(
+
+  private val EMPTY_METADATA = MetadataSnapshot(
     partitionStates = mutable.AnyRefMap.empty,
     topicIds = Map.empty,
     controllerId = None,
     aliveBrokers = mutable.LongMap.empty,
     aliveNodes = mutable.LongMap.empty)
+  //this is the cache state. every MetadataSnapshot instance is immutable, and updates (performed under a lock)
+  //replace the value with a completely new one. this means reads (which are not under any lock) need to grab
+  //the value of this var (into a val) ONCE and retain that read copy for the duration of their operation.
+  //multiple reads of this value risk getting different snapshots.
+  @volatile private var metadataSnapshot: MetadataSnapshot = EMPTY_METADATA
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
@@ -199,14 +201,27 @@ class ZkMetadataCache(
                        errorUnavailableEndpoints: Boolean = false,
                        errorUnavailableListeners: Boolean = false): Seq[MetadataResponseTopic] = {
     val snapshot = metadataSnapshot
-    topics.toSeq.flatMap { topic =>
-      getPartitionMetadata(snapshot, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
+
+    // broker isn't yet available
+    if (!isInitialized()) {
+      topics.toSeq.map(topic =>
         new MetadataResponseTopic()
-          .setErrorCode(Errors.NONE.code)
+          .setErrorCode(Errors.BROKER_NOT_AVAILABLE.code)
           .setName(topic)
-          .setTopicId(snapshot.topicIds.getOrElse(topic, Uuid.ZERO_UUID))
+          .setTopicId(Uuid.ZERO_UUID)
           .setIsInternal(Topic.isInternal(topic))
-          .setPartitions(partitionMetadata.toBuffer.asJava)
+          .setPartitions(Seq.empty.asJava)
+      )
+    } else {
+      topics.toSeq.flatMap { topic =>
+        getPartitionMetadata(snapshot, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
+          new MetadataResponseTopic()
+            .setErrorCode(Errors.NONE.code)
+            .setName(topic)
+            .setTopicId(snapshot.topicIds.getOrElse(topic, Uuid.ZERO_UUID))
+            .setIsInternal(Topic.isInternal(topic))
+            .setPartitions(partitionMetadata.toBuffer.asJava)
+        }
       }
     }
   }
@@ -582,4 +597,6 @@ class ZkMetadataCache(
   }
 
   override def getFeatureOption: Option[Features] = _features
+
+  override def isInitialized(): Boolean = metadataSnapshot != EMPTY_METADATA
 }

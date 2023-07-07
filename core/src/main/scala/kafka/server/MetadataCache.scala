@@ -110,6 +110,8 @@ trait MetadataCache {
   def getRandomAliveBrokerId: Option[Int]
 
   def features(): Features
+
+  def isInitialized(): Boolean
 }
 
 object MetadataCache {

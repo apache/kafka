@@ -174,14 +174,25 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                                 errorUnavailableEndpoints: Boolean = false,
                                 errorUnavailableListeners: Boolean = false): Seq[MetadataResponseTopic] = {
     val image = _currentImage
-    topics.toSeq.flatMap { topic =>
-      getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
+    if (!isInitialized()) {
+      topics.toSeq.map(topic =>
         new MetadataResponseTopic()
-          .setErrorCode(Errors.NONE.code)
+          .setErrorCode(Errors.BROKER_NOT_AVAILABLE.code)
           .setName(topic)
-          .setTopicId(Option(image.topics().getTopic(topic).id()).getOrElse(Uuid.ZERO_UUID))
+          .setTopicId(Uuid.ZERO_UUID)
           .setIsInternal(Topic.isInternal(topic))
-          .setPartitions(partitionMetadata.toBuffer.asJava)
+          .setPartitions(Seq.empty.asJava)
+      )
+    } else {
+      topics.toSeq.flatMap { topic =>
+        getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
+          new MetadataResponseTopic()
+            .setErrorCode(Errors.NONE.code)
+            .setName(topic)
+            .setTopicId(Option(image.topics().getTopic(topic).id()).getOrElse(Uuid.ZERO_UUID))
+            .setIsInternal(Topic.isInternal(topic))
+            .setPartitions(partitionMetadata.toBuffer.asJava)
+        }
       }
     }
   }
@@ -405,5 +416,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       image.highestOffsetAndEpoch().offset,
       true)
   }
+
+  override def isInitialized(): Boolean = _currentImage != MetadataImage.EMPTY
 }
 

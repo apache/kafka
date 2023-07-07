@@ -22,6 +22,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -129,7 +130,8 @@ public class TopicMetadataFetcher {
                             // if a requested topic is unknown, we just continue and let it be absent
                             // in the returned map
                             continue;
-                        else if (error.exception() instanceof RetriableException)
+                        else if (error.exception() instanceof RetriableException
+                                || error.exception() instanceof BrokerNotAvailableException)
                             shouldRetry = true;
                         else
                             throw new KafkaException("Unexpected error fetching metadata for topic " + topic,

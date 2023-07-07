@@ -802,4 +802,18 @@ class MetadataCacheTest {
       assertEquals(offlineReplicas, partitionState.offlineReplicas())
     }
   }
+
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataWhenUninitialized(cache: MetadataCache): Unit = {
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+
+    assertFalse(cache.isInitialized())
+    val topicMetadatas = cache.getTopicMetadata(Set("topic1"), listenerName)
+    assertEquals(1, topicMetadatas.size)
+
+    val topicMetadata = topicMetadatas.head
+    assertEquals(Errors.BROKER_NOT_AVAILABLE.code, topicMetadata.errorCode)
+  }
 }
