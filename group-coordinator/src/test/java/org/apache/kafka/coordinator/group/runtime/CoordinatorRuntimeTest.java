@@ -961,7 +961,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, ctx.timer.size());
 
         // Timer #1. This is never executed.
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.SECONDS,
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.SECONDS, true,
             () -> Arrays.asList("record5", "record6"));
 
         // The coordinator timer should have one pending task.
@@ -1067,11 +1067,11 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, ctx.timer.size());
 
         // Timer #1.
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS,
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
             () -> Arrays.asList("record1", "record2"));
 
         // Timer #2.
-        ctx.coordinator.timer.schedule("timer-2", 20, TimeUnit.MILLISECONDS,
+        ctx.coordinator.timer.schedule("timer-2", 20, TimeUnit.MILLISECONDS, true,
             () -> Arrays.asList("record3", "record4"));
 
         // The coordinator timer should have two pending tasks.
@@ -1121,7 +1121,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, processor.size());
 
         // Timer #1.
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS,
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
             () -> Collections.singletonList("record1"));
 
         // The coordinator timer should have one pending task.
@@ -1134,14 +1134,14 @@ public class CoordinatorRuntimeTest {
         assertEquals(1, processor.size());
 
         // Schedule a second timer with the same key.
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS,
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
             () -> Collections.singletonList("record2"));
 
         // The coordinator timer should still have one pending task.
         assertEquals(1, ctx.timer.size());
 
         // Schedule a third timer with the same key.
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS,
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
             () -> Collections.singletonList("record3"));
 
         // The coordinator timer should still have one pending task.
@@ -1192,7 +1192,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, processor.size());
 
         // Timer #1.
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS,
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
             () -> Collections.singletonList("record1"));
 
         // The coordinator timer should have one pending task.
@@ -1205,7 +1205,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(1, processor.size());
 
         // Schedule a second timer with the same key.
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS,
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
             () -> Collections.singletonList("record2"));
 
         // The coordinator timer should still have one pending task.
@@ -1233,7 +1233,7 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
-    public void testRetryTimer() throws InterruptedException {
+    public void testRetryableTimer() throws InterruptedException {
         MockTimer timer = new MockTimer();
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
@@ -1254,7 +1254,7 @@ public class CoordinatorRuntimeTest {
 
         // Timer #1.
         AtomicInteger cnt = new AtomicInteger(0);
-        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, () -> {
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true, () -> {
             cnt.incrementAndGet();
             throw new KafkaException("error");
         });
@@ -1285,6 +1285,45 @@ public class CoordinatorRuntimeTest {
 
         // Cancel Timer #1.
         ctx.coordinator.timer.cancel("timer-1");
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
+    public void testNonRetryableTimer() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinator, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinator, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        // Timer #1.
+        AtomicInteger cnt = new AtomicInteger(0);
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, false, () -> {
+            cnt.incrementAndGet();
+            throw new KafkaException("error");
+        });
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire the pending timer.
+        timer.advanceClock(10 + 1);
+
+        // The timer should have been called and the timer should have no pending tasks
+        // because the timer is not retried.
+        assertEquals(1, cnt.get());
         assertEquals(0, ctx.timer.size());
     }
 }

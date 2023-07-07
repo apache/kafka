@@ -103,7 +103,7 @@ public class GroupMetadataManagerTest {
     // Timer is not used yet so an empty mock is fine for now.
     static class MockCoordinatorTimer implements CoordinatorTimer<Record> {
         @Override
-        public void schedule(String key, long delay, TimeUnit unit, TimeoutOperation<Record> operation) {}
+        public void schedule(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<Record> operation) {}
 
         @Override
         public void cancel(String key) {}

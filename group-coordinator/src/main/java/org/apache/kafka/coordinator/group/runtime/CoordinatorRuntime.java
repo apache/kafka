@@ -257,11 +257,12 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             String key,
             long delay,
             TimeUnit unit,
+            boolean retry,
             TimeoutOperation<U> operation
         ) {
             // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
-            // expires, the event is push to the queue of the coordinator runtime to be executed. This
-            // ensure that the threading model of the runtime is respected.
+            // expires, the event is pushed to the queue of the coordinator runtime to be executed. This
+            // ensures that the threading model of the runtime is respected.
             TimerTask task = new TimerTask(unit.toMillis(delay)) {
                 @Override
                 public void run() {
@@ -283,20 +284,25 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                     // error is fatal.
                     event.future.exceptionally(ex -> {
                         if (ex instanceof RejectedExecutionException) {
-                            log.debug("The delayed write event {} for the timer {} was not executed because it was " +
+                            log.debug("The write event {} for the timer {} was not executed because it was " +
                                 "cancelled or overridden.", event.name, key);
                             return null;
                         }
 
                         if (ex instanceof NotCoordinatorException || ex instanceof CoordinatorLoadInProgressException) {
-                            log.debug("The delayed write event {} for the timer {} failed due to {}. Ignoring it because " +
+                            log.debug("The write event {} for the timer {} failed due to {}. Ignoring it because " +
                                 "the coordinator is not active.", event.name, key, ex.getMessage());
                             return null;
                         }
 
-                        log.info("The delayed write event {} for the timer {} failed due to {}. Rescheduling it. ",
-                            event.name, key, ex.getMessage(), ex);
-                        schedule(key, 500, TimeUnit.MILLISECONDS, operation);
+                        if (retry) {
+                            log.info("The write event {} for the timer {} failed due to {}. Rescheduling it. ",
+                                event.name, key, ex.getMessage());
+                            schedule(key, 500, TimeUnit.MILLISECONDS, retry, operation);
+                        } else {
+                            log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
+                                event.name, key, ex.getMessage());
+                        }
 
                         return null;
                     });
