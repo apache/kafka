@@ -675,6 +675,7 @@ public class AbstractWorkerSourceTaskTest {
 
         workerTask.toSend = Arrays.asList(record1, record2, record3);
 
+        // The first two records are filtered out / dropped by the transformation chain; only the third record will be attempted to be sent.
         // The producer throws a RetriableException the first time we try to send the third record
         assertFalse(workerTask.sendRecords());
 
@@ -683,7 +684,9 @@ public class AbstractWorkerSourceTaskTest {
 
         // Ensure that the first two records that were filtered out by the transformation chain
         // aren't re-processed when we retry the call to sendRecords()
-        verify(transformationChain, times(4)).apply(any(SourceRecord.class));
+        verify(transformationChain, times(1)).apply(eq(record1));
+        verify(transformationChain, times(1)).apply(eq(record2));
+        verify(transformationChain, times(2)).apply(eq(record3));
     }
 
     private void expectSendRecord(Headers headers) {
