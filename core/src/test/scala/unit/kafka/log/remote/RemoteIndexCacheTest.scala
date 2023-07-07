@@ -17,7 +17,7 @@
 package kafka.log.remote
 
 import kafka.log.UnifiedLog
-import kafka.log.remote.RemoteIndexCache.{RemoteLogIndexCacheCleanerThread, RemoteOffsetIndexFile, RemoteOffsetIndexFileName, RemoteTimeIndexFile, RemoteTimeIndexFileName, RemoteTransactionIndexFile, RemoteTransactionIndexFileName}
+import kafka.log.remote.RemoteIndexCache.{RemoteLogIndexCacheCleanerThread, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
@@ -104,9 +104,9 @@ class RemoteIndexCacheTest {
     val txnIndexFile = entry.txnIndex.file().toPath
     val timeIndexFile = entry.timeIndex.file().toPath
 
-    val expectedOffsetIndexFileName: String = RemoteOffsetIndexFileName(rlsMetadata)
-    val expectedTimeIndexFileName: String = RemoteTimeIndexFileName(rlsMetadata)
-    val expectedTxnIndexFileName: String = RemoteTransactionIndexFileName(rlsMetadata)
+    val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
+    val expectedTimeIndexFileName: String = remoteTimeIndexFileName(rlsMetadata)
+    val expectedTxnIndexFileName: String = remoteTransactionIndexFileName(rlsMetadata)
 
     assertEquals(expectedOffsetIndexFileName, offsetIndexFile.getFileName.toString)
     assertEquals(expectedTxnIndexFileName, txnIndexFile.getFileName.toString)
@@ -479,19 +479,19 @@ class RemoteIndexCacheTest {
   }
 
   private def createTxIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TransactionIndex = {
-    val txnIdxFile = RemoteTransactionIndexFile(tpDir, metadata)
+    val txnIdxFile = remoteTransactionIndexFile(tpDir, metadata)
     txnIdxFile.createNewFile()
     new TransactionIndex(metadata.startOffset(), txnIdxFile)
   }
 
   private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TimeIndex = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new TimeIndex(RemoteTimeIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 12)
+    new TimeIndex(remoteTimeIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 12)
   }
 
   private def createOffsetIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata) = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new OffsetIndex(RemoteOffsetIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 8)
+    new OffsetIndex(remoteOffsetIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 8)
   }
 
   private def generateRemoteLogSegmentMetadata(size: Int,

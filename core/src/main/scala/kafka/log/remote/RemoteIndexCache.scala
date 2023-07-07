@@ -18,7 +18,7 @@ package kafka.log.remote
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine, RemovalCause}
 import kafka.log.UnifiedLog
-import kafka.log.remote.RemoteIndexCache.{DirName, OffsetFromRemoteIndexFileName, RemoteLogIndexCacheCleanerThread, RemoteLogSegmentIdFromRemoteIndexFileName, RemoteOffsetIndexFile, RemoteTimeIndexFile, RemoteTransactionIndexFile}
+import kafka.log.remote.RemoteIndexCache.{DirName, offsetFromRemoteIndexFileName, RemoteLogIndexCacheCleanerThread, remoteLogSegmentIdFromRemoteIndexFileName, remoteOffsetIndexFile, remoteTimeIndexFile, remoteTransactionIndexFile}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{CoreUtils, Logging, threadsafe}
 import org.apache.kafka.common.Uuid
@@ -40,13 +40,13 @@ object RemoteIndexCache {
   val TmpFileSuffix = ".tmp"
   val RemoteLogIndexCacheCleanerThread = "remote-log-index-cleaner"
 
-  def RemoteLogSegmentIdFromRemoteIndexFileName(fileName: String): Uuid = {
+  def remoteLogSegmentIdFromRemoteIndexFileName(fileName: String): Uuid = {
     val underscoreIndex = fileName.indexOf("_")
     val dotIndex = fileName.indexOf(".")
     Uuid.fromString(fileName.substring(underscoreIndex + 1, dotIndex))
   }
 
-  def OffsetFromRemoteIndexFileName(fileName: String): Long = {
+  def offsetFromRemoteIndexFileName(fileName: String): Long = {
     fileName.substring(0, fileName.indexOf("_")).toLong
   }
 
@@ -66,29 +66,29 @@ object RemoteIndexCache {
     s"${startOffset.toString}_${segmentId.toString}"
   }
 
-  def RemoteOffsetIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
-    new File(dir, RemoteOffsetIndexFileName(remoteLogSegmentMetadata))
+  def remoteOffsetIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
+    new File(dir, remoteOffsetIndexFileName(remoteLogSegmentMetadata))
   }
 
-  def RemoteOffsetIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+  def remoteOffsetIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
     val prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
     prefix + UnifiedLog.IndexFileSuffix
   }
 
-  def RemoteTimeIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
-    new File(dir, RemoteTimeIndexFileName(remoteLogSegmentMetadata))
+  def remoteTimeIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
+    new File(dir, remoteTimeIndexFileName(remoteLogSegmentMetadata))
   }
 
-  def RemoteTimeIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+  def remoteTimeIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
     val prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
     prefix + UnifiedLog.TimeIndexFileSuffix
   }
 
-  def RemoteTransactionIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
-    new File(dir, RemoteTransactionIndexFileName(remoteLogSegmentMetadata))
+  def remoteTransactionIndexFile(dir: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): File = {
+    new File(dir, remoteTransactionIndexFileName(remoteLogSegmentMetadata))
   }
 
-  def RemoteTransactionIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+  def remoteTransactionIndexFileName(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
     val prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
     prefix + UnifiedLog.TxnIndexFileSuffix
   }
@@ -259,7 +259,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
     Files.list(cacheDir.toPath).forEach((path:Path) => {
       val indexFileName = path.getFileName.toString
-      val uuid = RemoteLogSegmentIdFromRemoteIndexFileName(indexFileName)
+      val uuid = remoteLogSegmentIdFromRemoteIndexFileName(indexFileName)
       // It is safe to update the internalCache non-atomically here since this function is always called by a single
       // thread only.
       if (!internalCache.asMap().containsKey(uuid)) {
@@ -273,7 +273,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             Files.exists(timestampIndexFile.toPath) &&
             Files.exists(txnIndexFile.toPath)) {
 
-          val offset = OffsetFromRemoteIndexFileName(indexFileName)
+          val offset = offsetFromRemoteIndexFileName(indexFileName)
           val offsetIndex = new OffsetIndex(offsetIndexFile, offset, Int.MaxValue, false)
           offsetIndex.sanityCheck()
 
@@ -375,7 +375,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         }
 
         val startOffset = remoteLogSegmentMetadata.startOffset()
-        val offsetIndexFile = RemoteOffsetIndexFile(cacheDir, remoteLogSegmentMetadata)
+        val offsetIndexFile = remoteOffsetIndexFile(cacheDir, remoteLogSegmentMetadata)
         val offsetIndex: OffsetIndex = loadIndexFile(offsetIndexFile,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
           file => {
@@ -384,7 +384,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             index
           })
 
-        val timeIndexFile = RemoteTimeIndexFile(cacheDir, remoteLogSegmentMetadata)
+        val timeIndexFile = remoteTimeIndexFile(cacheDir, remoteLogSegmentMetadata)
         val timeIndex: TimeIndex = loadIndexFile(timeIndexFile,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
           file => {
@@ -393,7 +393,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             index
           })
 
-        val txnIndexFile = RemoteTransactionIndexFile(cacheDir, remoteLogSegmentMetadata)
+        val txnIndexFile = remoteTransactionIndexFile(cacheDir, remoteLogSegmentMetadata)
         val txnIndex: TransactionIndex = loadIndexFile(txnIndexFile,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION),
           file => {
