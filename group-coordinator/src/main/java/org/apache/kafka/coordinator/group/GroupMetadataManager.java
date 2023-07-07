@@ -51,6 +51,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
@@ -94,6 +95,7 @@ public class GroupMetadataManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
+        private CoordinatorTimer<Record> timer = null;
         private List<PartitionAssignor> assignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
@@ -112,6 +114,11 @@ public class GroupMetadataManager {
 
         Builder withTime(Time time) {
             this.time = time;
+            return this;
+        }
+
+        Builder withTimer(CoordinatorTimer<Record> timer) {
+            this.timer = timer;
             return this;
         }
 
@@ -146,14 +153,16 @@ public class GroupMetadataManager {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
 
-            if (assignors == null || assignors.isEmpty()) {
-                throw new IllegalStateException("Assignors must be set before building.");
-            }
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
+            if (assignors == null || assignors.isEmpty())
+                throw new IllegalArgumentException("Assignors must be set before building.");
 
             return new GroupMetadataManager(
                 snapshotRegistry,
                 logContext,
                 time,
+                timer,
                 assignors,
                 metadataImage,
                 consumerGroupMaxSize,
@@ -177,6 +186,11 @@ public class GroupMetadataManager {
      * The system time.
      */
     private final Time time;
+
+    /**
+     * The system timer.
+     */
+    private final CoordinatorTimer<Record> timer;
 
     /**
      * The supported partition assignors keyed by their name.
@@ -222,6 +236,7 @@ public class GroupMetadataManager {
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
+        CoordinatorTimer<Record> timer,
         List<PartitionAssignor> assignors,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
@@ -231,6 +246,7 @@ public class GroupMetadataManager {
         this.log = logContext.logger(GroupMetadataManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.time = time;
+        this.timer = timer;
         this.metadataImage = metadataImage;
         this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
         this.defaultAssignor = assignors.get(0);

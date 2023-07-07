@@ -62,6 +62,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -82,6 +83,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
@@ -98,6 +100,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
+    // Timer is not used yet so an empty mock is fine for now.
+    static class MockCoordinatorTimer implements CoordinatorTimer<Record> {
+        @Override
+        public void schedule(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<Record> operation) {}
+
+        @Override
+        public void cancel(String key) {}
+    }
+
     static class MockPartitionAssignor implements PartitionAssignor {
         private final String name;
         private GroupAssignment prepareGroupAssignment = null;
@@ -273,6 +284,7 @@ public class GroupMetadataManagerTest {
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
                         .withTime(time)
+                        .withTimer(new MockCoordinatorTimer())
                         .withMetadataImage(metadataImage)
                         .withConsumerGroupHeartbeatInterval(5000)
                         .withConsumerGroupMaxSize(consumerGroupMaxSize)
