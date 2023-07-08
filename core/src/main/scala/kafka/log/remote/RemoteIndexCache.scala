@@ -23,7 +23,7 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{CoreUtils, Logging, threadsafe}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Utils, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
@@ -238,6 +238,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     .build[Uuid, Entry]()
 
   private def init(): Unit = {
+    val start = Time.SYSTEM.hiResClockMs()
     try {
       Files.createDirectory(cacheDir.toPath)
       info(s"Created new file $cacheDir for RemoteIndexCache")
@@ -292,6 +293,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         }
       }
     })
+    info(s"RemoteIndexCache starts up in ${Time.SYSTEM.hiResClockMs() - start} ms.")
   }
 
   init()
