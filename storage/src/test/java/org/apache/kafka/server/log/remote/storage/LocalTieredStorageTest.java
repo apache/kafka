@@ -67,6 +67,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -206,7 +207,7 @@ public final class LocalTieredStorageTest {
         remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
 
         tieredStorage.deleteLogSegmentData(newRemoteLogSegmentMetadata(id));
-        remoteStorageVerifier.verifyLogSegmentFilesAbsent(id, segment);
+        remoteStorageVerifier.verifyLogSegmentFilesAbsent(id);
     }
 
     @Test
@@ -223,7 +224,7 @@ public final class LocalTieredStorageTest {
         tieredStorage.deletePartition(topicIdPartition);
         remoteStorageVerifier.assertFileDoesNotExist(remoteStorageVerifier.expectedPartitionPath());
         for (RemoteLogSegmentId segmentId: segmentIds) {
-            remoteStorageVerifier.verifyLogSegmentFilesAbsent(segmentId, null);
+            remoteStorageVerifier.verifyLogSegmentFilesAbsent(segmentId);
         }
     }
 
@@ -242,7 +243,7 @@ public final class LocalTieredStorageTest {
         });
 
         tieredStorage.deleteLogSegmentData(newRemoteLogSegmentMetadata(id));
-        remoteStorageVerifier.verifyLogSegmentFilesAbsent(id, segment);
+        remoteStorageVerifier.verifyLogSegmentFilesAbsent(id);
     }
 
     @Test
@@ -441,14 +442,13 @@ public final class LocalTieredStorageTest {
          * Verify the remote storage does NOT contain remote log segment and associated files for the provided {@code id}.
          *
          * @param id The unique ID of the remote log segment and associated resources (e.g. offset and time indexes).
-         * @param segment The segment stored on Kafka's local storage.
          */
-        public void verifyLogSegmentFilesAbsent(final RemoteLogSegmentId id, final LogSegmentData segment) {
+        public void verifyLogSegmentFilesAbsent(final RemoteLogSegmentId id) {
             expectedPaths(id).forEach(this::assertFileDoesNotExist);
         }
 
         /**
-         * Compare the content of the remote segment with the provided {@code data} array.
+         * Compare the content of the remote segment with the provided {@link LogSegmentData}.
          * This method does not fetch from the remote storage.
          *
          * @param id The unique ID of the remote log segment and associated resources (e.g. offset and time indexes).
@@ -556,15 +556,11 @@ public final class LocalTieredStorageTest {
         }
 
         private void assertFileExists(final Path path) {
-            if (!path.toFile().exists()) {
-                throw new AssertionError(format("File %s does not exist", path));
-            }
+            assertTrue(path.toFile().exists(), format("File %s does not exist", path));
         }
 
         private void assertFileDoesNotExist(final Path path) {
-            if (path.toFile().exists()) {
-                throw new AssertionError(format("File %s should not exist", path));
-            }
+            assertFalse(path.toFile().exists(), format("File %s should not exist", path));
         }
 
         private void assertFileDataEquals(final Path path1, final Path path2) {

@@ -268,9 +268,21 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                     storageDirectory.getAbsolutePath());
 
         } else {
-            storageDirectory = new File(storageDir, ROOT_STORAGES_DIR_NAME);
-            // NOTE: Provide the relative storage directory path to view the files in the same directory when running tests.
+            // LocalTieredStorage implementation can be used in two modes:
+            // 1. Integration test and
+            // 2. To bring Kafka in the local machine with LocalTieredStorage implementation as RSM for quick testing
+            //    by adding kafka-storage-<version>-test.jar in the classpath, then enabling the INCLUDE_TEST_JARS flag
+            //    before running the server
+            //
+            // In mode-2, if the commented-out #L284 is enabled, then it creates the storageDirectory from the present
+            // kafka working directory which can cause confusion:
+            //
+            // (eg) Kafka is installed on /opt/kafka and storageDirectory is configured as /tmp/kafka-tiered-storage,
+            // then it will create it the directory in /opt/kafka/kafka-tiered-storage/tmp/kafka-tiered-storage instead
+            //  of /tmp/kafka-tiered-storage.
+            //
             // storageDirectory = new File(new File("."), ROOT_STORAGES_DIR_NAME + "/" + storageDir);
+            storageDirectory = new File(storageDir, ROOT_STORAGES_DIR_NAME);
             final boolean existed = Files.exists(storageDirectory.toPath());
             if (!existed) {
                 try {
@@ -300,7 +312,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             try {
                 fileset = openFileset(storageDirectory, id);
 
-                logger.info("Offloading log segment for {} from offset={}", id.topicIdPartition(), data.logSegment());
+                logger.info("Offloading log segment for {} from segment={}", id.topicIdPartition(), data.logSegment());
 
                 fileset.copy(transferer, data);
 
@@ -417,7 +429,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         });
     }
 
-    // New API to be added in RemoteStorageManager
+    // KAFKA-15166: Add deletePartition API to the RemoteStorageManager
     // @Override
     public void deletePartition(TopicIdPartition partition) throws RemoteStorageException {
         wrap(() -> {
