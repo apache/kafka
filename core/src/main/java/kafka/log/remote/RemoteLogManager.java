@@ -573,7 +573,7 @@ public class RemoteLogManager implements Closeable {
             String logFileName = logFile.getName();
 
             logger.info("Copying {} to remote storage.", logFileName);
-            RemoteLogSegmentId id = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
+            RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
 
             long endOffset = nextSegmentBaseOffset - 1;
             File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextSegmentBaseOffset).orElse(null);
