@@ -17,10 +17,10 @@
 package kafka.log.remote;
 
 import kafka.server.BrokerTopicStats;
+import kafka.utils.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
@@ -50,10 +50,7 @@ public class RemoteLogReaderTest {
 
     @BeforeEach
     public void setUp() {
-        KafkaYammerMetrics.defaultRegistry()
-            .allMetrics()
-            .keySet()
-            .forEach(metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName));
+        TestUtils.clearYammerMetrics();
     }
 
     @Test
@@ -77,7 +74,7 @@ public class RemoteLogReaderTest {
 
         // Verify metrics for remote reads are updated correctly
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteReadRequestRate().count());
-        assertEquals(100, brokerTopicStats.topicStats(TOPIC).remoteBytesInRate().count());
+        assertEquals(100, brokerTopicStats.topicStats(TOPIC).remoteFetchBytesRate().count());
         assertEquals(0, brokerTopicStats.topicStats(TOPIC).failedRemoteReadRequestRate().count());
     }
 
@@ -99,7 +96,7 @@ public class RemoteLogReaderTest {
 
         // Verify metrics for remote reads are updated correctly
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteReadRequestRate().count());
-        assertEquals(0, brokerTopicStats.topicStats(TOPIC).remoteBytesInRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(TOPIC).remoteFetchBytesRate().count());
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).failedRemoteReadRequestRate().count());
     }
 }

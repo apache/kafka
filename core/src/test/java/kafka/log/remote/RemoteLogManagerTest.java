@@ -48,7 +48,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -63,6 +63,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import scala.Option;
 import scala.collection.JavaConverters;
@@ -86,7 +87,11 @@ import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
+import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT;
+import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_READER_METRICS_NAME_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
+import static org.apache.kafka.storage.internals.log.RemoteStorageThreadPool.AVG_IDLE_PERCENT;
+import static org.apache.kafka.storage.internals.log.RemoteStorageThreadPool.TASK_QUEUE_SIZE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,15 +100,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class RemoteLogManagerTest {
@@ -148,10 +156,7 @@ public class RemoteLogManagerTest {
         Properties props = new Properties();
         remoteLogManagerConfig = createRLMConfig(props);
 
-        KafkaYammerMetrics.defaultRegistry()
-            .allMetrics()
-            .keySet()
-            .forEach(metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName));
+        kafka.utils.TestUtils.clearYammerMetrics();
 
         remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time, tp -> Optional.of(mockLog), brokerTopicStats) {
             public RemoteStorageManager createRemoteStorageManager() {
@@ -311,7 +316,8 @@ public class RemoteLogManagerTest {
         doNothing().when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
         // Verify the metrics for remote writes and for failures is zero before attempt to copy log segment
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
@@ -348,7 +354,8 @@ public class RemoteLogManagerTest {
         assertEquals(oldSegmentEndOffset, argument.getValue());
 
         // Verify the metric for remote writes is updated correctly
-        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
+        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
         // Verify we did not report any failure for remote writes
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
     }
@@ -405,7 +412,8 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         doThrow(new RuntimeException()).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
-        // Verify the metrics for remote write failures is zero before attempt to copy log segment
+        // Verify the metrics for remote write requests/failures is zero before attempt to copy log segment
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
@@ -416,7 +424,8 @@ public class RemoteLogManagerTest {
 
         // Verify we should not have updated the highest offset because of write failure
         verify(mockLog, times(0)).updateHighestOffsetInRemoteStorage(anyLong());
-        // Verify the metric for remote write failure was updated.
+        // Verify the metric for remote write requests/failures was updated.
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
     }
 
@@ -676,6 +685,47 @@ public class RemoteLogManagerTest {
         InOrder inorder = inOrder(remoteStorageManager, remoteLogMetadataManager);
         inorder.verify(remoteStorageManager, times(1)).close();
         inorder.verify(remoteLogMetadataManager, times(1)).close();
+    }
+
+    @Test
+    public void testRemoveMetricsOnClose() throws IOException {
+        MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class);
+        try {
+            RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId,
+                time, tp -> Optional.of(mockLog), brokerTopicStats) {
+                public RemoteStorageManager createRemoteStorageManager() {
+                    return remoteStorageManager;
+                }
+
+                public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                    return remoteLogMetadataManager;
+                }
+            };
+            // Close RemoteLogManager so that metrics are removed
+            remoteLogManager.close();
+
+            KafkaMetricsGroup mockRlmMetricsGroup = mockMetricsGroupCtor.constructed().get(0);
+            KafkaMetricsGroup mockThreadPoolMetricsGroup = mockMetricsGroupCtor.constructed().get(1);
+
+            List<String> remoteLogManagerMetricNames = Collections.singletonList(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+            List<String> remoteStorageThreadPoolMetricNames = Arrays.asList(
+                REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE,
+                REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT
+            );
+
+            verify(mockRlmMetricsGroup, times(remoteLogManagerMetricNames.size())).newGauge(anyString(), any());
+            // Verify that the RemoteLogManager metrics are removed
+            remoteLogManagerMetricNames.forEach(metricName -> verify(mockRlmMetricsGroup).removeMetric(metricName));
+
+            verify(mockThreadPoolMetricsGroup, times(remoteStorageThreadPoolMetricNames.size())).newGauge(anyString(), any());
+            // Verify that the RemoteStorageThreadPool metrics are removed
+            remoteStorageThreadPoolMetricNames.forEach(metricName -> verify(mockThreadPoolMetricsGroup).removeMetric(metricName));
+
+            verifyNoMoreInteractions(mockRlmMetricsGroup);
+            verifyNoMoreInteractions(mockThreadPoolMetricsGroup);
+        } finally {
+            mockMetricsGroupCtor.close();
+        }
     }
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
