@@ -121,7 +121,8 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
-    private static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
+    public static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
+    public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -182,7 +183,7 @@ public class RemoteLogManager implements Closeable {
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
-        metricsGroup.newGauge("RemoteLogManagerTasksAvgIdlePercent", new Gauge<Double>() {
+        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT, new Gauge<Double>() {
             @Override
             public Double value() {
                 return rlmScheduledThreadPool.getIdlePercent();
@@ -195,6 +196,11 @@ public class RemoteLogManager implements Closeable {
                 rlmConfig.remoteLogReaderMaxPendingTasks(),
                 REMOTE_LOG_READER_METRICS_NAME_PREFIX
         );
+    }
+
+    private void removeMetrics() {
+        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+        remoteStorageReaderThreadPool.removeMetrics();
     }
 
     private <T> T createDelegate(ClassLoader classLoader, String className) {
@@ -610,6 +616,7 @@ public class RemoteLogManager implements Closeable {
             LogSegmentData segmentData = new LogSegmentData(logFile.toPath(), toPathIfExists(segment.lazyOffsetIndex().get().file()),
                     toPathIfExists(segment.lazyTimeIndex().get().file()), Optional.ofNullable(toPathIfExists(segment.txnIndex().file())),
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
+            brokerTopicStats.topicStats(log.topicPartition().topic()).remoteWriteRequestRate().mark();
             remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
@@ -617,7 +624,7 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
-                .remoteBytesOutRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
+                .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             copiedOffsetOption = OptionalLong.of(endOffset);
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
@@ -913,6 +920,7 @@ public class RemoteLogManager implements Closeable {
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
                 rlmScheduledThreadPool.close();
+                removeMetrics();
                 shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
 
                 leaderOrFollowerTasks.clear();

@@ -30,7 +30,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
+    public static final String TASK_QUEUE_SIZE = "TaskQueueSize";
+    public static final String AVG_IDLE_PERCENT = "AvgIdlePercent";
     private final Logger logger;
+    private final String metricsNamePrefix;
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     public RemoteStorageThreadPool(String threadNamePrefix,
                                    int numThreads,
@@ -44,14 +48,15 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
                 return "[" + Thread.currentThread().getName() + "]";
             }
         }.logger(RemoteStorageThreadPool.class);
-        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
-        metricsGroup.newGauge(metricsNamePrefix.concat("TaskQueueSize"), new Gauge<Integer>() {
+
+        this.metricsNamePrefix = metricsNamePrefix;
+        metricsGroup.newGauge(metricsNamePrefix.concat(TASK_QUEUE_SIZE), new Gauge<Integer>() {
             @Override
             public Integer value() {
                 return RemoteStorageThreadPool.this.getQueue().size();
             }
         });
-        metricsGroup.newGauge(metricsNamePrefix.concat("AvgIdlePercent"), new Gauge<Double>() {
+        metricsGroup.newGauge(metricsNamePrefix.concat(AVG_IDLE_PERCENT), new Gauge<Double>() {
             @Override
             public Double value() {
                 return 1 - (double) RemoteStorageThreadPool.this.getActiveCount() / (double) RemoteStorageThreadPool.this.getCorePoolSize();
@@ -85,5 +90,10 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
             return new Thread(r, namePrefix + threadNumber.getAndIncrement());
         }
 
+    }
+
+    public void removeMetrics() {
+        metricsGroup.removeMetric(metricsNamePrefix.concat(TASK_QUEUE_SIZE));
+        metricsGroup.removeMetric(metricsNamePrefix.concat(AVG_IDLE_PERCENT));
     }
 }
