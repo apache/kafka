@@ -163,29 +163,25 @@ public class FileStreamSourceConnectorTest {
     }
 
     @Test
+    public void testAlterOffsetsIncorrectPartitionKey() {
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap("invalid_partition_key", FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 0)
+        )));
+
+        // null partitions are invalid
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                null,
+                Collections.singletonMap(POSITION_FIELD, 0)
+        )));
+    }
+
+    @Test
     public void testAlterOffsetsMultiplePartitions() {
         Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
         offsets.put(Collections.singletonMap(FILENAME_FIELD, FILENAME), Collections.singletonMap(POSITION_FIELD, 0));
-        offsets.put(Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"), Collections.singletonMap(POSITION_FIELD, 0));
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
-    }
-
-    @Test
-    public void testAlterOffsetsIncorrectPartitionKey() {
-        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
-                Collections.singletonMap("invalid_partition_key", FILENAME),
-                Collections.singletonMap(POSITION_FIELD, 0)
-        );
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
-    }
-
-    @Test
-    public void testAlterOffsetsIncorrectPartitionValue() {
-        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"),
-                Collections.singletonMap(POSITION_FIELD, 0)
-        );
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+        offsets.put(Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"), null);
+        connector.alterOffsets(sourceProperties, offsets);
     }
 
     @Test

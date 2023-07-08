@@ -114,30 +114,25 @@ public class FileStreamSourceConnector extends SourceConnector {
             throw new ConnectException("Offsets cannot be modified if the '" + FILE_CONFIG + "' configuration is unspecified");
         }
 
-        // An empty offsets map could indicate that the offsets were reset previously or that no offsets have been committed yet (for a reset operation)
-        // - we don't need any additional validation for this case.
-        if (offsets.size() == 0) {
-            return true;
+        // This connector makes use of a single source partition at a time which represents the file that it is configured to read from.
+        // However, there could also be source partitions from previous configurations of the connector.
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> partitionOffset : offsets.entrySet()) {
+            Map<String, ?> partition = partitionOffset.getKey();
+            if (partition == null) {
+                throw new ConnectException("Partition objects cannot be null");
+            }
+
+            if (!partition.containsKey(FILENAME_FIELD)) {
+                throw new ConnectException("Partition objects should contain the key '" + FILENAME_FIELD + "'");
+            }
+
+            Map<String, ?> offset = partitionOffset.getValue();
+            // null offsets are allowed and represent a deletion of offsets for a partition
+            if (offset != null && !offset.containsKey(POSITION_FIELD)) {
+                throw new ConnectException("Offset objects should either be null or contain the key '" + POSITION_FIELD + "'");
+            }
         }
 
-        // This connector makes use of a single source partition which represents the file that it is configured to read from
-        if (offsets.size() > 1) {
-            throw new ConnectException("The " + FileStreamSourceConnector.class.getSimpleName() + " supports only a single source partition / file");
-        }
-
-        Map<String, ?> partition = offsets.keySet().iterator().next();
-        if (!partition.containsKey(FILENAME_FIELD)) {
-            throw new ConnectException("The partition should contain the key '" + FILENAME_FIELD + "'");
-        }
-        if (!filename.equals(partition.get(FILENAME_FIELD))) {
-            throw new ConnectException("The value for the '" + FILENAME_FIELD + "' key in the partition should match the configured value for the " +
-                    "connector configuration '" + FILE_CONFIG + "'");
-        }
-
-        Map<String, ?> offset = offsets.values().iterator().next();
-        if (!offset.containsKey(POSITION_FIELD)) {
-            throw new ConnectException("The offset should contain the key '" + POSITION_FIELD + "'");
-        }
         // Let the task validate the actual value for the offset position on startup
         return true;
     }
