@@ -18,7 +18,7 @@
 package kafka.server.metadata
 
 import kafka.controller.StateChangeLogger
-import kafka.server.{CachedControllerId, FinalizedFeaturesAndEpoch, KRaftCachedControllerId, MetadataCache}
+import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -37,7 +37,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -393,15 +393,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()
 
-  override def features(): FinalizedFeaturesAndEpoch = {
+  override def features(): Features = {
     val image = _currentImage
-    val features = image.features().finalizedVersions().asScala.map {
-      case (name: String, level: java.lang.Short) => name -> Short2short(level)
-    }
-    features.put(MetadataVersion.FEATURE_NAME, image.features().metadataVersion().featureLevel())
-
-    FinalizedFeaturesAndEpoch(
-      features.toMap,
-      image.highestOffsetAndEpoch().offset)
+    new Features(image.features().metadataVersion(),
+      image.features().finalizedVersions(),
+      image.highestOffsetAndEpoch().offset,
+      true)
   }
 }

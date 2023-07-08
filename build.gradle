@@ -180,6 +180,12 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
+    dependsOn subprojects.collect {
+      it.tasks.matching {
+        it.name == "processMessages" || it.name == "processTestMessages"
+      }
+    }
+
     verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
@@ -270,6 +276,9 @@ subprojects {
     // set --source and --target via `sourceCompatibility` and `targetCompatibility` a couple of lines below
     if (JavaVersion.current().isJava9Compatible())
       options.release = minJavaVersion
+    // --source/--target 8 is deprecated in Java 20, suppress warning until Java 8 support is dropped in Kafka 4.0
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
+      options.compilerArgs << "-Xlint:-options"
   }
 
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
@@ -867,6 +876,7 @@ project(':core') {
 
 
     implementation libs.argparse4j
+    implementation libs.caffeine
     implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala

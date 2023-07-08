@@ -145,7 +145,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     // Visible for testing
-    CompletableFuture<MigrationDriverState> migrationState() {
+    public CompletableFuture<MigrationDriverState> migrationState() {
         CompletableFuture<MigrationDriverState> stateFuture = new CompletableFuture<>();
         eventQueue.append(() -> stateFuture.complete(migrationState));
         return stateFuture;
@@ -328,7 +328,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     /**
      * Construct and enqueue a {@link MetadataChangeEvent} with a given completion handler. In production use cases,
-     * this handler is a no-op. This method exists so we can add additional logic in our unit tests to wait for the
+     * this handler is a no-op. This method exists so that we can add additional logic in our unit tests to wait for the
      * enqueued event to finish executing.
      */
     void enqueueMetadataChangeEvent(

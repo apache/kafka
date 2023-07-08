@@ -42,9 +42,10 @@ public class UnalignedFileRecords implements UnalignedRecords {
     }
 
     @Override
-    public long writeTo(TransferableChannel destChannel, long previouslyWritten, int remaining) throws IOException {
+    public int writeTo(TransferableChannel destChannel, int previouslyWritten, int remaining) throws IOException {
         long position = this.position + previouslyWritten;
-        long count = Math.min(remaining, sizeInBytes() - previouslyWritten);
-        return destChannel.transferFrom(channel, position, count);
+        int count = Math.min(remaining, sizeInBytes() - previouslyWritten);
+        // safe to cast to int since `count` is an int
+        return (int) destChannel.transferFrom(channel, position, count);
     }
 }

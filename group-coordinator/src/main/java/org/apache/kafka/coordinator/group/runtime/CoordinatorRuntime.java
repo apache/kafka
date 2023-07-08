@@ -22,17 +22,27 @@ import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -60,7 +70,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @param <S> The type of the state machine.
  * @param <U> The type of the record.
  */
-public class CoordinatorRuntime<S extends Coordinator<U>, U> {
+public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoCloseable {
 
     /**
      * Builder to create a CoordinatorRuntime.
@@ -69,11 +79,19 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
      * @param <U> The type of the record.
      */
     public static class Builder<S extends Coordinator<U>, U> {
+        private String logPrefix;
         private LogContext logContext;
         private CoordinatorEventProcessor eventProcessor;
         private PartitionWriter<U> partitionWriter;
         private CoordinatorLoader<U> loader;
         private CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
+        private Time time;
+        private Timer timer;
+
+        public Builder<S, U> withLogPrefix(String logPrefix) {
+            this.logPrefix = logPrefix;
+            return this;
+        }
 
         public Builder<S, U> withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -100,9 +118,21 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
             return this;
         }
 
+        public Builder<S, U> withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public Builder<S, U> withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
+            if (logPrefix == null)
+                logPrefix = "";
             if (logContext == null)
-                logContext = new LogContext();
+                logContext = new LogContext(logPrefix);
             if (eventProcessor == null)
                 throw new IllegalArgumentException("Event processor must be set.");
             if (partitionWriter == null)
@@ -111,13 +141,20 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
                 throw new IllegalArgumentException("Loader must be set.");
             if (coordinatorBuilderSupplier == null)
                 throw new IllegalArgumentException("State machine supplier must be set.");
+            if (time == null)
+                throw new IllegalArgumentException("Time must be set.");
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
 
             return new CoordinatorRuntime<>(
+                logPrefix,
                 logContext,
                 eventProcessor,
                 partitionWriter,
                 loader,
-                coordinatorBuilderSupplier
+                coordinatorBuilderSupplier,
+                time,
+                timer
             );
         }
     }
@@ -180,6 +217,133 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
     }
 
     /**
+     * The EventBasedCoordinatorTimer implements the CoordinatorTimer interface and provides an event based
+     * timer which turns timeouts of a regular {@link Timer} into {@link CoordinatorWriteEvent} events which
+     * are executed by the {@link CoordinatorEventProcessor} used by this coordinator runtime. This is done
+     * to ensure that the timer respects the threading model of the coordinator runtime.
+     *
+     * The {@link CoordinatorWriteEvent} events pushed by the coordinator timer wraps the
+     * {@link TimeoutOperation} operations scheduled by the coordinators.
+     *
+     * It also keeps track of all the scheduled {@link TimerTask}. This allows timeout operations to be
+     * cancelled or rescheduled. When a timer is cancelled or overridden, the previous timer is guaranteed to
+     * not be executed even if it already expired and got pushed to the event processor.
+     *
+     * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
+     */
+    class EventBasedCoordinatorTimer implements CoordinatorTimer<U> {
+        /**
+         * The logger.
+         */
+        final Logger log;
+
+        /**
+         * The topic partition.
+         */
+        final TopicPartition tp;
+
+        /**
+         * The scheduled timers keyed by their key.
+         */
+        final Map<String, TimerTask> tasks = new HashMap<>();
+
+        EventBasedCoordinatorTimer(TopicPartition tp, LogContext logContext) {
+            this.tp = tp;
+            this.log = logContext.logger(EventBasedCoordinatorTimer.class);
+        }
+
+        @Override
+        public void schedule(
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            TimeoutOperation<U> operation
+        ) {
+            // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
+            // expires, the event is pushed to the queue of the coordinator runtime to be executed. This
+            // ensures that the threading model of the runtime is respected.
+            TimerTask task = new TimerTask(unit.toMillis(delay)) {
+                @Override
+                public void run() {
+                    String eventName = "Timeout(tp=" + tp + ", key=" + key + ")";
+                    CoordinatorWriteEvent<Void> event = new CoordinatorWriteEvent<>(eventName, tp, coordinator -> {
+                        log.debug("Executing write event {} for timer {}.", eventName, key);
+
+                        // If the task is different, it means that the timer has been
+                        // cancelled while the event was waiting to be processed.
+                        if (!tasks.remove(key, this)) {
+                            throw new RejectedExecutionException("Timer " + key + " was overridden or cancelled");
+                        }
+
+                        // Execute the timeout operation.
+                        return new CoordinatorResult<>(operation.generateRecords(), null);
+                    });
+
+                    // If the write event fails, it is rescheduled with a small backoff except if the
+                    // error is fatal.
+                    event.future.exceptionally(ex -> {
+                        if (ex instanceof RejectedExecutionException) {
+                            log.debug("The write event {} for the timer {} was not executed because it was " +
+                                "cancelled or overridden.", event.name, key);
+                            return null;
+                        }
+
+                        if (ex instanceof NotCoordinatorException || ex instanceof CoordinatorLoadInProgressException) {
+                            log.debug("The write event {} for the timer {} failed due to {}. Ignoring it because " +
+                                "the coordinator is not active.", event.name, key, ex.getMessage());
+                            return null;
+                        }
+
+                        if (retry) {
+                            log.info("The write event {} for the timer {} failed due to {}. Rescheduling it. ",
+                                event.name, key, ex.getMessage());
+                            schedule(key, 500, TimeUnit.MILLISECONDS, retry, operation);
+                        } else {
+                            log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
+                                event.name, key, ex.getMessage());
+                        }
+
+                        return null;
+                    });
+
+                    log.debug("Scheduling write event {} for timer {}.", event.name, key);
+                    try {
+                        enqueue(event);
+                    } catch (NotCoordinatorException ex) {
+                        log.info("Failed to enqueue write event {} for timer {} because the runtime is closed. Ignoring it.",
+                            event.name, key);
+                    }
+                }
+            };
+
+            log.debug("Registering timer {} with delay of {}ms.", key, unit.toMillis(delay));
+            TimerTask prevTask = tasks.put(key, task);
+            if (prevTask != null) prevTask.cancel();
+
+            timer.add(task);
+        }
+
+        @Override
+        public void cancel(String key) {
+            TimerTask prevTask = tasks.remove(key);
+            if (prevTask != null) prevTask.cancel();
+        }
+
+        public void cancelAll() {
+            Iterator<Map.Entry<String, TimerTask>> iterator = tasks.entrySet().iterator();
+            while (iterator.hasNext()) {
+                iterator.next().getValue().cancel();
+                iterator.remove();
+            }
+        }
+
+        public int size() {
+            return tasks.size();
+        }
+    }
+
+    /**
      * CoordinatorContext holds all the metadata around a coordinator state machine.
      */
     class CoordinatorContext {
@@ -187,6 +351,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
          * The topic partition backing the coordinator.
          */
         final TopicPartition tp;
+
+        /**
+         * The log context.
+         */
+        final LogContext logContext;
 
         /**
          * The snapshot registry backing the coordinator.
@@ -198,6 +367,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
          * on records to be committed.
          */
         final DeferredEventQueue deferredEventQueue;
+
+        /**
+         * The coordinator timer.
+         */
+        final EventBasedCoordinatorTimer timer;
 
         /**
          * The current state.
@@ -235,8 +409,14 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
             TopicPartition tp
         ) {
             this.tp = tp;
+            this.logContext = new LogContext(String.format("[%s topic=%s partition=%d] ",
+                logPrefix,
+                tp.topic(),
+                tp.partition()
+            ));
             this.snapshotRegistry = new SnapshotRegistry(logContext);
             this.deferredEventQueue = new DeferredEventQueue(logContext);
+            this.timer = new EventBasedCoordinatorTimer(tp, logContext);
             this.state = CoordinatorState.INITIAL;
             this.epoch = -1;
             this.lastWrittenOffset = 0L;
@@ -321,7 +501,10 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
                     state = CoordinatorState.LOADING;
                     coordinator = coordinatorBuilderSupplier
                         .get()
+                        .withLogContext(logContext)
                         .withSnapshotRegistry(snapshotRegistry)
+                        .withTime(time)
+                        .withTimer(timer)
                         .build();
                     break;
 
@@ -329,7 +512,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
                     state = CoordinatorState.ACTIVE;
                     snapshotRegistry.getOrCreateSnapshot(0);
                     partitionWriter.registerListener(tp, highWatermarklistener);
-                    coordinator.onLoaded();
+                    coordinator.onLoaded(metadataImage);
                     break;
 
                 case FAILED:
@@ -352,6 +535,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
          */
         private void unload() {
             partitionWriter.deregisterListener(tp, highWatermarklistener);
+            timer.cancelAll();
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
                 coordinator.onUnloaded();
@@ -736,6 +920,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
     }
 
     /**
+     * The log prefix.
+     */
+    private final String logPrefix;
+
+    /**
      * The log context.
      */
     private final LogContext logContext;
@@ -744,6 +933,16 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
      * The logger.
      */
     private final Logger log;
+
+    /**
+     * The system time.
+     */
+    private final Time time;
+
+    /**
+     * The system timer.
+     */
+    private final Timer timer;
 
     /**
      * The coordinators keyed by topic partition.
@@ -783,23 +982,37 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
 
     /**
+     * The latest known metadata image.
+     */
+    private volatile MetadataImage metadataImage = MetadataImage.EMPTY;
+
+    /**
      * Constructor.
      *
+     * @param logPrefix                     The log prefix.
      * @param logContext                    The log context.
      * @param processor                     The event processor.
      * @param partitionWriter               The partition writer.
      * @param loader                        The coordinator loader.
      * @param coordinatorBuilderSupplier    The coordinator builder.
+     * @param time                          The system time.
+     * @param timer                         The system timer.
      */
     private CoordinatorRuntime(
+        String logPrefix,
         LogContext logContext,
         CoordinatorEventProcessor processor,
         PartitionWriter<U> partitionWriter,
         CoordinatorLoader<U> loader,
-        CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier
+        CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier,
+        Time time,
+        Timer timer
     ) {
+        this.logPrefix = logPrefix;
         this.logContext = logContext;
         this.log = logContext.logger(CoordinatorRuntime.class);
+        this.time = time;
+        this.timer = timer;
         this.coordinators = new ConcurrentHashMap<>();
         this.processor = processor;
         this.partitionWriter = partitionWriter;
@@ -1056,6 +1269,37 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
     }
 
     /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The metadata delta.
+     */
+    public void onNewMetadataImage(
+        MetadataImage newImage,
+        MetadataDelta delta
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduling applying of a new metadata image with offset {}.", newImage.offset());
+
+        // Update global image.
+        metadataImage = newImage;
+
+        // Push an event for each coordinator.
+        coordinators.keySet().forEach(tp -> {
+            scheduleInternalOperation("UpdateImage(tp=" + tp + ", offset=" + newImage.offset() + ")", tp, () -> {
+                CoordinatorContext context = contextOrThrow(tp);
+                if (context.state == CoordinatorState.ACTIVE) {
+                    log.debug("Applying new metadata image with offset {} to {}.", newImage.offset(), tp);
+                    context.coordinator.onNewMetadataImage(newImage, delta);
+                } else {
+                    log.debug("Ignoring new metadata image with offset {} for {} because the coordinator is not active.",
+                        newImage.offset(), tp);
+                }
+            });
+        });
+    }
+
+    /**
      * Closes the runtime. This closes all the coordinators currently registered
      * in the runtime.
      *
@@ -1068,9 +1312,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         }
 
         log.info("Closing coordinator runtime.");
+        Utils.closeQuietly(loader, "loader");
+        Utils.closeQuietly(timer, "timer");
         // This close the processor, drain all the pending events and
         // reject any new events.
-        processor.close();
+        Utils.closeQuietly(processor, "event processor");
         // Unload all the coordinators.
         coordinators.forEach((tp, context) -> {
             context.transitionTo(CoordinatorState.CLOSED);

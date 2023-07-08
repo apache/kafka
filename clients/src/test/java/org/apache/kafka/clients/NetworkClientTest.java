@@ -461,7 +461,7 @@ public class NetworkClientTest {
 
     /**
      * This is a helper method that will execute two produce calls. The first call is expected to work and the
-     * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurrs
+     * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurs
      * during a request, we want to ensure that we {@link Metadata#requestUpdate() request a metadata update} so that
      * on a subsequent invocation of {@link NetworkClient#poll(long, long) poll}, the metadata request will be sent.
      *

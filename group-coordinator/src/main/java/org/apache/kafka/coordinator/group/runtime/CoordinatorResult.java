@@ -41,14 +41,14 @@ public class CoordinatorResult<T, U> {
      * Constructs a Result with records and a response.
      *
      * @param records   A non-null list of records.
-     * @param response  A non-null response.
+     * @param response  A response or null.
      */
     public CoordinatorResult(
         List<U> records,
         T response
     ) {
         this.records = Objects.requireNonNull(records);
-        this.response = Objects.requireNonNull(response);
+        this.response = response;
     }
 
     /**

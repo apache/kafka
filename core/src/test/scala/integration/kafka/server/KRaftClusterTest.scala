@@ -950,7 +950,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.brokers().forEach((_, server) => {
-        server.remoteLogManager match {
+        server.remoteLogManagerOpt match {
           case Some(_) =>
           case None => fail("RemoteLogManager should be initialized")
         }

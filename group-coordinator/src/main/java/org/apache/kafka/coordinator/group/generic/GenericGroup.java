@@ -163,7 +163,7 @@ public class GenericGroup implements Group {
     private Optional<Set<String>> subscribedTopics = Optional.empty();
 
     /**
-     * A flag to indiciate whether a new member was added. Used
+     * A flag to indicate whether a new member was added. Used
      * to further delay initial joins (new group).
      */
     private boolean newMemberAdded = false;
@@ -506,7 +506,7 @@ public class GenericGroup implements Group {
      */
     public boolean addPendingMember(String memberId) {
         if (hasMemberId(memberId)) {
-            throw new IllegalStateException("Attept to add pending member " + memberId +
+            throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
         return pendingJoinMembers.add(memberId);
@@ -528,7 +528,7 @@ public class GenericGroup implements Group {
      */
     public boolean addPendingSyncMember(String memberId) {
         if (!hasMemberId(memberId)) {
-            throw new IllegalStateException("Attept to add pending sync member " + memberId +
+            throw new IllegalStateException("Attempt to add pending sync member " + memberId +
                 " which is already a stable member of the group.");
         }
 
@@ -543,7 +543,7 @@ public class GenericGroup implements Group {
      */
     public boolean removePendingSyncMember(String memberId) {
         if (!hasMemberId(memberId)) {
-            throw new IllegalStateException("Attept to add pending member " + memberId +
+            throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
         return pendingSyncMembers.remove(memberId);

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.util.timer;
 
-public interface Timer {
+public interface Timer extends AutoCloseable {
     /**
      * Add a new task to this executor. It will be executed after the task's delay
      * (beginning from the time of submission)
@@ -38,8 +38,4 @@ public interface Timer {
      */
     int size();
 
-    /**
-     * Shutdown the timer service, leaving pending tasks unexecuted
-     */
-    void shutdown();
 }

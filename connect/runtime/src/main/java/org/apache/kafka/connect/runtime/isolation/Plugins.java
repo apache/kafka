@@ -38,8 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -59,22 +57,22 @@ public class Plugins {
     private final PluginScanResult scanResult;
 
     public Plugins(Map<String, String> props) {
-        this(props, Plugins.class.getClassLoader());
+        this(props, Plugins.class.getClassLoader(), new ClassLoaderFactory());
     }
 
     // VisibleForTesting
-    Plugins(Map<String, String> props, ClassLoader parent) {
+    Plugins(Map<String, String> props, ClassLoader parent, ClassLoaderFactory factory) {
         String pluginPath = WorkerConfig.pluginPath(props);
         List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
-        delegatingLoader = newDelegatingClassLoader(pluginLocations, parent);
-        scanResult = delegatingLoader.initLoaders();
+        delegatingLoader = factory.newDelegatingClassLoader(parent);
+        Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, delegatingLoader, factory);
+        scanResult = initLoaders(pluginSources);
     }
 
-    // VisibleForTesting
-    protected DelegatingClassLoader newDelegatingClassLoader(final List<Path> pluginLocations, ClassLoader parent) {
-        return AccessController.doPrivileged(
-                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(pluginLocations, parent)
-        );
+    private PluginScanResult initLoaders(Set<PluginSource> pluginSources) {
+        PluginScanResult reflectiveScanResult = new ReflectionScanner().discoverPlugins(pluginSources);
+        delegatingLoader.installDiscoveredPlugins(reflectiveScanResult);
+        return reflectiveScanResult;
     }
 
     private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {

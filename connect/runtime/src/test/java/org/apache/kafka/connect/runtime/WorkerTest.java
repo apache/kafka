@@ -22,6 +22,8 @@ import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupsResult;
 import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
@@ -61,6 +63,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -89,6 +92,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
@@ -134,6 +138,7 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GRO
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
 import static org.apache.kafka.connect.sink.SinkTask.TOPICS_CONFIG;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -144,6 +149,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -1819,16 +1825,24 @@ public class WorkerTest {
         verifyKafkaClusterId();
     }
 
-    @SuppressWarnings("unchecked")
     private void mockAdminListConsumerGroupOffsets(Admin admin, Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets, Exception e) {
+        mockAdminListConsumerGroupOffsets(admin, consumerGroupOffsets, e, null, 0);
+    }
+
+    private void mockAdminListConsumerGroupOffsets(Admin admin, Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets, Exception e, Time time, long delayMs) {
         ListConsumerGroupOffsetsResult result = mock(ListConsumerGroupOffsetsResult.class);
         when(admin.listConsumerGroupOffsets(anyString(), any(ListConsumerGroupOffsetsOptions.class))).thenReturn(result);
-        KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> adminFuture = mock(KafkaFuture.class);
-        when(result.partitionsToOffsetAndMetadata()).thenReturn(adminFuture);
-        when(adminFuture.whenComplete(any())).thenAnswer(invocation -> {
-            ((KafkaFuture.BiConsumer<Map<TopicPartition, OffsetAndMetadata>, Throwable>) invocation.getArgument(0))
-                    .accept(consumerGroupOffsets, e);
-            return null;
+        KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> adminFuture = new KafkaFutureImpl<>();
+        if (e != null) {
+            adminFuture.completeExceptionally(e);
+        } else {
+            adminFuture.complete(consumerGroupOffsets);
+        }
+        when(result.partitionsToOffsetAndMetadata()).thenAnswer(invocation -> {
+            if (time != null) {
+                time.sleep(delayMs);
+            }
+            return adminFuture;
         });
     }
 
@@ -1915,13 +1929,13 @@ public class WorkerTest {
                 "support altering of offsets"));
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterConnectorOffsets(CONNECTOR_ID, connectorProps,
+        worker.modifyConnectorOffsets(CONNECTOR_ID, connectorProps,
                 Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
                 cb);
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
-        assertEquals("Failed to alter offsets for connector " + CONNECTOR_ID + " because it doesn't support external modification of offsets",
+        assertEquals("Failed to modify offsets for connector " + CONNECTOR_ID + " because it doesn't support external modification of offsets",
                 e.getCause().getMessage());
 
         verifyGenericIsolation();
@@ -1952,7 +1966,7 @@ public class WorkerTest {
         });
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterSourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer,
+        worker.modifySourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer,
                 offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
         assertEquals("The offsets for this connector have been altered successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
 
@@ -1988,7 +2002,7 @@ public class WorkerTest {
         });
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterSourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer,
+        worker.modifySourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer,
                 offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS).message());
         assertEquals(ConnectException.class, e.getCause().getClass());
@@ -2002,7 +2016,7 @@ public class WorkerTest {
     }
 
     @Test
-    public void testAlterOffsetsSinkConnectorNoResets() throws Exception {
+    public void testAlterOffsetsSinkConnectorNoDeletes() throws Exception {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture = ArgumentCaptor.forClass(Map.class);
         Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
@@ -2024,7 +2038,7 @@ public class WorkerTest {
     }
 
     @Test
-    public void testAlterOffsetSinkConnectorOnlyResets() throws Exception {
+    public void testAlterOffsetSinkConnectorOnlyDeletes() throws Exception {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture = ArgumentCaptor.forClass(Set.class);
         Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
@@ -2049,7 +2063,7 @@ public class WorkerTest {
     }
 
     @Test
-    public void testAlterOffsetsSinkConnectorAltersAndResets() throws Exception {
+    public void testAlterOffsetsSinkConnectorAltersAndDeletes() throws Exception {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture = ArgumentCaptor.forClass(Map.class);
         @SuppressWarnings("unchecked")
@@ -2109,7 +2123,7 @@ public class WorkerTest {
         }
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+        worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
                 Thread.currentThread().getContextClassLoader(), cb);
         assertEquals("The offsets for this connector have been altered successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
 
@@ -2145,7 +2159,7 @@ public class WorkerTest {
                 Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+        worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
                 Thread.currentThread().getContextClassLoader(), cb);
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
@@ -2194,7 +2208,7 @@ public class WorkerTest {
         partitionOffsets.put(partition2, null);
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+        worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
                 Thread.currentThread().getContextClassLoader(), cb);
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
@@ -2229,7 +2243,7 @@ public class WorkerTest {
         partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+        worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
                 Thread.currentThread().getContextClassLoader(), cb);
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
@@ -2237,6 +2251,193 @@ public class WorkerTest {
 
         verify(admin, timeout(1000)).close();
         verifyNoMoreInteractions(admin);
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testResetOffsetsSourceConnectorExactlyOnceSupportEnabled() throws Exception {
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "enabled");
+        workerProps.put("bootstrap.servers", "localhost:9092");
+        workerProps.put("group.id", "connect-cluster");
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", "connect-offsets");
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+        mockKafkaClusterId();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, null);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+        ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+        OffsetStorageWriter offsetWriter = mock(OffsetStorageWriter.class);
+
+        Set<Map<String, Object>> connectorPartitions = new HashSet<>();
+        connectorPartitions.add(Collections.singletonMap("partitionKey1", new Object()));
+        connectorPartitions.add(Collections.singletonMap("partitionKey2", new Object()));
+        when(offsetStore.connectorPartitions(eq(CONNECTOR_ID))).thenReturn(connectorPartitions);
+        when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
+            invocation.getArgument(0, Callback.class).onCompletion(null, null);
+            return null;
+        });
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.modifySourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, null, offsetStore, producer,
+                offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
+        assertEquals("The offsets for this connector have been reset successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
+
+        InOrder inOrder = Mockito.inOrder(offsetStore, offsetWriter, producer);
+        inOrder.verify(offsetStore).start();
+        connectorPartitions.forEach(partition -> inOrder.verify(offsetWriter).offset(partition, null));
+        inOrder.verify(offsetWriter).beginFlush();
+        inOrder.verify(producer).initTransactions();
+        inOrder.verify(producer).beginTransaction();
+        inOrder.verify(offsetWriter).doFlush(any());
+        inOrder.verify(producer).commitTransaction();
+        inOrder.verify(offsetStore, timeout(1000)).stop();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testResetOffsetsSinkConnector() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        Time time = new MockTime();
+        worker = new Worker(WORKER_ID, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+
+        TopicPartition tp = new TopicPartition("test-topic", 0);
+        mockAdminListConsumerGroupOffsets(admin, Collections.singletonMap(tp, new OffsetAndMetadata(10L)), null, time, 2000);
+        when(sinkConnector.alterOffsets(eq(connectorProps), eq(Collections.singletonMap(tp, null)))).thenAnswer(invocation -> {
+            time.sleep(3000);
+            return true;
+        });
+
+        DeleteConsumerGroupsResult deleteConsumerGroupsResult = mock(DeleteConsumerGroupsResult.class);
+        when(admin.deleteConsumerGroups(anyCollection(), any(DeleteConsumerGroupsOptions.class))).thenReturn(deleteConsumerGroupsResult);
+        when(deleteConsumerGroupsResult.all()).thenReturn(KafkaFuture.completedFuture(null));
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, null,
+                Thread.currentThread().getContextClassLoader(), cb);
+        assertEquals("The offsets for this connector have been reset successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
+
+        ArgumentCaptor<DeleteConsumerGroupsOptions> deleteConsumerGroupsOptionsArgumentCaptor = ArgumentCaptor.forClass(DeleteConsumerGroupsOptions.class);
+        verify(admin).deleteConsumerGroups(anyCollection(), deleteConsumerGroupsOptionsArgumentCaptor.capture());
+        // Expect the call to Admin::deleteConsumerGroups to have a timeout value equal to the overall timeout value of DEFAULT_REST_REQUEST_TIMEOUT_MS
+        // minus the delay introduced in the call to Admin::listConsumerGroupOffsets (2000 ms) and the delay introduced in the call to
+        // SinkConnector::alterOffsets (3000 ms)
+        assertEquals((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS - 2000L - 3000L,
+                deleteConsumerGroupsOptionsArgumentCaptor.getValue().timeoutMs().intValue());
+        verify(admin, timeout(1000)).close();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testResetOffsetsSinkConnectorDeleteConsumerGroupError() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newCachedThreadPool(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+
+        TopicPartition tp = new TopicPartition("test-topic", 0);
+        mockAdminListConsumerGroupOffsets(admin, Collections.singletonMap(tp, new OffsetAndMetadata(10L)), null);
+        when(sinkConnector.alterOffsets(eq(connectorProps), eq(Collections.singletonMap(tp, null)))).thenReturn(true);
+
+        DeleteConsumerGroupsResult deleteConsumerGroupsResult = mock(DeleteConsumerGroupsResult.class);
+        when(admin.deleteConsumerGroups(anyCollection(), any(DeleteConsumerGroupsOptions.class))).thenReturn(deleteConsumerGroupsResult);
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new ClusterAuthorizationException("Test exception"));
+        when(deleteConsumerGroupsResult.all()).thenReturn(future);
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, null,
+                Thread.currentThread().getContextClassLoader(), cb);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(ConnectException.class, e.getCause().getClass());
+
+        verify(admin, timeout(1000)).close();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testModifySourceConnectorOffsetsTimeout() throws Exception {
+        mockKafkaClusterId();
+        Time time = new MockTime();
+        worker = new Worker(WORKER_ID, time, plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, null);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenAnswer(invocation -> {
+            time.sleep(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000);
+            return true;
+        });
+        ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+        OffsetStorageWriter offsetWriter = mock(OffsetStorageWriter.class);
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = Collections.singletonMap(
+                Collections.singletonMap("partitionKey", "partitionValue"),
+                Collections.singletonMap("offsetKey", "offsetValue"));
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.modifySourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer,
+                offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS).message());
+        assertEquals(ConnectException.class, e.getCause().getClass());
+        assertThat(e.getCause().getMessage(), containsString("Timed out"));
+
+        verify(offsetStore).start();
+        verify(offsetStore, timeout(1000)).stop();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testModifyOffsetsSinkConnectorTimeout() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        Time time = new MockTime();
+        worker = new Worker(WORKER_ID, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenAnswer(invocation -> {
+            time.sleep(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000);
+            return true;
+        });
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, new HashMap<>(),
+                Thread.currentThread().getContextClassLoader(), cb);
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS).message());
+        assertEquals(ConnectException.class, e.getCause().getClass());
+        assertThat(e.getCause().getMessage(), containsString("Timed out"));
+
+        verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
     }
 
