@@ -18,7 +18,6 @@
 package org.apache.kafka.tools.reassign;
 
 import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 
 public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
@@ -35,7 +34,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     private final OptionSpec<String> reassignmentJsonFileOpt;
     private final OptionSpec<String> topicsToMoveJsonFileOpt;
     private final OptionSpec<String> brokerListOpt;
-    private final OptionSpecBuilder disableRackAware;
+    private final OptionSpec<?> disableRackAware;
     private final OptionSpec<Long> interBrokerThrottleOpt;
     private final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
     private final OptionSpec<Long> timeoutOpt;
@@ -151,7 +150,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         return brokerListOpt;
     }
 
-    public OptionSpecBuilder disableRackAware() {
+    public OptionSpec<?> disableRackAware() {
         return disableRackAware;
     }
 
