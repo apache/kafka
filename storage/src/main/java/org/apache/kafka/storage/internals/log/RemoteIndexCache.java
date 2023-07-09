@@ -22,6 +22,7 @@ import com.github.benmanes.caffeine.cache.RemovalCause;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
@@ -137,13 +138,17 @@ public class RemoteIndexCache implements Closeable {
                 // evicted (means removal due to the policy)
                 .removalListener((Uuid key, Entry entry, RemovalCause cause) -> {
                     // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
-                    try {
-                        entry.markForCleanup();
-                    } catch (IOException e) {
-                        throw new KafkaException(e);
-                    }
-                    if (!expiredIndexes.offer(entry)) {
-                        log.error("Error while inserting entry {} into the cleaner queue", entry);
+                    if (entry != null) {
+                        try {
+                            entry.markForCleanup();
+                        } catch (IOException e) {
+                            throw new KafkaException(e);
+                        }
+                        if (!expiredIndexes.offer(entry)) {
+                            log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", entry, key);
+                        }
+                    } else {
+                        log.error("Received entry as null for key {} when the it is removed from the cache.", key);
                     }
                 }).build();
 
@@ -174,16 +179,18 @@ public class RemoteIndexCache implements Closeable {
                         Entry entry = expiredIndexes.take();
                         log.debug("Cleaning up index entry {}", entry);
                         entry.cleanup();
-                    } catch (InterruptedException ex) {
+                    } catch (InterruptedException ie) {
                         // cleaner thread should only be interrupted when cache is being closed, else it's an error
                         if (!isRemoteIndexCacheClosed.get()) {
-                            log.error("Cleaner thread received interruption but remote index cache is not closed", ex);
-                            throw new KafkaException(ex);
+                            log.error("Cleaner thread received interruption but remote index cache is not closed", ie);
+                            // propagate the InterruptedException outside to correctly close the thread.
+                            throw new KafkaException(ie);
                         } else {
                             log.debug("Cleaner thread was interrupted on cache shutdown");
                         }
                     } catch (Exception ex) {
-                        log.error("Error occurred while fetching/cleaning up expired entry", ex);
+                        // do not exit for exceptions other than InterruptedException
+                        log.error("Error occurred while cleaning up expired entry", ex);
                     }
                 }
             }
@@ -194,6 +201,8 @@ public class RemoteIndexCache implements Closeable {
     }
 
     private void init() throws IOException {
+        long start = Time.SYSTEM.hiResClockMs();
+
         try {
             Files.createDirectory(cacheDir.toPath());
             log.info("Created new file {} for RemoteIndexCache", cacheDir);
@@ -225,23 +234,22 @@ public class RemoteIndexCache implements Closeable {
                 if (fileNamePath == null)
                     throw new KafkaException("Empty file name in remote index cache directory: " + cacheDir);
 
-                String fileNameStr = fileNamePath.toString();
-                String name = fileNameStr.substring(0, fileNameStr.lastIndexOf("_") + 1);
-
-                // Create entries for each path if all the index files exist.
-                int firstIndex = name.indexOf('_');
-                long offset = Long.parseLong(name.substring(0, firstIndex));
-                Uuid uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')));
+                String indexFileName = fileNamePath.toString();
+                Uuid uuid = remoteLogSegmentIdFromRemoteIndexFileName(indexFileName);
 
                 // It is safe to update the internalCache non-atomically here since this function is always called by a single
                 // thread only.
                 if (!internalCache.asMap().containsKey(uuid)) {
-                    File offsetIndexFile = new File(cacheDir, name + INDEX_FILE_SUFFIX);
-                    File timestampIndexFile = new File(cacheDir, name + TIME_INDEX_FILE_SUFFIX);
-                    File txnIndexFile = new File(cacheDir, name + TXN_INDEX_FILE_SUFFIX);
+                    String fileNameWithoutSuffix = indexFileName.substring(0, indexFileName.indexOf("."));
+                    File offsetIndexFile = new File(cacheDir, fileNameWithoutSuffix + INDEX_FILE_SUFFIX);
+                    File timestampIndexFile = new File(cacheDir, fileNameWithoutSuffix + TIME_INDEX_FILE_SUFFIX);
+                    File txnIndexFile = new File(cacheDir, fileNameWithoutSuffix + TXN_INDEX_FILE_SUFFIX);
 
-                    if (offsetIndexFile.exists() && timestampIndexFile.exists() && txnIndexFile.exists()) {
-
+                    // Create entries for each path if all the index files exist.
+                    if (Files.exists(offsetIndexFile.toPath()) &&
+                            Files.exists(timestampIndexFile.toPath()) &&
+                            Files.exists(txnIndexFile.toPath())) {
+                        long offset = offsetFromRemoteIndexFileName(indexFileName);
                         OffsetIndex offsetIndex = new OffsetIndex(offsetIndexFile, offset, Integer.MAX_VALUE, false);
                         offsetIndex.sanityCheck();
 
@@ -272,14 +280,15 @@ public class RemoteIndexCache implements Closeable {
                 }
             }
         }
+        log.info("RemoteIndexCache starts up in {} ms.", Time.SYSTEM.hiResClockMs() - start);
     }
 
-    private <T> T loadIndexFile(String fileName, String suffix, RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+    private <T> T loadIndexFile(File file, RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                 Function<RemoteLogSegmentMetadata, InputStream> fetchRemoteIndex,
                                 Function<File, T> readIndex) throws IOException {
-        File indexFile = new File(cacheDir, fileName + suffix);
+        File indexFile = new File(cacheDir, file.getName());
         T index = null;
-        if (indexFile.exists()) {
+        if (Files.exists(indexFile.toPath())) {
             try {
                 index = readIndex.apply(indexFile);
             } catch (CorruptRecordException ex) {
@@ -307,68 +316,76 @@ public class RemoteIndexCache implements Closeable {
 
         lock.readLock().lock();
         try {
-            Uuid cacheKey = remoteLogSegmentMetadata.remoteLogSegmentId().id();
-            return internalCache.get(cacheKey, (Uuid uuid) -> {
-                long startOffset = remoteLogSegmentMetadata.startOffset();
-                // uuid.toString uses URL encoding which is safe for filenames and URLs.
-                String fileName = startOffset + "_" + uuid.toString() + "_";
+            // while this thread was waiting for lock, another thread may have changed the value of isRemoteIndexCacheClosed.
+            // check for index close again
+            if (isRemoteIndexCacheClosed.get()) {
+                throw new IllegalStateException("Unable to fetch index for segment id="
+                        + remoteLogSegmentMetadata.remoteLogSegmentId().id() + ". Index instance is already closed.");
+            }
 
+            return internalCache.get(remoteLogSegmentMetadata.remoteLogSegmentId().id(),
+                    (Uuid uuid) -> createCacheEntry(remoteLogSegmentMetadata));
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    private RemoteIndexCache.Entry createCacheEntry(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        long startOffset = remoteLogSegmentMetadata.startOffset();
+
+        try {
+            File offsetIndexFile = remoteOffsetIndexFile(cacheDir, remoteLogSegmentMetadata);
+            OffsetIndex offsetIndex = loadIndexFile(offsetIndexFile, remoteLogSegmentMetadata, rlsMetadata -> {
                 try {
-                    OffsetIndex offsetIndex = loadIndexFile(fileName, INDEX_FILE_SUFFIX, remoteLogSegmentMetadata, rlsMetadata -> {
-                        try {
-                            return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET);
-                        } catch (RemoteStorageException e) {
-                            throw new KafkaException(e);
-                        }
-                    }, file -> {
-                        try {
-                            OffsetIndex index = new OffsetIndex(file, startOffset, Integer.MAX_VALUE, false);
-                            index.sanityCheck();
-                            return index;
-                        } catch (IOException e) {
-                            throw new KafkaException(e);
-                        }
-                    });
-
-                    TimeIndex timeIndex = loadIndexFile(fileName, TIME_INDEX_FILE_SUFFIX, remoteLogSegmentMetadata, rlsMetadata -> {
-                        try {
-                            return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP);
-                        } catch (RemoteStorageException e) {
-                            throw new KafkaException(e);
-                        }
-                    }, file -> {
-                        try {
-                            TimeIndex index = new TimeIndex(file, startOffset, Integer.MAX_VALUE, false);
-                            index.sanityCheck();
-                            return index;
-                        } catch (IOException e) {
-                            throw new KafkaException(e);
-                        }
-                    });
-
-                    TransactionIndex txnIndex = loadIndexFile(fileName, TXN_INDEX_FILE_SUFFIX, remoteLogSegmentMetadata, rlsMetadata -> {
-                        try {
-                            return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION);
-                        } catch (RemoteStorageException e) {
-                            throw new KafkaException(e);
-                        }
-                    }, file -> {
-                        try {
-                            TransactionIndex index = new TransactionIndex(startOffset, file);
-                            index.sanityCheck();
-                            return index;
-                        } catch (IOException e) {
-                            throw new KafkaException(e);
-                        }
-                    });
-
-                    return new Entry(offsetIndex, timeIndex, txnIndex);
+                    return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET);
+                } catch (RemoteStorageException e) {
+                    throw new KafkaException(e);
+                }
+            }, file -> {
+                try {
+                    OffsetIndex index = new OffsetIndex(file, startOffset, Integer.MAX_VALUE, false);
+                    index.sanityCheck();
+                    return index;
                 } catch (IOException e) {
                     throw new KafkaException(e);
                 }
             });
-        } finally {
-            lock.readLock().unlock();
+            File timeIndexFile = remoteTimeIndexFile(cacheDir, remoteLogSegmentMetadata);
+            TimeIndex timeIndex = loadIndexFile(timeIndexFile, remoteLogSegmentMetadata, rlsMetadata -> {
+                try {
+                    return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP);
+                } catch (RemoteStorageException e) {
+                    throw new KafkaException(e);
+                }
+            }, file -> {
+                try {
+                    TimeIndex index = new TimeIndex(file, startOffset, Integer.MAX_VALUE, false);
+                    index.sanityCheck();
+                    return index;
+                } catch (IOException e) {
+                    throw new KafkaException(e);
+                }
+            });
+            File txnIndexFile = remoteTransactionIndexFile(cacheDir, remoteLogSegmentMetadata);
+            TransactionIndex txnIndex = loadIndexFile(txnIndexFile, remoteLogSegmentMetadata, rlsMetadata -> {
+                try {
+                    return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION);
+                } catch (RemoteStorageException e) {
+                    throw new KafkaException(e);
+                }
+            }, file -> {
+                try {
+                    TransactionIndex index = new TransactionIndex(startOffset, file);
+                    index.sanityCheck();
+                    return index;
+                } catch (IOException e) {
+                    throw new KafkaException(e);
+                }
+            });
+
+            return new Entry(offsetIndex, timeIndex, txnIndex);
+        } catch (IOException e) {
+            throw new KafkaException(e);
         }
     }
 
@@ -433,10 +450,8 @@ public class RemoteIndexCache implements Closeable {
         // entries concurrently, it does not ensure that we won't mutate underlying files belonging to an entry.
         private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-        // Visible for testing
         private boolean cleanStarted = false;
 
-        // Visible for testing
         private boolean markedForCleanup = false;
 
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
@@ -529,6 +544,15 @@ public class RemoteIndexCache implements Closeable {
             Utils.closeQuietly(timeIndex, "TimeIndex");
             Utils.closeQuietly(txnIndex, "TransactionIndex");
         }
+
+        @Override
+        public String toString() {
+            return "Entry{" +
+                    "offsetIndex=" + offsetIndex +
+                    ", timeIndex=" + timeIndex +
+                    ", txnIndex=" + txnIndex +
+                    '}';
+        }
     }
 
     /**
@@ -579,4 +603,56 @@ public class RemoteIndexCache implements Closeable {
             throw kafkaException;
         }
     }
+
+    private static Uuid remoteLogSegmentIdFromRemoteIndexFileName(String fileName) {
+        int underscoreIndex = fileName.indexOf("_");
+        int dotIndex = fileName.indexOf(".");
+        return Uuid.fromString(fileName.substring(underscoreIndex + 1, dotIndex));
+    }
+
+    private static long offsetFromRemoteIndexFileName(String fileName) {
+        return Long.parseLong(fileName.substring(0, fileName.indexOf("_")));
+    }
+
+    /**
+     * Generates prefix for file name for the on-disk representation of remote indexes.
+     * <p>
+     * Example of file name prefix is 45_fooid where 45 represents the base offset for the segment and
+     * fooid represents the unique {@link org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId}
+     *
+     * @param remoteLogSegmentMetadata remote segment for the remote indexes
+     * @return string which should be used as prefix for on-disk representation of remote indexes
+     */
+    private static String generateFileNamePrefixForIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        long startOffset = remoteLogSegmentMetadata.startOffset();
+        Uuid segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id();
+        // uuid.toString uses URL encoding which is safe for filenames and URLs.
+        return startOffset + "_" + segmentId.toString();
+    }
+
+    public static File remoteOffsetIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        return new File(dir, remoteOffsetIndexFileName(remoteLogSegmentMetadata));
+    }
+
+    public static String remoteOffsetIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        String prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata);
+        return prefix + LogFileUtils.INDEX_FILE_SUFFIX;
+    }
+
+    public static File remoteTimeIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        return new File(dir, remoteTimeIndexFileName(remoteLogSegmentMetadata));
+    }
+
+    public static String remoteTimeIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + TIME_INDEX_FILE_SUFFIX;
+    }
+
+    public static File remoteTransactionIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        return new File(dir, remoteTransactionIndexFileName(remoteLogSegmentMetadata));
+    }
+
+    public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
+    }
+
 }
