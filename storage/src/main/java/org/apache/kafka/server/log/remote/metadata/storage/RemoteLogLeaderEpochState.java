@@ -100,16 +100,21 @@ class RemoteLogLeaderEpochState {
 
     void handleSegmentWithCopySegmentFinishedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
                                                    Long leaderEpochEndOffset) {
+        // If there are duplicate segments uploaded due to leader-election, then mark them as unreferenced.
+        // Duplicate segments can be uploaded when the previous leader had tier-lags and the next leader uploads the
+        // segment for the same leader-epoch which is a super-set of previously uploaded segments.
+        Map.Entry<Long, RemoteLogSegmentId> lastEntry = offsetToId.lastEntry();
+        while (lastEntry != null && lastEntry.getKey() >= startOffset && highestLogOffset <= leaderEpochEndOffset) {
+            offsetToId.remove(lastEntry.getKey());
+            unreferencedSegmentIds.add(lastEntry.getValue());
+            lastEntry = offsetToId.lastEntry();
+        }
+
         // Add the segment epochs mapping as the segment is copied successfully.
-        RemoteLogSegmentId oldEntry = offsetToId.put(startOffset, remoteLogSegmentId);
+        offsetToId.put(startOffset, remoteLogSegmentId);
 
         // Remove the metadata from unreferenced entries as it is successfully copied and added to the offset mapping.
         unreferencedSegmentIds.remove(remoteLogSegmentId);
-
-        // Add the old entry to unreferenced entries as the mapping is removed for the old entry.
-        if (oldEntry != null) {
-            unreferencedSegmentIds.add(oldEntry);
-        }
 
         // Update the highest offset entry for this leader epoch as we added a new mapping.
         if (highestLogOffset == null || leaderEpochEndOffset > highestLogOffset) {
