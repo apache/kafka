@@ -21,6 +21,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
@@ -410,60 +412,46 @@ public class SerializationTest {
         return Serdes.serdeFrom(serializer, deserializer);
     }
 
-    @Test
-    public void testByteBufferSerCompatibility() {
-        final byte[] bytes = "Hello".getBytes(UTF_8);
-        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
-        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
-        final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
-        final ByteBuffer heapBuffer3 = heapBuffer0.duplicate();
-        final ByteBuffer heapBuffer4 = heapBuffer1.duplicate();
-        final ByteBuffer heapBuffer5 = heapBuffer2.duplicate();
-        final ByteBuffer heapBuffer6 = heapBuffer0.asReadOnlyBuffer();
-        final ByteBuffer heapBuffer7 = heapBuffer1.asReadOnlyBuffer();
-        final ByteBuffer heapBuffer8 = heapBuffer2.asReadOnlyBuffer();
-        final ByteBuffer heapBuffer9 = ByteBuffer.allocate(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes);
-        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
-        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
-        final ByteBuffer directBuffer2 = directBuffer0.duplicate();
-        final ByteBuffer directBuffer3 = directBuffer1.duplicate();
-        final ByteBuffer directBuffer4 = directBuffer0.asReadOnlyBuffer();
-        final ByteBuffer directBuffer5 = directBuffer1.asReadOnlyBuffer();
-        final ByteBuffer directBuffer6 = ByteBuffer.allocateDirect(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes);
+    @ParameterizedTest
+    @MethodSource("byteBufferProvider")
+    public void testByteBufferSerCompatibility(byte[] expectedBytes, ByteBuffer buffer) {
         try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
             assertNull(serializer.serialize(topic, null));
             assertNull(serializer.serializeToByteBuffer(topic, null));
-            assertArrayEquals(new byte[0], serializer.serialize(topic, ByteBuffer.allocate(0)));
 
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer0);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer1);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer2);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer3);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer4);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer5);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer6);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer7);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer8);
-            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer9);
-
-            testByteBufferSerCompatibility0(serializer, bytes, directBuffer0);
-            testByteBufferSerCompatibility0(serializer, bytes, directBuffer1);
-            testByteBufferSerCompatibility0(serializer, bytes, directBuffer2);
-            testByteBufferSerCompatibility0(serializer, bytes, directBuffer3);
-            testByteBufferSerCompatibility0(serializer, bytes, directBuffer4);
-            testByteBufferSerCompatibility0(serializer, bytes, directBuffer5);
-            testByteBufferSerCompatibility0(serializer, bytes, directBuffer6);
+            final ByteBuffer duplicatedBuf0 = buffer.duplicate();
+            final ByteBuffer duplicatedBuf1 = buffer.duplicate();
+            assertArrayEquals(expectedBytes, serializer.serialize(topic, duplicatedBuf0));
+            assertArrayEquals(expectedBytes, Utils.toArray(serializer.serializeToByteBuffer(topic, duplicatedBuf1)));
+            assertEquals(duplicatedBuf0, duplicatedBuf1);
         }
     }
 
-    private void testByteBufferSerCompatibility0(ByteBufferSerializer serializer,
-                                                 byte[] expectedBytes,
-                                                 ByteBuffer buffer) {
-        final ByteBuffer duplicatedBuf0 = buffer.duplicate();
-        final ByteBuffer duplicatedBuf1 = buffer.duplicate();
-        assertArrayEquals(expectedBytes, serializer.serialize(topic, duplicatedBuf0));
-        assertArrayEquals(expectedBytes, Utils.toArray(serializer.serializeToByteBuffer(topic, duplicatedBuf1)));
-        assertEquals(duplicatedBuf0, duplicatedBuf1);
+    private static Arguments[] byteBufferProvider() {
+        final byte[] bytes = "ByteBuffer".getBytes(UTF_8);
+        return new Arguments[]{
+                //HeapByteBuffer
+                Arguments.of(new byte[0], ByteBuffer.allocate(0)),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length + 1).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length + 1).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length + 1).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.wrap(bytes)),
+                Arguments.of(bytes, ByteBuffer.wrap(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.wrap(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocate(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes)),
+
+                //DirectByteBuffer
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length + 1).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length + 1).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length + 1).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes))
+        };
     }
 
     @Test
@@ -486,7 +474,7 @@ public class SerializationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testBooleanSerializer(Boolean dataToSerialize) {
         byte[] testData = new byte[1];
         testData[0] = (byte) (dataToSerialize ? 1 : 0);
@@ -496,7 +484,7 @@ public class SerializationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testBooleanDeserializer(Boolean dataToDeserialize) {
         byte[] testData = new byte[1];
         testData[0] = (byte) (dataToDeserialize ? 1 : 0);

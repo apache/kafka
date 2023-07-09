@@ -34,6 +34,8 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -43,6 +45,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -56,6 +59,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static java.nio.ByteOrder.BIG_ENDIAN;
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.diff;
@@ -83,9 +88,6 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public class UtilsTest {
 
@@ -97,21 +99,37 @@ public class UtilsTest {
         cases.put("a-little-bit-long-string".getBytes(), -985981536);
         cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
-        cases.put(new byte[] {'a', 'b', 'c'}, 479470107);
+        cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             final byte[] key = c.getKey();
-            assertEquals(c.getValue().intValue(), murmur2(key));
-            assertEquals(c.getValue().intValue(), murmur2(ByteBuffer.wrap(key)));
+            final int expected = c.getValue();
+            assertEquals(expected, murmur2(key));
+            assertEquals(expected, murmur2(ByteBuffer.wrap(key)));
 
             final ByteBuffer heapBuffer = ByteBuffer.allocate(key.length << 1).put(key);
             heapBuffer.flip();
-            assertEquals(c.getValue().intValue(), murmur2(heapBuffer));
+            assertEquals(expected, murmur2(heapBuffer));
 
             final ByteBuffer directBuffer = ByteBuffer.allocateDirect(key.length << 1).put(key);
             directBuffer.flip();
-            assertEquals(c.getValue().intValue(), murmur2(directBuffer));
+            assertEquals(expected, murmur2(directBuffer));
         }
+    }
+
+    @Test
+    public void testByteBufferMurmur2() {
+        final int capacity = 64;
+        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(capacity).order(LITTLE_ENDIAN);
+        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(capacity).order(BIG_ENDIAN);
+        for (int i = 0; i < capacity / 4; i++) {
+            heapBuffer0.putInt(1 << i);
+            heapBuffer1.putInt(1 << i);
+        }
+        heapBuffer0.flip();
+        heapBuffer1.flip();
+        assertEquals(murmur2(Utils.toArray(heapBuffer0)), murmur2(heapBuffer0));
+        assertEquals(murmur2(Utils.toArray(heapBuffer1)), murmur2(heapBuffer1));
     }
 
     @Test
