@@ -92,7 +92,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(2, 11)
     cache.assign(3, 12)
 
-    //When (say a bootstraping follower) sends request for UNDEFINED_EPOCH
+    //When (say a bootstrapping follower) sends request for UNDEFINED_EPOCH
     val epochAndOffsetFor = toTuple(cache.endOffsetFor(UNDEFINED_EPOCH, 0L))
 
     //Then

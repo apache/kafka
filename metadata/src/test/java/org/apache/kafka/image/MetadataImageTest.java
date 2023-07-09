@@ -43,7 +43,8 @@ public class MetadataImageTest {
             ConfigurationsImageTest.IMAGE1,
             ClientQuotasImageTest.IMAGE1,
             ProducerIdsImageTest.IMAGE1,
-            AclsImageTest.IMAGE1);
+            AclsImageTest.IMAGE1,
+            ScramImageTest.IMAGE1);
 
         DELTA1 = new MetadataDelta.Builder().
                 setImage(IMAGE1).
@@ -55,6 +56,7 @@ public class MetadataImageTest {
         RecordTestUtils.replayAll(DELTA1, ClientQuotasImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, ProducerIdsImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, AclsImageTest.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(DELTA1, ScramImageTest.DELTA1_RECORDS);
 
         IMAGE2 = new MetadataImage(
             new MetadataProvenance(200, 5, 4000),
@@ -64,7 +66,8 @@ public class MetadataImageTest {
             ConfigurationsImageTest.IMAGE2,
             ClientQuotasImageTest.IMAGE2,
             ProducerIdsImageTest.IMAGE2,
-            AclsImageTest.IMAGE2);
+            AclsImageTest.IMAGE2,
+            ScramImageTest.IMAGE2);
     }
 
     @Test

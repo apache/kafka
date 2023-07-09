@@ -23,7 +23,9 @@ import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -246,8 +248,22 @@ public interface Herder {
     void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb);
 
     /**
+     * Stop the connector. This call will asynchronously suspend processing by the connector and
+     * shut down all of its tasks.
+     * @param connector name of the connector
+     * @param cb callback to invoke upon completion
+     */
+    void stopConnector(String connector, Callback<Void> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
+     * <p>
+     * Note that, unlike {@link #stopConnector(String, Callback)}, tasks for this connector will not
+     * be shut down and none of their resources will be de-allocated. Instead, they will be left in an
+     * "idling" state where no data is polled from them (if source tasks) or given to them (if sink tasks),
+     * but all internal state kept by the tasks and their resources is left intact and ready to begin
+     * processing records again as soon as the connector is {@link #resumeConnector(String) resumed}.
      * @param connector name of the connector
      */
     void pauseConnector(String connector);
@@ -279,6 +295,28 @@ public interface Herder {
      * @return the list of ConfigKeyInfo of the plugin
      */
     List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
+
+    /**
+     * Get the current offsets for a connector.
+     * @param connName the name of the connector whose offsets are to be retrieved
+     * @param cb callback to invoke upon completion
+     */
+    void connectorOffsets(String connName, Callback<ConnectorOffsets> cb);
+
+    /**
+     * Alter a connector's offsets.
+     * @param connName the name of the connector whose offsets are to be altered
+     * @param offsets a mapping from partitions to offsets that need to be written
+     * @param cb callback to invoke upon completion
+     */
+    void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
+
+    /**
+     * Reset a connector's offsets.
+     * @param connName the name of the connector whose offsets are to be reset
+     * @param cb callback to invoke upon completion
+     */
+    void resetConnectorOffsets(String connName, Callback<Message> cb);
 
     enum ConfigReloadAction {
         NONE,

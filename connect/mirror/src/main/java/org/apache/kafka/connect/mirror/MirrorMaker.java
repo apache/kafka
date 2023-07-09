@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.mirror.rest.MirrorRestServer;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -51,6 +53,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -63,6 +66,8 @@ import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.io.File;
+
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 
 /**
  *  Entry point for "MirrorMaker 2.0".
@@ -267,9 +272,12 @@ public class MirrorMaker {
         String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
         // Create the admin client to be shared by all backing stores for this herder
         Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
+        adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "shared-admin");
         ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase,
+                plugins.newInternalConverter(true, JsonConverter.class.getName(),
+                        Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(distributedConfig);
         ConnectorClientConfigOverridePolicy clientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
         clientConfigOverridePolicy.configure(config.originals());

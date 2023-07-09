@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import java.util.stream.Collectors;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
@@ -80,6 +82,23 @@ public interface AdminApiLookupStrategy<T> {
      *         which encountered a fatal error
      */
     LookupResult<T> handleResponse(Set<T> keys, AbstractResponse response);
+
+    /**
+     * Callback that is invoked when a lookup request hits an UnsupportedVersionException.
+     * Keys for which the exception cannot be handled and the request shouldn't be retried must be mapped
+     * to an error and returned. The remainder of the keys will then be unmapped and the lookup request will
+     * be retried for them.
+     *
+     * @return The failure mappings for the keys for which the exception cannot be handled and the
+     * request shouldn't be retried. If the exception cannot be handled all initial keys will be in
+     * the returned map.
+     */
+    default Map<T, Throwable> handleUnsupportedVersionException(
+        UnsupportedVersionException exception,
+        Set<T> keys
+    ) {
+        return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
+    }
 
     class LookupResult<K> {
         // This is the set of keys that have been completed by the lookup phase itself.

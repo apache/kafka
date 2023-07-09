@@ -33,11 +33,11 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.runtime.SampleSourceConnector;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.ReflectionScanner;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -133,7 +133,7 @@ public class ConnectorPluginsResourceTest {
             HEADER_CONVERTER_PLUGINS.add(new MockConnectorPluginDesc<>(LongConverter.class));
 
             TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(RegexRouter.class));
-            TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(TimestampConverter.class));
+            TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(TimestampConverter.Key.class));
 
             PREDICATE_PLUGINS.add(new MockConnectorPluginDesc<>(HasHeaderKey.class));
             PREDICATE_PLUGINS.add(new MockConnectorPluginDesc<>(RecordIsTombstone.class));
@@ -387,8 +387,7 @@ public class ConnectorPluginsResourceTest {
     public void testListAllPlugins() {
         Set<Class<?>> excludes = Stream.of(
                         ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.TRANSFORM_EXCLUDES
+                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES
                 ).flatMap(Collection::stream)
                 .collect(Collectors.toSet());
         Set<PluginInfo> expectedConnectorPlugins = Stream.of(
@@ -454,7 +453,7 @@ public class ConnectorPluginsResourceTest {
         public MockConnectorPluginDesc(Class<T> klass) throws Exception {
             super(
                     klass,
-                    DelegatingClassLoader.versionFor(klass),
+                    ReflectionScanner.versionFor(klass),
                     new MockPluginClassLoader(null, new URL[0])
             );
         }

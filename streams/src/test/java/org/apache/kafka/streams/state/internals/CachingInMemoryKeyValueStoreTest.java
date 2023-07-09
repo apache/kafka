@@ -616,7 +616,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     }
 
     private int addItemsToCache() {
-        int cachedSize = 0;
+        long cachedSize = 0;
         int i = 0;
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);

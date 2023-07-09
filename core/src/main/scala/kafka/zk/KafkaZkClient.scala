@@ -21,7 +21,6 @@ import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.metrics.KafkaMetricsGroup
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, KafkaConfig}
@@ -35,6 +34,7 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CheckResult, CreateResult, ErrorResult, SetDataResult}
@@ -43,6 +43,7 @@ import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, OpResult, ZooKeeper}
 
+import java.util
 import java.lang.{Long => JLong}
 import scala.collection.{Map, Seq, mutable}
 
@@ -59,13 +60,15 @@ case class SuccessfulRegistrationResult(zkControllerEpoch: Int, controllerEpochZ
  * monolithic [[kafka.zk.ZkData]] is the way to go.
  */
 class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
-  Logging with KafkaMetricsGroup {
+  Logging {
 
-  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
-    explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
+  private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass) {
+    override def metricName(name: String, metricTags: util.Map[String, String]): MetricName = {
+      KafkaMetricsGroup.explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
+    }
   }
 
-  private val latencyMetric = newHistogram("ZooKeeperRequestLatencyMs")
+  private val latencyMetric = metricsGroup.newHistogram("ZooKeeperRequestLatencyMs")
 
   import KafkaZkClient._
 
@@ -272,7 +275,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Gets topic partition states for the given partitions.
-   * @param partitions the partitions for which we want ot get states.
+   * @param partitions the partitions for which we want to get states.
    * @return sequence of GetDataResponses whose contexts are the partitions they are associated with.
    */
   def getTopicPartitionStatesRaw(partitions: Seq[TopicPartition]): Seq[GetDataResponse] = {
@@ -596,7 +599,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Adds a topic ID to existing topic and replica assignments
    * @param topicIdReplicaAssignments the TopicIDReplicaAssignments to add a topic ID to
-   * @return the updated TopicIdReplicaAssigments including the newly created topic IDs
+   * @return the updated TopicIdReplicaAssignments including the newly created topic IDs
    */
   def setTopicIds(topicIdReplicaAssignments: collection.Set[TopicIdReplicaAssignment],
                   expectedControllerEpochZkVersion: Int): Set[TopicIdReplicaAssignment] = {
@@ -1627,7 +1630,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Close the underlying ZooKeeperClient.
    */
   def close(): Unit = {
-    removeMetric("ZooKeeperRequestLatencyMs")
+    metricsGroup.removeMetric("ZooKeeperRequestLatencyMs")
     zooKeeperClient.close()
   }
 

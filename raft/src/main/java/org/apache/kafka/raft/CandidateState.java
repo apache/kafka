@@ -39,7 +39,7 @@ public class CandidateState implements EpochState {
     private final Logger log;
 
     /**
-     * The life time of a candidate state is the following:
+     * The lifetime of a candidate state is the following:
      *
      *  1. Once started, it would keep record of the received votes.
      *  2. If majority votes granted, it can then end its life and will be replaced by a leader state;
@@ -255,6 +255,8 @@ public class CandidateState implements EpochState {
             "localId=" + localId +
             ", epoch=" + epoch +
             ", retries=" + retries +
+            ", voteStates=" + voteStates +
+            ", highWatermark=" + highWatermark +
             ", electionTimeoutMs=" + electionTimeoutMs +
             ')';
     }

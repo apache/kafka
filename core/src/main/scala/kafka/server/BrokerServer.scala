@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.cluster.Broker.ServerInfo
+import kafka.cluster.EndPoint
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
@@ -25,9 +25,10 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, SnapshotWriterBuilder}
+import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.NetworkClient
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -36,18 +37,18 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
+import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft
-import org.apache.kafka.raft.{RaftClient, RaftConfig}
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
-import org.apache.kafka.snapshot.SnapshotWriter
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
 import java.net.InetAddress
@@ -56,19 +57,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.{Map, Seq}
-import scala.compat.java8.OptionConverters._
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
-
-class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
-    extends SnapshotWriterBuilder {
-  override def build(committedOffset: Long,
-                     committedEpoch: Int,
-                     lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
-    val snapshotId = new raft.OffsetAndEpoch(committedOffset + 1, committedEpoch)
-    raftClient.createSnapshot(snapshotId, lastContainedLogTime).asScala
-  }
-}
 
 /**
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
@@ -77,7 +68,6 @@ class BrokerServer(
   val sharedServer: SharedServer,
   val initialOfflineDirs: Seq[String],
 ) extends KafkaBroker {
-  val threadNamePrefix = sharedServer.threadNamePrefix
   val config = sharedServer.brokerConfig
   val time = sharedServer.time
   def metrics = sharedServer.metrics
@@ -111,7 +101,7 @@ class BrokerServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   var logManager: LogManager = _
-  var remoteLogManager: Option[RemoteLogManager] = None
+  var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
 
@@ -146,15 +136,13 @@ class BrokerServer(
 
   val clusterId: String = sharedServer.metaProps.clusterId
 
-  var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
-
-  var metadataListener: BrokerMetadataListener = _
-
-  var metadataPublisher: BrokerMetadataPublisher = _
+  var brokerMetadataPublisher: BrokerMetadataPublisher = _
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
 
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
+
+  val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -189,7 +177,7 @@ class BrokerServer(
 
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         isZkBroker = false)
 
       /* start scheduler */
@@ -199,7 +187,8 @@ class BrokerServer(
       /* register broker metrics */
       brokerTopicStats = new BrokerTopicStats
 
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
@@ -210,15 +199,16 @@ class BrokerServer(
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
-      remoteLogManager = createRemoteLogManager(config)
+      remoteLogManagerOpt = createRemoteLogManager()
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying,
-        "controller quorum voters future", sharedServer.controllerQuorumVotersFuture,
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "controller quorum voters future",
+        sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
@@ -229,7 +219,7 @@ class BrokerServer(
         metrics,
         config,
         channelName = "forwarding",
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         retryTimeoutMs = 60000
       )
       clientToControllerChannelManager.start()
@@ -258,10 +248,14 @@ class BrokerServer(
         controllerNodeProvider,
         time = time,
         metrics,
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch
       )
       alterPartitionManager.start()
+
+      val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+      val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, addPartitionsToTxnNetworkClient, time)
 
       this._replicaManager = new ReplicaManager(
         config = config,
@@ -269,7 +263,7 @@ class BrokerServer(
         time = time,
         scheduler = kafkaScheduler,
         logManager = logManager,
-        remoteLogManager = remoteLogManager,
+        remoteLogManager = remoteLogManagerOpt,
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
@@ -277,7 +271,11 @@ class BrokerServer(
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
         zkClient = None,
-        threadNamePrefix = threadNamePrefix)
+        threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
+        delayedRemoteFetchPurgatoryParam = None,
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
+        addPartitionsToTxnManager = Some(addPartitionsToTxnManager)
+      )
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -297,9 +295,9 @@ class BrokerServer(
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
+        time,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        clientToControllerChannelManager,
-        config.requestTimeoutMs
+        clientToControllerChannelManager
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.
@@ -312,31 +310,9 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      /* Add all reconfigurables for config change notification before starting the metadata listener */
-      config.dynamicConfig.addReconfigurables(this)
-
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
-
-      if (!config.processRoles.contains(ControllerRole)) {
-        // If no controller is defined, we rely on the broker to generate snapshots.
-        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
-          config.nodeId,
-          time,
-          threadNamePrefix,
-          new BrokerSnapshotWriterBuilder(raftManager.client)
-        ))
-      }
-
-      metadataListener = new BrokerMetadataListener(
-        config.nodeId,
-        time,
-        threadNamePrefix,
-        config.metadataSnapshotMaxNewRecordBytes,
-        metadataSnapshotter,
-        sharedServer.brokerMetrics,
-        sharedServer.metadataLoaderFaultHandler)
 
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>
@@ -358,19 +334,21 @@ class BrokerServer(
         metrics,
         config,
         "heartbeat",
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         config.brokerSessionTimeoutMs / 2 // KAFKA-14392
       )
       lifecycleManager.start(
-        () => metadataListener.highestMetadataOffset,
+        () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
         sharedServer.metaProps.clusterId,
         networkListeners,
         featuresRemapped
       )
-
-      // Register a listener with the Raft layer to receive metadata event notifications
-      raftManager.register(metadataListener)
+      // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
+      // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
+      lifecycleManager.initialCatchUpFuture.whenComplete((_, e) => {
+        if (e != null) brokerMetadataPublisher.firstPublishFuture.completeExceptionally(e)
+      })
 
       val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
       var interBrokerListener: Endpoint = null
@@ -388,25 +366,10 @@ class BrokerServer(
           config.interBrokerListenerName.value() + ". Found listener(s): " +
           endpoints.asScala.map(ep => ep.listenerName().orElse("(none)")).mkString(", "))
       }
-      val authorizerInfo = ServerInfo(new ClusterResource(clusterId),
-        config.nodeId,
-        endpoints,
-        interBrokerListener,
-        config.earlyStartListeners.map(_.value()).asJava)
 
       // Create and initialize an authorizer if one is configured.
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
-      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
-        case Some(authZ) =>
-          authZ.start(authorizerInfo).asScala.map { case (ep, cs) =>
-            ep -> cs.toCompletableFuture
-          }
-        case None =>
-          authorizerInfo.endpoints.asScala.map { ep =>
-            ep -> CompletableFuture.completedFuture[Void](null)
-          }.toMap
-      }
 
       val fetchManager = new FetchManager(Time.SYSTEM,
         new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
@@ -440,43 +403,75 @@ class BrokerServer(
         config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
 
-      FutureUtils.waitWithLogging(logger.underlying, "broker metadata to catch up",
-        lifecycleManager.initialCatchUpFuture, startupDeadline, time)
-
-      // Apply the metadata log changes that we've accumulated.
-      metadataPublisher = new BrokerMetadataPublisher(config,
+      brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
         replicaManager,
         groupCoordinator,
         transactionCoordinator,
-        clientQuotaMetadataManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
           dynamicConfigHandlers.toMap,
         "broker"),
+        new DynamicClientQuotaPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          clientQuotaMetadataManager),
+        new ScramPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          credentialProvider),
         authorizer,
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)
+      metadataPublishers.add(brokerMetadataPublisher)
 
-      // Tell the metadata listener to start publishing its output, and wait for the first
-      // publish operation to complete. This first operation will initialize logManager,
-      // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
-      // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
-      FutureUtils.waitWithLogging(logger.underlying,
-        "the broker to catch up with the current cluster metadata",
-        metadataListener.startPublishing(metadataPublisher), startupDeadline, time)
+      // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
+      // be done before we publish the dynamic configs, so that we don't miss anything.
+      config.dynamicConfig.addReconfigurables(this)
 
-      // Log static broker configurations.
+      // Install all the metadata publishers.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the broker metadata publishers to be installed",
+        sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
+
+      // Wait for this broker to contact the quorum, and for the active controller to acknowledge
+      // us as caught up. It will do this by returning a heartbeat response with isCaughtUp set to
+      // true. The BrokerLifecycleManager tracks this.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the controller to acknowledge that we are caught up",
+        lifecycleManager.initialCatchUpFuture, startupDeadline, time)
+
+      // Wait for the first metadata update to be published. Metadata updates are not published
+      // until we read at least up to the high water mark of the cluster metadata partition.
+      // Usually, we publish the initial metadata before lifecycleManager.initialCatchUpFuture
+      // is completed, so this check is not necessary. But this is a simple check to make
+      // completely sure.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the initial broker metadata update to be published",
+        brokerMetadataPublisher.firstPublishFuture , startupDeadline, time)
+
+      // Now that we have loaded some metadata, we can log a reasonably up-to-date broker
+      // configuration.  Keep in mind that KafkaConfig.originals is a mutable field that gets set
+      // by the dynamic configuration publisher. Ironically, KafkaConfig.originals does not
+      // contain the original configuration values.
       new KafkaConfig(config.originals(), true)
 
       // Start RemoteLogManager before broker start serving the requests.
-      remoteLogManager.foreach(_.startup())
-
-      // Enable inbound TCP connections. Each endpoint will be started only once its matching
-      // authorizer future is completed.
-      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
+      remoteLogManagerOpt.foreach(rlm => {
+        val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
+        if (listenerName != null) {
+          val endpoint = endpoints.stream.filter(e => e.listenerName.equals(ListenerName.normalised(listenerName)))
+            .findFirst()
+            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
+              " should be set as a listener name within valid broker listener name list."))
+          rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
+        }
+        rlm.startup()
+      })
 
       // If we are using a ClusterMetadataAuthorizer which stores its ACLs in the metadata log,
       // notify it that the loading process is complete.
@@ -488,16 +483,34 @@ class BrokerServer(
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
-      FutureUtils.waitWithLogging(logger.underlying, "the broker to be unfenced",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the broker to be unfenced",
         lifecycleManager.setReadyToUnfence(), startupDeadline, time)
 
-      // Block here until all the authorizer futures are complete
-      FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
+      // Enable inbound TCP connections. Each endpoint will be started only once its matching
+      // authorizer future is completed.
+      val endpointReadyFutures = {
+        val builder = new EndpointReadyFutures.Builder()
+        builder.build(authorizer.asJava,
+          new KafkaAuthorizerServerInfo(
+            new ClusterResource(clusterId),
+            config.nodeId,
+            endpoints,
+            interBrokerListener,
+            config.earlyStartListeners.map(_.value()).asJava))
+      }
+      val authorizerFutures = endpointReadyFutures.futures().asScala.toMap
+      val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
+
+      // Block here until all the authorizer futures are complete.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
 
       // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
-        socketServerFuture, startupDeadline, time)
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the SocketServer Acceptors to be started",
+        enableRequestProcessingFuture, startupDeadline, time)
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {
@@ -509,14 +522,14 @@ class BrokerServer(
     }
   }
 
-  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
-    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
-    if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+  protected def createRemoteLogManager(): Option[RemoteLogManager] = {
+    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
       }
 
-      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
+      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+        (tp: TopicPartition) => logManager.getLog(tp).asJava));
     } else {
       None
     }
@@ -541,17 +554,14 @@ class BrokerServer(
             error("Got unexpected exception waiting for controlled shutdown future", e)
         }
       }
-
-      if (metadataListener != null)
-        metadataListener.beginShutdown()
-
       lifecycleManager.beginShutdown()
-
       // Stop socket server to stop accepting any more connections and requests.
       // Socket server will be shutdown towards the end of the sequence.
       if (socketServer != null) {
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       }
+      metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
+      metadataPublishers.clear()
       if (dataPlaneRequestHandlerPool != null)
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)
@@ -559,10 +569,6 @@ class BrokerServer(
       if (controlPlaneRequestProcessor != null)
         CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
-      if (metadataListener != null) {
-        CoreUtils.swallow(metadataListener.close(), this)
-      }
-      metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other
@@ -599,7 +605,7 @@ class BrokerServer(
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
-      CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)
+      CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)

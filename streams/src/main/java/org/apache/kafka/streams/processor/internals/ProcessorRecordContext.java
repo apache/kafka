@@ -161,7 +161,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         final int partition = buffer.getInt();
         final int headerCount = buffer.getInt();
         final Headers headers;
-        if (headerCount == -1) { // keep for backward compatibilty
+        if (headerCount == -1) { // keep for backward compatibility
             headers = new RecordHeaders();
         } else {
             final Header[] headerArr = new Header[headerCount];
