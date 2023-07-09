@@ -17,7 +17,7 @@
 
 package org.apache.kafka.tools.reassign;
 
-import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 
@@ -30,15 +30,15 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     private final OptionSpecBuilder listOpt;
 
     // Arguments
-    private final ArgumentAcceptingOptionSpec<String> bootstrapServerOpt;
-    private final ArgumentAcceptingOptionSpec<String> commandConfigOpt;
-    private final ArgumentAcceptingOptionSpec<String> reassignmentJsonFileOpt;
-    private final ArgumentAcceptingOptionSpec<String> topicsToMoveJsonFileOpt;
-    private final ArgumentAcceptingOptionSpec<String> brokerListOpt;
+    private final OptionSpec<String> bootstrapServerOpt;
+    private final OptionSpec<String> commandConfigOpt;
+    private final OptionSpec<String> reassignmentJsonFileOpt;
+    private final OptionSpec<String> topicsToMoveJsonFileOpt;
+    private final OptionSpec<String> brokerListOpt;
     private final OptionSpecBuilder disableRackAware;
-    private final ArgumentAcceptingOptionSpec<Long> interBrokerThrottleOpt;
-    private final ArgumentAcceptingOptionSpec<Long> replicaAlterLogDirsThrottleOpt;
-    private final ArgumentAcceptingOptionSpec<Long> timeoutOpt;
+    private final OptionSpec<Long> interBrokerThrottleOpt;
+    private final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
+    private final OptionSpec<Long> timeoutOpt;
     private final OptionSpecBuilder additionalOpt;
     private final OptionSpecBuilder preserveThrottlesOpt;
 
@@ -131,23 +131,23 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         return listOpt;
     }
 
-    public ArgumentAcceptingOptionSpec<String> bootstrapServerOpt() {
+    public OptionSpec<String> bootstrapServerOpt() {
         return bootstrapServerOpt;
     }
 
-    public ArgumentAcceptingOptionSpec<String> commandConfigOpt() {
+    public OptionSpec<String> commandConfigOpt() {
         return commandConfigOpt;
     }
 
-    public ArgumentAcceptingOptionSpec<String> reassignmentJsonFileOpt() {
+    public OptionSpec<String> reassignmentJsonFileOpt() {
         return reassignmentJsonFileOpt;
     }
 
-    public ArgumentAcceptingOptionSpec<String> topicsToMoveJsonFileOpt() {
+    public OptionSpec<String> topicsToMoveJsonFileOpt() {
         return topicsToMoveJsonFileOpt;
     }
 
-    public ArgumentAcceptingOptionSpec<String> brokerListOpt() {
+    public OptionSpec<String> brokerListOpt() {
         return brokerListOpt;
     }
 
@@ -155,15 +155,15 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         return disableRackAware;
     }
 
-    public ArgumentAcceptingOptionSpec<Long> interBrokerThrottleOpt() {
+    public OptionSpec<Long> interBrokerThrottleOpt() {
         return interBrokerThrottleOpt;
     }
 
-    public ArgumentAcceptingOptionSpec<Long> replicaAlterLogDirsThrottleOpt() {
+    public OptionSpec<Long> replicaAlterLogDirsThrottleOpt() {
         return replicaAlterLogDirsThrottleOpt;
     }
 
-    public ArgumentAcceptingOptionSpec<Long> timeoutOpt() {
+    public OptionSpec<Long> timeoutOpt() {
         return timeoutOpt;
     }
 
