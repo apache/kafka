@@ -54,17 +54,17 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runners.Suite;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -87,7 +87,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -102,11 +101,10 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doReturn;
-
-@Suite.SuiteClasses({
-        MockitoJUnitRunner.StrictStubs.class,
-        PowerMockRunner.class
-})
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.eq;
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RecordCollectorTest {
 
     private final LogContext logContext = new LogContext("test ");
@@ -149,14 +147,12 @@ public class RecordCollectorTest {
     private StreamsProducer streamsProducer;
     private ProcessorTopology topology;
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
-
     private RecordCollectorImpl collector;
+    final Sensor mockSensor = Mockito.mock(Sensor.class);
 
     @Before
     public void setup() {
 
-        PowerMock.mockStatic(StreamsMetricsImpl.class);
-        final Sensor mockSensor = Mockito.mock(Sensor.class);
         when(mockStreamsMetrics.taskLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
                 Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class))).thenReturn(mockSensor);
         when(mockStreamsMetrics.topicLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
@@ -206,88 +202,28 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldRecordRecordsAndBytesProduced() {
+    public void shouldRecordRecordsAndBytesProduced1() {
         final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
 
-        final String threadId = Thread.currentThread().getName();
-        final String processorNodeId = sinkNodeName;
-        final String topic = "topic";
-        final MetricName recordMetricName = new MetricName("records-produced-total",
-                TOPIC_LEVEL_GROUP,
-                "The total number of records produced from this topic",
-                mockStreamsMetrics.topicLevelTagMap(threadId, taskId.toString(), processorNodeId, topic));
-        final MetricName byteMetricName = new MetricName("bytes-produced-total",
-                TOPIC_LEVEL_GROUP,
-                "The total number of bytes produced from this topic",
-                mockStreamsMetrics.topicLevelTagMap(threadId, taskId.toString(), processorNodeId, topic));
+        final MockedStatic<TopicMetrics> topicMetrics = mockStatic(TopicMetrics.class);
 
-        final Map<MetricName, Metric> mockMetricsMap = new HashMap<>();
-        final Metric recordMockMetric = Mockito.mock(Metric.class);
-        final Metric byteMockMetric = Mockito.mock(Metric.class);
-
-        when(recordMockMetric.metricValue()).thenReturn(0D);
-        when(byteMockMetric.metricValue()).thenReturn(0D);
-        mockMetricsMap.put(recordMetricName, recordMockMetric);
-        mockMetricsMap.put(byteMetricName, byteMockMetric);
-        doReturn(mockMetricsMap).when(mockStreamsMetrics).metrics();
-        final Metric recordsProduced = mockStreamsMetrics.metrics().get(recordMetricName);
-        final Metric bytesProduced = mockStreamsMetrics.metrics().get(byteMetricName);
-
-        double totalRecords = 0D;
-        double totalBytes = 0D;
-
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        when(TopicMetrics.producedSensor(
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.any(StreamsMetricsImpl.class)
+        )).thenReturn(mockSensor);
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(0));
-
-        when(recordMockMetric.metricValue()).thenReturn(1.0);
-        when(byteMockMetric.metricValue()).thenReturn(29.0);
-
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        double bytes = producerRecordSizeInBytes(mockProducer.history().get(0));
 
         collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(1));
+        bytes = producerRecordSizeInBytes(mockProducer.history().get(1));
 
-        when(recordMockMetric.metricValue()).thenReturn(2.0);
-        when(byteMockMetric.metricValue()).thenReturn(66.0);
-
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
-
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(2));
-
-        when(recordMockMetric.metricValue()).thenReturn(3.0);
-        when(byteMockMetric.metricValue()).thenReturn(95.0);
-
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
-
-        collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(3));
-
-        when(recordMockMetric.metricValue()).thenReturn(4.0);
-        when(byteMockMetric.metricValue()).thenReturn(132.0);
-
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
-
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(4));
-
-        when(recordMockMetric.metricValue()).thenReturn(5.0);
-        when(byteMockMetric.metricValue()).thenReturn(161.0);
-
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        Mockito.verify(mockSensor).record(eq(bytes), anyLong());
+        Mockito.verify(mockSensor).record(eq(bytes), anyLong());
+        topicMetrics.close();
     }
 
     @Test
