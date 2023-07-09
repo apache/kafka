@@ -41,7 +41,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.jupiter.api.Tag;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
@@ -66,7 +65,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
-@Tag("integration")
 public class KTableKTableForeignKeyJoinIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);

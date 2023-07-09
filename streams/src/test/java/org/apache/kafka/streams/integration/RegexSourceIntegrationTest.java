@@ -41,13 +41,11 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -81,7 +79,6 @@ import static org.hamcrest.Matchers.greaterThan;
  * an embedded Kafka cluster.
  */
 @Timeout(600)
-@Category({IntegrationTest.class})
 @Tag("integration")
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
