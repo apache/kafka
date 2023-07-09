@@ -53,7 +53,7 @@ public class DeleteRecordsCommand {
         execute(args, System.out);
     }
 
-    private static Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) {
+    static Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) {
         try {
             ObjectMapper mapper = new ObjectMapper();
 
@@ -82,7 +82,7 @@ public class DeleteRecordsCommand {
             partitions.elements().forEachRemaining(partitionJs -> {
                 String topic = partitionJs.get("topic").asText();
                 int partition = partitionJs.get("partition").asInt();
-                Long offset = partitionJs.get("offset").asLong();
+                long offset = partitionJs.get("offset").asLong();
 
                 res.add(new Tuple<>(new TopicPartition(topic, partition), offset));
             });
