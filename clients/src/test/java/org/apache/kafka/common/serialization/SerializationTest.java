@@ -422,8 +422,14 @@ public class SerializationTest {
         final ByteBuffer heapBuffer6 = heapBuffer0.asReadOnlyBuffer();
         final ByteBuffer heapBuffer7 = heapBuffer1.asReadOnlyBuffer();
         final ByteBuffer heapBuffer8 = heapBuffer2.asReadOnlyBuffer();
+        final ByteBuffer heapBuffer9 = ByteBuffer.allocate(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes);
         final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
         final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
+        final ByteBuffer directBuffer2 = directBuffer0.duplicate();
+        final ByteBuffer directBuffer3 = directBuffer1.duplicate();
+        final ByteBuffer directBuffer4 = directBuffer0.asReadOnlyBuffer();
+        final ByteBuffer directBuffer5 = directBuffer1.asReadOnlyBuffer();
+        final ByteBuffer directBuffer6 = ByteBuffer.allocateDirect(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes);
         try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
             assertNull(serializer.serialize(topic, null));
             assertNull(serializer.serializeToByteBuffer(topic, null));
@@ -438,9 +444,15 @@ public class SerializationTest {
             testByteBufferSerCompatibility0(serializer, bytes, heapBuffer6);
             testByteBufferSerCompatibility0(serializer, bytes, heapBuffer7);
             testByteBufferSerCompatibility0(serializer, bytes, heapBuffer8);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer9);
 
             testByteBufferSerCompatibility0(serializer, bytes, directBuffer0);
             testByteBufferSerCompatibility0(serializer, bytes, directBuffer1);
+            testByteBufferSerCompatibility0(serializer, bytes, directBuffer2);
+            testByteBufferSerCompatibility0(serializer, bytes, directBuffer3);
+            testByteBufferSerCompatibility0(serializer, bytes, directBuffer4);
+            testByteBufferSerCompatibility0(serializer, bytes, directBuffer5);
+            testByteBufferSerCompatibility0(serializer, bytes, directBuffer6);
         }
     }
 
