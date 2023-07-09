@@ -23,11 +23,11 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 
 public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     // Actions
-    private final OptionSpecBuilder verifyOpt;
-    private final OptionSpecBuilder generateOpt;
-    private final OptionSpecBuilder executeOpt;
-    private final OptionSpecBuilder cancelOpt;
-    private final OptionSpecBuilder listOpt;
+    private final OptionSpec<?> verifyOpt;
+    private final OptionSpec<?> generateOpt;
+    private final OptionSpec<?> executeOpt;
+    private final OptionSpec<?> cancelOpt;
+    private final OptionSpec<?> listOpt;
 
     // Arguments
     private final OptionSpec<String> bootstrapServerOpt;
@@ -39,8 +39,8 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     private final OptionSpec<Long> interBrokerThrottleOpt;
     private final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
     private final OptionSpec<Long> timeoutOpt;
-    private final OptionSpecBuilder additionalOpt;
-    private final OptionSpecBuilder preserveThrottlesOpt;
+    private final OptionSpec<?> additionalOpt;
+    private final OptionSpec<?> preserveThrottlesOpt;
 
     public ReassignPartitionsCommandOptions(String[] args) {
         super(args);
@@ -111,23 +111,23 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         options = parser.parse(args);
     }
 
-    public OptionSpecBuilder verifyOpt() {
+    public OptionSpec<?> verifyOpt() {
         return verifyOpt;
     }
 
-    public OptionSpecBuilder generateOpt() {
+    public OptionSpec<?> generateOpt() {
         return generateOpt;
     }
 
-    public OptionSpecBuilder executeOpt() {
+    public OptionSpec<?> executeOpt() {
         return executeOpt;
     }
 
-    public OptionSpecBuilder cancelOpt() {
+    public OptionSpec<?> cancelOpt() {
         return cancelOpt;
     }
 
-    public OptionSpecBuilder listOpt() {
+    public OptionSpec<?> listOpt() {
         return listOpt;
     }
 
@@ -167,11 +167,11 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         return timeoutOpt;
     }
 
-    public OptionSpecBuilder additionalOpt() {
+    public OptionSpec<?> additionalOpt() {
         return additionalOpt;
     }
 
-    public OptionSpecBuilder preserveThrottlesOpt() {
+    public OptionSpec<?> preserveThrottlesOpt() {
         return preserveThrottlesOpt;
     }
 }
