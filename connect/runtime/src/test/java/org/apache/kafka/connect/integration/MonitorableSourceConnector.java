@@ -70,7 +70,10 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     // Boolean valued configuration that determines whether MonitorableSourceConnector::alterOffsets should return true or false
     public static final String ALTER_OFFSETS_RESULT = "alter.offsets.result";
 
-    private String connectorName;
+    // Boolean flag which indicates if updateOffsets is supported.
+    public static final String UPDATE_OFFSETS = "update.offsets";
+
+    private static String connectorName;
     private ConnectorHandle connectorHandle;
     private Map<String, String> commonConfigs;
 
@@ -173,6 +176,8 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
         private long priorTransactionBoundary;
         private long nextTransactionBoundary;
 
+        private boolean updateOffsets;
+
         @Override
         public String version() {
             return "unknown";
@@ -200,6 +205,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
                 throw new RuntimeException("Injecting errors during task start");
             }
             calculateNextBoundary();
+            updateOffsets = Boolean.parseBoolean(props.getOrDefault(UPDATE_OFFSETS, Boolean.toString(false)));
         }
 
         @Override
@@ -254,6 +260,15 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             log.info("Stopped {} task {}", this.getClass().getSimpleName(), taskId);
             stopped = true;
             taskHandle.recordTaskStop();
+        }
+
+        @Override
+        public Optional<Map<Map<String, Object>, Map<String, Object>>> updateOffsets(Map<Map<String, Object>, Map<String, Object>> offsets) {
+            if (!updateOffsets) {
+                return Optional.empty();
+            }
+            offsets.put(sourcePartition(connectorName + "-" + 100), sourceOffset(seqno));
+            return Optional.of(offsets);
         }
 
         /**

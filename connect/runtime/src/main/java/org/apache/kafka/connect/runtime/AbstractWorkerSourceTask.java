@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -177,13 +178,21 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     protected abstract void finalOffsetCommit(boolean failed);
 
 
+    /**
+     * Invoked after {@link  SourceTask#updateOffsets(Map)} is invoked and there are offsets to be updated for source
+     * partitions. Implementors can use this to update the buffer which would be used for committing offsets.
+     * @param partition Partition for which the offset has to be updated
+     * @param offset Offset for the above partition which would be updated.
+     */
+    protected abstract void updateOffset(Map<String, Object> partition, Map<String, Object> offset);
+
     protected final WorkerConfig workerConfig;
     protected final WorkerSourceTaskContext sourceTaskContext;
     protected final ConnectorOffsetBackingStore offsetStore;
     protected final OffsetStorageWriter offsetWriter;
     protected final Producer<byte[], byte[]> producer;
 
-    private final SourceTask task;
+    protected final SourceTask task;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
@@ -198,6 +207,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     // Visible for testing
     List<SourceRecord> toSend;
+    // Visible for testing
+    Map<Map<String, Object>, Map<String, Object>> polledSourceOffsets = new HashMap<>();
     protected Map<String, String> taskConfig;
     protected boolean started = false;
     private volatile boolean producerClosed = false;
@@ -385,6 +396,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      * @return true if all messages were sent, false if some need to be retried
      */
     // Visible for testing
+    @SuppressWarnings("unchecked")
     boolean sendRecords() {
         int processed = 0;
         recordBatch(toSend.size());
@@ -450,6 +462,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                 producerSendFailed(true, producerRecord, preTransformRecord, e);
             }
             processed++;
+            polledSourceOffsets.put((Map<String, Object>) record.sourcePartition(), (Map<String, Object>) record.sourceOffset());
             recordDispatched(preTransformRecord);
         }
         toSend = null;
@@ -465,6 +478,26 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             // Do nothing. Let the framework poll whenever it's ready.
             return null;
         }
+    }
+
+    protected void updateOffsets() {
+        Optional<Map<Map<String, Object>, Map<String, Object>>> mayBeUpdatedOffsets = task.updateOffsets(polledSourceOffsets);
+        if (mayBeUpdatedOffsets.isPresent() && !mayBeUpdatedOffsets.get().isEmpty()) {
+            Map<Map<String, Object>, Map<String, Object>> updatedOffsets = mayBeUpdatedOffsets.get();
+            if (polledSourceOffsets.size() > updatedOffsets.size()) {
+                log.warn("{} Some partitions have been removed after updateOffsets invocation. Missing partitions won't be removed from the committed offsets", this);
+            }
+            for (Map.Entry<Map<String, Object>, Map<String, Object>> offset : updatedOffsets.entrySet()) {
+                if (offset.getValue() == null) {
+                    log.trace("{} Ignoring updated offset with null value", offset.getKey());
+                    continue;
+                }
+                updateOffset(offset.getKey(), offset.getValue());
+            }
+        }
+        // It should be safe to clear it here as the partition-offset values returned by the tasks have been
+        // stored in underneath buffers for offsets.
+        polledSourceOffsets.clear();
     }
 
     /**

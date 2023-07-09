@@ -74,6 +74,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -86,6 +87,8 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -119,7 +122,7 @@ import static org.mockito.Mockito.when;
 @RunWith(Parameterized.class)
 public class ExactlyOnceWorkerSourceTaskTest {
     private static final String TOPIC = "topic";
-    private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
+    private static final Map<String, Object> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, ?> OFFSET = offset(12);
 
     // Connect-format data
@@ -222,6 +225,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(sourceTask, MockitoUtils.anyTimes()).poll();
         verify(sourceTask, MockitoUtils.anyTimes()).commit();
         verify(sourceTask, MockitoUtils.anyTimes()).commitRecord(any(), any());
+        verify(sourceTask, MockitoUtils.anyTimes()).updateOffsets(any());
 
         verify(offsetWriter, MockitoUtils.anyTimes()).offset(PARTITION, OFFSET);
         verify(offsetWriter, MockitoUtils.anyTimes()).beginFlush();
@@ -592,6 +596,47 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateOffsetsPollBasedCommit() throws Exception {
+        Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.POLL);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+
+        // Make sure the task returns empty batches from poll before we start polling it
+        pollRecords.set(Collections.emptyList());
+
+        createWorkerTask();
+
+        startTaskThread();
+
+        when(offsetWriter.beginFlush())
+                .thenReturn(false)
+                .thenReturn(false)
+                .thenReturn(true)
+                .thenReturn(false);
+        // 5 empty polls
+        awaitEmptyPolls(5);
+        // After 3rd poll, updateOffsets sends out an offset to commit.
+        when(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(mkMap(mkEntry(PARTITION, (Map<String, Object>) OFFSET))))
+                .thenReturn(Optional.empty());
+
+        assertEquals("Only one flush should take place due to updateOffsets updating offsets", 1, flushCount());
+
+        awaitShutdown();
+
+        // Task should have flushed offsets for the only time when updateOffsets returned offsets
+        verifyTransactions(6, 1);
+
+        verifyPreflight();
+        verifyStartup();
+        verifyCleanShutdown();
+        assertPollMetrics(0);
+        assertTransactionMetrics(0);
+    }
+
+    @Test
     public void testIntervalBasedCommit() throws Exception {
         long commitInterval = 618;
         Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.INTERVAL);
@@ -633,8 +678,63 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateOffsetsIntervalBasedCommit() throws Exception {
+        long commitInterval = 618;
+        Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.INTERVAL);
+        connectorProps.put(TRANSACTION_BOUNDARY_INTERVAL_CONFIG, Long.toString(commitInterval));
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+
+        // Make sure the task returns empty batches from poll before we start polling it
+        pollRecords.set(Collections.emptyList());
+
+        time = new MockTime();
+
+        createWorkerTask();
+
+        startTaskThread();
+
+        when(offsetWriter.beginFlush())
+                .thenReturn(true)
+                .thenReturn(false);
+
+        awaitEmptyPolls(1);
+        assertEquals("No flushes should have taken place before offset commit interval has elapsed", 0, flushCount());
+        time.sleep(commitInterval);
+
+        // The placement of this mock seems to be order dependent. If I place it above the
+        // first awaitEmptyPolls, it tends to throw weird ClassCaseExceptions citing task.poll().
+        when(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .thenReturn(Optional.of(mkMap(mkEntry(PARTITION, (Map<String, Object>) OFFSET))));
+
+        awaitEmptyPolls(1);
+        assertEquals("One flush should have taken place after offset commit interval has elapsed and updateOffsets sent updated offsets once", 1, flushCount());
+        time.sleep(commitInterval * 2);
+
+        awaitEmptyPolls(1);
+        assertEquals("No new flushes should have taken place after offset commit interval has elapsed again due to empty polls", 1, flushCount());
+
+        awaitShutdown();
+
+        // Task should have flushed offsets for the only time when updateOffsets returned offsets
+        verifyTransactions(3, 1);
+
+        verifyPreflight();
+        verifyStartup();
+        verifyCleanShutdown();
+        assertPollMetrics(0);
+        assertTransactionMetrics(0);
+    }
+
+
+    @Test
     public void testConnectorCommitOnBatch() throws Exception {
         testConnectorBasedCommit(TransactionContext::commitTransaction, false);
+    }
+
+    @Test
+    public void testConnectorCommitOnBatchWithUpdateOffsets() throws Exception {
+        testUpdateOffsetsConnectorBasedCommit(TransactionContext::commitTransaction, false, false);
     }
 
     @Test
@@ -643,13 +743,28 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @Test
+    public void testConnectorCommitOnRecordWithUpdateOffsets() throws Exception {
+        testUpdateOffsetsConnectorBasedCommit(ctx -> ctx.commitTransaction(SOURCE_RECORD_2), false, true);
+    }
+
+    @Test
     public void testConnectorAbortOnBatch() throws Exception {
         testConnectorBasedCommit(TransactionContext::abortTransaction, true);
     }
 
     @Test
+    public void testConnectorAbortOnBatchWithUpdateOffsets() throws Exception {
+        testUpdateOffsetsConnectorBasedCommit(TransactionContext::abortTransaction, true, false);
+    }
+
+    @Test
     public void testConnectorAbortOnRecord() throws Exception {
         testConnectorBasedCommit(ctx -> ctx.abortTransaction(SOURCE_RECORD_2), true);
+    }
+
+    @Test
+    public void testConnectorAbortOnRecordWithUpdateOffsets() throws Exception {
+        testUpdateOffsetsConnectorBasedCommit(ctx -> ctx.abortTransaction(SOURCE_RECORD_2), true, true);
     }
 
     private void testConnectorBasedCommit(Consumer<TransactionContext> requestCommit, boolean abort) throws Exception {
@@ -695,6 +810,62 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyPossibleTopicCreation();
         assertPollMetrics(1);
         assertTransactionMetrics(abort ? 0 : (3 * RECORDS.size()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void testUpdateOffsetsConnectorBasedCommit(Consumer<TransactionContext> requestCommit, boolean abort, boolean recordBasedCommitOrAbort) throws Exception {
+        Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.CONNECTOR);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        createWorkerTask();
+
+        expectSuccessfulSends();
+
+        TransactionContext transactionContext = workerTask.sourceTaskContext.transactionContext();
+
+        startTaskThread();
+
+        awaitEmptyPolls(3);
+        assertEquals("No flushes should have taken place without connector requesting transaction commit",
+                0, flushCount());
+
+        requestCommit.accept(transactionContext);
+        when(offsetWriter.beginFlush())
+                .thenReturn(true);
+        when(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .thenReturn(Optional.of(mkMap(mkEntry(PARTITION, (Map<String, Object>) OFFSET))));
+        awaitEmptyPolls(3);
+        if (recordBasedCommitOrAbort) {
+            assertEquals("No flush should have taken place after transaction commit/abort was requested for a record which is neither committable nor abortable", 0, flushCount());
+            requestCommit.accept(transactionContext);
+            awaitPolls(3);
+            assertEquals("One flush should have taken place after transaction commit/abort was requested", 1, flushCount());
+            awaitPolls(1);
+            assertEquals("Only one flush should still have taken place without connector re-requesting commit/abort, even on identical records", 1, flushCount());
+        } else {
+            assertEquals("One flush should have taken place after transaction commit/abort was requested and there are offsets to commit", 1, flushCount());
+            awaitPolls(1);
+            requestCommit.accept(transactionContext);
+            awaitPolls(2);
+            assertEquals("One more flush should have taken place after transaction commit/abort was requested", 2, flushCount());
+            awaitPolls(1);
+            assertEquals("Only one flush should still have taken place without connector re-requesting commit/abort, even on identical records", 2, flushCount());
+        }
+        awaitShutdown();
+        // We begin a new transaction after connector-requested aborts so that we can still write offsets for the source records that were aborted
+        if (recordBasedCommitOrAbort) {
+            verify(producer, times(abort ? 3 : 2)).beginTransaction();
+        } else {
+            verify(producer, times(abort ? 4 : 3)).beginTransaction();
+        }
+        if (abort) {
+            verify(producer).abortTransaction();
+        }
+        verify(producer, times(flushCount())).commitTransaction();
+        verifySends(8);
+        verifyPreflight();
+        verifyStartup();
+        verifyCleanShutdown();
+        verifyPossibleTopicCreation();
     }
 
     @Test

@@ -251,9 +251,15 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         }
     }
 
+    @Override
+    protected void updateOffset(Map<String, Object> partition, Map<String, Object> offset) {
+        offsetWriter.offset(partition, offset);
+    }
+
     private void commitTransaction() {
         log.debug("{} Committing offsets", this);
 
+        updateOffsets();
         long started = time.milliseconds();
 
         AtomicReference<Throwable> flushError = new AtomicReference<>();

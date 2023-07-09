@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,8 +31,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.UPDATE_OFFSETS;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -45,6 +49,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster.DEFAULT_NUM_BROKERS;
 
 /**
@@ -66,6 +71,8 @@ public class SourceConnectorsIntegrationTest {
     private static final int DEFAULT_PARTITIONS = 1;
     private static final int FOO_GROUP_REPLICATION_FACTOR = DEFAULT_NUM_BROKERS;
     private static final int FOO_GROUP_PARTITIONS = 9;
+
+    private static final long OFFSET_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
 
     private EmbeddedConnectCluster.Builder connectBuilder;
     private EmbeddedConnectCluster connect;
@@ -209,6 +216,107 @@ public class SourceConnectorsIntegrationTest {
         connect.assertions().assertTopicsExist(BAR_TOPIC);
         connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR,
                 DEFAULT_PARTITIONS, "Topic " + BAR_TOPIC + " does not have the expected settings");
+    }
+
+    @Test
+    public void testSourceConnectorOffsetsNotUpdatedWhenDisabled() throws Exception {
+
+        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(FOO_CONNECTOR);
+
+        long recordTransferDurationMs = TimeUnit.SECONDS.toMillis(30);
+
+        brokerProps.put("auto.create.topics.enable", String.valueOf(true));
+        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(false));
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(30000));
+        connect = connectBuilder.brokerProps(brokerProps).workerProps(workerProps).build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
+
+        connectorHandle.expectedRecords(100);
+
+        connectorHandle.expectedCommits(100);
+
+        Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
+        fooProps.put(NAME_CONFIG, FOO_CONNECTOR);
+        // By default it's false. Setting here explicitly for illustrative purposes
+        fooProps.put(UPDATE_OFFSETS, Boolean.toString(false));
+        connect.configureConnector(FOO_CONNECTOR, fooProps);
+
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(fooProps.get(CONNECTOR_CLASS_CONFIG), fooProps, 0,
+                "Validating connector configuration produced an unexpected number or errors.");
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        connect.assertions().assertTopicsExist(FOO_TOPIC);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, DEFAULT_REPLICATION_FACTOR,
+                DEFAULT_PARTITIONS, "Topic " + FOO_TOPIC + " does not have the expected settings");
+
+        // wait for the connector tasks to produce enough records
+        connectorHandle.awaitRecords(recordTransferDurationMs);
+
+        // wait for the connector tasks to commit enough records
+        connectorHandle.awaitCommits(recordTransferDurationMs);
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        int recordNum = connect.kafka().consume(100, recordTransferDurationMs, FOO_TOPIC).count();
+
+        validateOffsets(FOO_CONNECTOR, 1, "We should have the offsets of exactly one partition");    }
+
+    @Test
+    public void testSourceConnectorOffsetsUpdatedWhenEnabled() throws Exception {
+
+        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(FOO_CONNECTOR);
+
+        long recordTransferDurationMs = TimeUnit.SECONDS.toMillis(30);
+
+        brokerProps.put("auto.create.topics.enable", String.valueOf(true));
+        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(false));
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(30000));
+        connect = connectBuilder.brokerProps(brokerProps).workerProps(workerProps).build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
+
+        connectorHandle.expectedRecords(100);
+
+        connectorHandle.expectedCommits(100);
+
+        Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
+        fooProps.put(NAME_CONFIG, FOO_CONNECTOR);
+        // We allow offsets to be updated
+        fooProps.put(UPDATE_OFFSETS, Boolean.toString(true));
+        connect.configureConnector(FOO_CONNECTOR, fooProps);
+
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(fooProps.get(CONNECTOR_CLASS_CONFIG), fooProps, 0,
+                "Validating connector configuration produced an unexpected number or errors.");
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        connect.assertions().assertTopicsExist(FOO_TOPIC);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, DEFAULT_REPLICATION_FACTOR,
+                DEFAULT_PARTITIONS, "Topic " + FOO_TOPIC + " does not have the expected settings");
+
+        // wait for the connector tasks to produce enough records
+        connectorHandle.awaitRecords(recordTransferDurationMs);
+
+        // wait for the connector tasks to commit enough records
+        connectorHandle.awaitCommits(recordTransferDurationMs);
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        int recordNum = connect.kafka().consume(100, recordTransferDurationMs, FOO_TOPIC).count();
+
+        validateOffsets(FOO_CONNECTOR, 2, "We should have the offsets of an extra source partition");    }
+
+    private void validateOffsets(String connectorName, int numPartitions, String message) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
+            return offsets.offsets().size() == numPartitions;
+        }, OFFSET_READ_TIMEOUT_MS, message);
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {

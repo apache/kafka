@@ -321,10 +321,23 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
     }
 
     private void updateCommittableOffsets() {
+        // We invoke updateOffsets only when
+        // 1) Either the last poll invocation didn't return any records or
+        // 2) All the records returned by the previous poll invocation got processed successfully
+        // 3) First iteration of task because toSend would be null initially.
+        if (toSend == null) {
+            updateOffsets();
+        }
         CommittableOffsets newOffsets = submittedRecords.committableOffsets();
         synchronized (this) {
             this.committableOffsets = this.committableOffsets.updatedWith(newOffsets);
         }
+    }
+
+    @Override
+    protected void updateOffset(Map<String, Object> partition, Map<String, Object> offset) {
+        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(partition, offset);
+        submittedRecord.ack();
     }
 
     private void maybeThrowProducerSendException() {

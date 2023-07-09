@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
@@ -174,5 +175,21 @@ public abstract class SourceTask implements Task {
             throws InterruptedException {
         // by default, just call other method for backwards compatibility
         commitRecord(record);
+    }
+
+    /**
+     * Hook to update the offsets for source partitions before offsets are committed. Source tasks can use this
+     * hook to update the offsets for any source partition which isn't part of the offsets about to be committed or update
+     * the offsets for any source partition. If any source partition is dropped, or has been set to a null offset,
+     * then it has no effect on the offsets committed.
+     * @param offsets the offsets that were accumulated as per last poll or iteration. Could be empty, never null.
+     *                Note that this could mean different things based upon the mode:
+     *                At Least Once Mode: The offsets that are about to be committed based on the previous poll
+     *                EOS: The offsets about to be committed based on the transaction boundary.
+     *
+     * @return An optional map of updated Source partitions and offsets.
+     */
+    public Optional<Map<Map<String, Object>, Map<String, Object>>> updateOffsets(Map<Map<String, Object>, Map<String, Object>> offsets) {
+        return Optional.empty();
     }
 }
