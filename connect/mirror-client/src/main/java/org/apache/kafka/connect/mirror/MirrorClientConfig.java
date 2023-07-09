@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Map;
 import java.util.HashMap;
 
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 /** Configuration required for MirrorClient to talk to a given target cluster.
  *  <p>

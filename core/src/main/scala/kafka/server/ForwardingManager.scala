@@ -63,7 +63,7 @@ trait ForwardingManager {
    *                            byte buffer from the envelope request, since we will be mutating
    *                            the position and limit fields. It should be a copy.
    * @param requestBody         The AbstractRequest we are sending.
-   * @param requestToString     A callback which can be invoked to produce a human-readable decription
+   * @param requestToString     A callback which can be invoked to produce a human-readable description
    *                            of the request.
    * @param responseCallback    A callback which takes in an `Option[AbstractResponse]`.
    *                            We will call this function with Some(x) after the controller responds with x.

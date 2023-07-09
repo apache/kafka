@@ -849,7 +849,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      * @deprecated since 2.6; use {@link #repartition()} instead
      */
-    // TODO: when removed, update `StreamsResetter` decription of --intermediate-topics
+    // TODO: when removed, update `StreamsResetter` description of --intermediate-topics
     @Deprecated
     KStream<K, V> through(final String topic);
 

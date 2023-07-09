@@ -24,15 +24,18 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.message.DescribeClusterRequestData
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer._
@@ -49,7 +52,8 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.{FileSystems, Path}
 import java.{lang, util}
-import java.util.concurrent.CompletionStage
+import java.util.concurrent.{CompletableFuture, CompletionStage}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable
@@ -78,7 +82,7 @@ class KRaftClusterTest {
   }
 
   @Test
-  def testCreateClusterAndRestartNode(): Unit = {
+  def testCreateClusterAndRestartBrokerNode(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
@@ -89,6 +93,35 @@ class KRaftClusterTest {
       val broker = cluster.brokers().values().iterator().next()
       broker.shutdown()
       broker.startup()
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndRestartControllerNode(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
+      val port = controller.socketServer.boundPort(controller.config.controllerListeners.head.listenerName)
+
+      // shutdown active controller
+      controller.shutdown()
+      // Rewrite The `listeners` config to avoid controller socket server init using different port
+      val config = controller.sharedServer.controllerConfig.props
+      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$port")
+      controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
+      //  metrics will be set to null when closing a controller, so we should recreate it for testing
+      controller.sharedServer.metrics = new Metrics()
+
+      // restart controller
+      controller.startup()
+      TestUtils.waitUntilTrue(() => cluster.controllers().values().iterator().asScala.exists(_.controller.isActive), "Timeout waiting for new controller election")
     } finally {
       cluster.close()
     }
@@ -917,7 +950,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.brokers().forEach((_, server) => {
-        server.remoteLogManager match {
+        server.remoteLogManagerOpt match {
           case Some(_) =>
           case None => fail("RemoteLogManager should be initialized")
         }
@@ -973,13 +1006,33 @@ class KRaftClusterTest {
     }
   }
 
+  /**
+   * Test a single broker, single controller cluster at the minimum bootstrap level. This tests
+   * that we can function without having periodic NoOpRecords written.
+   */
+  @Test
+  def testSingleControllerSingleBrokerCluster(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+    } finally {
+      cluster.close()
+    }
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = Array(true))
+  @ValueSource(booleans = Array(false, true))
   def testReconfigureControllerClientQuotas(combinedController: Boolean): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
-        setCoResident(combinedController).
+        setCombined(combinedController).
         setNumControllerNodes(1).build()).
       setConfigProp("client.quota.callback.class", classOf[DummyClientQuotaCallback].getName).
       setConfigProp(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey, "0").
@@ -1010,6 +1063,103 @@ class KRaftClusterTest {
         admin.close()
       }
       assertConfigValue(1)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testReconfigureControllerAuthorizer(combinedMode: Boolean): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setCombined(combinedMode).
+        setNumControllerNodes(1).build()).
+      setConfigProp("authorizer.class.name", classOf[FakeConfigurableAuthorizer].getName).
+      build()
+
+    def assertFoobarValue(expected: Int): Unit = {
+      TestUtils.retry(60000) {
+        assertEquals(expected, cluster.controllers().values().iterator().next().
+          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+        assertEquals(expected, cluster.brokers().values().iterator().next().
+          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+      }
+    }
+
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      assertFoobarValue(0)
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.incrementalAlterConfigs(
+          Collections.singletonMap(new ConfigResource(Type.BROKER, ""),
+            Collections.singletonList(new AlterConfigOp(
+              new ConfigEntry(FakeConfigurableAuthorizer.foobarConfigKey, "123"), OpType.SET)))).
+          all().get()
+      } finally {
+        admin.close()
+      }
+      assertFoobarValue(123)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testOverlyLargeCreateTopics(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val newTopics = new util.ArrayList[NewTopic]()
+        for (i <- 0 to 10000) {
+          newTopics.add(new NewTopic("foo" + i, 100000, 1.toShort))
+        }
+        val executionException = assertThrows(classOf[ExecutionException],
+            () => admin.createTopics(newTopics).all().get())
+        assertNotNull(executionException.getCause)
+        assertEquals(classOf[PolicyViolationException], executionException.getCause.getClass)
+        assertEquals("Unable to perform excessively large batch operation.",
+          executionException.getCause.getMessage)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testTimedOutHeartbeats(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      setConfigProp(KafkaConfig.BrokerHeartbeatIntervalMsProp, 10.toString).
+      setConfigProp(KafkaConfig.BrokerSessionTimeoutMsProp, 1000.toString).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      controller.controller.waitForReadyBrokers(3).get()
+      TestUtils.retry(60000) {
+        val latch = controller.controller.asInstanceOf[QuorumController].pause()
+        Thread.sleep(1001)
+        latch.countDown()
+        assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
+        assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
+          "Expected timedOutHeartbeats to be greater than 0.");
+      }
     } finally {
       cluster.close()
     }
@@ -1070,3 +1220,70 @@ class DummyClientQuotaCallback() extends ClientQuotaCallback with Reconfigurable
   override def reconfigure(configs: util.Map[String, _]): Unit = configure(configs)
 }
 
+object FakeConfigurableAuthorizer {
+  val foobarConfigKey = "fake.configurable.authorizer.foobar.config"
+
+  def fakeConfigurableAuthorizerConfigToInt(configs: util.Map[String, _]): Int = {
+    val result = configs.get(foobarConfigKey)
+    if (result == null) {
+      0
+    } else {
+      val resultString = result.toString().trim()
+      try {
+        Integer.valueOf(resultString)
+      } catch {
+        case e: NumberFormatException => throw new ConfigException(s"Bad value of ${foobarConfigKey}: ${resultString}")
+      }
+    }
+  }
+}
+
+class FakeConfigurableAuthorizer() extends Authorizer with Reconfigurable {
+  import FakeConfigurableAuthorizer._
+
+  val foobar = new AtomicInteger(0)
+
+  override def start(serverInfo: AuthorizerServerInfo): java.util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+    serverInfo.endpoints().asScala.map(e => e -> {
+      val future = new CompletableFuture[Void]
+      future.complete(null)
+      future
+    }).toMap.asJava
+  }
+
+  override def reconfigurableConfigs(): java.util.Set[String] = Set(foobarConfigKey).asJava
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+    fakeConfigurableAuthorizerConfigToInt(configs)
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    foobar.set(fakeConfigurableAuthorizerConfigToInt(configs))
+  }
+
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+    actions.asScala.map(_ => AuthorizationResult.ALLOWED).toList.asJava
+  }
+
+  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = List[AclBinding]().asJava
+
+  override def close(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {
+    foobar.set(fakeConfigurableAuthorizerConfigToInt(configs))
+  }
+
+  override def createAcls(
+    requestContext: AuthorizableRequestContext,
+    aclBindings: util.List[AclBinding]
+  ): util.List[_ <: CompletionStage[AclCreateResult]] = {
+    Collections.emptyList()
+  }
+
+  override def deleteAcls(
+    requestContext: AuthorizableRequestContext,
+    aclBindingFilters: util.List[AclBindingFilter]
+  ): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+    Collections.emptyList()
+  }
+}

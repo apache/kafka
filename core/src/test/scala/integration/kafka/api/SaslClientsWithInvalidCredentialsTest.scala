@@ -12,7 +12,6 @@
   */
 package kafka.api
 
-import java.nio.file.Files
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -51,8 +50,8 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   val numPartitions = 1
   val tp = new TopicPartition(topic, 0)
 
-  override def configureSecurityBeforeServersStart(): Unit = {
-    super.configureSecurityBeforeServersStart()
+  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
+    super.configureSecurityBeforeServersStart(testInfo)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
@@ -195,13 +194,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   private def prepareConsumerGroupService = {
-    val propsFile = TestUtils.tempFile()
-    val propsStream = Files.newOutputStream(propsFile.toPath)
-    try {
-      propsStream.write("security.protocol=SASL_PLAINTEXT\n".getBytes())
-      propsStream.write(s"sasl.mechanism=$kafkaClientSaslMechanism".getBytes())
-    }
-    finally propsStream.close()
+    val propsFile = TestUtils.tempPropertiesFile(Map("security.protocol" -> "SASL_PLAINTEXT", "sasl.mechanism" -> kafkaClientSaslMechanism))
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(),
                         "--describe",

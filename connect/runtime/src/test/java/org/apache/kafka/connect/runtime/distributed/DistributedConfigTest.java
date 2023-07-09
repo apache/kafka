@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
 import javax.crypto.KeyGenerator;
@@ -30,6 +31,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -409,6 +411,16 @@ public class DistributedConfigTest {
     }
 
     @Test
+    public void testCaseInsensitiveSecurityProtocol() {
+        final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
+        final Map<String, String> configs = configs();
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
+        final DistributedConfig distributedConfig = new DistributedConfig(configs);
+        assertEquals(saslSslLowerCase, distributedConfig.originalsStrings()
+                .get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
     public void shouldIdentifyNeedForTransactionalLeader() {
         Map<String, String> workerProps = configs();
 
@@ -443,6 +455,16 @@ public class DistributedConfigTest {
                 "connect-cluster-\u2603",
                 new DistributedConfig(workerProps).transactionalProducerId()
         );
+    }
+
+    @Test
+    public void testOsDefaultSocketBufferSizes() {
+        Map<String, String> configs = configs();
+        configs.put(CommonClientConfigs.SEND_BUFFER_CONFIG,
+            Integer.toString(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND));
+        configs.put(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
+            Integer.toString(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND));
+        new DistributedConfig(configs);
     }
 
 }

@@ -146,8 +146,6 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         backupWorkerProps.putAll(superUserConfig());
 
         HashMap<String, String> additionalConfig = new HashMap<String, String>(superUserConfig()) {{
-                put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".enabled", "true");
-                put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "true");
                 put(FORWARDING_ADMIN_CLASS, FakeForwardingAdminWithLocalMetadata.class.getName());
             }};
 
@@ -189,8 +187,8 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
     @Test
     public void testReplicationIsCreatingTopicsUsingProvidedForwardingAdmin() throws Exception {
-        produceMessages(primary, "test-topic-1");
-        produceMessages(backup, "test-topic-1");
+        produceMessages(primaryProducer, "test-topic-1");
+        produceMessages(backupProducer, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
@@ -226,8 +224,8 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     @Test
     public void testCreatePartitionsUseProvidedForwardingAdmin() throws Exception {
         mm2Config = new MirrorMakerConfig(mm2Props);
-        produceMessages(backup, "test-topic-1");
-        produceMessages(primary, "test-topic-1");
+        produceMessages(backupProducer, "test-topic-1");
+        produceMessages(primaryProducer, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
@@ -259,8 +257,8 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     public void testSyncTopicConfigUseProvidedForwardingAdmin() throws Exception {
         mm2Props.put("sync.topic.configs.enabled", "true");
         mm2Config = new MirrorMakerConfig(mm2Props);
-        produceMessages(backup, "test-topic-1");
-        produceMessages(primary, "test-topic-1");
+        produceMessages(backupProducer, "test-topic-1");
+        produceMessages(primaryProducer, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery

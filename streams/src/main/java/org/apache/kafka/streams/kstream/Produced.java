@@ -142,7 +142,7 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * Produce records using the provided partitioner.
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
      *                      if not specified and the key serde provides a {@link WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultStreamPartitioner} wil be used
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultStreamPartitioner} will be used
      * @return this
      */
     public Produced<K, V> withStreamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {

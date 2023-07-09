@@ -286,7 +286,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkUserAppearsInAlterResults(results1_1, user2)
 
     // KRaft is eventually consistent so it is possible to call describe before 
-    // the credential is propogated from the controller to the broker.
+    // the credential is propagated from the controller to the broker.
     TestUtils.waitUntilTrue(() => describeAllWithNoTopLevelErrorConfirmed().data.results.size == 2,
                                "describeAllWithNoTopLevelErrorConfirmed does not see 2 users");
 

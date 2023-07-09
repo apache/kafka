@@ -42,7 +42,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 /** Top-level config describing replication flows between multiple Kafka clusters.
  *  <p>
@@ -199,6 +199,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
 
         // fill in reasonable defaults
+        props.putIfAbsent(CommonClientConfigs.CLIENT_ID_CONFIG, sourceAndTarget.toString());
         props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
         props.putIfAbsent(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
                 + sourceAndTarget.source() + ".internal");

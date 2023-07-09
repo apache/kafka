@@ -278,10 +278,12 @@ public class InternalTopicManager {
     private void validateCleanupPolicy(final ValidationResult validationResult,
                                        final InternalTopicConfig topicConfig,
                                        final Config brokerSideTopicConfig) {
-        if (topicConfig instanceof UnwindowedChangelogTopicConfig) {
-            validateCleanupPolicyForUnwindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
+        if (topicConfig instanceof UnwindowedUnversionedChangelogTopicConfig) {
+            validateCleanupPolicyForUnwindowedUnversionedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
         } else if (topicConfig instanceof WindowedChangelogTopicConfig) {
             validateCleanupPolicyForWindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
+        } else if (topicConfig instanceof VersionedChangelogTopicConfig) {
+            validateCleanupPolicyForVersionedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
         } else if (topicConfig instanceof RepartitionTopicConfig) {
             validateCleanupPolicyForRepartitionTopic(validationResult, topicConfig, brokerSideTopicConfig);
         } else {
@@ -289,9 +291,9 @@ public class InternalTopicManager {
         }
     }
 
-    private void validateCleanupPolicyForUnwindowedChangelogs(final ValidationResult validationResult,
-                                                              final InternalTopicConfig topicConfig,
-                                                              final Config brokerSideTopicConfig) {
+    private void validateCleanupPolicyForUnwindowedUnversionedChangelogs(final ValidationResult validationResult,
+                                                                         final InternalTopicConfig topicConfig,
+                                                                         final Config brokerSideTopicConfig) {
         final String topicName = topicConfig.name();
         final String cleanupPolicy = getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, topicName);
         if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
@@ -331,6 +333,35 @@ public class InternalTopicManager {
                         + topicName + " is set but it should be unset."
                 );
             }
+        }
+    }
+
+    private void validateCleanupPolicyForVersionedChangelogs(final ValidationResult validationResult,
+                                                             final InternalTopicConfig topicConfig,
+                                                             final Config brokerSideTopicConfig) {
+        final String topicName = topicConfig.name();
+        final String cleanupPolicy = getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, topicName);
+
+        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
+            validationResult.addMisconfiguration(
+                topicName,
+                "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
+                    + topicName + " should not contain \""
+                    + TopicConfig.CLEANUP_POLICY_DELETE + "\"."
+            );
+        }
+
+        final long brokerSideCompactionLagMs =
+            Long.parseLong(getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, topicName));
+        final Map<String, String> streamsSideConfig =
+            topicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+        final long streamsSideCompactionLagMs = Long.parseLong(streamsSideConfig.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
+        if (brokerSideCompactionLagMs < streamsSideCompactionLagMs) {
+            validationResult.addMisconfiguration(
+                topicName,
+                "Min compaction lag (" + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + ") of existing internal topic "
+                    + topicName + " is " + brokerSideCompactionLagMs + " but should be " + streamsSideCompactionLagMs + " or larger."
+            );
         }
     }
 
@@ -580,7 +611,7 @@ public class InternalTopicManager {
                 if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +
-                            "Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
+                            "Use 'org.apache.kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
                         topicName, numberOfPartitions.get(), existedTopicPartition.get(topicName));
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);

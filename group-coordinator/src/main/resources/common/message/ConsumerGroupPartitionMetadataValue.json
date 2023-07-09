@@ -26,6 +26,8 @@
       "about": "The list of topic metadata.", "fields": [
       { "name": "TopicId", "versions": "0+", "type": "uuid",
         "about": "The topic id." },
+      { "name": "TopicName", "versions": "0+", "type": "string",
+        "about": "The topic name." },
       { "name": "NumPartitions", "versions": "0+", "type": "int32",
         "about": "The number of partitions of the topic." }
     ]}

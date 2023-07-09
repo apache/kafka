@@ -69,7 +69,7 @@ public class TestPlugins {
         /**
          * A plugin which will always throw an exception during loading
          */
-        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException"),
+        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException", false),
         /**
          * A plugin which samples information about its initialization.
          */
@@ -94,6 +94,11 @@ public class TestPlugins {
          * which samples information about its method calls.
          */
         SAMPLING_CONFIG_PROVIDER("sampling-config-provider", "test.plugins.SamplingConfigProvider"),
+        /**
+         * A {@link org.apache.kafka.connect.sink.SinkConnector}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONNECTOR("sampling-connector", "test.plugins.SamplingConnector"),
         /**
          * A plugin which uses a {@link java.util.ServiceLoader}
          * to load internal classes, and samples information about their initialization.
@@ -141,9 +146,17 @@ public class TestPlugins {
          */
         BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
         /**
-         * A plugin which is incorrectly packaged, which has a private default constructor.
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
          */
         BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("bad-packaging", "test.plugins.NoDefaultConstructorConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
+         */
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONVERTER("bad-packaging", "test.plugins.NoDefaultConstructorConverter", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
+         */
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_OVERRIDE_POLICY("bad-packaging", "test.plugins.NoDefaultConstructorOverridePolicy", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
@@ -151,7 +164,15 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER);
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER),
+        /**
+         * A reflectively discovered plugin which subclasses another plugin which is present on the classpath
+         */
+        SUBCLASS_OF_CLASSPATH_CONVERTER("subclass-of-classpath", "test.plugins.SubclassOfClasspathConverter"),
+        /**
+         * A ServiceLoader discovered plugin which subclasses another plugin which is present on the classpath
+         */
+        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY("subclass-of-classpath", "test.plugins.SubclassOfClasspathOverridePolicy");
 
         private final String resourceDir;
         private final String className;
@@ -191,12 +212,12 @@ public class TestPlugins {
     }
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    private static final Map<String, File> PLUGIN_JARS;
+    private static final Map<String, Path> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
 
     static {
         Throwable err = null;
-        Map<String, File> pluginJars = new HashMap<>();
+        Map<String, Path> pluginJars = new HashMap<>();
         try {
             for (TestPlugin testPlugin : TestPlugin.values()) {
                 if (pluginJars.containsKey(testPlugin.resourceDir())) {
@@ -227,8 +248,12 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<String> pluginPath() {
+    public static List<Path> pluginPath() {
         return pluginPath(defaultPlugins());
+    }
+
+    public static String pluginPathJoined() {
+        return pluginPath().stream().map(Path::toString).collect(Collectors.joining(","));
     }
 
     /**
@@ -237,15 +262,18 @@ public class TestPlugins {
      * @return A list of plugin jar filenames containing the specified test plugins
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<String> pluginPath(TestPlugin... plugins) {
+    public static List<Path> pluginPath(TestPlugin... plugins) {
         assertAvailable();
         return Arrays.stream(plugins)
                 .filter(Objects::nonNull)
                 .map(TestPlugin::resourceDir)
                 .distinct()
                 .map(PLUGIN_JARS::get)
-                .map(File::getPath)
                 .collect(Collectors.toList());
+    }
+
+    public static String pluginPathJoined(TestPlugin... plugins) {
+        return pluginPath(plugins).stream().map(Path::toString).collect(Collectors.joining(","));
     }
 
     /**
@@ -278,17 +306,17 @@ public class TestPlugins {
                 .toArray(TestPlugin[]::new);
     }
 
-    private static File createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
+    private static Path createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
         Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
         compileJavaSources(inputDir, binDir);
-        File jarFile = Files.createTempFile(resourceDir + ".", ".jar").toFile();
-        try (JarOutputStream jar = openJarFile(jarFile)) {
+        Path jarFile = Files.createTempFile(resourceDir + ".", ".jar");
+        try (JarOutputStream jar = openJarFile(jarFile.toFile())) {
             writeJar(jar, inputDir, removeRuntimeClasses);
             writeJar(jar, binDir, removeRuntimeClasses);
         }
         removeDirectory(binDir);
-        jarFile.deleteOnExit();
+        jarFile.toFile().deleteOnExit();
         return jarFile;
     }
 

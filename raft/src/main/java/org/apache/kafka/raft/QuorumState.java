@@ -209,7 +209,7 @@ public class QuorumState {
             );
         }
 
-        transitionTo(initialState);
+        durableTransitionTo(initialState);
     }
 
     public Set<Integer> remoteVoters() {
@@ -277,16 +277,17 @@ public class QuorumState {
         // The Resigned state is a soft state which does not need to be persisted.
         // A leader will always be re-initialized in this state.
         int epoch = state.epoch();
-        this.state = new ResignedState(
-            time,
-            localIdOrThrow(),
-            epoch,
-            voters,
-            randomElectionTimeoutMs(),
-            preferredSuccessors,
-            logContext
+        memoryTransitionTo(
+            new ResignedState(
+                time,
+                localIdOrThrow(),
+                epoch,
+                voters,
+                randomElectionTimeoutMs(),
+                preferredSuccessors,
+                logContext
+            )
         );
-        log.info("Completed transition to {}", state);
     }
 
     /**
@@ -313,7 +314,7 @@ public class QuorumState {
             electionTimeoutMs = randomElectionTimeoutMs();
         }
 
-        transitionTo(new UnattachedState(
+        durableTransitionTo(new UnattachedState(
             time,
             epoch,
             voters,
@@ -356,7 +357,7 @@ public class QuorumState {
         // Note that we reset the election timeout after voting for a candidate because we
         // know that the candidate has at least as good of a chance of getting elected as us
 
-        transitionTo(new VotedState(
+        durableTransitionTo(new VotedState(
             time,
             epoch,
             candidateId,
@@ -392,7 +393,7 @@ public class QuorumState {
                 " and epoch=" + epoch + " from state " + state);
         }
 
-        transitionTo(new FollowerState(
+        durableTransitionTo(new FollowerState(
             time,
             epoch,
             leaderId,
@@ -416,7 +417,7 @@ public class QuorumState {
         int newEpoch = epoch() + 1;
         int electionTimeoutMs = randomElectionTimeoutMs();
 
-        transitionTo(new CandidateState(
+        durableTransitionTo(new CandidateState(
             time,
             localIdOrThrow(),
             newEpoch,
@@ -460,11 +461,11 @@ public class QuorumState {
             accumulator,
             logContext
         );
-        transitionTo(state);
+        durableTransitionTo(state);
         return state;
     }
 
-    private void transitionTo(EpochState state) {
+    private void durableTransitionTo(EpochState state) {
         if (this.state != null) {
             try {
                 this.state.close();
@@ -475,8 +476,13 @@ public class QuorumState {
         }
 
         this.store.writeElectionState(state.election());
+        memoryTransitionTo(state);
+    }
+
+    private void memoryTransitionTo(EpochState state) {
+        EpochState from = this.state;
         this.state = state;
-        log.info("Completed transition to {}", state);
+        log.info("Completed transition to {} from {}", state, from);
     }
 
     private int randomElectionTimeoutMs() {

@@ -93,7 +93,6 @@ import scala.jdk.CollectionConverters._
  *                                  If the inter-broker protocol version on a ZK cluster is below 2.8, partition.metadata
  *                                  will be deleted to avoid ID conflicts upon re-upgrade.
  * @param remoteStorageSystemEnable flag to indicate whether the system level remote log storage is enabled or not.
- * @param remoteLogManager          Optional RemoteLogManager instance if it exists.
  */
 @threadsafe
 class UnifiedLog(@volatile var logStartOffset: Long,
@@ -105,7 +104,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  @volatile private var _topicId: Option[Uuid],
                  val keepPartitionMetadataFile: Boolean,
                  val remoteStorageSystemEnable: Boolean = false,
-                 remoteLogManager: Option[RemoteLogManager] = None,
                  @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging {
 
   import kafka.log.UnifiedLog._
@@ -148,6 +146,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   @volatile private[kafka] var _localLogStartOffset: Long = logStartOffset
 
   def localLogStartOffset(): Long = _localLogStartOffset
+
+  @volatile private var highestOffsetInRemoteStorage: Long = -1L
 
   locally {
     initializePartitionMetadata()
@@ -520,6 +520,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       localLog.updateRecoveryPoint(offset)
     }
   }
+  def updateHighestOffsetInRemoteStorage(offset: Long): Unit = {
+    if (!remoteLogEnabled())
+      warn(s"Unable to update the highest offset in remote storage with offset $offset since remote storage is not enabled. The existing highest offset is $highestOffsetInRemoteStorage.")
+    else if (offset > highestOffsetInRemoteStorage) highestOffsetInRemoteStorage = offset
+  }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
   // free of all side-effects, i.e. it must not update any log-specific state.
@@ -570,6 +575,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       result.put(producerId.toLong, lastRecord)
     }
     result
+  }
+
+  def hasOngoingTransaction(producerId: Long): Boolean = lock synchronized {
+    val entry = producerStateManager.activeProducers.get(producerId)
+    entry != null && entry.currentTxnFirstOffset.isPresent
   }
 
   /**
@@ -670,7 +680,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       interBrokerProtocolVersion = MetadataVersion.latest,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
-      None,
+      requestLocal = None,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
@@ -686,7 +696,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
-   * @param requestLocal The request local instance if assignOffsets is true
+   * @param requestLocal The request local instance if validateAndAssignOffsets is true
    * @param ignoreRecordSize true to skip validation of record size.
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
@@ -1157,11 +1167,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * , i.e. it only gives back the timestamp based on the last modification time of the log segments.
    *
    * @param targetTimestamp The given timestamp for offset fetching.
+   * @param remoteLogManager Optional RemoteLogManager instance if it exists.
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
    *         None if no such message is found.
    */
   @nowarn("cat=deprecation")
-  def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
+  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): Option[TimestampAndOffset] = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1231,10 +1242,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           }
 
           remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset, leaderEpochCache.get)
-        } else None
+        } else Optional.empty()
 
-        if (remoteOffset.nonEmpty) {
-          remoteOffset
+        if (remoteOffset.isPresent) {
+          remoteOffset.asScala
         } else {
           // If it is not found in remote storage, search in the local storage starting with local log start offset.
 
@@ -1767,7 +1778,6 @@ object UnifiedLog extends Logging {
             keepPartitionMetadataFile: Boolean,
             numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
             remoteStorageSystemEnable: Boolean = false,
-            remoteLogManager: Option[RemoteLogManager] = None,
             logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
@@ -1807,7 +1817,6 @@ object UnifiedLog extends Logging {
       topicId,
       keepPartitionMetadataFile,
       remoteStorageSystemEnable,
-      remoteLogManager,
       logOffsetsListener)
   }
 

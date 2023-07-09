@@ -385,7 +385,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
       0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
-    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forReplica(version, 5000, -1, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createListOffsetsRequest = {
@@ -2233,6 +2233,30 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val response = connectAndReceive[MetadataResponse](request)
     assertEquals(Collections.emptyMap, response.errorCounts)
     assertFalse(response.clusterId.isEmpty, "Cluster id not returned")
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRetryProducerInitializationAfterPermissionFix(quorum: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    val wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
+    val prefixed = new ResourcePattern(TOPIC, "t", PREFIXED)
+    val literal = new ResourcePattern(TOPIC, topic, LITERAL)
+    val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
+    val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
+    val producer = buildIdempotentProducer()
+
+    addAndVerifyAcls(Set(denyWriteAce), wildcard)
+    assertThrows(classOf[Exception], () => {
+      val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      future.get()
+    })
+    removeAndVerifyAcls(Set(denyWriteAce), wildcard)
+    addAndVerifyAcls(Set(allowWriteAce), prefixed)
+    addAndVerifyAcls(Set(allowWriteAce), literal)
+    val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+    assertDoesNotThrow(() => future.get())
+    producer.close()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

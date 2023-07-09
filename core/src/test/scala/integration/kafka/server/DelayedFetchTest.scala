@@ -173,6 +173,7 @@ class DelayedFetchTest {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
       replicaId,
+      1,
       maxWaitMs,
       1,
       maxBytes,
@@ -187,7 +188,7 @@ class DelayedFetchTest {
     fetchPartitionData: FetchRequest.PartitionData,
     error: Errors
   ): Unit = {
-    when(replicaManager.readFromLocalLog(
+    when(replicaManager.readFromLog(
       fetchParams,
       readPartitionInfo = Seq((topicIdPartition, fetchPartitionData)),
       quota = replicaQuota,

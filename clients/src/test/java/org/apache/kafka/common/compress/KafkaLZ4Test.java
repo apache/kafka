@@ -306,7 +306,7 @@ public class KafkaLZ4Test {
             args.ignoreFlagDescriptorChecksum);
 
         int n = 100;
-        int remaining = args.payload.length;
+        long remaining = args.payload.length;
         long skipped = in.skip(n);
         assertEquals(Math.min(n, remaining), skipped);
 

@@ -68,13 +68,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     private final ClusterConfig clusterConfig;
     private final AtomicReference<KafkaClusterTestKit> clusterReference;
     private final AtomicReference<EmbeddedZookeeper> zkReference;
-    private final boolean isCoResident;
+    private final boolean isCombined;
 
-    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCoResident) {
+    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCombined) {
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
         this.zkReference = new AtomicReference<>();
-        this.isCoResident = isCoResident;
+        this.isCombined = isCombined;
     }
 
     @Override
@@ -82,7 +82,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCoResident ? "CoReside" : "Distributed", clusterDesc);
+        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCombined ? "Combined" : "Isolated", clusterDesc);
     }
 
     @Override
@@ -92,7 +92,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
                         setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
-                        setCoResident(isCoResident).
+                        setCombined(isCombined).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
@@ -105,19 +105,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     zkReference.set(new EmbeddedZookeeper());
                     builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", zkReference.get().port()));
                 }
-
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
                 // KAFKA-12512 need to pass security protocol and listener name here
                 KafkaClusterTestKit cluster = builder.build();
                 clusterReference.set(cluster);
                 cluster.format();
-                cluster.startup();
-                kafka.utils.TestUtils.waitUntilTrue(
-                    () -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                    () -> "Broker never made it to RUNNING state.",
-                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
-                    100L);
+                if (clusterConfig.isAutoStart()) {
+                    cluster.startup();
+                    kafka.utils.TestUtils.waitUntilTrue(
+                        () -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                        () -> "Broker never made it to RUNNING state.",
+                        org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
+                        100L);
+                }
             },
             (AfterTestExecutionCallback) context -> clusterInstance.stop(),
             new ClusterInstanceParameterResolver(clusterInstance),

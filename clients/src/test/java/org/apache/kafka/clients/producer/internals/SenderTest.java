@@ -291,7 +291,7 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
-        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
+        ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 
@@ -723,13 +723,22 @@ public class SenderTest {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
+        // cluster authorization failed on initProducerId is retriable
         prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFalse(transactionManager.hasProducerId());
         assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
+        assertEquals(-1, transactionManager.producerIdAndEpoch().epoch);
 
-        // cluster authorization is a fatal error for the producer
         assertSendFailure(ClusterAuthorizationException.class);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        // sender retry initProducerId and succeed
+        sender.runOnce();
+        assertFalse(transactionManager.hasFatalError());
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+        // subsequent send should be successful
+        assertSuccessfulSend();
     }
 
     @Test
@@ -3026,6 +3035,28 @@ public class SenderTest {
         verifyErrorMessage(produceResponse(tp0, 0L, Errors.INVALID_REQUEST, 0, -1, errorMessage), errorMessage);
     }
 
+    @Test
+    public void testSenderShouldRetryWithBackoffOnRetriableError() {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        long start = time.milliseconds();
+
+        // first request is sent immediately
+        prepareAndReceiveInitProducerId(producerId, (short) -1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+        long request1 = time.milliseconds();
+        assertEquals(start, request1);
+
+        // backoff before sending second request
+        prepareAndReceiveInitProducerId(producerId, (short) -1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+        long request2 = time.milliseconds();
+        assertEquals(RETRY_BACKOFF_MS, request2 - request1);
+
+        // third request should also backoff
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertEquals(RETRY_BACKOFF_MS, time.milliseconds() - request2);
+    }
+
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
         sender.runOnce(); // connect
@@ -3182,7 +3213,7 @@ public class SenderTest {
     }
 
     private TransactionManager createTransactionManager() {
-        return new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions());
+        return new TransactionManager(new LogContext(), null, 0, RETRY_BACKOFF_MS, new ApiVersions());
     }
     
     private void setupWithTransactionState(TransactionManager transactionManager) {
@@ -3229,6 +3260,22 @@ public class SenderTest {
         metadata.add("test", time.milliseconds());
         if (updateMetadata)
             this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+    }
+
+    private void assertSuccessfulSend() throws InterruptedException {
+        Future<RecordMetadata> future = appendToAccumulator(tp0);
+        sender.runOnce(); // send request
+        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce();
+        assertTrue(future.isDone());
+        try {
+            future.get();
+        } catch (ExecutionException e) {
+            fail("Future should not have raised an exception: " + e.getCause());
+        }
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {

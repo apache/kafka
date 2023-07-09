@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.io.{Closeable, File, FileWriter, IOException, Reader, StringReader}
+import java.io.{Closeable, File, IOException, Reader, StringReader}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
@@ -32,7 +32,7 @@ import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.UnifiedLog
-import kafka.network.{Processor, RequestChannel}
+import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils.TestControllerRequestCompletionHandler
@@ -77,6 +77,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 object DynamicBrokerReconfigurationTest {
+  val Plain = "PLAIN"
   val SecureInternal = "INTERNAL"
   val SecureExternal = "EXTERNAL"
 }
@@ -125,7 +126,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS)
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$SecureInternal:SSL, $SecureExternal:SASL_SSL, CONTROLLER:$controllerListenerSecurityProtocol")
+      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"PLAINTEXT:PLAINTEXT, $SecureInternal:SSL, $SecureExternal:SASL_SSL, CONTROLLER:$controllerListenerSecurityProtocol")
       props.put(KafkaConfig.InterBrokerListenerNameProp, SecureInternal)
       props.put(KafkaConfig.SslClientAuthProp, "requested")
       props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, "PLAIN")
@@ -375,7 +376,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Produce/consume should work with new truststore with new producer/consumer
     val producer = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    // Start the new consumer in a separate group than the continous consumer started at the beginning of the test so
+    // Start the new consumer in a separate group than the continuous consumer started at the beginning of the test so
     // that it is not disrupted by rebalance.
     val consumer = ConsumerBuilder("group2").trustStoreProps(sslProperties2).topic(topic2).build()
     verifyProduceConsume(producer, consumer, 10, topic2)
@@ -1167,6 +1168,35 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertTrue(partitions.exists(_.leader == null), "Did not find partitions with no leader")
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testReconfigureRemovedListener(quorum: String): Unit = {
+    val client = adminClients.head
+    val broker = servers.head
+    assertEquals(2, broker.config.dynamicConfig.reconfigurables.asScala.count(r => r.isInstanceOf[DataPlaneAcceptor]))
+    val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, broker.config.brokerId.toString)
+
+    def acceptors: Seq[DataPlaneAcceptor] = broker.config.dynamicConfig.reconfigurables.asScala.filter(_.isInstanceOf[DataPlaneAcceptor])
+      .map(_.asInstanceOf[DataPlaneAcceptor]).toSeq
+
+    // add new PLAINTEXT listener
+    client.incrementalAlterConfigs(Map(broker0Resource ->
+      Seq(new AlterConfigOp(new ConfigEntry(KafkaConfig.ListenersProp,
+        s"PLAINTEXT://localhost:0, $SecureInternal://localhost:0, $SecureExternal://localhost:0"), AlterConfigOp.OpType.SET)
+      ).asJavaCollection).asJava).all().get()
+
+    TestUtils.waitUntilTrue(() => acceptors.size == 3, s"failed to add new DataPlaneAcceptor")
+
+    // remove PLAINTEXT listener
+    client.incrementalAlterConfigs(Map(broker0Resource ->
+      Seq(new AlterConfigOp(new ConfigEntry(KafkaConfig.ListenersProp,
+        s"$SecureInternal://localhost:0, $SecureExternal://localhost:0"), AlterConfigOp.OpType.SET)
+      ).asJavaCollection).asJava).all().get()
+
+    TestUtils.waitUntilTrue(() => acceptors.size == 2,
+      s"failed to remove DataPlaneAcceptor. current: ${acceptors.map(_.endPoint.toString).mkString(",")}")
+  }
+
   private def addListener(servers: Seq[KafkaBroker], listenerName: String, securityProtocol: SecurityProtocol,
                           saslMechanisms: Seq[String]): Unit = {
     val config = servers.head.config
@@ -1682,15 +1712,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def alterConfigsUsingConfigCommand(props: Properties): Unit = {
-    val propsFile = TestUtils.tempFile()
-    val propsWriter = new FileWriter(propsFile)
-    try {
-      clientProps(SecurityProtocol.SSL).forEach {
-        case (k, v) => propsWriter.write(s"$k=$v\n")
-      }
-    } finally {
-      propsWriter.close()
-    }
+    val propsFile = TestUtils.tempPropertiesFile(clientProps(SecurityProtocol.SSL))
 
     servers.foreach { server =>
       val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),

@@ -81,7 +81,7 @@ object AlterPartitionManager {
     controllerNodeProvider: ControllerNodeProvider,
     time: Time,
     metrics: Metrics,
-    threadNamePrefix: Option[String],
+    threadNamePrefix: String,
     brokerEpochSupplier: () => Long,
   ): AlterPartitionManager = {
     val channelManager = BrokerToControllerChannelManager(
@@ -89,7 +89,7 @@ object AlterPartitionManager {
       time = time,
       metrics = metrics,
       config = config,
-      channelName = "alterPartition",
+      channelName = "alter-partition",
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )
@@ -283,7 +283,7 @@ class DefaultAlterPartitionManager(
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicIdPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-          .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+          .setNewIsrWithEpochs(item.leaderAndIsr.isrWithBrokerEpoch.asJava)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
         if (metadataVersion.isLeaderRecoverySupported) {

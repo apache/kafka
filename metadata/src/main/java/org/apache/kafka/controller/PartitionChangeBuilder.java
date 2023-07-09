@@ -17,17 +17,20 @@
 
 package org.apache.kafka.controller;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -71,24 +74,30 @@ public class PartitionChangeBuilder {
     private final Uuid topicId;
     private final int partitionId;
     private final IntPredicate isAcceptableLeader;
-    private final boolean isLeaderRecoverySupported;
+    private final MetadataVersion metadataVersion;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
     private List<Integer> targetAdding;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
+    private boolean zkMigrationEnabled;
 
-    public PartitionChangeBuilder(PartitionRegistration partition,
-                                  Uuid topicId,
-                                  int partitionId,
-                                  IntPredicate isAcceptableLeader,
-                                  boolean isLeaderRecoverySupported) {
+
+    public PartitionChangeBuilder(
+        PartitionRegistration partition,
+        Uuid topicId,
+        int partitionId,
+        IntPredicate isAcceptableLeader,
+        MetadataVersion metadataVersion
+    ) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
-        this.isLeaderRecoverySupported = isLeaderRecoverySupported;
+        this.metadataVersion = metadataVersion;
+        this.zkMigrationEnabled = false;
+
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
@@ -99,6 +108,15 @@ public class PartitionChangeBuilder {
     public PartitionChangeBuilder setTargetIsr(List<Integer> targetIsr) {
         this.targetIsr = targetIsr;
         return this;
+    }
+
+    public PartitionChangeBuilder setTargetIsrWithBrokerStates(List<BrokerState> targetIsrWithEpoch) {
+        return setTargetIsr(
+            targetIsrWithEpoch
+              .stream()
+              .map(brokerState -> brokerState.brokerId())
+              .collect(Collectors.toList())
+        );
     }
 
     public PartitionChangeBuilder setTargetReplicas(List<Integer> targetReplicas) {
@@ -123,6 +141,11 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
         this.targetLeaderRecoveryState = targetLeaderRecoveryState;
+        return this;
+    }
+
+    public PartitionChangeBuilder setZkMigrationEnabled(boolean zkMigrationEnabled) {
+        this.zkMigrationEnabled = zkMigrationEnabled;
         return this;
     }
 
@@ -212,26 +235,29 @@ public class PartitionChangeBuilder {
     private void tryElection(PartitionChangeRecord record) {
         ElectionResult electionResult = electLeader();
         if (electionResult.node != partition.leader) {
-            log.debug(
-                "Setting new leader for topicId {}, partition {} to {} using {} election",
-                topicId,
-                partitionId,
-                electionResult.node,
-                electionResult.unclean ? "an unclean" : "a clean"
-            );
+            // generating log messages for partition elections can get expensive on large clusters,
+            // so only log clean elections at TRACE level; log unclean elections at INFO level
+            // to ensure the message is emitted since an unclean election can lead to data loss.
+            if (electionResult.unclean) {
+                log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election",
+                    topicId, partitionId, electionResult.node);
+            } else {
+                log.trace("Setting new leader for topicId {}, partition {} to {} using a clean election",
+                    topicId, partitionId, electionResult.node);
+            }
             record.setLeader(electionResult.node);
             if (electionResult.unclean) {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
                 record.setIsr(Collections.singletonList(electionResult.node));
                 if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING &&
-                    isLeaderRecoverySupported) {
+                    metadataVersion.isLeaderRecoverySupported()) {
                     // And mark the leader recovery state as RECOVERING
                     record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
                 }
             }
         } else {
-            log.debug("Failed to find a new leader with current state: {}", this);
+            log.trace("Failed to find a new leader with current state: {}", this);
         }
     }
 
@@ -240,8 +266,7 @@ public class PartitionChangeBuilder {
      *
      * We need to bump the leader epoch if:
      * 1. The leader changed, or
-     * 2. The new ISR does not contain all the nodes that the old ISR did, or
-     * 3. The new replica list does not contain all the nodes that the old replica list did.
+     * 2. The new replica list does not contain all the nodes that the old replica list did.
      *
      * Changes that do NOT fall in any of these categories will increase the partition epoch, but
      * not the leader epoch. Note that if the leader epoch increases, the partition epoch will
@@ -252,43 +277,46 @@ public class PartitionChangeBuilder {
      * NO_LEADER_CHANGE, a leader epoch bump will automatically occur. That takes care of
      * case 1. In this function, we check for cases 2 and 3, and handle them by manually
      * setting record.leader to the current leader.
+     *
+     * In MV before 3.6 there was a bug (KAFKA-15021) in the brokers' replica manager
+     * that required that the leader epoch be bump whenever the ISR shrank. In MV 3.6 this leader
+     * bump is not required when the ISR shrinks. Note, that the leader epoch is never increased if
+     * the ISR expanded.
+     *
+     * In MV 3.6 and beyond, if the controller is in ZK migration mode, the leader epoch must
+     * be bumped during ISR shrink for compatability with ZK brokers.
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {
-            if (!Replicas.contains(targetIsr, partition.isr) ||
-                    !Replicas.contains(targetReplicas, partition.replicas)) {
+            boolean bumpLeaderEpochOnIsrShrink = metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled;
+
+            if (!Replicas.contains(targetReplicas, partition.replicas)) {
+                // Reassignment
+                record.setLeader(partition.leader);
+            } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
+                // ISR shrink
                 record.setLeader(partition.leader);
             }
         }
     }
 
     private void completeReassignmentIfNeeded() {
-        // Check if there is a reassignment to complete.
-        if (targetRemoving.isEmpty() && targetAdding.isEmpty()) return;
+        PartitionReassignmentReplicas reassignmentReplicas =
+            new PartitionReassignmentReplicas(
+                targetRemoving,
+                targetAdding,
+                targetReplicas);
 
-        List<Integer> newTargetIsr = targetIsr;
-        List<Integer> newTargetReplicas = targetReplicas;
-        if (!targetRemoving.isEmpty()) {
-            newTargetIsr = new ArrayList<>(targetIsr.size());
-            for (int replica : targetIsr) {
-                if (!targetRemoving.contains(replica)) {
-                    newTargetIsr.add(replica);
-                }
-            }
-            if (newTargetIsr.isEmpty()) return;
-            newTargetReplicas = new ArrayList<>(targetReplicas.size());
-            for (int replica : targetReplicas) {
-                if (!targetRemoving.contains(replica)) {
-                    newTargetReplicas.add(replica);
-                }
-            }
-            if (newTargetReplicas.isEmpty()) return;
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> completedReassignmentOpt =
+            reassignmentReplicas.maybeCompleteReassignment(targetIsr);
+        if (!completedReassignmentOpt.isPresent()) {
+            return;
         }
-        for (int replica : targetAdding) {
-            if (!newTargetIsr.contains(replica)) return;
-        }
-        targetIsr = newTargetIsr;
-        targetReplicas = newTargetReplicas;
+
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = completedReassignmentOpt.get();
+
+        targetIsr = completedReassignment.isr;
+        targetReplicas = completedReassignment.replicas;
         targetRemoving = Collections.emptyList();
         targetAdding = Collections.emptyList();
     }
@@ -308,15 +336,9 @@ public class PartitionChangeBuilder {
             // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
             record.setIsr(targetIsr);
         }
-        if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
-            record.setReplicas(targetReplicas);
-        }
-        if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {
-            record.setRemovingReplicas(targetRemoving);
-        }
-        if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
-            record.setAddingReplicas(targetAdding);
-        }
+
+        setAssignmentChanges(record);
+
         if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
             record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
         }
@@ -325,6 +347,18 @@ public class PartitionChangeBuilder {
             return Optional.empty();
         } else {
             return Optional.of(new ApiMessageAndVersion(record, (short) 0));
+        }
+    }
+
+    private void setAssignmentChanges(PartitionChangeRecord record) {
+        if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
+            record.setReplicas(targetReplicas);
+        }
+        if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {
+            record.setRemovingReplicas(targetRemoving);
+        }
+        if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
+            record.setAddingReplicas(targetAdding);
         }
     }
 

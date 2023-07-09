@@ -129,6 +129,11 @@ class WorkerMetricsGroup {
         }
 
         @Override
+        public void onStop(final String connector) {
+            delegateListener.onStop(connector);
+        }
+
+        @Override
         public void onPause(final String connector) {
             delegateListener.onPause(connector);
         }

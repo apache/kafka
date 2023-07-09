@@ -21,7 +21,7 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.test.MockController
-import kafka.utils.{MockTime, NotNothing}
+import kafka.utils.NotNothing
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -46,11 +46,12 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -154,7 +155,11 @@ class ControllerApisTest {
       new KafkaConfig(props),
       MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
       Seq.empty,
-      new SimpleApiVersionManager(ListenerType.CONTROLLER, true)
+      new SimpleApiVersionManager(
+        ListenerType.CONTROLLER,
+        true,
+        false,
+        () => Features.fromKRaftVersion(MetadataVersion.latest()))
     )
   }
 

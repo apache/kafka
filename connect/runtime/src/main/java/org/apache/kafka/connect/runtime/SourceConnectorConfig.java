@@ -117,10 +117,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
             super(plugins, configDef, props);
         }
 
-        @Override
-        public Object get(String key) {
-            return super.get(key);
-        }
     }
 
     private final TransactionBoundary transactionBoundary;

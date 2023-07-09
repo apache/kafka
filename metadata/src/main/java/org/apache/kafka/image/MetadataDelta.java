@@ -35,6 +35,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -226,7 +227,7 @@ public final class MetadataDelta {
                  */
                 break;
             case ZK_MIGRATION_STATE_RECORD:
-                // TODO handle this
+                replay((ZkMigrationStateRecord) record);
                 break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
@@ -310,6 +311,10 @@ public final class MetadataDelta {
 
     public void replay(RemoveUserScramCredentialRecord record) {
         getOrCreateScramDelta().replay(record);
+    }
+
+    public void replay(ZkMigrationStateRecord record) {
+        getOrCreateFeaturesDelta().replay(record);
     }
 
     /**
