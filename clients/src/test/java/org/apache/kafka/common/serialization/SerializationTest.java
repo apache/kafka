@@ -449,7 +449,6 @@ public class SerializationTest {
                                                  ByteBuffer buffer) {
         final ByteBuffer duplicatedBuf0 = buffer.duplicate();
         final ByteBuffer duplicatedBuf1 = buffer.duplicate();
-        assertEquals(duplicatedBuf0, duplicatedBuf1);
         assertArrayEquals(expectedBytes, serializer.serialize(topic, duplicatedBuf0));
         assertArrayEquals(expectedBytes, Utils.toArray(serializer.serializeToByteBuffer(topic, duplicatedBuf1)));
         assertEquals(duplicatedBuf0, duplicatedBuf1);

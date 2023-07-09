@@ -43,6 +43,9 @@ import static org.openjdk.jmh.annotations.Mode.Throughput;
 @Measurement(iterations = 5, time = 1)
 public class MurMurHashBenchmark {
 
+    @Param({"42"})
+    private int seed;
+
     @Param({"128", "256"})
     private int bytes;
 
@@ -58,7 +61,7 @@ public class MurMurHashBenchmark {
 
     @Setup
     public void setup() {
-        final SplittableRandom random = new SplittableRandom();
+        final SplittableRandom random = new SplittableRandom(seed);
         bytesArray = new byte[bytes];
         byteBuffer = direct ? ByteBuffer.allocateDirect(bytes) : ByteBuffer.allocate(bytes);
         for (int i = 0; i < bytes; i++) {

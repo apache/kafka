@@ -536,6 +536,8 @@ public final class Utils {
         // Initialize the hash to a random value
         int h = seed ^ length;
         final int length4 = length / 4;
+
+        // murmur2 works on little-endian byte order.
         data = data.order() == LITTLE_ENDIAN ? data : data.slice().order(LITTLE_ENDIAN);
         for (int i = data.hasArray() ? data.arrayOffset() + data.position() : data.position(); i < length4; i++) {
             int k = data.getInt(i * 4);
