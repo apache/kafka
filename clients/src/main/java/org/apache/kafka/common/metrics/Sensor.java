@@ -255,7 +255,7 @@ public final class Sensor {
     }
 
     // visible for testing
-    protected void checkQuotasNonThreadSafe(long timeMs) {
+    void checkQuotasNonThreadSafe(long timeMs) {
         checkQuotasInternal(timeMs);
     }
 
