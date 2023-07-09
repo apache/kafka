@@ -876,7 +876,6 @@ project(':core') {
 
 
     implementation libs.argparse4j
-    implementation libs.caffeine
     implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
@@ -931,7 +930,8 @@ project(':core') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-
+    testImplementation libs.caffeine
+    
     generator project(':generator')
   }
 

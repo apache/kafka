@@ -41,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -72,12 +73,10 @@ import static org.apache.kafka.storage.internals.log.LogFileUtils.TXN_INDEX_FILE
 public class RemoteIndexCache implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteIndexCache.class);
-
-    public static final String DIR_NAME = "remote-log-index-cache";
-
     private static final String TMP_FILE_SUFFIX = ".tmp";
 
     public static final String REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD = "remote-log-index-cleaner";
+    public static final String DIR_NAME = "remote-log-index-cache";
 
     /**
      * Directory where the index files will be stored on disk.
@@ -159,8 +158,8 @@ public class RemoteIndexCache implements Closeable {
         cleanerThread.start();
     }
 
-    public LinkedBlockingQueue<Entry> expiredIndexes() {
-        return expiredIndexes;
+    public Collection<Entry> expiredIndexes() {
+        return Collections.unmodifiableCollection(expiredIndexes);
     }
 
     public Cache<Uuid, Entry> internalCache() {
@@ -174,26 +173,25 @@ public class RemoteIndexCache implements Closeable {
     private ShutdownableThread createCleanerThread() {
         ShutdownableThread thread = new ShutdownableThread("remote-log-index-cleaner") {
             public void doWork() {
-                while (!isRemoteIndexCacheClosed.get()) {
-                    try {
-                        Entry entry = expiredIndexes.take();
-                        log.debug("Cleaning up index entry {}", entry);
-                        entry.cleanup();
-                    } catch (InterruptedException ie) {
-                        // cleaner thread should only be interrupted when cache is being closed, else it's an error
-                        if (!isRemoteIndexCacheClosed.get()) {
-                            log.error("Cleaner thread received interruption but remote index cache is not closed", ie);
-                            // propagate the InterruptedException outside to correctly close the thread.
-                            throw new KafkaException(ie);
-                        } else {
-                            log.debug("Cleaner thread was interrupted on cache shutdown");
-                        }
-                    } catch (Exception ex) {
-                        // do not exit for exceptions other than InterruptedException
-                        log.error("Error occurred while cleaning up expired entry", ex);
+                try {
+                    Entry entry = expiredIndexes.take();
+                    log.debug("Cleaning up index entry {}", entry);
+                    entry.cleanup();
+                } catch (InterruptedException ie) {
+                    // cleaner thread should only be interrupted when cache is being closed, else it's an error
+                    if (!isRemoteIndexCacheClosed.get()) {
+                        log.error("Cleaner thread received interruption but remote index cache is not closed", ie);
+                        // propagate the InterruptedException outside to correctly close the thread.
+                        throw new KafkaException(ie);
+                    } else {
+                        log.debug("Cleaner thread was interrupted on cache shutdown");
                     }
+                } catch (Exception ex) {
+                    // do not exit for exceptions other than InterruptedException
+                    log.error("Error occurred while cleaning up expired entry", ex);
                 }
             }
+
         };
         thread.setDaemon(true);
 
@@ -213,10 +211,11 @@ public class RemoteIndexCache implements Closeable {
             throw new KafkaException(e);
         }
 
-        // Delete any .deleted files remained from the earlier run of the broker.
+        // Delete any .deleted or .tmp files remained from the earlier run of the broker.
         try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
             paths.forEach(path -> {
-                if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
+                if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
+                        path.endsWith(TMP_FILE_SUFFIX)) {
                     try {
                         Files.deleteIfExists(path);
                     } catch (IOException e) {
