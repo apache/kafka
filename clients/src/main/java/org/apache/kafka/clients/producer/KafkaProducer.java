@@ -928,10 +928,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer", cce);
             }
+
+            setReadOnly(record.headers());
+
             int partition = partition(record, serializedKey, serializedValue, cluster);
             tp = new TopicPartition(record.topic(), partition);
 
-            setReadOnly(record.headers());
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
@@ -1276,7 +1278,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return partition != null ?
                 partition :
                 partitioner.partition(
-                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster, record.headers());
     }
 
     private void throwIfInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
