@@ -202,7 +202,7 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldRecordRecordsAndBytesProduced1() {
+    public void shouldRecordRecordsAndBytesProduced() {
         final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
 
         final MockedStatic<TopicMetrics> topicMetrics = mockStatic(TopicMetrics.class);
