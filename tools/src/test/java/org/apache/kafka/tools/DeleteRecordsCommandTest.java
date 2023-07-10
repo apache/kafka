@@ -72,7 +72,7 @@ public class DeleteRecordsCommandTest {
                 "Offset json file contains duplicate topic partitions: t-0"
             );
 
-            admin.createTopics(Collections.singleton(new NewTopic("t", 1, (short)1))).all().get();
+            admin.createTopics(Collections.singleton(new NewTopic("t", 1, (short) 1))).all().get();
 
             Properties props = new Properties();
 

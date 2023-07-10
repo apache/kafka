@@ -97,7 +97,7 @@ public class DeleteRecordsCommand {
     public static void execute(String[] args, PrintStream out) throws IOException {
         DeleteRecordsCommandOptions opts = new DeleteRecordsCommandOptions(args);
 
-        try(Admin adminClient = createAdminClient(opts)) {
+        try (Admin adminClient = createAdminClient(opts)) {
             execute0(adminClient, Utils.readFileAsString(opts.options.valueOf(opts.offsetJsonFileOpt)), out);
         }
     }
