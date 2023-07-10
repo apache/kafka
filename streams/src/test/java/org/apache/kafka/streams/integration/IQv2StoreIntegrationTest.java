@@ -1083,22 +1083,15 @@ public class IQv2StoreIntegrationTest {
     }   
 
     public <V> void shouldHandleRangeQuery(
+            //rewrite to say you can pass in a null query; if not present should return null
         final Optional<Integer> lower,
         final Optional<Integer> upper,
         final Function<V, Integer> valueExtactor,
         final Set<Integer> expectedValue) {
 
         final RangeQuery<Integer, V> query;
-        if (lower.isPresent() && upper.isPresent()) {
-            query = RangeQuery.withRange(lower.get(), upper.get());
-        } else if (lower.isPresent()) {
-            query = RangeQuery.withLowerBound(lower.get());
-        } else if (upper.isPresent()) {
-            query = RangeQuery.withUpperBound(upper.get());
-        } else {
-            query = RangeQuery.withNoBounds();
-        }
 
+        query = RangeQuery.withRange(lower.orElse(null), upper.orElse(null));
         final StateQueryRequest<KeyValueIterator<Integer, V>> request =
             inStore(STORE_NAME)
                 .withQuery(query)
