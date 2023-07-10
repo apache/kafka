@@ -88,8 +88,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /* for coordinating the pausing and the cleaning of a partition */
   private val pausedCleaningCond = lock.newCondition()
 
-  // Avoid adding legacy tags for a metric when initializing `LogCleanerManager`
-  GaugeMetricNameWithTag.clear()
+  // Visible for testing
+  private[log] val gaugeMetricNameWithTag = new java.util.HashMap[String, java.util.List[java.util.Map[String, String]]]()
+
   /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
   for (dir <- logDirs) {
     val metricTag = Map("logDirectory" -> dir.getAbsolutePath).asJava
@@ -97,7 +98,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       () => inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) },
       metricTag
     )
-    GaugeMetricNameWithTag.computeIfAbsent(UncleanablePartitionsCountMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
+    gaugeMetricNameWithTag.computeIfAbsent(UncleanablePartitionsCountMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
       .add(metricTag)
   }
 
@@ -124,7 +125,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       },
       metricTag
     )
-    GaugeMetricNameWithTag.computeIfAbsent(UncleanableBytesMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
+    gaugeMetricNameWithTag.computeIfAbsent(UncleanableBytesMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
       .add(metricTag)
   }
 
@@ -549,9 +550,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   def removeMetrics(): Unit = {
     GaugeMetricNameNoTag.foreach(metricsGroup.removeMetric)
-    GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
-      metricNameAndTags._2.asScala.foreach(tag => metricsGroup.removeMetric(metricNameAndTags._1, tag))
-    })
+    gaugeMetricNameWithTag.asScala.foreach { metricNameAndTags =>
+      metricNameAndTags._2.asScala.foreach { tag =>
+        metricsGroup.removeMetric(metricNameAndTags._1, tag)
+      }
+    }
+    gaugeMetricNameWithTag.clear()
   }
 }
 
@@ -575,8 +579,7 @@ private[log] object LogCleanerManager extends Logging {
   private val MaxDirtyPercentMetricName = "max-dirty-percent"
   private val TimeSinceLastRunMsMetricName = "time-since-last-run-ms"
 
-  private[log] val GaugeMetricNameWithTag = new java.util.HashMap[String, java.util.List[java.util.Map[String, String]]]()
-
+  // Visible for testing
   private[log] val GaugeMetricNameNoTag = Set(
     MaxDirtyPercentMetricName,
     TimeSinceLastRunMsMetricName

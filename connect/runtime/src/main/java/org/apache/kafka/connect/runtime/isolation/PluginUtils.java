@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.reflections.util.ClasspathHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -324,6 +327,34 @@ public class PluginUtils {
         }
         return Arrays.asList(archives.toArray(new Path[0]));
     }
+
+    public static Set<PluginSource> pluginSources(List<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
+        Set<PluginSource> pluginSources = new HashSet<>();
+        for (Path pluginLocation : pluginLocations) {
+
+            try {
+                List<URL> pluginUrls = new ArrayList<>();
+                for (Path path : pluginUrls(pluginLocation)) {
+                    pluginUrls.add(path.toUri().toURL());
+                }
+                URL[] urls = pluginUrls.toArray(new URL[0]);
+                PluginClassLoader loader = factory.newPluginClassLoader(
+                        pluginLocation.toUri().toURL(),
+                        urls,
+                        classLoader
+                );
+                pluginSources.add(new PluginSource(pluginLocation, loader, urls));
+            } catch (InvalidPathException | MalformedURLException e) {
+                log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
+            } catch (IOException e) {
+                log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
+            }
+        }
+        URL[] classpathUrls = ClasspathHelper.forJavaClassPath().toArray(new URL[0]);
+        pluginSources.add(new PluginSource(null, classLoader.getParent(), classpathUrls));
+        return pluginSources;
+    }
+
 
     /**
      * Return the simple class name of a plugin as {@code String}.

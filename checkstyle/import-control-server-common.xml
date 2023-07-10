@@ -82,13 +82,17 @@
             <allow pkg="org.apache.kafka.server.authorizer" />
         </subpackage>
 
-        <!-- InterBrokerSendThread uses some clients classes that are not part of the public -->
-        <!-- API but are still relatively common -->
         <subpackage name="util">
+            <!-- InterBrokerSendThread uses some clients classes that are not part of the public -->
+            <!-- API but are still relatively common -->
             <allow class="org.apache.kafka.clients.ClientRequest" />
             <allow class="org.apache.kafka.clients.ClientResponse" />
             <allow class="org.apache.kafka.clients.KafkaClient" />
             <allow class="org.apache.kafka.clients.RequestCompletionHandler" />
+
+            <subpackage name="timer">
+                <allow class="org.apache.kafka.server.util.MockTime" />
+            </subpackage>
         </subpackage>
     </subpackage>
 
