@@ -287,8 +287,12 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         boolean containsTombstones = values.containsValue(null);
 
         // If there are tombstone offsets, then the failure to write to secondary store will
-        // not be ignored. Also, for tombstone records, we first write to secondary store and
-        // then to primary stores.
+        // not be ignored. Also, for tombstone records, we first write to secondary store in a synchronous manner and
+        // then to primary stores. This is because, if a tombstone offset is successfully written to the per-connector offsets topic,
+        // but cannot be written to the global offsets topic, then the global offsets topic will still contain that
+        // source offset, but the per-connector topic will not. Due to the fallback-on-global logic used by the worker,
+        // if a task requests offsets for one of the tombstoned partitions, the worker will provide it with the
+        // offsets present in the global offsets topic, instead of indicating to the task that no offsets can be found.
         if (secondaryStore != null && containsTombstones) {
             AtomicReference<Throwable> secondaryStoreTombstoneWriteError = new AtomicReference<>();
             FutureCallback<Void> secondaryWriteFuture = new FutureCallback<>();
@@ -296,7 +300,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             try {
                 // For EOS, there is no timeout for offset commit and it is allowed to take as much time as needed for
                 // commits. We still need to wait because we want to fail the offset commit for cases when
-                // tombstone records fail to be written to the secondary store. Note that while commitTransaction
+                // offsets with tombstone records fail to be written to the secondary store. Note that while commitTransaction
                 // already waits for all records to be sent and ack'ed, in this case we do need to add an explicit
                 // blocking call. In case EOS is disabled, we wait for the same duration as `offset.commit.timeout.ms`
                 // and throw that exception which would allow the offset commit to fail.
@@ -312,10 +316,10 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 log.error("{} Flush of tombstone(s)-containing offsets to secondary store threw an unexpected exception: ", this, e.getCause());
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e.getCause());
             } catch (TimeoutException e) {
-                log.error("{} Timed out waiting to flush offsets with tombstones to secondary storage ", this);
+                log.error("{} Timed out waiting to flush tombstone(s)-containing offsets to secondary store ", this);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             } catch (Exception e) {
-                log.error("{} Got Exception when trying to flush tombstone(s)-containing offsets to secondary storage", this, e);
+                log.error("{} Got Exception when trying to flush tombstone(s)-containing offsets to secondary store", this, e);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             }
             Throwable writeError = secondaryStoreTombstoneWriteError.get();
