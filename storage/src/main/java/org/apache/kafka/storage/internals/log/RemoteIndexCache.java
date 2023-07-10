@@ -39,13 +39,13 @@ import java.io.InputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -109,8 +109,6 @@ public class RemoteIndexCache implements Closeable {
      * 4. Should support LRU-like policy.
      *
      * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
-     *
-     * Visible for testing.
      */
     private final Cache<Uuid, Entry> internalCache;
     private final RemoteStorageManager remoteStorageManager;
@@ -162,6 +160,7 @@ public class RemoteIndexCache implements Closeable {
         return Collections.unmodifiableCollection(expiredIndexes);
     }
 
+    // Visible for testing
     public Cache<Uuid, Entry> internalCache() {
         return internalCache;
     }
@@ -217,7 +216,9 @@ public class RemoteIndexCache implements Closeable {
                 if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
                         path.endsWith(TMP_FILE_SUFFIX)) {
                     try {
-                        Files.deleteIfExists(path);
+                        if (Files.deleteIfExists(path)) {
+                            log.debug("Deleted file path {} on cache initialization", path);
+                        }
                     } catch (IOException e) {
                         throw new KafkaException(e);
                     }
@@ -291,7 +292,7 @@ public class RemoteIndexCache implements Closeable {
             try {
                 index = readIndex.apply(indexFile);
             } catch (CorruptRecordException ex) {
-                log.info("Error occurred while loading the stored index", ex);
+                log.info("Error occurred while loading the stored index file {}", indexFile.getPath(), ex);
             }
         }
 
@@ -299,7 +300,7 @@ public class RemoteIndexCache implements Closeable {
             File tmpIndexFile = new File(indexFile.getParentFile(), indexFile.getName() + RemoteIndexCache.TMP_FILE_SUFFIX);
 
             try (InputStream inputStream = fetchRemoteIndex.apply(remoteLogSegmentMetadata);) {
-                Files.copy(inputStream, tmpIndexFile.toPath());
+                Files.copy(inputStream, tmpIndexFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
 
             Utils.atomicMoveWithFallback(tmpIndexFile.toPath(), indexFile.toPath(), false);
@@ -406,6 +407,7 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
+    @Override
     public void close() {
         // Make close idempotent and ensure no more reads allowed from henceforth. The in-progress reads will continue to
         // completion (release the read lock) and then close will begin executing. Cleaner thread will immediately stop work.
@@ -433,11 +435,7 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
-    public Map<Uuid, Entry> entries() {
-        return Collections.unmodifiableMap(internalCache.asMap());
-    }
-
-    public static class Entry {
+    public static class Entry implements AutoCloseable {
 
         private final OffsetIndex offsetIndex;
         private final TimeIndex timeIndex;
@@ -518,38 +516,49 @@ public class RemoteIndexCache implements Closeable {
         }
 
         public void cleanup() throws IOException {
-            markForCleanup();
-            // no-op if clean is done already
-            if (!cleanStarted) {
-                cleanStarted = true;
+            lock.writeLock().lock();
+            try {
+                markForCleanup();
+                // no-op if clean is done already
+                if (!cleanStarted) {
+                    cleanStarted = true;
 
-                List<StorageAction<Void, Exception>> actions = Arrays.asList(() -> {
-                    offsetIndex.deleteIfExists();
-                    return null;
-                }, () -> {
-                    timeIndex.deleteIfExists();
-                    return null;
-                }, () -> {
-                    txnIndex.deleteIfExists();
-                    return null;
-                });
+                    List<StorageAction<Void, Exception>> actions = Arrays.asList(() -> {
+                        offsetIndex.deleteIfExists();
+                        return null;
+                    }, () -> {
+                        timeIndex.deleteIfExists();
+                        return null;
+                    }, () -> {
+                        txnIndex.deleteIfExists();
+                        return null;
+                    });
 
-                tryAll(actions);
+                    tryAll(actions);
+                }
+            } finally {
+                lock.writeLock().unlock();
             }
         }
 
+        @Override
         public void close() {
-            Utils.closeQuietly(offsetIndex, "OffsetIndex");
-            Utils.closeQuietly(timeIndex, "TimeIndex");
-            Utils.closeQuietly(txnIndex, "TransactionIndex");
+            lock.writeLock().lock();
+            try {
+                Utils.closeQuietly(offsetIndex, "OffsetIndex");
+                Utils.closeQuietly(timeIndex, "TimeIndex");
+                Utils.closeQuietly(txnIndex, "TransactionIndex");
+            } finally {
+                lock.writeLock().unlock();
+            }
         }
 
         @Override
         public String toString() {
             return "Entry{" +
-                    "offsetIndex=" + offsetIndex +
-                    ", timeIndex=" + timeIndex +
-                    ", txnIndex=" + txnIndex +
+                    "offsetIndex=" + offsetIndex.file().getName() +
+                    ", timeIndex=" + timeIndex.file().getName() +
+                    ", txnIndex=" + txnIndex.file().getName() +
                     '}';
         }
     }
