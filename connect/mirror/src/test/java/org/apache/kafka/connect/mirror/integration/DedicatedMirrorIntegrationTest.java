@@ -17,12 +17,19 @@
 package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMaker;
+import org.apache.kafka.connect.mirror.MirrorSourceConnector;
+import org.apache.kafka.connect.mirror.SourceAndTarget;
+import org.apache.kafka.connect.runtime.AbstractStatus;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+import org.apache.kafka.test.NoRetryException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -40,16 +47,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorMaker.CONNECTOR_CLASSES;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 @Tag("integration")
 public class DedicatedMirrorIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(DedicatedMirrorIntegrationTest.class);
-
-    private static final int TOPIC_CREATION_TIMEOUT_MS = 120_000;
-    private static final int TOPIC_REPLICATION_TIMEOUT_MS = 120_000;
-
+    private static final int TOPIC_CREATION_TIMEOUT_MS = 30_000;
+    private static final int TOPIC_REPLICATION_TIMEOUT_MS = 30_000;
+    private static final long MM_START_UP_TIMEOUT_MS = 120_000;
     private Map<String, EmbeddedKafkaCluster> kafkaClusters;
     private Map<String, MirrorMaker> mirrorMakers;
 
@@ -63,8 +70,8 @@ public class DedicatedMirrorIntegrationTest {
     public void teardown() throws Throwable {
         AtomicReference<Throwable> shutdownFailure = new AtomicReference<>();
         mirrorMakers.forEach((name, mirrorMaker) ->
-            Utils.closeQuietly(mirrorMaker::stop, "MirrorMaker worker '" + name + "'", shutdownFailure)
-        );
+                Utils.closeQuietly(mirrorMaker::stop, "MirrorMaker worker '" + name + "'", shutdownFailure));
+        mirrorMakers.forEach((name, mirrorMaker) -> mirrorMaker.awaitStop());
         kafkaClusters.forEach((name, kafkaCluster) ->
             Utils.closeQuietly(kafkaCluster::stop, "Embedded Kafka cluster '" + name + "'", shutdownFailure)
         );
@@ -109,8 +116,7 @@ public class DedicatedMirrorIntegrationTest {
         clusterA.start();
         clusterB.start();
 
-        try (Admin adminA = clusterA.createAdminClient();
-             Admin adminB = clusterB.createAdminClient()) {
+        try (Admin adminB = clusterB.createAdminClient()) {
 
             // Cluster aliases
             final String a = "A";
@@ -142,15 +148,23 @@ public class DedicatedMirrorIntegrationTest {
                 }};
 
             // Bring up a single-node cluster
-            startMirrorMaker("single node", mmProps);
+            final MirrorMaker mm = startMirrorMaker("single node", mmProps);
+            final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
+            awaitMirrorMakerStart(mm, sourceAndTarget);
+
+            // wait for heartbeat connector to start a task
+            awaitConnectorTasksStart(mm, MirrorHeartbeatConnector.class, sourceAndTarget);
 
             final int numMessages = 10;
             String topic = testTopicPrefix + "1";
 
             // Create the topic on cluster A
-            createTopic(adminA, topic);
+            clusterA.createTopic(topic, 1);
             // and wait for MirrorMaker to create it on cluster B
             awaitTopicCreation(b, adminB, a + "." + topic);
+
+            // wait for source connector to start a task
+            awaitConnectorTasksStart(mm, MirrorSourceConnector.class, sourceAndTarget);
 
             // Write data to the topic on cluster A
             writeToTopic(clusterA, topic, numMessages);
@@ -176,9 +190,7 @@ public class DedicatedMirrorIntegrationTest {
         clusterA.start();
         clusterB.start();
 
-        try (Admin adminA = clusterA.createAdminClient();
-                Admin adminB = clusterB.createAdminClient()) {
-
+        try (Admin adminB = clusterB.createAdminClient()) {
             // Cluster aliases
             final String a = "A";
             // Use a convoluted cluster name to ensure URL encoding/decoding works
@@ -222,11 +234,18 @@ public class DedicatedMirrorIntegrationTest {
                     put("config.storage.replication.factor", "1");
                 }};
 
+            final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
             // Bring up a three-node cluster
             final int numNodes = 3;
             for (int i = 0; i < numNodes; i++) {
                 startMirrorMaker("node " + i, mmProps);
             }
+
+            // wait for mirror maker to start
+            awaitMirrorMakerStart(mirrorMakers.get("node 0"), sourceAndTarget);
+
+            // wait for heartbeat connector to start running
+            awaitConnectorTasksStart(mirrorMakers.get("node 0"), MirrorHeartbeatConnector.class, sourceAndTarget);
 
             // Create one topic per Kafka cluster per MirrorMaker node
             final int topicsPerCluster = numNodes;
@@ -235,9 +254,12 @@ public class DedicatedMirrorIntegrationTest {
                 String topic = testTopicPrefix + i;
 
                 // Create the topic on cluster A
-                createTopic(adminA, topic);
+                clusterA.createTopic(topic, 1);
                 // and wait for MirrorMaker to create it on cluster B
                 awaitTopicCreation(b, adminB, a + "." + topic);
+
+                // wait for source connector to start running
+                awaitConnectorTasksStart(mirrorMakers.get("node " + i), MirrorSourceConnector.class, sourceAndTarget);
 
                 // Write data to the topic on cluster A
                 writeToTopic(clusterA, topic, messagesPerTopic);
@@ -245,10 +267,6 @@ public class DedicatedMirrorIntegrationTest {
                 awaitTopicContent(clusterB, b, a + "." + topic, messagesPerTopic);
             }
         }
-    }
-
-    private void createTopic(Admin admin, String name) throws Exception {
-        admin.createTopics(Collections.singleton(new NewTopic(name, 1, (short) 1))).all().get();
     }
 
     private void awaitTopicCreation(String clusterName, Admin admin, String topic) throws Exception {
@@ -273,6 +291,29 @@ public class DedicatedMirrorIntegrationTest {
         }
     }
 
+    private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget) throws InterruptedException {
+        waitForCondition(() -> {
+            try {
+                return CONNECTOR_CLASSES.stream().allMatch(
+                    connectorClazz -> isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget));
+            } catch (Exception ex) {
+                log.error("Something unexpected occurred. Unable to check for startup status for mirror maker {}", mm, ex);
+                throw new NoRetryException(ex);
+            }
+        }, MM_START_UP_TIMEOUT_MS, "MirrorMaker instances did not transition to running in time");
+    }
+
+    private <T extends SourceConnector> void awaitConnectorTasksStart(final MirrorMaker mm, final Class<T> clazz, final SourceAndTarget sourceAndTarget) throws InterruptedException {
+        waitForCondition(() -> {
+            try {
+                return isTaskRunningForMirrorMakerConnector(clazz, mm, sourceAndTarget);
+            } catch (Exception ex) {
+                log.error("Something unexpected occurred. Unable to check for startup status of connector {} for mirror maker with source->target={}", clazz.getSimpleName(), sourceAndTarget, ex);
+                throw new NoRetryException(ex);
+            }
+        }, MM_START_UP_TIMEOUT_MS, "Tasks for connector " + clazz.getSimpleName() + " for MirrorMaker instances did not transition to running in time");
+    }
+
     private void awaitTopicContent(EmbeddedKafkaCluster cluster, String clusterName, String topic, int numMessages) throws Exception {
         try (Consumer<?, ?> consumer = cluster.createConsumer(Collections.singletonMap(AUTO_OFFSET_RESET_CONFIG, "earliest"))) {
             consumer.subscribe(Collections.singleton(topic));
@@ -288,4 +329,40 @@ public class DedicatedMirrorIntegrationTest {
         }
     }
 
+    /**
+     * Validates that the underlying connector are running for the given MirrorMaker.
+     */
+    private boolean isConnectorRunningForMirrorMaker(final Class<?> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
+        final String connName = connectorClazz.getSimpleName();
+        try {
+            final ConnectorStateInfo connectorStatus = mm.connectorStatus(sourceAndTarget, connName);
+            if (connectorStatus.connector().state().equals(AbstractStatus.State.FAILED.toString())) {
+                throw new NoRetryException(new AssertionError(
+                    String.format("Connector %s is in FAILED state for MirrorMaker %s and source->target=%s",
+                            connectorClazz, mm, sourceAndTarget)));
+            }
+            // verify that connector state is set to running
+            return connectorStatus.connector().state().equals(AbstractStatus.State.RUNNING.toString());
+        } catch (NotFoundException nf) {
+            // Expected exception thrown by connectorStatus() when connect is not registered
+            return false;
+        }
+    }
+
+    /**
+     * Validates that the tasks are associated with the connector and they are running for the given MirrorMaker.
+     */
+    private <T extends SourceConnector> boolean isTaskRunningForMirrorMakerConnector(final Class<T> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
+        final String connName = connectorClazz.getSimpleName();
+        final ConnectorStateInfo connectorStatus = mm.connectorStatus(sourceAndTarget, connName);
+        return isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget)
+            // verify that at least one task exists
+            && !connectorStatus.tasks().isEmpty()
+            // verify that tasks are set to running
+            && connectorStatus.tasks().stream().allMatch(s -> {
+                if (s.state().equals(AbstractStatus.State.FAILED.toString()))
+                    throw new NoRetryException(new AssertionError(String.format("Task %s is in FAILED state", s)));
+                return s.state().equals(AbstractStatus.State.RUNNING.toString());
+            });
+    }
 }
