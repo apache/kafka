@@ -151,7 +151,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       verifyCleanShutdownAfterFailedStartup[CancellationException]
     } else {
       propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }

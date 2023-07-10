@@ -79,7 +79,7 @@ public class ClientUtilsTest {
 
     @Test
     public void testOnlyBadHostname() {
-        assertThrows(ConfigException.class, () -> checkWithoutLookup("some.invalid.hostname.foo.bar.local:9999"));
+        assertThrows(ConfigException.class, () -> checkWithoutLookup("some.invalid:9999"));
     }
 
     @Test
@@ -103,7 +103,7 @@ public class ClientUtilsTest {
     @Test
     public void testResolveUnknownHostException() {
         assertThrows(UnknownHostException.class,
-            () -> ClientUtils.resolve("some.invalid.hostname.foo.bar.local", hostResolver));
+            () -> ClientUtils.resolve("some.invalid", hostResolver));
     }
 
     @Test
