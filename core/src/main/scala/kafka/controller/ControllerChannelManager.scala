@@ -112,6 +112,8 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     brokerLock synchronized {
       brokerStateInfo.values.toList.foreach(removeExistingBroker)
     }
+    gaugeMetricNameWithTag.clear()
+    timerMetricNameWithTag.clear()
   }
 
   def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
@@ -240,14 +242,17 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   }
 
   private def removeMetricsForBroker(brokerState: ControllerBrokerStateInfo): Unit = {
-    val metricNameWithTag = new MetricNameWithTagData
-    metricNameWithTag.putAll(gaugeMetricNameWithTag)
-    metricNameWithTag.putAll(timerMetricNameWithTag)
+    val metricNameWithTag = Seq(gaugeMetricNameWithTag, timerMetricNameWithTag)
 
-    metricNameWithTag.asScala.foreach { metricNameAndTags =>
-      metricNameAndTags._2.asScala.iterator.foreach { tag =>
-        if (tag.get(BrokerMetricTagKeyName).equals(brokerState.brokerNode.id.toString)) {
-          metricsGroup.removeMetric(metricNameAndTags._1, tag)
+    metricNameWithTag.foreach { metricMap =>
+      metricMap.asScala.foreach { metricNameAndTags =>
+        val tagsIterator = metricNameAndTags._2.iterator()
+        while (tagsIterator.hasNext) {
+          val tag = tagsIterator.next();
+          if (tag.get(BrokerMetricTagKeyName).equals(brokerState.brokerNode.id.toString)) {
+            metricsGroup.removeMetric(metricNameAndTags._1, tag)
+            tagsIterator.remove()
+          }
         }
       }
     }
