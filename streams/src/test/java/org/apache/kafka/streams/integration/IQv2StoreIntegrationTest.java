@@ -1083,7 +1083,7 @@ public class IQv2StoreIntegrationTest {
     }   
 
     public <V> void shouldHandleRangeQuery(
-            //rewrite to say you can pass in a null query; if not present should return null
+
         final Optional<Integer> lower,
         final Optional<Integer> upper,
         final Function<V, Integer> valueExtactor,
