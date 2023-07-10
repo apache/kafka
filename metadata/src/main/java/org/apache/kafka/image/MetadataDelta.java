@@ -340,7 +340,6 @@ public final class MetadataDelta {
     public void replay(RemoveUserScramCredentialRecord record) {
         getOrCreateScramDelta().replay(record);
     }
-    // XXX Need a remove delegation Token
 
     public void replay(ZkMigrationStateRecord record) {
         getOrCreateFeaturesDelta().replay(record);
