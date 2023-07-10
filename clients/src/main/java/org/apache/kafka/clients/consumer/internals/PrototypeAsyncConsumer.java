@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -28,7 +27,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
@@ -44,12 +42,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.KafkaMetricsContext;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -62,7 +55,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -77,6 +69,12 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createConsumerInterceptors;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createKeyDeserializer;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createValueDeserializer;
 
 /**
  * This prototype consumer uses the EventHandler to process application
@@ -85,33 +83,30 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
  * for detail implementation.
  */
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
-    private static final String CLIENT_ID_METRIC_TAG = "client-id";
-    private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final LogContext logContext;
     private final EventHandler eventHandler;
     private final Time time;
     private final Optional<String> groupId;
-    private final String clientId;
     private final Logger log;
+    private final Deserializer<K> keyDeserializer;
+    private final Deserializer<V> valueDeserializer;
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    public PrototypeAsyncConsumer(Properties properties,
-                         Deserializer<K> keyDeserializer,
-                         Deserializer<V> valueDeserializer) {
+    public PrototypeAsyncConsumer(final Properties properties,
+                                  final Deserializer<K> keyDeserializer,
+                                  final Deserializer<V> valueDeserializer) {
         this(Utils.propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
     public PrototypeAsyncConsumer(final Map<String, Object> configs,
                                   final Deserializer<K> keyDeser,
                                   final Deserializer<V> valDeser) {
-        this(new ConsumerConfig(appendDeserializerToConfig(configs, keyDeser, valDeser)), keyDeser,
-                valDeser);
+        this(new ConsumerConfig(appendDeserializerToConfig(configs, keyDeser, valDeser)), keyDeser, valDeser);
     }
-    @SuppressWarnings("unchecked")
     public PrototypeAsyncConsumer(final ConsumerConfig config,
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer) {
@@ -119,25 +114,16 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                 GroupRebalanceConfig.ProtocolType.CONSUMER);
         this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
-        this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-        // If group.instance.id is set, we will append it to the log context.
-        if (groupRebalanceConfig.groupInstanceId.isPresent()) {
-            logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
-                    ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
-        } else {
-            logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
-        }
+        this.logContext = createLogContext(config, groupRebalanceConfig);
         this.log = logContext.logger(getClass());
-        OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
-        this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
-        this.metrics = buildMetrics(config, time, clientId);
-        List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
-                ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                ConsumerInterceptor.class,
-                Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
-        ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
-                valueDeserializer, metrics.reporters(), interceptorList);
+        this.keyDeserializer = createKeyDeserializer(config, keyDeserializer);
+        this.valueDeserializer = createValueDeserializer(config, valueDeserializer);
+        this.subscriptions = createSubscriptionState(config, logContext);
+        this.metrics = createMetrics(config, time);
+        List<ConsumerInterceptor<K, V>> interceptorList = createConsumerInterceptors(config);
+        ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keyDeserializer,
+                this.valueDeserializer, metrics.reporters(), interceptorList);
         this.eventHandler = new DefaultEventHandler(
                 config,
                 groupRebalanceConfig,
@@ -158,9 +144,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             SubscriptionState subscriptionState,
             EventHandler eventHandler,
             Metrics metrics,
-            ClusterResourceListeners clusterResourceListeners,
             Optional<String> groupId,
-            String clientId,
             int defaultApiTimeoutMs) {
         this.time = time;
         this.logContext = logContext;
@@ -169,7 +153,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.metrics = metrics;
         this.groupId = groupId;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.clientId = clientId;
+        this.keyDeserializer = createKeyDeserializer(config, null);
+        this.valueDeserializer = createValueDeserializer(config, null);
         this.eventHandler = eventHandler;
     }
 
@@ -603,23 +588,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         else if (newConfigs.get(VALUE_DESERIALIZER_CLASS_CONFIG) == null)
             throw new ConfigException(VALUE_DESERIALIZER_CLASS_CONFIG, null, "must be non-null.");
         return newConfigs;
-    }
-
-    private static Metrics buildMetrics(
-            final ConsumerConfig config,
-            final Time time,
-            final String clientId) {
-        Map<String, String> metricsTags = Collections.singletonMap(CLIENT_ID_METRIC_TAG, clientId);
-        MetricConfig metricConfig = new MetricConfig()
-                .samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
-                .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-                .tags(metricsTags);
-        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-        MetricsContext metricsContext = new KafkaMetricsContext(
-                JMX_PREFIX,
-                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        return new Metrics(metricConfig, reporters, time, metricsContext);
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
