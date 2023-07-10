@@ -707,11 +707,15 @@ class ReplicaManager(val config: KafkaConfig,
       val sTime = time.milliseconds
 
       val verificationGuards: mutable.Map[TopicPartition, Object] = mutable.Map[TopicPartition, Object]()
-      val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) =
+      val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition, errorsPerPartition) =
         if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
-          (entriesPerPartition, Map.empty)
+          (entriesPerPartition, Map.empty[TopicPartition, MemoryRecords], Map.empty[TopicPartition, Errors])
         else {
-          partitionEntriesForVerification(verificationGuards, entriesPerPartition)
+          val verifiedEntries: mutable.Map[TopicPartition, MemoryRecords] = mutable.Map[TopicPartition, MemoryRecords]()
+          val unverifiedEntries: mutable.Map[TopicPartition, MemoryRecords] = mutable.Map[TopicPartition, MemoryRecords]()
+          val errorEntries: mutable.Map[TopicPartition, Errors] = mutable.Map[TopicPartition, Errors]()
+          partitionEntriesForVerification(verificationGuards, entriesPerPartition, verifiedEntries, unverifiedEntries, errorEntries)
+          (verifiedEntries.toMap, unverifiedEntries.toMap, errorEntries.toMap)
         }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
@@ -735,8 +739,15 @@ class ReplicaManager(val config: KafkaConfig,
             Some(error.exception(message))
           )
         }
+
+        val errorResults = errorsPerPartition.map { case (topicPartition, error) =>
+          topicPartition -> LogAppendResult(
+            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+            Some(error.exception())
+          )
+        }
         
-        val allResults = localProduceResults ++ unverifiedResults
+        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
 
         val produceStatus = allResults.map { case (topicPartition, result) =>
           topicPartition -> ProducePartitionStatus(
@@ -838,33 +849,37 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def partitionEntriesForVerification(verificationGuards: mutable.Map[TopicPartition, Object],
-                                              entriesPerPartition: Map[TopicPartition, MemoryRecords]): (Map[TopicPartition, MemoryRecords], Map[TopicPartition, MemoryRecords]) = {
+                                              entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                                              verifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
+                                              unverifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
+                                              errorEntries: mutable.Map[TopicPartition, Errors]): Unit= {
     val transactionalProducerIds = mutable.HashSet[Long]()
-    val (verifiedEntries, unverifiedEntries) = entriesPerPartition.partition { case (topicPartition, records) =>
-      // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
-      val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
-      transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
+    entriesPerPartition.foreach { case (topicPartition, records) =>
+      try {
+        // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
+        val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
+        transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
 
-      if (transactionalBatches.nonEmpty) {
-        // We return verification guard if the partition needs to be verified. If no state is present, no need to verify.
-        val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(records.firstBatch.producerId)
-        if (verificationGuard != null) {
-          verificationGuards.put(topicPartition, verificationGuard)
-          false
-        } else
-          true
-      } else {
-        // If there is no producer ID or transactional records in the batches, no need to verify.
-        true
+        if (transactionalBatches.nonEmpty) {
+          // We return verification guard if the partition needs to be verified. If no state is present, no need to verify.
+          val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(records.firstBatch.producerId)
+          if (verificationGuard != null) {
+            verificationGuards.put(topicPartition, verificationGuard)
+            unverifiedEntries.put(topicPartition, records)
+          } else
+            verifiedEntries.put(topicPartition, records)
+        } else {
+          // If there is no producer ID or transactional records in the batches, no need to verify.
+          verifiedEntries.put(topicPartition, records)
+        }
+      } catch {
+        case e: Exception => errorEntries.put(topicPartition, Errors.forException(e))
       }
     }
-
     // We should have exactly one producer ID for transactional records
     if (transactionalProducerIds.size > 1) {
       throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
     }
-
-    (verifiedEntries, unverifiedEntries)
   }
 
   /**
