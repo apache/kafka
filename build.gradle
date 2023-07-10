@@ -203,7 +203,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'TROGDOR.md',
+        'trogdor/README.md',
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
