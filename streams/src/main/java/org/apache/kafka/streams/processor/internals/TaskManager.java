@@ -1648,13 +1648,14 @@ public class TaskManager {
     }
 
     private Stream<Task> standbyTaskStream() {
+        final Stream<Task> standbyTasksInTaskRegistry = tasks.allTasks().stream().filter(t -> !t.isActive());
         if (stateUpdater != null) {
             return Stream.concat(
                 stateUpdater.getStandbyTasks().stream(),
-                tasks.allTasks().stream().filter(t -> !t.isActive())
+                standbyTasksInTaskRegistry
             );
         } else {
-            return tasks.allTasks().stream().filter(t -> !t.isActive());
+            return standbyTasksInTaskRegistry;
         }
     }
 
