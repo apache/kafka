@@ -118,7 +118,6 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
                 // DisconnectException is expected when NetworkClient#initiateClose is called
                 return;
             }
-
             if (t instanceof InterruptedException && !isRunning()) {
                 // InterruptedException is expected when shutting down. Throw the error to ShutdownableThread to handle
                 throw t;

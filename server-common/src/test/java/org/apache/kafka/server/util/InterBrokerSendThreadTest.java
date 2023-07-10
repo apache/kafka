@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.server.util;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.same;
@@ -33,12 +30,18 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Queue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -47,6 +50,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 
 public class InterBrokerSendThreadTest {
@@ -297,6 +302,40 @@ public class InterBrokerSendThreadTest {
 
         assertFalse(sendThread.hasUnsentRequests());
         assertTrue(completionHandler.executedWithDisconnectedResponse);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInterruption(boolean isShuttingDown) throws InterruptedException, IOException {
+        Exception interrupted = new InterruptedException();
+
+        // InterBrokerSendThread#shutdown calls NetworkClient#initiateClose first so NetworkClient#poll
+        // can throw InterruptedException if a callback request that throws it is handled
+        when(networkClient.poll(anyLong(), anyLong())).thenAnswer((t) -> {
+            throw interrupted;
+        });
+
+        AtomicReference<Throwable> exception = new AtomicReference<>();
+        final InterBrokerSendThread thread =
+            new TestInterBrokerSendThread(networkClient, (t) -> {
+                 if (isShuttingDown)
+                     assertTrue(t instanceof InterruptedException);
+                 else
+                     assertTrue(t instanceof FatalExitError);
+                 exception.getAndSet(t);
+            });
+
+        if (isShuttingDown)
+            thread.shutdown();
+        thread.pollOnce(100);
+
+        verify(networkClient).poll(anyLong(), anyLong());
+        if (isShuttingDown) {
+            verify(networkClient).initiateClose();
+            verify(networkClient).close();
+        }
+        verifyNoMoreInteractions(networkClient);
+        assertNotNull(exception.get());
     }
 
     private static class StubRequestBuilder<T extends AbstractRequest>
