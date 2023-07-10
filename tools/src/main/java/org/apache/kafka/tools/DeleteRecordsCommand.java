@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import joptsimple.OptionSpec;
@@ -70,7 +71,7 @@ public class DeleteRecordsCommand {
         }
     }
 
-    private static Collection<Tuple<TopicPartition, Long>> parseJsonData(int version, JsonNode js) {
+    private static Collection<Tuple<TopicPartition, Long>> parseJsonData(int version, JsonNode js) throws JsonMappingException {
         if (version == 1) {
             JsonNode partitions = js.get("partitions");
 
@@ -79,13 +80,13 @@ public class DeleteRecordsCommand {
 
             Collection<Tuple<TopicPartition, Long>> res = new ArrayList<>();
 
-            partitions.elements().forEachRemaining(partitionJs -> {
-                String topic = partitionJs.get("topic").asText();
-                int partition = partitionJs.get("partition").asInt();
-                long offset = partitionJs.get("offset").asLong();
+            for (JsonNode partitionJs : partitions) {
+                String topic = getOrThrow(partitionJs, "topic").asText();
+                int partition = getOrThrow(partitionJs, "partition").asInt();
+                long offset = getOrThrow(partitionJs, "offset").asLong();
 
                 res.add(new Tuple<>(new TopicPartition(topic, partition), offset));
-            });
+            }
 
             return res;
         }
@@ -95,13 +96,17 @@ public class DeleteRecordsCommand {
 
     public static void execute(String[] args, PrintStream out) throws IOException {
         DeleteRecordsCommandOptions opts = new DeleteRecordsCommandOptions(args);
-        Admin adminClient = createAdminClient(opts);
-        String offsetJsonFile = opts.options.valueOf(opts.offsetJsonFileOpt);
-        String offsetJsonString = Utils.readFileAsString(offsetJsonFile);
+
+        try(Admin adminClient = createAdminClient(opts)) {
+            execute0(adminClient, Utils.readFileAsString(opts.options.valueOf(opts.offsetJsonFileOpt)), out);
+        }
+    }
+
+    static void execute0(Admin adminClient, String offsetJsonString, PrintStream out) {
         Collection<Tuple<TopicPartition, Long>> offsetSeq = parseOffsetJsonStringWithoutDedup(offsetJsonString);
 
         Iterable<TopicPartition> duplicatePartitions =
-            CoreUtils.duplicates(offsetSeq.stream().map(Tuple::v1).collect(Collectors.toSet()));
+            CoreUtils.duplicates(offsetSeq.stream().map(Tuple::v1).collect(Collectors.toList()));
 
         if (duplicatePartitions.iterator().hasNext()) {
             StringJoiner duplicates = new StringJoiner(",");
@@ -126,8 +131,6 @@ public class DeleteRecordsCommand {
                 out.printf("partition: %s\terror: %s%n", tp, e.getMessage());
             }
         });
-
-        adminClient.close();
     }
 
     private static Admin createAdminClient(DeleteRecordsCommandOptions opts) throws IOException {
@@ -204,10 +207,16 @@ public class DeleteRecordsCommand {
 
         @Override
         public String toString() {
-            return "Tuple{" +
-                "v1=" + v1 +
-                ", v2=" + v2 +
-                '}';
+            return "Tuple{v1=" + v1 + ", v2=" + v2 + '}';
         }
+    }
+
+    private static JsonNode getOrThrow(JsonNode node, String name) throws JsonMappingException {
+        JsonNode child = node.get(name);
+
+        if (child == null)
+            throw new JsonMappingException(null, "No such field exists: `" + name + "`");
+
+        return child;
     }
 }
