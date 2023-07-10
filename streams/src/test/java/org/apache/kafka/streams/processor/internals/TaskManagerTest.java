@@ -4669,7 +4669,7 @@ public class TaskManagerTest {
         Mockito.verify(consumer, atLeastOnce()).resume(assignment);
     }
 
-    private static void verifyResumeWasCalledWith(final Consumer<byte[], byte[]> consumer, Set<TopicPartition> assignment) {
+    private static void verifyResumeWasCalledWith(final Consumer<byte[], byte[]> consumer, final Set<TopicPartition> assignment) {
         Mockito.verify(consumer, atLeastOnce()).resume(assignment);
     }
 
