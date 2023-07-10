@@ -84,6 +84,7 @@ import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -220,8 +221,8 @@ public class RemoteLogManagerTest {
 
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
-        assertEquals(host + ":" + port, capture.getValue().get("bootstrap.servers"));
-        assertEquals(securityProtocol, capture.getValue().get("security.protocol"));
+        assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
+        assertEquals(securityProtocol, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
         assertEquals(clusterId, capture.getValue().get("cluster.id"));
         assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
     }

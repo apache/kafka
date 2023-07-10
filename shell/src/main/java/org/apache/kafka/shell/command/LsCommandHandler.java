@@ -117,6 +117,7 @@ public final class LsCommandHandler implements Commands.Handler {
                     if (node.isDirectory()) {
                         List<String> children = new ArrayList<>();
                         children.addAll(node.childNames());
+                        children.sort(String::compareTo);
                         targetDirectories.add(
                             new TargetDirectory(info.lastPathComponent(), children));
                     } else {

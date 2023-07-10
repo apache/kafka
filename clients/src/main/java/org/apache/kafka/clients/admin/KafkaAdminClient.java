@@ -44,6 +44,7 @@ import org.apache.kafka.clients.admin.internals.AlterConsumerGroupOffsetsHandler
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
+import org.apache.kafka.clients.admin.internals.DeleteRecordsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
@@ -121,11 +122,6 @@ import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
-import org.apache.kafka.common.message.DeleteRecordsRequestData;
-import org.apache.kafka.common.message.DeleteRecordsRequestData.DeleteRecordsPartition;
-import org.apache.kafka.common.message.DeleteRecordsRequestData.DeleteRecordsTopic;
-import org.apache.kafka.common.message.DeleteRecordsResponseData;
-import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
@@ -186,8 +182,6 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
-import org.apache.kafka.common.requests.DeleteRecordsRequest;
-import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
@@ -2917,6 +2911,7 @@ public class KafkaAdminClient extends AdminClient {
                 maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
                     throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
                 // Fail all the other remaining futures
+
                 completeAllExceptionally(futures.values(), throwable);
             }
         };
@@ -2925,123 +2920,15 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                              final DeleteRecordsOptions options) {
-
-        // requests need to be sent to partitions leader nodes so ...
-        // ... from the provided map it's needed to create more maps grouping topic/partition per leader
-
-        final Map<TopicPartition, KafkaFutureImpl<DeletedRecords>> futures = new HashMap<>(recordsToDelete.size());
-        for (TopicPartition topicPartition: recordsToDelete.keySet()) {
-            futures.put(topicPartition, new KafkaFutureImpl<>());
+        SimpleAdminApiFuture<TopicPartition, DeletedRecords> future = DeleteRecordsHandler.newFuture(recordsToDelete.keySet());
+        int timeoutMs = defaultApiTimeoutMs;
+        if (options.timeoutMs() != null) {
+            timeoutMs = options.timeoutMs();
         }
+        DeleteRecordsHandler handler = new DeleteRecordsHandler(recordsToDelete, logContext, timeoutMs);
+        invokeDriver(handler, future, options.timeoutMs);
 
-        // preparing topics list for asking metadata about them
-        final Set<String> topics = new HashSet<>();
-        for (TopicPartition topicPartition: recordsToDelete.keySet()) {
-            topics.add(topicPartition.topic());
-        }
-
-        final long nowMetadata = time.milliseconds();
-        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
-        // asking for topics metadata for getting partitions leaders
-        runnable.call(new Call("topicsMetadata", deadline,
-                new LeastLoadedNodeProvider()) {
-
-            @Override
-            MetadataRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(convertToMetadataRequestTopic(topics))
-                    .setAllowAutoTopicCreation(false));
-            }
-
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                MetadataResponse response = (MetadataResponse) abstractResponse;
-
-                Map<String, Errors> errors = response.errors();
-                Cluster cluster = response.buildCluster();
-
-                // Group topic partitions by leader
-                Map<Node, Map<String, DeleteRecordsTopic>> leaders = new HashMap<>();
-                for (Map.Entry<TopicPartition, RecordsToDelete> entry: recordsToDelete.entrySet()) {
-                    TopicPartition topicPartition = entry.getKey();
-                    KafkaFutureImpl<DeletedRecords> future = futures.get(topicPartition);
-
-                    // Fail partitions with topic errors
-                    Errors topicError = errors.get(topicPartition.topic());
-                    if (errors.containsKey(topicPartition.topic())) {
-                        future.completeExceptionally(topicError.exception());
-                    } else {
-                        Node node = cluster.leaderFor(topicPartition);
-                        if (node != null) {
-                            Map<String, DeleteRecordsTopic> deletionsForLeader = leaders.computeIfAbsent(
-                                    node, key -> new HashMap<>());
-                            DeleteRecordsTopic deleteRecords = deletionsForLeader.get(topicPartition.topic());
-                            if (deleteRecords == null) {
-                                deleteRecords = new DeleteRecordsTopic()
-                                        .setName(topicPartition.topic());
-                                deletionsForLeader.put(topicPartition.topic(), deleteRecords);
-                            }
-                            deleteRecords.partitions().add(new DeleteRecordsPartition()
-                                    .setPartitionIndex(topicPartition.partition())
-                                    .setOffset(entry.getValue().beforeOffset()));
-                        } else {
-                            future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
-                        }
-                    }
-                }
-
-                final long deleteRecordsCallTimeMs = time.milliseconds();
-
-                for (final Map.Entry<Node, Map<String, DeleteRecordsTopic>> entry : leaders.entrySet()) {
-                    final Map<String, DeleteRecordsTopic> partitionDeleteOffsets = entry.getValue();
-                    final int brokerId = entry.getKey().id();
-
-                    runnable.call(new Call("deleteRecords", deadline,
-                            new ConstantNodeIdProvider(brokerId)) {
-
-                        @Override
-                        DeleteRecordsRequest.Builder createRequest(int timeoutMs) {
-                            return new DeleteRecordsRequest.Builder(new DeleteRecordsRequestData()
-                                    .setTimeoutMs(timeoutMs)
-                                    .setTopics(new ArrayList<>(partitionDeleteOffsets.values())));
-                        }
-
-                        @Override
-                        void handleResponse(AbstractResponse abstractResponse) {
-                            DeleteRecordsResponse response = (DeleteRecordsResponse) abstractResponse;
-                            for (DeleteRecordsTopicResult topicResult: response.data().topics()) {
-                                for (DeleteRecordsResponseData.DeleteRecordsPartitionResult partitionResult : topicResult.partitions()) {
-                                    KafkaFutureImpl<DeletedRecords> future = futures.get(new TopicPartition(topicResult.name(), partitionResult.partitionIndex()));
-                                    if (partitionResult.errorCode() == Errors.NONE.code()) {
-                                        future.complete(new DeletedRecords(partitionResult.lowWatermark()));
-                                    } else {
-                                        future.completeExceptionally(Errors.forCode(partitionResult.errorCode()).exception());
-                                    }
-                                }
-                            }
-                        }
-
-                        @Override
-                        void handleFailure(Throwable throwable) {
-                            Stream<KafkaFutureImpl<DeletedRecords>> callFutures =
-                                    partitionDeleteOffsets.values().stream().flatMap(
-                                        recordsToDelete ->
-                                                recordsToDelete.partitions().stream().map(partitionsToDelete ->
-                                                    new TopicPartition(recordsToDelete.name(), partitionsToDelete.partitionIndex()))
-                                    ).map(futures::get);
-                            completeAllExceptionally(callFutures, throwable);
-                        }
-                    }, deleteRecordsCallTimeMs);
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(futures.values(), throwable);
-            }
-        }, nowMetadata);
-
-        return new DeleteRecordsResult(new HashMap<>(futures));
+        return new DeleteRecordsResult(future.all());
     }
 
     @Override

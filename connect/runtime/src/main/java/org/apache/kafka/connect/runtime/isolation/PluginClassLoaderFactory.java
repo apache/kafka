@@ -14,30 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.runtime;
+package org.apache.kafka.connect.runtime.isolation;
 
-import java.util.concurrent.TimeUnit;
+import java.net.URL;
 
 /**
- * An interface to schedule and cancel operations.
+ * Factory for {@link PluginClassLoader} instances.
+ * Used for mocking classloader initialization in tests.
  */
-public interface Timer {
+public interface PluginClassLoaderFactory {
 
-    /**
-     * Add an operation to the timer. If an operation with the same key
-     * already exists, replace it with the new operation.
-     *
-     * @param key         The key to identify this operation.
-     * @param delay       The delay to wait before expiring.
-     * @param unit        The delay unit.
-     * @param operation   The operation to perform upon expiration.
-     */
-    void schedule(String key, long delay, TimeUnit unit, Runnable operation);
+    PluginClassLoader newPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent);
 
-    /**
-     * Remove an operation corresponding to a given key.
-     *
-     * @param key The key.
-     */
-    void cancel(String key);
 }
