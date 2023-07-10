@@ -69,6 +69,7 @@ import static org.apache.kafka.storage.internals.log.LogFileUtils.TXN_INDEX_FILE
  * <a href="https://github.com/ben-manes/caffeine/wiki/Efficiency">Window TinyLfu</a>. TinyLfu relies on a frequency
  * sketch to probabilistically estimate the historic usage of an entry.
  *
+ * This class is thread safe.
  */
 public class RemoteIndexCache implements Closeable {
 
@@ -165,6 +166,7 @@ public class RemoteIndexCache implements Closeable {
         return internalCache;
     }
 
+    // Visible for testing
     public ShutdownableThread cleanerThread() {
         return cleanerThread;
     }
@@ -457,14 +459,17 @@ public class RemoteIndexCache implements Closeable {
             this.txnIndex = txnIndex;
         }
 
+        // Visible for testing
         public OffsetIndex offsetIndex() {
             return offsetIndex;
         }
 
+        // Visible for testing
         public TimeIndex timeIndex() {
             return timeIndex;
         }
 
+        // Visible for testing
         public TransactionIndex txnIndex() {
             return txnIndex;
         }
