@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.KRAFT)
+@ClusterTestDefaults(clusterType = Type.ALL)
 @Tag("integration")
 public class DeleteRecordsCommandTest {
 
@@ -56,8 +56,8 @@ public class DeleteRecordsCommandTest {
         this.cluster = cluster;
     }
 
-    @ClusterTest(clusterType = Type.ZK)
-    public void testCommand() throws Exception {
+    @ClusterTest
+    public void testCommandZk() throws Exception {
         Properties adminProps = new Properties();
 
         adminProps.put(AdminClientConfig.RETRIES_CONFIG, 1);
