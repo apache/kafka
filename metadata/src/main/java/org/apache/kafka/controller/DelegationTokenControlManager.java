@@ -28,7 +28,7 @@ import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 // import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.token.delegation.DelegationToken;
+// XXX import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
@@ -44,7 +44,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.InvalidKeyException;
 import java.nio.charset.StandardCharsets;
 import javax.crypto.spec.SecretKeySpec;
-import javax.crypto.SecretKey;
+// import javax.crypto.SecretKey;
 import javax.crypto.Mac;
 
 import org.slf4j.Logger;
@@ -146,7 +146,7 @@ public class DelegationTokenControlManager {
             SecretKeySpec secretKey = new SecretKeySpec(toBytes(secretKeyString), mac.getAlgorithm());
             mac.init(secretKey);
             result = mac.doFinal(toBytes(tokenId));
-        } catch (NoSuchAlgorithmException|InvalidKeyException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             System.out.println("Caught an exception 2");
         }
         return result;
@@ -155,7 +155,7 @@ public class DelegationTokenControlManager {
     private TokenInformation getToken(byte[] hmac) {
         String base64Pwd = Base64.getEncoder().encodeToString(hmac);
         System.out.println("tokencache has token count : " + tokenCache.tokens().size());
-        return (tokenCache.tokenForHmac(base64Pwd));
+        return tokenCache.tokenForHmac(base64Pwd);
     }
 
     /*

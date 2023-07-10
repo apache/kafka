@@ -18,11 +18,12 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
+// XXX import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
 import org.apache.kafka.common.message.DescribeDelegationTokenRequestData;
 import org.apache.kafka.common.message.DescribeDelegationTokenRequestData.DescribeDelegationTokenOwner;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.image.node.DelegationTokenImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 // import org.apache.kafka.common.protocol.Errors;
@@ -33,7 +34,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.HashMap;
+// import java.util.HashMap;
 import java.util.Map.Entry;
 // import java.util.stream.Collectors;
 
@@ -119,7 +120,6 @@ public final class DelegationTokenImage {
 
     @Override
     public String toString() {
-// XXX        return new DelegationTokenImageNode(this).stringify();
-        return "";
+        return new DelegationTokenImageNode(this).stringify();
     }
 }

@@ -19,8 +19,8 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.metadata.DelegationTokenData;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.Map.Entry;
@@ -70,7 +70,7 @@ public final class DelegationTokenDelta {
         for (Entry<String, Optional<DelegationTokenData>> tokenChange : changes.entrySet()) {
             if (tokenChange.getValue().isPresent()) {
                 newTokens.put(tokenChange.getKey(), tokenChange.getValue().get());
-            } else{
+            } else {
                 newTokens.remove(tokenChange.getKey());
             }
         }

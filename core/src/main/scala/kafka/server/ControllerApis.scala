@@ -28,7 +28,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
-import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
+import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
@@ -44,12 +44,13 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
@@ -847,9 +848,24 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleCreateDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val alterRequest = request.body[CreateDelegationTokenRequest]
-// Requester is always allowed to create token for self
-//    authHelper.authorizeClusterOperation(request, ALTER)
-// XXX authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)
+
+    val requester = request.context.principal
+    val ownerPrincipalName = alterRequest.data.ownerPrincipalName
+    val ownerPrincipalType = alterRequest.data.ownerPrincipalType
+    val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
+      request.context.principal
+    } else {
+      new KafkaPrincipal(ownerPrincipalType, ownerPrincipalName)
+    }
+
+    // Requester is always allowed to create token for self
+    if (!owner.equals(requester) && 
+      !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+          Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
+    }
+
     println("ControllerApis:handleCreateDelegationTokenRequest:authorized")
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       OptionalLong.empty())

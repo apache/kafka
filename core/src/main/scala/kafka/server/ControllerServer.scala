@@ -118,7 +118,6 @@ class ControllerServer(
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
   val featuresPublisher = new FeaturesPublisher()
-  var tokenManager: DelegationTokenManager = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -370,16 +369,15 @@ class ControllerServer(
         credentialProvider
       ))
 
-      // XXX We need a tokenManager for the Publisher (for now)
-      tokenManager = new DelegationTokenManager(config, tokenCache, time)
 
       // Set up the DelegationToken publisher.
-      // The tokenCache in the tokenManager is the same as set for DelegationTokenControlManager
+      // We need a tokenManager for the Publisher
+      // The tokenCache in the tokenManager is the same used in DelegationTokenControlManager
       metadataPublishers.add(new DelegationTokenPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
           "controller",
-          tokenManager
+          new DelegationTokenManager(config, tokenCache, time)
       ))
 
       // Set up the metrics publisher.
