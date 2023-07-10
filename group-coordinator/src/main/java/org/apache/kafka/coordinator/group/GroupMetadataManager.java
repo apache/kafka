@@ -732,7 +732,6 @@ public class GroupMetadataManager {
         log.info("[GroupId " + groupId + "] Member " + memberId + " left the consumer group.");
 
         List<Record> records = consumerGroupFenceMember(group, member);
-        cancelConsumerGroupSessionTimeout(groupId, memberId);
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(-1));
@@ -773,6 +772,10 @@ public class GroupMetadataManager {
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
         records.add(newGroupEpochRecord(group.groupId(), groupEpoch));
+
+        // Cancel all the timers of the member.
+        cancelConsumerGroupSessionTimeout(group.groupId(), member.memberId());
+        cancelConsumerGroupRevocationTimeout(group.groupId(), member.memberId());
 
         return records;
     }
@@ -842,7 +845,7 @@ public class GroupMetadataManager {
                 ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
-                if (member.state() != ConsumerGroupMember.MemberState.REVOKING &&
+                if (member.state() != ConsumerGroupMember.MemberState.REVOKING ||
                     member.memberEpoch() != expectedMemberEpoch) {
                     log.debug("[GroupId " + groupId + "] Ignoring revocation timeout for " + memberId + " because the member " +
                         "state does not match the expected state.");

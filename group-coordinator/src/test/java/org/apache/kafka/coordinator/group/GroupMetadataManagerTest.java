@@ -2515,8 +2515,9 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(-1));
         assertEquals(-1, result.response().memberEpoch());
 
-        // Verify that there is not session timeout.
+        // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId);
+        context.assertNoRevocationTimeout(groupId, memberId);
     }
 
     @Test
@@ -2574,6 +2575,10 @@ public class GroupMetadataManagerTest {
             )),
             timeouts
         );
+
+        // Verify that there are no timers.
+        context.assertNoSessionTimeout(groupId, memberId);
+        context.assertNoRevocationTimeout(groupId, memberId);
     }
 
     @Test
@@ -2950,6 +2955,10 @@ public class GroupMetadataManagerTest {
             )),
             timeouts
         );
+
+        // Verify that there are no timers.
+        context.assertNoSessionTimeout(groupId, memberId1);
+        context.assertNoRevocationTimeout(groupId, memberId1);
     }
 
     @Test
