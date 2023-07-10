@@ -242,7 +242,10 @@ public class DefaultTaskManager implements TaskManager {
             uncaughtExceptions.put(taskId, exception);
         });
 
-        log.info("Set an uncaught exception for task {}", taskId);
+        log.info("Set an uncaught exception of type {} for task {}, with error message: {}",
+            exception.getClass().getName(),
+            taskId,
+            exception.getMessage());
     }
 
     public Map<TaskId, StreamsException> drainUncaughtExceptions() {

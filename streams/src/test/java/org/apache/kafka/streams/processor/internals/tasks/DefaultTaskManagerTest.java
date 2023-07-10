@@ -172,7 +172,8 @@ public class DefaultTaskManagerTest {
     public void shouldNotSetUncaughtExceptionsForUnassignedTasks() {
         taskManager.add(Collections.singleton(task));
 
-        assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        assertEquals("An uncaught exception can only be set as long as the task is still assigned", e.getMessage());
     }
 
     @Test
@@ -182,27 +183,18 @@ public class DefaultTaskManagerTest {
         taskManager.assignNextTask(taskExecutor);
         taskManager.setUncaughtException(exception, task.id());
 
-        assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        assertEquals("The uncaught exception must be cleared before restarting processing", e.getMessage());
     }
 
     @Test
-    public void shouldReturnExceptionsOnDrainExceptions() {
+    public void shouldReturnAndClearExceptionsOnDrainExceptions() {
         taskManager.add(Collections.singleton(task));
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
         taskManager.assignNextTask(taskExecutor);
         taskManager.setUncaughtException(exception, task.id());
 
         assertEquals(taskManager.drainUncaughtExceptions(), Collections.singletonMap(task.id(), exception));
-    }
-
-    @Test
-    public void shouldClearExceptionsOnDrainExceptions() {
-        taskManager.add(Collections.singleton(task));
-        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
-        taskManager.assignNextTask(taskExecutor);
-        taskManager.setUncaughtException(exception, task.id());
-        taskManager.drainUncaughtExceptions();
-
         assertEquals(taskManager.drainUncaughtExceptions(), Collections.emptyMap());
     }
 
