@@ -34,9 +34,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
-// import java.util.HashMap;
 import java.util.Map.Entry;
-// import java.util.stream.Collectors;
+import java.util.stream.Collectors;
 
 
 /**
@@ -56,9 +55,18 @@ public final class DelegationTokenImage {
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
-// XXX Must do this       if (options.metadataVersion().isDelegationTokenSupported()) 
-        for (Entry<String, DelegationTokenData> entry : tokens.entrySet()) {
-            writer.write(0, entry.getValue().toRecord());
+        if (options.metadataVersion().isDelegationTokenSupported()) {
+            for (Entry<String, DelegationTokenData> entry : tokens.entrySet()) {
+                writer.write(0, entry.getValue().toRecord());
+            }
+        } else {
+            if (!tokens.isEmpty()) {
+                List<String> tokenIds = new ArrayList<>(tokens.keySet());
+                StringBuffer delegationTokenImageString = new StringBuffer("DelegationTokenImage(");
+                delegationTokenImageString.append(tokenIds.stream().collect(Collectors.joining(", ")));
+                delegationTokenImageString.append(")");
+                options.handleLoss(delegationTokenImageString.toString());
+            } 
         }
     }
 

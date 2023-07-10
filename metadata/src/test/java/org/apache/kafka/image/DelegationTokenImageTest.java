@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
@@ -30,9 +31,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-// import java.util.HashMap;
+import java.util.HashMap;
 import java.util.List;
-// import java.util.Map;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -48,30 +49,38 @@ public class DelegationTokenImageTest {
 
     final static DelegationTokenImage IMAGE2;
 
-    static DelegationTokenData randomDelegationTokenData() {
+    static DelegationTokenData randomDelegationTokenData(String tokenId, long expireTimestamp) {
         TokenInformation ti = new TokenInformation(
-            "somerandomuuid",
-            SecurityUtils.parseKafkaPrincipal("fred"),
-            SecurityUtils.parseKafkaPrincipal("fred"),
+            tokenId,
+            SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
+            SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
             new ArrayList<KafkaPrincipal>(),
             0,
-            0,
-            0);
+            1000,
+            expireTimestamp);
         return new DelegationTokenData(ti);
     }
 
     static {
-
-//        IMAGE1 = new ScramImage(image1mechanisms);
-        IMAGE1 = DelegationTokenImage.EMPTY;
+        Map<String, DelegationTokenData> image1 = new HashMap<>();
+        image1.put("somerandomuuid", randomDelegationTokenData("somerandomuuid", 100));
+        IMAGE1 = new DelegationTokenImage(image1);
 
         DELTA1_RECORDS = new ArrayList<>();
-// Add records
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new DelegationTokenRecord().
+            setOwner(KafkaPrincipal.USER_TYPE + ":" + "fred").
+            setRequester(KafkaPrincipal.USER_TYPE + ":" + "fred").
+            setIssueTimestamp(0).
+            setMaxTimestamp(1000).
+            setExpirationTimestamp(200).
+            setTokenId("somerandomuuid"), (short) 0));
+
         DELTA1 = new DelegationTokenDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-//        IMAGE2 = new ScramImage(image2mechanisms);
-        IMAGE2 = DelegationTokenImage.EMPTY;
+        Map<String, DelegationTokenData> image2 = new HashMap<>();
+        image2.put("somerandomuuid", randomDelegationTokenData("somerandomuuid", 200));
+        IMAGE2 = new DelegationTokenImage(image2);
     }
 
     @Test

@@ -59,6 +59,8 @@ import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_EXPIRED;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_NOT_FOUND;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PRINCIPAL_TYPE;
 import static org.apache.kafka.common.protocol.Errors.NONE;
+import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
+
 
 /**
  * Manages DelegationTokens.
@@ -187,6 +189,12 @@ public class DelegationTokenControlManager {
             // DelegationTokens are not enabled
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
         }
+
+        if (metadataVersion.isDelegationTokenSupported()) {
+            // DelegationTokens are not supported in this metadata version
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(UNSUPPORTED_VERSION.code()));
+        }
+
 
         for (CreatableRenewers renewer : requestData.renewers()) {
             if (renewer.principalType().equals(KafkaPrincipal.USER_TYPE)) {
