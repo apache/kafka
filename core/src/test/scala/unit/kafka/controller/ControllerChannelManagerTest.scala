@@ -41,12 +41,13 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{ mockConstruction, verify, verifyNoMoreInteractions}
+import org.mockito.Mockito.{mockConstruction, verify, verifyNoMoreInteractions}
 
 import java.net.ServerSocket
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class ControllerChannelManagerTest {
   private val controllerId = 1
@@ -62,7 +63,11 @@ class ControllerChannelManagerTest {
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     val metrics = new Metrics
     val serverSocket = new ServerSocket(0)
-    try {
+    Using.resources(
+      mockMetricsGroupCtor,
+      metrics,
+      serverSocket
+    ) {
       // Start a ControllerChannelManager
       val securityProtocol = SecurityProtocol.PLAINTEXT
       val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
@@ -107,7 +112,6 @@ class ControllerChannelManagerTest {
       })
 
       controllerChannelManager.shutdown()
-      controllerChannelManager.removeMetrics()
 
       // We can not use `gaugeMetricNameWithTag` to verify, because it is cleared.
       gaugeMetricNameWithTagToVerify.asScala.foreach(metricNameTags => {
@@ -119,10 +123,7 @@ class ControllerChannelManagerTest {
       ControllerChannelManager.GaugeMetricNameNoTag.foreach(verify(mockMetricsGroup).removeMetric(_))
 
       verifyNoMoreInteractions(mockMetricsGroup)
-    } finally {
-      mockMetricsGroupCtor.close()
-      metrics.close()
-      serverSocket.close()
+      return
     }
   }
 

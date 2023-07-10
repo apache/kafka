@@ -299,7 +299,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       val shutdownFuture = executor.submit(new Runnable {
         override def run(): Unit = {
           controllerChannelManager.shutdown()
-          controllerChannelManager.removeMetrics()
         }
       })
       shutdownFuture.get(10, TimeUnit.SECONDS)
@@ -309,7 +308,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         serverSocket.close()
       if (controllerChannelManager != null) {
         controllerChannelManager.shutdown()
-        controllerChannelManager.removeMetrics()
       }
       executor.shutdownNow()
       metrics.close()

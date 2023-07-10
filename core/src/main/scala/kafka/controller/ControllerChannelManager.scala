@@ -75,13 +75,31 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  metricsGroup.newGauge(TotalQueueSizeMetricName,
-    () => brokerLock synchronized {
-      brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
-    }
-  )
+  private def newGaugeMetricWithNoTag(): Unit = {
+    metricsGroup.newGauge(TotalQueueSizeMetricName,
+      () => brokerLock synchronized {
+        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
+      }
+    )
+  }
+
+  private def newGaugeMetricWithTag[T](name: String, metric: Gauge[T], tags: java.util.Map[String, String]): Gauge[T] = {
+    val newGaugeMetric = metricsGroup.newGauge(name, metric, tags)
+    gaugeMetricNameWithTag.computeIfAbsent(name, k => new java.util.HashSet[java.util.Map[String, String]]())
+      .add(tags)
+    newGaugeMetric
+  }
+
+  private def newTimerMetricWithTag(name: String, durationUnit: TimeUnit, rateUnit: TimeUnit, tags: java.util.Map[String, String]): Timer = {
+    val newTimerMetric = metricsGroup.newTimer(name, durationUnit, rateUnit, tags)
+    timerMetricNameWithTag.computeIfAbsent(name, k => new java.util.HashSet[java.util.Map[String, String]]())
+      .add(tags)
+    newTimerMetric
+  }
 
   def startup(initialBrokers: Set[Broker]):Unit = {
+    newGaugeMetricWithNoTag()
+
     initialBrokers.foreach(addNewBroker)
 
     brokerLock synchronized {
@@ -90,15 +108,10 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   }
 
   def shutdown():Unit = {
+    GaugeMetricNameNoTag.foreach(metricsGroup.removeMetric(_))
     brokerLock synchronized {
       brokerStateInfo.values.toList.foreach(removeExistingBroker)
     }
-  }
-
-  // Only remove global metric in `ControllerChannelManager` when controller shutdown, because metrics in `metricNameWithTag`
-  // has been removed in `shutdown` when controller `onControllerResignation`
-  def removeMetrics(): Unit = {
-    GaugeMetricNameNoTag.foreach(metricsGroup.removeMetric(_))
   }
 
   def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
@@ -190,19 +203,16 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     }
 
     val brokerMetricTag = brokerMetricTags(broker.id)
-    val requestRateAndQueueTimeMetrics = metricsGroup.newTimer(
+
+    val requestRateAndQueueTimeMetrics = newTimerMetricWithTag(
       RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTag
     )
-    timerMetricNameWithTag.computeIfAbsent(RequestRateAndQueueTimeMetricName, k => new java.util.HashSet[java.util.Map[String, String]]())
-      .add(brokerMetricTag)
 
     val requestThread = new RequestSendThread(config.brokerId, controllerEpoch, messageQueue, networkClient,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
-    val queueSizeGauge = metricsGroup.newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTag)
-    gaugeMetricNameWithTag.computeIfAbsent(QueueSizeMetricName, k => new java.util.HashSet[java.util.Map[String, String]]())
-      .add(brokerMetricTag)
+    val queueSizeGauge = newGaugeMetricWithTag(QueueSizeMetricName, () => messageQueue.size, brokerMetricTag)
 
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
@@ -230,19 +240,17 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   }
 
   private def removeMetricsForBroker(brokerState: ControllerBrokerStateInfo): Unit = {
-    val removeTagSet = new java.util.HashSet[java.util.Map[String, String]]()
     val metricNameWithTag = new MetricNameWithTagData
     metricNameWithTag.putAll(gaugeMetricNameWithTag)
     metricNameWithTag.putAll(timerMetricNameWithTag)
-    metricNameWithTag.asScala.foreach(metricNameAndTags => {
-      metricNameAndTags._2.asScala.filter(tag => tag.get(BrokerMetricTagKeyName).equals(brokerState.brokerNode.id.toString))
-        .foreach(metricTag => {
-          metricsGroup.removeMetric(metricNameAndTags._1, metricTag)
-          removeTagSet.add(metricTag)
-        })
-    })
-    gaugeMetricNameWithTag.values().asScala.foreach(tagSet => tagSet.removeAll(removeTagSet))
-    timerMetricNameWithTag.values().asScala.foreach(tagSet => tagSet.removeAll(removeTagSet))
+
+    metricNameWithTag.asScala.foreach { metricNameAndTags =>
+      metricNameAndTags._2.asScala.iterator.foreach { tag =>
+        if (tag.get(BrokerMetricTagKeyName).equals(brokerState.brokerNode.id.toString)) {
+          metricsGroup.removeMetric(metricNameAndTags._1, tag)
+        }
+      }
+    }
   }
 
   protected def startRequestSendThread(brokerId: Int): Unit = {
