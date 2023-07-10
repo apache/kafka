@@ -849,6 +849,7 @@ public class GroupMetadataManager {
                     member.memberEpoch() != expectedMemberEpoch) {
                     log.debug("[GroupId " + groupId + "] Ignoring revocation timeout for " + memberId + " because the member " +
                         "state does not match the expected state.");
+                    return Collections.emptyList();
                 }
 
                 log.info("[GroupId " + groupId + "] Member " + memberId + " fenced from the group because " +

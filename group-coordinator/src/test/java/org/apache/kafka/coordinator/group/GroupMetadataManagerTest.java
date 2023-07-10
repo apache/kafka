@@ -383,7 +383,7 @@ public class GroupMetadataManagerTest {
             return timeouts;
         }
 
-        public void assertSessionTimeout(
+        public MockCoordinatorTimer.ScheduledTimeout<Record> assertSessionTimeout(
             String groupId,
             String memberId,
             long delayMs
@@ -392,6 +392,7 @@ public class GroupMetadataManagerTest {
                 timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
             assertNotNull(timeout);
             assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+            return timeout;
         }
 
         public void assertNoSessionTimeout(
@@ -403,7 +404,7 @@ public class GroupMetadataManagerTest {
             assertNull(timeout);
         }
 
-        public void assertRevocationTimeout(
+        public MockCoordinatorTimer.ScheduledTimeout<Record> assertRevocationTimeout(
             String groupId,
             String memberId,
             long delayMs
@@ -412,6 +413,7 @@ public class GroupMetadataManagerTest {
                 timer.timeout(consumerGroupRevocationTimeoutKey(groupId, memberId));
             assertNotNull(timeout);
             assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+            return timeout;
         }
 
         public void assertNoRevocationTimeout(
@@ -2780,8 +2782,10 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        // Verify that there is a revocation timeout.
-        context.assertRevocationTimeout(groupId, memberId1, 90000);
+        // Verify that there is a revocation timeout. Keep a reference
+        // to the timeout for later.
+        MockCoordinatorTimer.ScheduledTimeout<Record> scheduledTimeout =
+            context.assertRevocationTimeout(groupId, memberId1, 90000);
 
         assertEquals(
             Collections.emptyList(),
@@ -2815,6 +2819,10 @@ public class GroupMetadataManagerTest {
 
         // Verify that there is not revocation timeout.
         context.assertNoRevocationTimeout(groupId, memberId1);
+
+        // Execute the scheduled revocation timeout captured earlier to simulate a
+        // stale timeout. This should be a no-op.
+        assertEquals(Collections.emptyList(), scheduledTimeout.operation.generateRecords());
     }
 
     @Test
