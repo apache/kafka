@@ -114,7 +114,6 @@ public class DefaultTaskExecutorTest {
         taskExecutor.start();
 
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
-
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).setUncaughtException(exception, task.id());
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
         assertNull(taskExecutor.currentTask());
