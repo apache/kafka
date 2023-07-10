@@ -221,7 +221,7 @@ public class OffsetStorageWriterTest {
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", true);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -247,7 +247,7 @@ public class OffsetStorageWriterTest {
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -272,7 +272,7 @@ public class OffsetStorageWriterTest {
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", true);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -297,7 +297,7 @@ public class OffsetStorageWriterTest {
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -322,7 +322,7 @@ public class OffsetStorageWriterTest {
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -348,7 +348,7 @@ public class OffsetStorageWriterTest {
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -373,7 +373,7 @@ public class OffsetStorageWriterTest {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withOnlyConnectorStore(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -396,7 +396,7 @@ public class OffsetStorageWriterTest {
 
         KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
 
-        extractKeyValue(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
+        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withOnlyConnectorStore(
                 () -> LoggingContext.forConnector("source-connector"),
@@ -440,21 +440,15 @@ public class OffsetStorageWriterTest {
         return offsetBackingStore;
     }
 
-
     private Producer<byte[], byte[]> createMockProducer(boolean throwingProducer) {
-        if (throwingProducer) {
-            return new MockProducer<byte[], byte[]>() {
-                @Override
-                public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final org.apache.kafka.clients.producer.Callback callback) {
-                    callback.onCompletion(null, PRODUCE_EXCEPTION);
-                    return null;
-                }
-            };
-        }
         return new MockProducer<byte[], byte[]>() {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final org.apache.kafka.clients.producer.Callback callback) {
-                callback.onCompletion(null, null);
+                if (throwingProducer) {
+                    callback.onCompletion(null, PRODUCE_EXCEPTION);
+                } else {
+                    callback.onCompletion(null, null);
+                }
                 return null;
             }
         };
@@ -477,7 +471,7 @@ public class OffsetStorageWriterTest {
                              Map<String, Object> value, byte[] valueSerialized,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        extractKeyValue(key, keySerialized, value, valueSerialized);
+        mockKeyValueConversion(key, keySerialized, value, valueSerialized);
 
         final ArgumentCaptor<Callback<Void>> storeCallback = ArgumentCaptor.forClass(Callback.class);
         final Map<ByteBuffer, ByteBuffer> offsetsSerialized = Collections.singletonMap(
@@ -499,7 +493,7 @@ public class OffsetStorageWriterTest {
         });
     }
 
-    private void extractKeyValue(Map<String, Object> key, byte[] keySerialized, Map<String, Object> value, byte[] valueSerialized) {
+    private void mockKeyValueConversion(Map<String, Object> key, byte[] keySerialized, Map<String, Object> value, byte[] valueSerialized) {
         List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
         when(keyConverter.fromConnectData(NAMESPACE, null, keyWrapped)).thenReturn(keySerialized);
         when(valueConverter.fromConnectData(NAMESPACE, null, value)).thenReturn(valueSerialized);
