@@ -37,7 +37,7 @@ public final class DelegationTokenData {
     private TokenInformation tokenInformation;
 
     public static DelegationTokenData fromRecord(DelegationTokenRecord record) {
-        List<KafkaPrincipal>renewers = new ArrayList<>();
+        List<KafkaPrincipal> renewers = new ArrayList<>();
         for (String renewerString : record.renewers()) {
             renewers.add(SecurityUtils.parseKafkaPrincipal(renewerString));
         }
