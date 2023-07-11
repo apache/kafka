@@ -585,6 +585,7 @@ public class MirrorSourceConnector extends SourceConnector {
     // Visible for testing
     int updateTopicAcls(List<AclBinding> bindings) {
         Set<AclBinding> addBindings = new HashSet<>(bindings);
+        Set<AclBinding> failedBindings = new HashSet<>();
         addBindings.removeAll(knownTopicAclBindings);
         int newBindCount = addBindings.size();
         if (!addBindings.isEmpty()) {
@@ -592,13 +593,15 @@ public class MirrorSourceConnector extends SourceConnector {
             targetAdminClient.createAcls(addBindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {
                     log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
+                    failedBindings.add(k);
                 }
             }));
+            bindings.removeAll(failedBindings);
             knownTopicAclBindings = new HashSet<>(bindings);
         } else {
             log.debug("Not found new topic Acl info, skip sync!");
         }
-        return newBindCount;
+        return newBindCount - failedBindings.size();
     }
 
     private static Stream<TopicPartition> expandTopicDescription(TopicDescription description) {
