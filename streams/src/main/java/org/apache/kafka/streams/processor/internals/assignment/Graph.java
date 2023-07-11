@@ -90,6 +90,7 @@ public class Graph<V extends Comparable<V>> {
     private final SortedMap<V, SortedMap<V, Edge>> adjList = new TreeMap<>();
     private final SortedSet<V> nodes = new TreeSet<>();
     private final boolean isResidualGraph;
+    private V sourceNode, sinkNode;
 
     public Graph() {
         this(false);
@@ -115,14 +116,45 @@ public class Graph<V extends Comparable<V>> {
         return isResidualGraph;
     }
 
+    public void setSourceNode(final V node) {
+        sourceNode = node;
+    }
+
+    public void setSinkNode(final V node) {
+        sinkNode = node;
+    }
+
+    public int getTotalCost() {
+        int totalCost = 0;
+        for (final Map.Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
+            final SortedMap<V, Edge> edges = nodeEdges.getValue();
+            for (final Entry<V, Edge> nodeEdge : edges.entrySet()) {
+                totalCost += nodeEdge.getValue().cost * nodeEdge.getValue().flow;
+            }
+        }
+        return totalCost;
+    }
+
     private void addEdge(final V u, final Edge edge) {
-         if (edge.capacity < 0) {
+        if (edge.capacity < 0) {
             throw new IllegalArgumentException("Edge capacity cannot be negative");
         }
         if (edge.flow > edge.capacity) {
             throw new IllegalArgumentException(String.format("Edge flow %d cannot exceed capacity %d",
                 edge.flow, edge.capacity));
         }
+
+        if (!isResidualGraph) {
+            // Check if there's already an edge from u to v
+            final Map<V, Edge> edgeMap = adjList.get(edge.destination);
+            if (edgeMap != null && edgeMap.containsKey(u)) {
+                throw new IllegalArgumentException(
+                    "There is already an edge from " + edge.destination
+                        + " to " + u + ". Can not add an edge from " + u + " to " + edge.destination
+                        + " since there will create a cycle between two nodes");
+            }
+        }
+
         adjList.computeIfAbsent(u, set -> new TreeMap<>()).put(edge.destination, edge);
         nodes.add(u);
         nodes.add(edge.destination);
@@ -152,8 +184,8 @@ public class Graph<V extends Comparable<V>> {
                 final Edge backwardEdge = new Edge(node, edge.capacity, edge.cost * -1, edge.flow, 0);
                 forwardEdge.counterEdge = backwardEdge;
                 backwardEdge.counterEdge = forwardEdge;
-                addEdge(node, forwardEdge);
-                addEdge(edge.destination, backwardEdge);
+                residulGraph.addEdge(node, forwardEdge);
+                residulGraph.addEdge(edge.destination, backwardEdge);
             }
         }
         return residulGraph;
@@ -163,9 +195,7 @@ public class Graph<V extends Comparable<V>> {
      * Solve min cost flow with cycle canceling algorithm.
      */
     public void solveMinCostFlow() {
-        if (isResidualGraph) {
-            throw new IllegalStateException("Should not be residual graph to solve min cost flow");
-        }
+        validateMinCostGraph();
         final Graph<V> residualGraph = getResidualGraph();
         residualGraph.cancelNegativeCycles();
 
@@ -178,6 +208,65 @@ public class Graph<V extends Comparable<V>> {
                 edge.flow = residualEdge.flow;
                 edge.residualFlow = residualEdge.residualFlow;
             }
+        }
+    }
+
+    private void validateMinCostGraph() {
+        if (isResidualGraph) {
+            throw new IllegalStateException("Should not be residual graph to solve min cost flow");
+        }
+
+        /*
+         Check provided flow satisfying below constraints:
+         1. Input flow and output flow for each node should be the same except for source and destination node
+         2. Output flow of source and input flow of destination should be the same
+        */
+
+        final Map<V, Long> inFlow = new HashMap<>();
+        final Map<V, Long> outFlow = new HashMap<>();
+        for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
+            final V node = nodeEdges.getKey();
+            if (node.equals(sinkNode)) {
+                throw new IllegalArgumentException("Sink node " + sinkNode + " shouldn't have output");
+            }
+            for (final Entry<V, Edge> nodeEdge : nodeEdges.getValue().entrySet()) {
+                final V destination = nodeEdge.getKey();
+                if (destination.equals(sourceNode)) {
+                    throw new IllegalArgumentException("Source node " + sourceNode + " shouldn't have input " + node);
+                }
+                final Edge edge = nodeEdge.getValue();
+                Long count = outFlow.get(node);
+                if (count == null) {
+                    outFlow.put(node, (long) edge.flow);
+                } else {
+                    outFlow.put(node, count + edge.flow);
+                }
+
+                count = inFlow.get(destination);
+                if (count == null) {
+                    inFlow.put(destination, (long) edge.flow);
+                } else {
+                    inFlow.put(destination, count + edge.flow);
+                }
+            }
+        }
+
+        for (final Entry<V, Long> in : inFlow.entrySet()) {
+            if (in.getKey().equals(sourceNode) || in.getKey().equals(sinkNode)) {
+                continue;
+            }
+            final Long out = outFlow.get(in.getKey());
+            if (!Objects.equals(in.getValue(), out)) {
+                throw new IllegalStateException("Input flow for node " + in.getKey() + " is " +
+                    in.getValue() + " which doesn't match output flow " + out);
+            }
+        }
+
+        final Long sourceOutput = outFlow.get(sourceNode);
+        final Long sinkInput = inFlow.get(sinkNode);
+        if (!Objects.equals(sourceOutput, sinkInput)) {
+            throw new IllegalStateException("Output flow for source " + sourceNode + " is " + sourceOutput
+                + " which doesn't match input flow " + sinkInput + " for sink " + sinkNode);
         }
     }
 
@@ -213,14 +302,18 @@ public class Graph<V extends Comparable<V>> {
                 parentEdge.residualFlow -= possibleFlow;
                 parentEdge.flow += possibleFlow;
                 counterEdge.residualFlow += possibleFlow;
-                counterEdge.flow -= possibleFlow;
+                if (counterEdge.flow >= possibleFlow) {
+                    counterEdge.flow -= possibleFlow;
+                }
                 for (V curNode = parentNode; curNode != nodeInCycle; curNode = parentNodes.get(curNode)) {
-                    parentEdge = parentEdges.get(nodeInCycle);
+                    parentEdge = parentEdges.get(curNode);
                     counterEdge = parentEdge.counterEdge;
                     parentEdge.residualFlow -= possibleFlow;
                     parentEdge.flow += possibleFlow;
                     counterEdge.residualFlow += possibleFlow;
-                    counterEdge.flow -= possibleFlow;
+                    if (counterEdge.flow >= possibleFlow) {
+                        counterEdge.flow -= possibleFlow;
+                    }
                 }
             }
         }
@@ -228,7 +321,7 @@ public class Graph<V extends Comparable<V>> {
 
     private V detectNegativeCycles(final V source, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
         // Use long to account for any overflow
-        final Map<V, Long> distance = nodes.stream().collect(Collectors.toMap(node -> node, node -> Long.MAX_VALUE));
+        final Map<V, Long> distance = nodes.stream().collect(Collectors.toMap(node -> node, node -> (long) Integer.MAX_VALUE));
         distance.put(source, 0L);
         final int nodeCount = nodes.size();
 
