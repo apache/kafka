@@ -566,7 +566,7 @@ public class GroupMetadataManager {
         throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
 
         if (memberEpoch == 0) {
-            log.info("[GroupId " + groupId + "] Member " + memberId + " joins the consumer group.");
+            log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
         }
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
@@ -592,14 +592,14 @@ public class GroupMetadataManager {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
 
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
-                log.info("[GroupId " + groupId + "] Member " + memberId + " updated its subscribed topics to: " +
-                    updatedMember.subscribedTopicNames());
+                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicNames());
                 bumpGroupEpoch = true;
             }
 
             if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
-                log.info("[GroupId " + groupId + "] Member " + memberId + " updated its subscribed regex to: " +
-                    updatedMember.subscribedTopicRegex());
+                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicRegex());
                 bumpGroupEpoch = true;
             }
         }
@@ -615,8 +615,8 @@ public class GroupMetadataManager {
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId " + groupId + "] Computed new subscription metadata: "
-                    + subscriptionMetadata + ".");
+                log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                    groupId, subscriptionMetadata);
                 bumpGroupEpoch = true;
                 records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
@@ -624,7 +624,7 @@ public class GroupMetadataManager {
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
                 records.add(newGroupEpochRecord(groupId, groupEpoch));
-                log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
+                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             }
 
             group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
@@ -649,15 +649,16 @@ public class GroupMetadataManager {
                         .addOrUpdateMember(memberId, updatedMember)
                         .build();
 
-                log.info("[GroupId " + groupId + "] Computed a new target assignment for epoch " + groupEpoch + ": "
-                    + assignmentResult.targetAssignment() + ".");
+                log.info("[GroupId {}] Computed a new target assignment for epoch {}: {}.",
+                    groupId, groupEpoch, assignmentResult.targetAssignment());
 
                 records.addAll(assignmentResult.records());
                 targetAssignment = assignmentResult.targetAssignment().get(memberId);
                 targetAssignmentEpoch = groupEpoch;
             } catch (PartitionAssignorException ex) {
-                String msg = "Failed to compute a new target assignment for epoch " + groupEpoch + ": " + ex + ".";
-                log.error("[GroupId " + groupId + "] " + msg);
+                String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
+                    groupEpoch, ex.getMessage());
+                log.error("[GroupId {}] {}.", groupId, msg);
                 throw new UnknownServerException(msg, ex);
             }
         }
@@ -679,15 +680,15 @@ public class GroupMetadataManager {
                 assignmentUpdated = true;
                 records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
-                log.info("[GroupId " + groupId + "] Member " + memberId + " transitioned from " +
-                    member.currentAssignmentSummary() + " to " + updatedMember.currentAssignmentSummary() + ".");
+                log.info("[GroupId {}] Member {} transitioned from {} to {}.",
+                    groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
 
                 if (updatedMember.state() == ConsumerGroupMember.MemberState.REVOKING) {
                     scheduleConsumerGroupRevocationTimeout(
                         groupId,
                         memberId,
-                        member.rebalanceTimeoutMs(),
-                        member.memberEpoch()
+                        updatedMember.rebalanceTimeoutMs(),
+                        updatedMember.memberEpoch()
                     );
                 } else {
                     cancelConsumerGroupRevocationTimeout(groupId, memberId);
@@ -764,8 +765,8 @@ public class GroupMetadataManager {
         );
 
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId " + group.groupId() + "] Computed new subscription metadata: "
-                + subscriptionMetadata + ".");
+            log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                group.groupId(), subscriptionMetadata);
             records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
         }
 
@@ -795,17 +796,15 @@ public class GroupMetadataManager {
             try {
                 ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
-
-                log.info("[GroupId " + groupId + "] Member " + memberId + " fenced from the group because " +
-                    "its session expired.");
-
+                log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
+                    groupId, memberId);
                 return consumerGroupFenceMember(group, member);
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the group " +
-                    "does not exist.");
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
+                    groupId, memberId);
             } catch (UnknownMemberIdException ex) {
-                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the member " +
-                    "does not exist.");
+                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                    groupId, memberId);
             }
 
             return Collections.emptyList();
@@ -847,21 +846,20 @@ public class GroupMetadataManager {
 
                 if (member.state() != ConsumerGroupMember.MemberState.REVOKING ||
                     member.memberEpoch() != expectedMemberEpoch) {
-                    log.debug("[GroupId " + groupId + "] Ignoring revocation timeout for " + memberId + " because the member " +
-                        "state does not match the expected state.");
+                    log.debug("[GroupId {}] Ignoring revocation timeout for {} because the member " +
+                        "state does not match the expected state.", groupId, memberId);
                     return Collections.emptyList();
                 }
 
-                log.info("[GroupId " + groupId + "] Member " + memberId + " fenced from the group because " +
-                    "it failed to revoke partitions within {}ms.", revocationTimeoutMs);
-
+                log.info("[GroupId {}] Member {} fenced from the group because " +
+                    "it failed to revoke partitions within {}ms.", groupId, memberId, revocationTimeoutMs);
                 return consumerGroupFenceMember(group, member);
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the group " +
-                    "does not exist.");
+                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                    groupId, memberId);
             } catch (UnknownMemberIdException ex) {
-                log.debug("[GroupId " + groupId + "] Could not fence " + memberId + " because the member " +
-                    "does not exist.");
+                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                    groupId, memberId);
             }
 
             return Collections.emptyList();
@@ -869,7 +867,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Schedules the revocation timeout of the member.
+     * Cancels the revocation timeout of the member.
      *
      * @param groupId       The group id.
      * @param memberId      The member id.

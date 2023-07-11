@@ -28,7 +28,15 @@ import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * A simple mock for the {@link CoordinatorTimer}. The mock does not automatically
+ * expire timeouts. They are only expired when {@link MockCoordinatorTimer#poll()}
+ * is called.
+ */
 public class MockCoordinatorTimer<T> implements CoordinatorTimer<T> {
+    /**
+     * Represents a scheduled timeout.
+     */
     public static class ScheduledTimeout<T> {
         public final String key;
         public final long deadlineMs;
@@ -45,6 +53,9 @@ public class MockCoordinatorTimer<T> implements CoordinatorTimer<T> {
         }
     }
 
+    /**
+     * Represents an expired timeout.
+     */
     public static class ExpiredTimeout<T> {
         public final String key;
         public final List<T> records;
@@ -87,6 +98,9 @@ public class MockCoordinatorTimer<T> implements CoordinatorTimer<T> {
         this.time = time;
     }
 
+    /**
+     * Schedules a timeout.
+     */
     @Override
     public void schedule(
         String key,
@@ -103,6 +117,9 @@ public class MockCoordinatorTimer<T> implements CoordinatorTimer<T> {
         timeoutMap.put(key, timeout);
     }
 
+    /**
+     * Cancels a timeout.
+     */
     @Override
     public void cancel(String key) {
         ScheduledTimeout<T> timeout = timeoutMap.remove(key);
@@ -111,18 +128,30 @@ public class MockCoordinatorTimer<T> implements CoordinatorTimer<T> {
         }
     }
 
+    /**
+     * @return True if a timeout with the key exists; false otherwise.
+     */
     public boolean contains(String key) {
         return timeoutMap.containsKey(key);
     }
 
+    /**
+     * @return The scheduled timeout for the key; null otherwise.
+     */
     public ScheduledTimeout<T> timeout(String key) {
         return timeoutMap.get(key);
     }
 
+    /**
+     * @return The number of scheduled timeouts.
+     */
     public int size() {
         return timeoutMap.size();
     }
 
+    /**
+     * @return A list of expired timeouts based on the current time.
+     */
     public List<ExpiredTimeout<T>> poll() {
         List<ExpiredTimeout<T>> results = new ArrayList<>();
 

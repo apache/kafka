@@ -2930,9 +2930,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
-                .setRebalanceTimeoutMs(90000)
-                .setSubscribedTopicNames(Collections.singletonList("foo")));
+                .setMemberEpoch(1));
 
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
