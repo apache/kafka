@@ -19,6 +19,22 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_3_5_1" href="#upgrade_3_5_1">Upgrading to 3.5.1 from any version 0.8.x through 3.4.x</a></h4>
+    All upgrade steps remain same as <a id="upgrade_3_5_0" href="#upgrade_3_5_0">upgrading to 3.5.0</a>
+    <h5><a id="upgrade_351_notable" href="#upgrade_351_notable">Notable changes in 3.5.1</a></h5>
+    <ul>
+        <li>
+            Upgraded the dependency, snappy-java, to a version which is not vulnerable to
+            <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-34455">CVE-2023-34455.</a>
+            You can find more information about the CVE at <a href="https://kafka.apache.org/cve-list#CVE-2023-34455">Kafka CVE list.</a>
+        </li>
+        <li>
+            Fixed a regression introduced in 3.3.0, which caused <code>security.protocol</code> configuration values to be restricted to
+            upper case only. After the fix, <code>security.protocol</code> values are case insensitive.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-15053">KAFKA-15053</a> for details.
+        </li>
+    </ul>
+
 <h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>
 
     <h5><a id="upgrade_350_notable" href="#upgrade_350_notable">Notable changes in 3.5.0</a></h5>
