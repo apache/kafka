@@ -58,11 +58,13 @@ import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.OffsetPosition;
+import org.apache.kafka.storage.internals.log.RemoteIndexCache;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
@@ -160,7 +162,7 @@ public class RemoteLogManager implements Closeable {
                             String logDir,
                             String clusterId,
                             Time time,
-                            Function<TopicPartition, Optional<UnifiedLog>> fetchLog) {
+                            Function<TopicPartition, Optional<UnifiedLog>> fetchLog) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
