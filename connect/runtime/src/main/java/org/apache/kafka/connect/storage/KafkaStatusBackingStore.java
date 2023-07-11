@@ -588,6 +588,25 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         synchronized (this) {
             log.trace("Received task {} status update {}", id, status);
             CacheEntry<TaskStatus> entry = getOrAdd(id);
+
+            // During frequent rebalances, there could be a race condition because of which
+            // an UNASSIGNED state of a prior or same generation can be sent by a worker despite a
+            // RUNNING status by another worker because the first worker
+            // couldn't read the latest RUNNING status. This can lead to an inaccurate status
+            // representation even though the task might be actually running.
+            // Note that this could also mean that when a generation reset happens, and an
+            // UNASSIGNED status is sent, then it would be ignored if the current status is RUNNING
+            // at a higher generation. But since it will be followed by a RUNNING or a different
+            // status message(at the lower generation) soon after, the misrepresentation of the UNASSIGNED
+            // status would be short-lived in most cases.
+            if (status.state() == TaskStatus.State.UNASSIGNED
+                    && entry.get() != null
+                    && entry.get().state() == TaskStatus.State.RUNNING
+                    && entry.get().generation() >= status.generation()) {
+                log.trace("Ignoring stale status {} in favour of more upto date status {}", status, entry.get());
+                return;
+            }
+
             entry.put(status);
         }
     }
