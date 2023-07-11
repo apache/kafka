@@ -110,7 +110,6 @@ public class FileStreamSourceConnector extends SourceConnector {
         AbstractConfig config = new AbstractConfig(CONFIG_DEF, connectorConfig);
         String filename = config.getString(FILE_CONFIG);
         if (filename == null || filename.isEmpty()) {
-            // If the 'file' configuration is unspecified, stdin is used and no offsets are tracked
             throw new ConnectException("Offsets cannot be modified if the '" + FILE_CONFIG + "' configuration is unspecified. " +
                     "This is because stdin is used for input and offsets are not tracked.");
         }
@@ -130,7 +129,7 @@ public class FileStreamSourceConnector extends SourceConnector {
             Map<String, ?> offset = partitionOffset.getValue();
             // null offsets are allowed and represent a deletion of offsets for a partition
             if (offset == null) {
-                return true;
+                continue;
             }
 
             if (!offset.containsKey(POSITION_FIELD)) {

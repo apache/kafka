@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.kafka.connect.file.FileStreamSourceTask.FILENAME_FIELD;
 import static org.apache.kafka.connect.file.FileStreamSourceTask.POSITION_FIELD;
@@ -196,45 +197,19 @@ public class FileStreamSourceConnectorTest {
 
     @Test
     public void testAlterOffsetsOffsetPositionValues() {
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
                 Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, "nan")
-        )));
+                Collections.singletonMap(POSITION_FIELD, offset)
+        ));
 
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, null)
-        )));
-
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, new Object())
-        )));
-
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, 3.14)
-        )));
-
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, -420)
-        )));
-
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, "-420")
-        )));
-
-        assertTrue(connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, 10)
-        )));
-
-        assertTrue(connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, "10")
-        )));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(null));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(new Object()));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(3.14));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(-420));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("-420"));
+        assertTrue(() -> alterOffsets.apply(10));
+        assertTrue(() -> alterOffsets.apply("10"));
     }
 
     @Test
