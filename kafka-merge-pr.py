@@ -319,7 +319,7 @@ def resolve_jira_issue(merge_branches, comment, default_jira_id=""):
 def resolve_jira_issues(title, merge_branches, comment):
     jira_ids = re.findall("%s-[0-9]{4,5}" % CAPITALIZED_PROJECT_NAME, title)
 
-    if len(jira_ids) == 0:
+    if not jira_ids:
         resolve_jira_issue(merge_branches, comment)
     for jira_id in jira_ids:
         resolve_jira_issue(merge_branches, comment, jira_id)

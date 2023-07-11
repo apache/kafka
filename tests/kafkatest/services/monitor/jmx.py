@@ -115,7 +115,7 @@ class JmxMixin(object):
         # do not calculate average and maximum of jmx stats until we have read output from all nodes
         # If the service is multithreaded, this means that the results will be aggregated only when the last
         # service finishes
-        if any(len(time_to_stats) == 0 for time_to_stats in self.jmx_stats):
+        if any(not time_to_stats for time_to_stats in self.jmx_stats):
             return
 
         start_time_sec = min([min(time_to_stats.keys()) for time_to_stats in self.jmx_stats])
