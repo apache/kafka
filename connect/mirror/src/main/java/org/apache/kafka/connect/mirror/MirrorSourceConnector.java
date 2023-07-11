@@ -596,8 +596,8 @@ public class MirrorSourceConnector extends SourceConnector {
                     failedBindings.add(k);
                 }
             }));
-            bindings.removeAll(failedBindings);
             knownTopicAclBindings = new HashSet<>(bindings);
+            knownTopicAclBindings.removeAll(failedBindings);
         } else {
             log.debug("Not found new topic Acl info, skip sync!");
         }
