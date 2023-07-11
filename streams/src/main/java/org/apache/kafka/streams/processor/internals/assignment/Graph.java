@@ -319,6 +319,14 @@ public class Graph<V extends Comparable<V>> {
         }
     }
 
+    /**
+     * Detect negative cycle using Bellman-ford shortest path algorithm
+     * @param source Source node
+     * @param parentNodes Parent nodes to store negative cycle nodes
+     * @param parentEdges Parent edges to store negative cycle edges
+     *
+     * @return One node in negative cycle if exists or null if there's no negative cycle
+     */
     private V detectNegativeCycles(final V source, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
         // Use long to account for any overflow
         final Map<V, Long> distance = nodes.stream().collect(Collectors.toMap(node -> node, node -> (long) Integer.MAX_VALUE));
