@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.coordinator.group.common.TopicAndClusterMetadata;
 
 /**
  * Server side partition assignor used by the GroupCoordinator.
@@ -36,8 +37,9 @@ public interface PartitionAssignor {
      * Perform the group assignment given the current members and
      * topic metadata.
      *
+     * @param metadataImages The topic and cluster metadata images.
      * @param assignmentSpec The assignment spec.
      * @return The new assignment for the group.
      */
-    GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException;
+    GroupAssignment assign(TopicAndClusterMetadata metadataImages, AssignmentSpec assignmentSpec) throws PartitionAssignorException;
 }

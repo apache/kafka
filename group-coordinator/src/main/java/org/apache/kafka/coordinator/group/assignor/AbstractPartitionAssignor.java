@@ -16,20 +16,45 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.common.RackAwareTopicIdPartition;
+import org.apache.kafka.coordinator.group.common.TopicAndClusterMetadata;
 
-public class AbstractPartitionAssignor implements PartitionAssignor {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
   @Override
   public String name() {
-    return null;
+      return null;
   }
-  public GroupAssignment assign(Cluster metadata, AssignmentSpec assignmentSpec) {
 
-    return assign(assignmentSpec);
+  public GroupAssignment assign(TopicAndClusterMetadata metadataImages, AssignmentSpec assignmentSpec) {
+    List<RackAwareTopicIdPartition> rackAwareTopicIdPartitions = new ArrayList<>(assignmentSpec.topics().entrySet().stream()
+        .flatMap(entry -> {
+          Uuid topicId = entry.getKey();
+          AssignmentTopicMetadata topicSpec = entry.getValue();
+          return IntStream.range(0, topicSpec.numPartitions())
+              .mapToObj(partition -> {
+                List<String> racks = new ArrayList<>();
+                for (int replica : Objects.requireNonNull(metadataImages.topicsImage().getPartition(topicId, partition)).replicas) {
+                  String rack = String.valueOf(metadataImages.clusterImage().broker(replica).rack());
+                  racks.add(rack);
+                }
+                return new RackAwareTopicIdPartition(topicId, partition, Optional.of(racks));
+              });
+        }).collect(Collectors.toList()));
+
+        return assign(Optional.of(rackAwareTopicIdPartitions), assignmentSpec);
   }
-  @Override
-  public GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException {
-    return null;
+
+  public GroupAssignment assign(Optional<List<RackAwareTopicIdPartition>> partitionRackInfo, AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+      throw new PartitionAssignorException("Implementation doesn't exist");
   }
+
 }

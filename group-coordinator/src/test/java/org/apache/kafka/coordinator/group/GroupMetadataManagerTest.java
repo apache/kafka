@@ -40,11 +40,12 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.assignor.AbstractPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.common.RackAwareTopicIdPartition;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -81,6 +82,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -98,7 +100,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
-    static class MockPartitionAssignor implements PartitionAssignor {
+    static class MockPartitionAssignor extends AbstractPartitionAssignor {
         private final String name;
         private GroupAssignment prepareGroupAssignment = null;
 
@@ -116,7 +118,7 @@ public class GroupMetadataManagerTest {
         }
 
         @Override
-        public GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+        public GroupAssignment assign(Optional<List<RackAwareTopicIdPartition>> partitionRackInfo, AssignmentSpec assignmentSpec) throws PartitionAssignorException {
             return prepareGroupAssignment;
         }
     }
@@ -232,7 +234,7 @@ public class GroupMetadataManagerTest {
             final private LogContext logContext = new LogContext();
             final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
             private MetadataImage metadataImage;
-            private List<PartitionAssignor> assignors;
+            private List<AbstractPartitionAssignor> assignors;
             private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
             private int consumerGroupMaxSize = Integer.MAX_VALUE;
             private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -242,7 +244,7 @@ public class GroupMetadataManagerTest {
                 return this;
             }
 
-            public Builder withAssignors(List<PartitionAssignor> assignors) {
+            public Builder withAssignors(List<AbstractPartitionAssignor> assignors) {
                 this.assignors = assignors;
                 return this;
             }
@@ -1935,9 +1937,9 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        AbstractPartitionAssignor assignor = mock(AbstractPartitionAssignor.class);
         when(assignor.name()).thenReturn("range");
-        when(assignor.assign(any())).thenThrow(new PartitionAssignorException("Assignment failed."));
+        when(assignor.assign(Optional.empty(), any())).thenThrow(new PartitionAssignorException("Assignment failed."));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))

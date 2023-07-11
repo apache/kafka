@@ -17,12 +17,15 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.assignor.AbstractPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentTopicMetadata;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.common.TopicAndClusterMetadata;
+import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.TopicsImage;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -41,6 +44,7 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignme
 import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,7 +55,7 @@ public class TargetAssignmentBuilderTest {
     public static class TargetAssignmentBuilderTestContext {
         private final String groupId;
         private final int groupEpoch;
-        private final PartitionAssignor assignor = mock(PartitionAssignor.class);
+        private final AbstractPartitionAssignor assignor = mock(AbstractPartitionAssignor.class);
         private final Map<String, ConsumerGroupMember> members = new HashMap<>();
         private final Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
@@ -181,13 +185,23 @@ public class TargetAssignmentBuilderTest {
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
-            when(assignor.assign(any())).thenReturn(new GroupAssignment(memberAssignments));
+            when(assignor.assign(
+                eq(new TopicAndClusterMetadata(TopicsImage.EMPTY, ClusterImage.EMPTY)),
+                any()
+            )).thenReturn(new GroupAssignment(memberAssignments));
+
 
             // Create and populate the assignment builder.
             TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor)
                 .withMembers(members)
                 .withSubscriptionMetadata(subscriptionMetadata)
-                .withTargetAssignment(targetAssignment);
+                .withTargetAssignment(targetAssignment)
+                .withTopicAndClusterMetadataImages(
+                        new TopicAndClusterMetadata(
+                            TopicsImage.EMPTY,
+                            ClusterImage.EMPTY
+                        )
+                );
 
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -203,7 +217,11 @@ public class TargetAssignmentBuilderTest {
 
             // Verify that the assignor was called once with the expected
             // assignment spec.
-            verify(assignor, times(1)).assign(assignmentSpec);
+            verify(assignor, times(1))
+                .assign(
+                    new TopicAndClusterMetadata(TopicsImage.EMPTY, ClusterImage.EMPTY),
+                    assignmentSpec
+                );
 
             return result;
         }

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.common.RackAwareTopicIdPartition;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static java.lang.Math.min;
@@ -47,7 +49,7 @@ import static java.lang.Math.min;
  *           movements during reassignment. (Sticky) </li>
  * </ol>
  */
-public class RangeAssignor implements PartitionAssignor {
+public class RangeAssignor extends AbstractPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override
@@ -118,7 +120,7 @@ public class RangeAssignor implements PartitionAssignor {
      * </ol>
      */
     @Override
-    public GroupAssignment assign(final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+    public GroupAssignment assign(Optional<List<RackAwareTopicIdPartition>> partitionRackInfo, final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
         Map<String, MemberAssignment> newAssignment = new HashMap<>();
 
         // Step 1

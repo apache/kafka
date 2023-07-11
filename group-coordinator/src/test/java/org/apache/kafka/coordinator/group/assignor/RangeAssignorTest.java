@@ -57,7 +57,7 @@ public class RangeAssignorTest {
         );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment groupAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         assertEquals(Collections.emptyMap(), groupAssignment.members());
     }
@@ -78,7 +78,7 @@ public class RangeAssignorTest {
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
 
         assertThrows(PartitionAssignorException.class,
-            () -> assignor.assign(assignmentSpec));
+            () -> assignor.assign(Optional.empty(), assignmentSpec));
     }
 
     @Test
@@ -104,7 +104,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -152,7 +152,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -203,7 +203,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         // Topic 3 has 2 partitions but three consumers subscribed to it - one of them will not get a partition.
@@ -265,7 +265,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -318,7 +318,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -376,7 +376,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -440,7 +440,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -483,7 +483,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -543,7 +543,7 @@ public class RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+        GroupAssignment computedAssignment = assignor.assign(Optional.empty(), assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
