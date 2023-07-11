@@ -57,7 +57,7 @@ if __name__ == "__main__":
     
     selected_reviewers = []
     while True:
-        if len(selected_reviewers) != 0:
+        if selected_reviewers:
             print(f"Reviewers so far: {selected_reviewers}")
         user_input = prompt_for_user()
         if user_input is None:
@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 candidates.append((reviewer, email, count))
             if len(candidates) == 10:
                 break
-        if len(candidates) == 0:
+        if not candidates:
             continue
 
         print("\nPossible matches (in order of most recent):")
@@ -85,7 +85,7 @@ if __name__ == "__main__":
             print("Invalid selection")
             continue
 
-    if len(selected_reviewers) != 0:
+    if selected_reviewers:
         out = "\n\nReviewers: "
         out += ", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])
         out += "\n"

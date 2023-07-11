@@ -91,7 +91,7 @@ def fail(msg):
     sys.exit(1)
 
 def print_output(output):
-    if output is None or len(output) == 0:
+    if output is None or not output:
         return
     for line in output.split('\n'):
         print(">", line)

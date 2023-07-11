@@ -888,7 +888,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.maybe_setup_client_scram_credentials(node)
 
         self.start_jmx_tool(self.idx(node), node)
-        if len(self.pids(node)) == 0:
+        if not self.pids(node):
             raise Exception("No process ids recorded on node %s" % node.account.hostname)
 
     def upgrade_metadata_version(self, new_version):
@@ -956,7 +956,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.combined_nodes_started -= 1
 
         try:
-            wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=timeout_sec,
+            wait_until(lambda: not self.pids(node), timeout_sec=timeout_sec,
                        err_msg="Kafka node failed to stop in %d seconds" % timeout_sec)
         except Exception:
             if node_has_combined_controllers:
