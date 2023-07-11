@@ -2619,7 +2619,7 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId1)
                     .setMemberEpoch(0)
-                    .setRebalanceTimeoutMs(90000)
+                    .setRebalanceTimeoutMs(180000)
                     .setSubscribedTopicNames(Collections.singletonList("foo"))
                     .setTopicPartitions(Collections.emptyList()));
 
@@ -2690,7 +2690,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
                 .setMemberEpoch(1)
-                .setRebalanceTimeoutMs(90000)
+                .setRebalanceTimeoutMs(12000)
                 .setSubscribedTopicNames(Collections.singletonList("foo")));
 
         assertResponseEquals(
@@ -2707,7 +2707,7 @@ public class GroupMetadataManagerTest {
         );
 
         // Verify that there is a revocation timeout.
-        context.assertRevocationTimeout(groupId, memberId1, 90000);
+        context.assertRevocationTimeout(groupId, memberId1, 12000);
 
         assertEquals(
             Collections.emptyList(),
@@ -2798,8 +2798,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
                 .setMemberEpoch(1)
-                .setRebalanceTimeoutMs(90000)
-                .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .setTopicPartitions(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
                     .setTopicId(fooTopicId)
                     .setPartitions(Collections.singletonList(0)))));
