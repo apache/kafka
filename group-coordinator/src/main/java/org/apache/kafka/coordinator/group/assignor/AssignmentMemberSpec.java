@@ -119,6 +119,5 @@ public class AssignmentMemberSpec {
             ", subscribedTopicIds=" + subscribedTopicIds +
             ", assignedPartitions=" + assignedPartitions +
             ')';
-
     }
 }
