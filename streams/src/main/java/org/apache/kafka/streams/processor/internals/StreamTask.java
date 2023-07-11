@@ -413,7 +413,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     //
                     // TODO: this should be removed after we decouple caching with emitting
                     stateMgr.flushCache();
-                    recordCollector.flush();
+                    if (!eosEnabled) {
+                        // under EOS, commitTransaction will implicitly flush the Producer, so there's no need to flush
+                        // it explicitly and add an extra round-trip to the brokers
+                        recordCollector.flush();
+                    }
                     hasPendingTxCommit = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());
