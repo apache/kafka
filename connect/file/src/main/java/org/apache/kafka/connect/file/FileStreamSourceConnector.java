@@ -111,7 +111,8 @@ public class FileStreamSourceConnector extends SourceConnector {
         String filename = config.getString(FILE_CONFIG);
         if (filename == null || filename.isEmpty()) {
             // If the 'file' configuration is unspecified, stdin is used and no offsets are tracked
-            throw new ConnectException("Offsets cannot be modified if the '" + FILE_CONFIG + "' configuration is unspecified");
+            throw new ConnectException("Offsets cannot be modified if the '" + FILE_CONFIG + "' configuration is unspecified. " +
+                    "This is because stdin is used for input and offsets are not tracked.");
         }
 
         // This connector makes use of a single source partition at a time which represents the file that it is configured to read from.
@@ -128,12 +129,26 @@ public class FileStreamSourceConnector extends SourceConnector {
 
             Map<String, ?> offset = partitionOffset.getValue();
             // null offsets are allowed and represent a deletion of offsets for a partition
-            if (offset != null && !offset.containsKey(POSITION_FIELD)) {
+            if (offset == null) {
+                return true;
+            }
+
+            if (!offset.containsKey(POSITION_FIELD)) {
                 throw new ConnectException("Offset objects should either be null or contain the key '" + POSITION_FIELD + "'");
+            }
+
+            // The 'position' in the offset represents the position in the file's byte stream and should be a non-negative long value
+            try {
+                long offsetPosition = Long.parseLong(String.valueOf(offset.get(POSITION_FIELD)));
+                if (offsetPosition < 0) {
+                    throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset should be a non-negative number");
+                }
+            } catch (NumberFormatException e) {
+                throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset should be a number");
             }
         }
 
-        // Let the task validate the actual value for the offset position on startup
+        // Let the task check whether the actual value for the offset position is valid for the configured file on startup
         return true;
     }
 }

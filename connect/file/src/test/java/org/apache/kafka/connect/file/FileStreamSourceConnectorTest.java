@@ -36,6 +36,7 @@ import static org.apache.kafka.connect.file.FileStreamSourceTask.POSITION_FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class FileStreamSourceConnectorTest {
@@ -165,7 +166,7 @@ public class FileStreamSourceConnectorTest {
     @Test
     public void testAlterOffsetsIncorrectPartitionKey() {
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap("invalid_partition_key", FILENAME),
+                Collections.singletonMap("other_partition_key", FILENAME),
                 Collections.singletonMap(POSITION_FIELD, 0)
         )));
 
@@ -181,16 +182,59 @@ public class FileStreamSourceConnectorTest {
         Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
         offsets.put(Collections.singletonMap(FILENAME_FIELD, FILENAME), Collections.singletonMap(POSITION_FIELD, 0));
         offsets.put(Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"), null);
-        connector.alterOffsets(sourceProperties, offsets);
+        assertTrue(connector.alterOffsets(sourceProperties, offsets));
     }
 
     @Test
     public void testAlterOffsetsIncorrectOffsetKey() {
         Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
                 Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap("invalid_offset_key", 0)
+                Collections.singletonMap("other_offset_key", 0)
         );
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsOffsetPositionValues() {
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, "nan")
+        )));
+
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, null)
+        )));
+
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, new Object())
+        )));
+
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 3.14)
+        )));
+
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, -420)
+        )));
+
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, "-420")
+        )));
+
+        assertTrue(connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 10)
+        )));
+
+        assertTrue(connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, "10")
+        )));
     }
 
     @Test
@@ -203,7 +247,7 @@ public class FileStreamSourceConnectorTest {
         // Expect no exception to be thrown when a valid offsets map is passed. An empty offsets map is treated as valid
         // since it could indicate that the offsets were reset previously or that no offsets have been committed yet
         // (for a reset operation)
-        connector.alterOffsets(sourceProperties, offsets);
-        connector.alterOffsets(sourceProperties, new HashMap<>());
+        assertTrue(connector.alterOffsets(sourceProperties, offsets));
+        assertTrue(connector.alterOffsets(sourceProperties, new HashMap<>()));
     }
 }
