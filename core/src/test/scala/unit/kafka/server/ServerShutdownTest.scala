@@ -264,6 +264,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     val executor = Executors.newSingleThreadExecutor
     var serverSocket: ServerSocket = null
     var controllerChannelManager: ControllerChannelManager = null
+    var controllerContext: ControllerContext = null
 
     try {
       // Set up a server to accept a connection and receive one byte from the first request. No response is sent.
@@ -278,7 +279,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       // Start a ControllerChannelManager
       val brokerAndEpochs = Map((new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol), 0L))
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
-      val controllerContext = new ControllerContext
+      controllerContext = new ControllerContext
       controllerContext.setLiveBrokers(brokerAndEpochs)
       controllerChannelManager = new ControllerChannelManager(
         () => controllerContext.epoch,
@@ -308,6 +309,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         controllerChannelManager.shutdown()
       executor.shutdownNow()
       metrics.close()
+      if (controllerContext != null) {
+        controllerContext.resetContext()
+      }
     }
   }
 

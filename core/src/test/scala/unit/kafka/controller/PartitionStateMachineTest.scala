@@ -28,7 +28,7 @@ import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers.{any, anyInt}
@@ -56,6 +56,11 @@ class PartitionStateMachineTest {
     mockControllerBrokerRequestBatch = mock(classOf[ControllerBrokerRequestBatch])
     partitionStateMachine = new ZkPartitionStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext,
       mockZkClient, mockControllerBrokerRequestBatch)
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    controllerContext.resetContext();
   }
 
   private def partitionState(partition: TopicPartition): PartitionState = {

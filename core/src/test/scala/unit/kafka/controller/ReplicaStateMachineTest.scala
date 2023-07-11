@@ -29,7 +29,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
@@ -56,6 +56,11 @@ class ReplicaStateMachineTest {
     mockControllerBrokerRequestBatch = mock(classOf[ControllerBrokerRequestBatch])
     replicaStateMachine = new ZkReplicaStateMachine(config, new StateChangeLogger(brokerId, true, None),
       controllerContext, mockZkClient, mockControllerBrokerRequestBatch)
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    controllerContext.resetContext()
   }
 
   private def replicaState(replica: PartitionAndReplica): ReplicaState = {

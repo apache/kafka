@@ -22,8 +22,14 @@ import kafka.cluster.{Broker, EndPoint}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{mockConstruction, verify, verifyNoMoreInteractions}
+
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 
 class ControllerContextTest {
@@ -54,6 +60,31 @@ class ControllerContextTest {
       }
       context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
       leaderIndex += 1
+    }
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    context.resetContext()
+  }
+
+  @Test
+  def testRemoveMetricsOnResetContext(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val mockContext = new ControllerContext
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      ControllerStats.MeterMetricNames.foreach(metricName => verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(metricName), any(), any()))
+      mockContext.stats.timerMetricNames.asScala.foreach(metricName => verify(mockMetricsGroup).newTimer(ArgumentMatchers.eq(metricName), any(), any()))
+      val timerMetricNamesToVerify = new java.util.ArrayList[String]()
+      mockContext.stats.timerMetricNames.asScala.foreach(timerMetricNamesToVerify.add)
+
+      mockContext.resetContext()
+      ControllerStats.MeterMetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      timerMetricNamesToVerify.asScala.foreach(verify(mockMetricsGroup).removeMetric(_))
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
     }
   }
 

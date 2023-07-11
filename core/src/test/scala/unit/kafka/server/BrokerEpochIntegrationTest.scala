@@ -245,6 +245,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
     } finally {
       controllerChannelManager.shutdown()
       metrics.close()
+      controllerContext.resetContext()
     }
   }
 

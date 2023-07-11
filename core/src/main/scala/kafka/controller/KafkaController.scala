@@ -16,7 +16,7 @@
  */
 package kafka.controller
 
-import com.yammer.metrics.core.Timer
+import com.yammer.metrics.core.{Meter, Timer}
 
 import java.util.concurrent.TimeUnit
 import kafka.admin.AdminOperationException
@@ -52,6 +52,7 @@ import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -538,7 +539,6 @@ class KafkaController(val config: KafkaConfig,
 
   private def removeMetrics(): Unit = {
     KafkaController.MetricNames.foreach(metricsGroup.removeMetric)
-    controllerContext.stats.removeMetrics()
   }
 
   /*
@@ -975,6 +975,8 @@ class KafkaController(val config: KafkaConfig,
     registerBrokerModificationsHandler(controllerContext.liveOrShuttingDownBrokerIds)
     // update the leader and isr cache for all existing partitions from Zookeeper
     updateLeaderAndIsrCache()
+    // register metrics in `ControllerStats`
+    controllerContext.stats.registerMetrics()
     // start the channel manager
     controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
     info(s"Currently active brokers in the cluster: ${controllerContext.liveBrokerIds}")
@@ -2777,20 +2779,31 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 
 private[controller] class ControllerStats {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val registered = new AtomicBoolean(false)
 
   // Visible for testing
   private[controller] val timerMetricNames = new java.util.ArrayList[String]()
 
-  val uncleanLeaderElectionRate = metricsGroup.newMeter(UncleanLeaderElectionsPerSecMetricName, "elections", TimeUnit.SECONDS)
+  var uncleanLeaderElectionRate: Meter = _
 
-  val rateAndTimeMetrics: Map[ControllerState, Timer] = ControllerState.values.flatMap { state =>
-    state.rateAndTimeMetricName.map { metricName =>
-      if (metricName.nonEmpty) {
-        timerMetricNames.add(metricName)
-      }
-      state -> metricsGroup.newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+  var rateAndTimeMetrics: Map[ControllerState, Timer] = Map.empty
+
+  registerMetrics()
+
+  def registerMetrics(): Unit = {
+    if (!registered.get()) {
+      uncleanLeaderElectionRate = metricsGroup.newMeter(UncleanLeaderElectionsPerSecMetricName, "elections", TimeUnit.SECONDS)
+      rateAndTimeMetrics = ControllerState.values.flatMap { state =>
+        state.rateAndTimeMetricName.map { metricName =>
+          if (metricName.nonEmpty) {
+            timerMetricNames.add(metricName)
+          }
+          state -> metricsGroup.newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+        }
+      }.toMap
+      registered.set(true)
     }
-  }.toMap
+  }
 
   // For test.
   def removeMetric(name: String): Unit = {
@@ -2800,6 +2813,9 @@ private[controller] class ControllerStats {
   def removeMetrics(): Unit = {
     MeterMetricNames.foreach(metricsGroup.removeMetric(_))
     timerMetricNames.asScala.foreach(metricsGroup.removeMetric(_))
+    timerMetricNames.clear()
+    rateAndTimeMetrics = Map.empty
+    registered.set(false)
   }
 }
 

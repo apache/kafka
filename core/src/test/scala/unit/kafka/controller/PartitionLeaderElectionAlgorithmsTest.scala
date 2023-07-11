@@ -17,7 +17,7 @@
 package kafka.controller
 
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class PartitionLeaderElectionAlgorithmsTest {
   private var controllerContext: ControllerContext = _
@@ -25,7 +25,11 @@ class PartitionLeaderElectionAlgorithmsTest {
   @BeforeEach
   def setUp(): Unit = {
     controllerContext = new ControllerContext
-    controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec")
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    controllerContext.resetContext()
   }
 
   @Test

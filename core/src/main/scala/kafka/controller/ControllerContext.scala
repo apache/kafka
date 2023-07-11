@@ -306,6 +306,7 @@ class ControllerContext extends ControllerChannelContext {
     epochZkVersion = 0
     clearTopicsState()
     clearLiveBrokers()
+    stats.removeMetrics()
   }
 
   def setAllTopics(topics: Set[String]): Unit = {
