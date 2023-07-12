@@ -280,8 +280,8 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                         return new CoordinatorResult<>(operation.generateRecords(), null);
                     });
 
-                    // If the write event fails, it is rescheduled with a small backoff except if the
-                    // error is fatal.
+                    // If the write event fails, it is rescheduled with a small backoff except if retry
+                    // is disabled or if the error is fatal.
                     event.future.exceptionally(ex -> {
                         if (ex instanceof RejectedExecutionException) {
                             log.debug("The write event {} for the timer {} was not executed because it was " +
