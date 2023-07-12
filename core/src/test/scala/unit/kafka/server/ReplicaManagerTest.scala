@@ -3401,7 +3401,7 @@ class ReplicaManagerTest {
       TestUtils.tempRelativeDir("data").getAbsolutePath,
       "clusterId",
       time,
-      (tp: TopicPartition) => Optional.of(mockLog),
+      _ => Optional.of(mockLog),
       brokerTopicStats)
     val spyRLM = spy(remoteLogManager)
 
@@ -3455,7 +3455,7 @@ class ReplicaManagerTest {
       for (i <- 1 to 5)
         replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
 
-      // wait until at least 2 task submitted
+      // wait until at least 2 task submitted to use all the available threads
       queueLatch.await()
       // make sure tasks are all submitted
       Thread.sleep(100)
