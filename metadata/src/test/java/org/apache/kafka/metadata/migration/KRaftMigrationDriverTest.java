@@ -42,6 +42,7 @@ import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
+import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -214,6 +215,7 @@ public class KRaftMigrationDriverTest {
             metadataPublisher -> { },
             new MockFaultHandler("test"),
             quorumFeatures,
+            KafkaConfigSchema.EMPTY,
             mockTime
         )) {
 
@@ -299,6 +301,7 @@ public class KRaftMigrationDriverTest {
             metadataPublisher -> { },
             faultHandler,
             quorumFeatures,
+            KafkaConfigSchema.EMPTY,
             mockTime
         )) {
             MetadataImage image = MetadataImage.EMPTY;
@@ -344,6 +347,7 @@ public class KRaftMigrationDriverTest {
             },
             new MockFaultHandler("test"),
             quorumFeatures,
+            KafkaConfigSchema.EMPTY,
             mockTime
         )) {
 
@@ -390,6 +394,7 @@ public class KRaftMigrationDriverTest {
                 metadataPublisher -> { },
                 faultHandler,
                 quorumFeatures,
+                KafkaConfigSchema.EMPTY,
                 mockTime
         )) {
             MetadataImage image = MetadataImage.EMPTY;
@@ -461,6 +466,7 @@ public class KRaftMigrationDriverTest {
             metadataPublisher -> { },
             new MockFaultHandler("test"),
             quorumFeatures,
+            KafkaConfigSchema.EMPTY,
             mockTime
         )) {
             verifier.verify(driver, migrationClient, topicClient, configClient);
