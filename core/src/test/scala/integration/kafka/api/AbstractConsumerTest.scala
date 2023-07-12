@@ -346,7 +346,6 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                                            partitionsToAssign: Set[TopicPartition],
                                            userRebalanceListener: ConsumerRebalanceListener)
     extends ShutdownableThread("daemon-consumer-assignment", false) {
-    setDaemon(true)
 
     def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) = {
       this(consumer, topicsToSubscribe, Set.empty[TopicPartition], null)

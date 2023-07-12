@@ -502,7 +502,6 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false) {
-    setDaemon(true)
     var iter: Int = 0
 
     override def doWork(): Unit = {
