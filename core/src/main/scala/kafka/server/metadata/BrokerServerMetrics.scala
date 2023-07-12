@@ -23,7 +23,6 @@ import org.apache.kafka.common.metrics.Gauge
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.image.MetadataProvenance
-import org.apache.kafka.image.loader.MetadataLoaderMetrics
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 
 import java.util.Collections
@@ -31,7 +30,7 @@ import java.util.concurrent.TimeUnit.NANOSECONDS
 
 final class BrokerServerMetrics private (
   metrics: Metrics
-) extends MetadataLoaderMetrics {
+) extends AutoCloseable {
   import BrokerServerMetrics._
 
   private val batchProcessingTimeHistName = KafkaMetricsGroup.explicitMetricName("kafka.server",
@@ -123,15 +122,15 @@ final class BrokerServerMetrics private (
     ).foreach(metrics.removeMetric)
   }
 
-  override def updateBatchProcessingTime(elapsedNs: Long): Unit =
+  def updateBatchProcessingTime(elapsedNs: Long): Unit =
     batchProcessingTimeHist.update(NANOSECONDS.toMicros(elapsedNs))
 
-  override def updateBatchSize(size: Int): Unit = batchSizeHist.update(size)
+  def updateBatchSize(size: Int): Unit = batchSizeHist.update(size)
 
-  override def updateLastAppliedImageProvenance(provenance: MetadataProvenance): Unit =
+  def updateLastAppliedImageProvenance(provenance: MetadataProvenance): Unit =
     lastAppliedImageProvenance.set(provenance)
 
-  override def lastAppliedOffset(): Long = lastAppliedImageProvenance.get().lastContainedOffset()
+  def lastAppliedOffset(): Long = lastAppliedImageProvenance.get().lastContainedOffset()
 
   def lastAppliedTimestamp(): Long = lastAppliedImageProvenance.get().lastContainedLogTimeMs()
 }

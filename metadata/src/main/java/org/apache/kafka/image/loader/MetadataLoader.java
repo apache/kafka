@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.image.writer.ImageReWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
@@ -35,14 +36,17 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.Snapshots;
 import org.slf4j.Logger;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -69,28 +73,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private Time time = Time.SYSTEM;
         private LogContext logContext = null;
         private FaultHandler faultHandler = (m, e) -> new FaultHandlerException(m, e);
-        private MetadataLoaderMetrics metrics = new MetadataLoaderMetrics() {
-            private volatile long lastAppliedOffset = -1L;
-
-            @Override
-            public void updateBatchProcessingTime(long elapsedNs) { }
-
-            @Override
-            public void updateBatchSize(int size) { }
-
-            @Override
-            public void updateLastAppliedImageProvenance(MetadataProvenance provenance) {
-                this.lastAppliedOffset = provenance.lastContainedOffset();
-            }
-
-            @Override
-            public long lastAppliedOffset() {
-                return lastAppliedOffset;
-            }
-
-            @Override
-            public void close() throws Exception { }
-        };
+        private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
 
         public Builder setNodeId(int nodeId) {
@@ -113,13 +96,13 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return this;
         }
 
-        public Builder setMetadataLoaderMetrics(MetadataLoaderMetrics metrics) {
-            this.metrics = metrics;
+        public Builder setHighWaterMarkAccessor(Supplier<OptionalLong> highWaterMarkAccessor) {
+            this.highWaterMarkAccessor = highWaterMarkAccessor;
             return this;
         }
 
-        public Builder setHighWaterMarkAccessor(Supplier<OptionalLong> highWaterMarkAccessor) {
-            this.highWaterMarkAccessor = highWaterMarkAccessor;
+        public Builder setMetrics(MetadataLoaderMetrics metrics) {
+            this.metrics = metrics;
             return this;
         }
 
@@ -129,6 +112,12 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
             if (highWaterMarkAccessor == null) {
                 throw new RuntimeException("You must set the high water mark accessor.");
+            }
+            if (metrics == null) {
+                metrics = new MetadataLoaderMetrics(Optional.empty(),
+                    __ -> { },
+                    __ -> { },
+                    new AtomicReference<>(MetadataProvenance.EMPTY));
             }
             return new MetadataLoader(
                 time,
@@ -219,6 +208,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
                 threadNamePrefix + "metadata-loader-",
                 new ShutdownEvent());
+    }
+
+    // VisibleForTesting
+    MetadataLoaderMetrics metrics() {
+        return metrics;
     }
 
     private boolean stillNeedToCatchUp(String where, long offset) {
@@ -349,6 +343,9 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     }
                 }
                 metrics.updateLastAppliedImageProvenance(image.provenance());
+                if (delta.featuresDelta() != null) {
+                    metrics.setCurrentMetadataVersion(image.features().metadataVersion());
+                }
                 if (uninitializedPublishers.isEmpty()) {
                     scheduleInitializeNewPublishers(0);
                 }
@@ -406,7 +403,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         MetadataProvenance provenance =
                 new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs);
         long elapsedNs = time.nanoseconds() - startNs;
-        metrics.updateBatchProcessingTime(elapsedNs);
+        metrics.updateBatchProcessingTimeNs(elapsedNs);
         return new LogDeltaManifest(provenance,
                 currentLeaderAndEpoch,
                 numBatches,
@@ -418,24 +415,30 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
             try {
+                long numLoaded = metrics.incrementHandleLoadSnapshotCount();
+                String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
+                log.info("handleLoadSnapshot({}): incrementing HandleLoadSnapshotCount to {}.",
+                    snapshotName, numLoaded);
                 MetadataDelta delta = new MetadataDelta.Builder().
                         setImage(image).
                         build();
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
-                log.info("handleLoadSnapshot: generated a metadata delta from a snapshot at offset {} " +
-                        "in {} us.", manifest.provenance().lastContainedOffset(),
+                log.info("handleLoadSnapshot({}): generated a metadata delta between offset {} " +
+                        "and this snapshot in {} us.", snapshotName,
+                        image.provenance().lastContainedOffset(),
                         NANOSECONDS.toMicros(manifest.elapsedNs()));
                 try {
                     image = delta.apply(manifest.provenance());
                 } catch (Throwable e) {
                     faultHandler.handleFault("Error generating new metadata image from " +
-                            "snapshot at offset " + reader.lastContainedLogOffset(), e);
+                            "snapshot " + snapshotName, e);
                     return;
                 }
                 if (stillNeedToCatchUp("handleLoadSnapshot", manifest.provenance().lastContainedOffset())) {
                     return;
                 }
-                log.info("handleLoadSnapshot: publishing new snapshot image with provenance {}.", image.provenance());
+                log.info("handleLoadSnapshot({}): publishing new snapshot image to {} publisher(s).",
+                        snapshotName, publishers.size());
                 for (MetadataPublisher publisher : publishers.values()) {
                     try {
                         publisher.onMetadataUpdate(delta, image, manifest);
@@ -446,6 +449,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     }
                 }
                 metrics.updateLastAppliedImageProvenance(image.provenance());
+                metrics.setCurrentMetadataVersion(image.features().metadataVersion());
                 if (uninitializedPublishers.isEmpty()) {
                     scheduleInitializeNewPublishers(0);
                 }

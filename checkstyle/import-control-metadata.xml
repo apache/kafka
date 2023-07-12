@@ -63,7 +63,6 @@
     </subpackage>
 
     <subpackage name="controller">
-        <allow pkg="com.yammer.metrics"/>
         <allow pkg="org.apache.kafka.clients" />
         <allow pkg="org.apache.kafka.clients.admin" />
         <allow pkg="org.apache.kafka.common.acl" />
@@ -73,7 +72,6 @@
         <allow pkg="org.apache.kafka.common.internals" />
         <allow pkg="org.apache.kafka.common.message" />
         <allow pkg="org.apache.kafka.common.metadata" />
-        <allow pkg="org.apache.kafka.common.metrics" />
         <allow pkg="org.apache.kafka.common.network" />
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.common.quota" />
@@ -93,13 +91,17 @@
         <allow pkg="org.apache.kafka.server.common" />
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="org.apache.kafka.server.fault" />
-        <allow pkg="org.apache.kafka.server.metrics" />
         <allow pkg="org.apache.kafka.server.mutable" />
         <allow pkg="org.apache.kafka.server.policy"/>
         <allow pkg="org.apache.kafka.server.util"/>
         <allow pkg="org.apache.kafka.snapshot" />
         <allow pkg="org.apache.kafka.test" />
         <allow pkg="org.apache.kafka.timeline" />
+        <subpackage name="metrics">
+            <allow pkg="com.yammer.metrics"/>
+            <allow pkg="org.apache.kafka.common.metrics" />
+            <allow pkg="org.apache.kafka.server.metrics" />
+        </subpackage>
     </subpackage>
 
     <subpackage name="image">
@@ -122,6 +124,14 @@
         <allow pkg="org.apache.kafka.server.util" />
         <allow pkg="org.apache.kafka.snapshot" />
         <allow pkg="org.apache.kafka.test" />
+        <subpackage name="loader">
+            <subpackage name="metrics">
+                <allow pkg="com.yammer.metrics"/>
+                <allow pkg="org.apache.kafka.common.metrics" />
+                <allow pkg="org.apache.kafka.controller.metrics" />
+                <allow pkg="org.apache.kafka.server.metrics" />
+            </subpackage>
+        </subpackage>
     </subpackage>
 
     <subpackage name="metadata">
