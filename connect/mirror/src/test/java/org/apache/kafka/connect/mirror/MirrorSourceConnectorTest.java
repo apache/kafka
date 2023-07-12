@@ -48,6 +48,7 @@ import org.mockito.ArgumentMatchers;
 
 import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
@@ -85,6 +86,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class MirrorSourceConnectorTest {
@@ -706,7 +709,7 @@ public class MirrorSourceConnectorTest {
 
         // First topic acl info update when starting `syncTopicAcls` thread
         int newAddCount = connector.updateTopicAcls(filteredBindings);
-        assertEquals(connector.knownTopicAclBindings(), new HashSet<>(filteredBindings));
+        assertEquals(new HashSet<>(filteredBindings), connector.knownTopicAclBindings());
         assertEquals(filteredBindings.size(), newAddCount);
 
         List<AclBinding> newAddBindings = new ArrayList<>();
@@ -718,7 +721,7 @@ public class MirrorSourceConnectorTest {
 
         // The next increment topic acl info update
         newAddCount = connector.updateTopicAcls(filteredBindings);
-        assertEquals(connector.knownTopicAclBindings(), new HashSet<>(filteredBindings));
+        assertEquals(new HashSet<>(filteredBindings), connector.knownTopicAclBindings());
         assertEquals(newAddBindings.size(), newAddCount);
 
         // The next increment topic acl info update, contains failed create
@@ -732,8 +735,13 @@ public class MirrorSourceConnectorTest {
         Map<AclBinding, KafkaFuture<Void>> futures = new HashMap<>();
         KafkaFutureImpl<Void> futureForBinding5 = new KafkaFutureImpl<>();
         KafkaFutureImpl<Void> futureForBinding6 = new KafkaFutureImpl<>();
-        futureForBinding5.complete(null);
-        futureForBinding6.completeExceptionally(new ApiException("mock create acl failure."));
+        ExecutorService singleThread = Executors.newSingleThreadExecutor();
+        // Delayed completion of `createAclRequest` for simulating actual scenarios
+        singleThread.submit(() -> {
+            sleep(5000);
+            futureForBinding5.complete(null);
+            futureForBinding6.completeExceptionally(new ApiException("mock create acl failure."));
+        });
         futures.put(binding5, futureForBinding5);
         futures.put(binding6, futureForBinding6);
         CreateAclsResult mockCreateAclsResult = new CreateAclsResult(new HashMap<>(futures));
@@ -743,7 +751,7 @@ public class MirrorSourceConnectorTest {
         int newAddSuccessCount = connector.updateTopicAcls(filteredBindings);
         Set<AclBinding> bindingToVerify = new HashSet<>(filteredBindings);
         bindingToVerify.remove(binding6);
-        assertEquals(connector.knownTopicAclBindings(), bindingToVerify);
+        assertEquals(bindingToVerify, connector.knownTopicAclBindings());
         assertEquals(1, newAddSuccessCount);
     }
 }

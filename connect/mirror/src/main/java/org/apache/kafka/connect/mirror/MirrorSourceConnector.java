@@ -20,10 +20,12 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map.Entry;
 
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.connect.connector.Task;
@@ -74,6 +76,7 @@ import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
 
 /** Replicate data, configuration, and ACLs between clusters.
@@ -590,12 +593,16 @@ public class MirrorSourceConnector extends SourceConnector {
         int newBindCount = addBindings.size();
         if (!addBindings.isEmpty()) {
             log.info("Syncing new found {} topic ACL bindings.", newBindCount);
-            targetAdminClient.createAcls(addBindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+            Map<AclBinding, KafkaFuture<Void>> futureMap = targetAdminClient.createAcls(addBindings).values();
+            futureMap.forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {
                     log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
                     failedBindings.add(k);
                 }
             }));
+            while (!futureMap.values().stream().allMatch(Future::isDone)) {
+                sleep(1000);
+            }
             knownTopicAclBindings = new HashSet<>(bindings);
             knownTopicAclBindings.removeAll(failedBindings);
         } else {
