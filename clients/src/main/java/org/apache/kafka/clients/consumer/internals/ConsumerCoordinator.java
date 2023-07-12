@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.LinkedHashSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -1654,7 +1655,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             for (final String topic : subscription.metadataTopics()) {
                 final List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
                 if (partitions != null) {
-                    final Set<PartitionRack> partitionRacks = new HashSet<>(partitions.size() * 3);
+                    // we use a LinkedHashSet to improve iteration performance, even though we don't care about the order
+                    final Set<PartitionRack> partitionRacks = new LinkedHashSet<>(partitions.size() * 3);
                     for (final PartitionInfo p : partitions) {
                         if (clientRack.isPresent() && p.replicas() != null) {
                             for (final Node node : p.replicas()) {
