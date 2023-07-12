@@ -78,6 +78,8 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
+import org.mockito.ArgumentMatchers.{any, anyBoolean}
+import org.mockito.Mockito
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1409,73 +1411,33 @@ object TestUtils extends Logging {
                        interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                        recoveryThreadsPerDataDir: Int = 4,
                        log: Option[UnifiedLog] = None): LogManager = {
-    if (log.isEmpty) {
-      new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
-        initialOfflineDirs = Array.empty[File],
-        configRepository = configRepository,
-        initialDefaultConfig = defaultConfig,
-        cleanerConfig = cleanerConfig,
-        recoveryThreadsPerDataDir = recoveryThreadsPerDataDir,
-        flushCheckMs = 1000L,
-        flushRecoveryOffsetCheckpointMs = 10000L,
-        flushStartOffsetCheckpointMs = 10000L,
-        retentionCheckMs = 1000L,
-        maxTransactionTimeoutMs = 5 * 60 * 1000,
-        producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
-        producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
-        scheduler = time.scheduler,
-        time = time,
-        brokerTopicStats = new BrokerTopicStats,
-        logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-        keepPartitionMetadataFile = true,
-        interBrokerProtocolVersion = interBrokerProtocolVersion,
-        remoteStorageSystemEnable = false)
-    } else {
-      new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
-        initialOfflineDirs = Array.empty[File],
-        configRepository = configRepository,
-        initialDefaultConfig = defaultConfig,
-        cleanerConfig = cleanerConfig,
-        recoveryThreadsPerDataDir = recoveryThreadsPerDataDir,
-        flushCheckMs = 1000L,
-        flushRecoveryOffsetCheckpointMs = 10000L,
-        flushStartOffsetCheckpointMs = 10000L,
-        retentionCheckMs = 1000L,
-        maxTransactionTimeoutMs = 5 * 60 * 1000,
-        producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
-        producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
-        scheduler = time.scheduler,
-        time = time,
-        brokerTopicStats = new BrokerTopicStats,
-        logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-        keepPartitionMetadataFile = true,
-        interBrokerProtocolVersion = interBrokerProtocolVersion,
-        remoteStorageSystemEnable = false) {
-        override def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false, topicId: Option[Uuid]): UnifiedLog = {
-          log.get
-        }
-      }
-    }
-//    new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
-//                   initialOfflineDirs = Array.empty[File],
-//                   configRepository = configRepository,
-//                   initialDefaultConfig = defaultConfig,
-//                   cleanerConfig = cleanerConfig,
-//                   recoveryThreadsPerDataDir = recoveryThreadsPerDataDir,
-//                   flushCheckMs = 1000L,
-//                   flushRecoveryOffsetCheckpointMs = 10000L,
-//                   flushStartOffsetCheckpointMs = 10000L,
-//                   retentionCheckMs = 1000L,
-//                   maxTransactionTimeoutMs = 5 * 60 * 1000,
-//                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
-//                   producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
-//                   scheduler = time.scheduler,
-//                   time = time,
-//                   brokerTopicStats = new BrokerTopicStats,
-//                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-//                   keepPartitionMetadataFile = true,
-//                   interBrokerProtocolVersion = interBrokerProtocolVersion,
-//                   remoteStorageSystemEnable = false)
+    val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
+                   initialOfflineDirs = Array.empty[File],
+                   configRepository = configRepository,
+                   initialDefaultConfig = defaultConfig,
+                   cleanerConfig = cleanerConfig,
+                   recoveryThreadsPerDataDir = recoveryThreadsPerDataDir,
+                   flushCheckMs = 1000L,
+                   flushRecoveryOffsetCheckpointMs = 10000L,
+                   flushStartOffsetCheckpointMs = 10000L,
+                   retentionCheckMs = 1000L,
+                   maxTransactionTimeoutMs = 5 * 60 * 1000,
+                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
+                   producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+                   scheduler = time.scheduler,
+                   time = time,
+                   brokerTopicStats = new BrokerTopicStats,
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+                   keepPartitionMetadataFile = true,
+                   interBrokerProtocolVersion = interBrokerProtocolVersion,
+                   remoteStorageSystemEnable = false)
+
+    if (log.isDefined) {
+      val spyLogManager = Mockito.spy(logManager)
+      Mockito.doReturn(log.get).when(spyLogManager).getOrCreateLog(any(), anyBoolean(), anyBoolean(), any)
+      spyLogManager
+    } else
+      logManager
   }
 
   class MockAlterPartitionManager extends AlterPartitionManager {
