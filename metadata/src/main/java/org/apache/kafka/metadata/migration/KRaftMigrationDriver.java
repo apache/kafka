@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
+import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -79,6 +80,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final LegacyPropagator propagator;
     private final ZkRecordConsumer zkRecordConsumer;
     private final KafkaEventQueue eventQueue;
+    private final QuorumControllerMetrics controllerMetrics;
     private final FaultHandler faultHandler;
     /**
      * A callback for when the migration state has been recovered from ZK. This is used to delay the installation of this
@@ -100,14 +102,16 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         Consumer<MetadataPublisher> initialZkLoadHandler,
         FaultHandler faultHandler,
         QuorumFeatures quorumFeatures,
+        QuorumControllerMetrics controllerMetrics,
         Time time
-    ) {
+        ) {
         this.nodeId = nodeId;
         this.zkRecordConsumer = zkRecordConsumer;
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
         this.time = time;
         this.logContext = new LogContext("[KRaftMigrationDriver id=" + nodeId + "] ");
+        this.controllerMetrics = controllerMetrics;
         this.log = logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
@@ -128,9 +132,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         LegacyPropagator propagator,
         Consumer<MetadataPublisher> initialZkLoadHandler,
         FaultHandler faultHandler,
-        QuorumFeatures quorumFeatures
+        QuorumFeatures quorumFeatures,
+        QuorumControllerMetrics controllerMetrics
     ) {
-        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, Time.SYSTEM);
+        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, controllerMetrics, Time.SYSTEM);
     }
 
 
@@ -699,6 +704,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Persist the offset of the metadata that was written to ZK
             ZkMigrationLeadershipState zkStateAfterDualWrite = migrationLeadershipState.withKRaftMetadataOffsetAndEpoch(
                 image.highestOffsetAndEpoch().offset(), image.highestOffsetAndEpoch().epoch());
+
+            controllerMetrics.updateDualWriteOffset(image.highestOffsetAndEpoch().offset());
+
             applyMigrationOperation("Updating ZK migration state after " + metadataType,
                 state -> zkMigrationClient.setMigrationRecoveryState(zkStateAfterDualWrite));
 
