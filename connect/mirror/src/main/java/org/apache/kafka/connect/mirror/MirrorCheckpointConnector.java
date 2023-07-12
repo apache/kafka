@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
 import org.slf4j.Logger;
@@ -39,6 +40,9 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.apache.kafka.connect.mirror.Checkpoint.CONSUMER_GROUP_ID_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
@@ -130,6 +134,27 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public String version() {
         return AppInfoParser.getVersion();
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> offsetEntry : offsets.entrySet()) {
+            Map<String, ?> sourcePartition = offsetEntry.getKey();
+            if (sourcePartition == null) {
+                throw new ConnectException("Source partitions may not be null");
+            }
+
+            MirrorUtils.validateSourcePartitionString(sourcePartition, CONSUMER_GROUP_ID_KEY);
+            MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
+            MirrorUtils.validateSourcePartitionPartition(sourcePartition);
+
+            Map<String, ?> sourceOffset = offsetEntry.getValue();
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, false);
+        }
+
+        // We don't actually use these offsets in the task class, so no additional effort is required beyond just validating
+        // the format of the user-supplied offsets
+        return true;
     }
 
     private void refreshConsumerGroups()

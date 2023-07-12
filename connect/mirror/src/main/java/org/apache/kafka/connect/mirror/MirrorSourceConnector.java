@@ -75,6 +75,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
+import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
 
 /** Replicate data, configuration, and ACLs between clusters.
  *
@@ -266,6 +268,27 @@ public class MirrorSourceConnector extends SourceConnector {
         return consumerUsesReadCommitted(props)
                 ? ExactlyOnceSupport.SUPPORTED
                 : ExactlyOnceSupport.UNSUPPORTED;
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> offsetEntry : offsets.entrySet()) {
+            Map<String, ?> sourcePartition = offsetEntry.getKey();
+            if (sourcePartition == null) {
+                throw new ConnectException("Source partitions may not be null");
+            }
+
+            MirrorUtils.validateSourcePartitionString(sourcePartition, SOURCE_CLUSTER_KEY);
+            MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
+            MirrorUtils.validateSourcePartitionPartition(sourcePartition);
+
+            Map<String, ?> sourceOffset = offsetEntry.getValue();
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, true);
+        }
+
+        // We never commit offsets with our source consumer, so no additional effort is required beyond just validating
+        // the format of the user-supplied offsets
+        return true;
     }
 
     private boolean consumerUsesReadCommitted(Map<String, String> props) {
