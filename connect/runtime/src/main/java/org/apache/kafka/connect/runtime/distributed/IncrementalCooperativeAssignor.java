@@ -442,7 +442,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks.Builder lostAssignmentsToReassign,
                                          List<WorkerLoad> completeWorkerAssignment) {
-        // There are no lost assignments and there have been no successive revoking rebalances
+        // There are no lost assignments and there were no revocations in the previous round
         if (lostAssignments.isEmpty() && !revokedInPrevious) {
             resetDelay();
             return;
