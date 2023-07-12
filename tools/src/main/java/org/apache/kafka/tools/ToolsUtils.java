@@ -104,7 +104,7 @@ public class ToolsUtils {
         rows.forEach(row -> printRow(columnLengths, row, out));
     }
 
-    public static void validatePortOrDie(OptionParser parser, String hostPort) {
+    public static void validatePortOrExit(OptionParser parser, String hostPort) {
         String[] hostPorts;
 
         if (hostPort.contains(",")) {

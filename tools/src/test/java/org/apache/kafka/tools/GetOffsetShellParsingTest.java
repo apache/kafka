@@ -221,7 +221,7 @@ public class GetOffsetShellParsingTest {
     }
 
     @Test
-    public void testPartitionsSetFilter() {
+    public void testPartitionsSetFilter() throws TerseException {
         TopicPartitionFilter partitionsSetFilter = getOffsetShell.createTopicPartitionFilterWithTopicAndPartitionPattern("topic", "1,3,5");
 
         assertFalse(partitionsSetFilter.isTopicPartitionAllowed(getTopicPartition("topic", 0)));
@@ -239,7 +239,7 @@ public class GetOffsetShellParsingTest {
 
     @Test
     public void testInvalidTimeValue() {
-        assertThrows(IllegalArgumentException.class, () -> GetOffsetShell.execute("--bootstrap-server", "localhost:9092", "--time", "invalid"));
+        assertThrows(TerseException.class, () -> GetOffsetShell.execute("--bootstrap-server", "localhost:9092", "--time", "invalid"));
     }
 
     private TopicPartition getTopicPartition(String topic, Integer partition) {

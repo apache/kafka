@@ -17,8 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
@@ -33,12 +31,13 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.PartitionFilter;
 import org.apache.kafka.server.util.PartitionFilter.PartitionRangeFilter;
 import org.apache.kafka.server.util.PartitionFilter.PartitionsSetFilter;
 import org.apache.kafka.server.util.PartitionFilter.UniquePartitionFilter;
-import org.apache.kafka.server.util.TopicFilter.IncludeList;
+import org.apache.kafka.server.util.TopicFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter.CompositeTopicPartitionFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter.TopicFilterAndPartitionFilter;
@@ -59,7 +58,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class GetOffsetShell {
-    Pattern topicPartitionPattern = Pattern.compile("([^:,]*)(?::(?:([0-9]*)|(?:([0-9]*)-([0-9]*))))?");
+    private static final Pattern TOPIC_PARTITION_PATTERN = Pattern.compile("([^:,]*)(?::(?:([0-9]*)|(?:([0-9]*)-([0-9]*))))?");
 
     public static void main(String... args) {
         Exit.exit(mainNoExit(args));
@@ -69,6 +68,9 @@ public class GetOffsetShell {
         try {
             execute(args);
             return 0;
+        } catch (TerseException e) {
+            System.err.println(e.getMessage());
+            return 1;
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -76,12 +78,12 @@ public class GetOffsetShell {
         }
     }
 
-    static void execute(String... args) throws IOException, ExecutionException, InterruptedException {
+    static void execute(String... args) throws IOException, ExecutionException, InterruptedException, TerseException {
         GetOffsetShell getOffsetShell = new GetOffsetShell();
 
-        getOffsetShell.parseArgs(args);
+        GetOffsetShellOptions options = new GetOffsetShellOptions(args);
 
-        Map<TopicPartition, Long> partitionOffsets = getOffsetShell.fetchOffsets();
+        Map<TopicPartition, Long> partitionOffsets = getOffsetShell.fetchOffsets(options);
 
         for (Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
             TopicPartition topic = entry.getKey();
@@ -90,97 +92,144 @@ public class GetOffsetShell {
         }
     }
 
-    private OptionSet options;
-    private OptionSpec<String> topicPartitionsOpt;
-    private OptionSpec<String> topicOpt;
-    private OptionSpec<String> partitionsOpt;
-    private OptionSpec<String> timeOpt;
-    private OptionSpec<String> commandConfigOpt;
-    private OptionSpec<String> effectiveBrokerListOpt;
-    private OptionSpecBuilder excludeInternalTopicsOpt;
+    private static class GetOffsetShellOptions extends CommandDefaultOptions {
+        private final OptionSpec<String> brokerListOpt;
+        private final OptionSpec<String> bootstrapServerOpt;
+        private final OptionSpec<String> topicPartitionsOpt;
+        private final OptionSpec<String> topicOpt;
+        private final OptionSpec<String> partitionsOpt;
+        private final OptionSpec<String> timeOpt;
+        private final OptionSpec<String> commandConfigOpt;
+        private final OptionSpec<String> effectiveBrokerListOpt;
+        private final OptionSpecBuilder excludeInternalTopicsOpt;
 
-    public void parseArgs(final String[] args) {
-        final OptionParser parser = new OptionParser(false);
+        public GetOffsetShellOptions(String[] args) {
+            super(args);
 
-        OptionSpec<String> brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
-                .withRequiredArg()
-                .describedAs("HOST1:PORT1,...,HOST3:PORT3")
-                .ofType(String.class);
-        OptionSpec<String> bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
-                .requiredUnless("broker-list")
-                .withRequiredArg()
-                .describedAs("HOST1:PORT1,...,HOST3:PORT3")
-                .ofType(String.class);
-        topicPartitionsOpt = parser.accepts("topic-partitions", "Comma separated list of topic-partition patterns to get the offsets for, with the format of '" + topicPartitionPattern + "'." +
-                        " The first group is an optional regex for the topic name, if omitted, it matches any topic name." +
-                        " The section after ':' describes a 'partition' pattern, which can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions.")
-                .withRequiredArg()
-                .describedAs("topic1:1,topic2:0-3,topic3,topic4:5-,topic5:-3")
-                .ofType(String.class);
-        topicOpt = parser.accepts("topic", "The topic to get the offsets for. It also accepts a regular expression. If not present, all authorized topics are queried. Cannot be used if --topic-partitions is present.")
-                .withRequiredArg()
-                .describedAs("topic")
-                .ofType(String.class);
-        partitionsOpt = parser.accepts("partitions", "Comma separated list of partition ids to get the offsets for. If not present, all partitions of the authorized topics are queried. Cannot be used if --topic-partitions is present.")
-                .withRequiredArg()
-                .describedAs("partition ids")
-                .ofType(String.class);
-        timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
-                .withRequiredArg()
-                .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp")
-                .ofType(String.class)
-                .defaultsTo("latest");
-        commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
-                .withRequiredArg()
-                .describedAs("config file")
-                .ofType(String.class);
-        excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", "By default, internal topics are included. If specified, internal topics are excluded.");
+            brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+                    .withRequiredArg()
+                    .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+                    .ofType(String.class);
+            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+                    .requiredUnless("broker-list")
+                    .withRequiredArg()
+                    .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+                    .ofType(String.class);
+            topicPartitionsOpt = parser.accepts("topic-partitions", "Comma separated list of topic-partition patterns to get the offsets for, with the format of '" + TOPIC_PARTITION_PATTERN + "'." +
+                            " The first group is an optional regex for the topic name, if omitted, it matches any topic name." +
+                            " The section after ':' describes a 'partition' pattern, which can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions.")
+                    .withRequiredArg()
+                    .describedAs("topic1:1,topic2:0-3,topic3,topic4:5-,topic5:-3")
+                    .ofType(String.class);
+            topicOpt = parser.accepts("topic", "The topic to get the offsets for. It also accepts a regular expression. If not present, all authorized topics are queried. Cannot be used if --topic-partitions is present.")
+                    .withRequiredArg()
+                    .describedAs("topic")
+                    .ofType(String.class);
+            partitionsOpt = parser.accepts("partitions", "Comma separated list of partition ids to get the offsets for. If not present, all partitions of the authorized topics are queried. Cannot be used if --topic-partitions is present.")
+                    .withRequiredArg()
+                    .describedAs("partition ids")
+                    .ofType(String.class);
+            timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
+                    .withRequiredArg()
+                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp")
+                    .ofType(String.class)
+                    .defaultsTo("latest");
+            commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
+                    .withRequiredArg()
+                    .describedAs("config file")
+                    .ofType(String.class);
+            excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", "By default, internal topics are included. If specified, internal topics are excluded.");
 
-        if (args.length == 0) {
-            CommandLineUtils.printUsageAndExit(parser, "An interactive shell for getting topic-partition offsets.");
+            if (args.length == 0) {
+                CommandLineUtils.printUsageAndExit(parser, "An interactive shell for getting topic-partition offsets.");
+            }
+
+            options = parser.parse(args);
+
+            if (options.has(bootstrapServerOpt)) {
+                effectiveBrokerListOpt = bootstrapServerOpt;
+            } else {
+                effectiveBrokerListOpt = brokerListOpt;
+            }
+
+            CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
+
+            String brokerList = options.valueOf(effectiveBrokerListOpt);
+
+            ToolsUtils.validatePortOrExit(parser, brokerList);
         }
 
-        options = parser.parse(args);
-
-        if (options.has(bootstrapServerOpt)) {
-            effectiveBrokerListOpt = bootstrapServerOpt;
-        } else {
-            effectiveBrokerListOpt = brokerListOpt;
+        public boolean hasTopicPartitionsOpt() {
+            return options.has(topicPartitionsOpt);
         }
 
-        CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
+        public String topicPartitionsOpt() {
+            return options.valueOf(topicPartitionsOpt);
+        }
 
-        String brokerList = options.valueOf(effectiveBrokerListOpt);
+        public boolean hasTopicOpt() {
+            return options.has(topicOpt);
+        }
 
-        ToolsUtils.validatePortOrDie(parser, brokerList);
+        public String topicOpt() {
+            return options.valueOf(topicOpt);
+        }
+
+        public boolean hasPartitionsOpt() {
+            return options.has(partitionsOpt);
+        }
+
+        public String partitionsOpt() {
+            return options.valueOf(partitionsOpt);
+        }
+
+        public String timeOpt() {
+            return options.valueOf(timeOpt);
+        }
+
+        public boolean hasCommandConfigOpt() {
+            return options.has(commandConfigOpt);
+        }
+
+        public String commandConfigOpt() {
+            return options.valueOf(commandConfigOpt);
+        }
+
+        public String effectiveBrokerListOpt() {
+            return options.valueOf(effectiveBrokerListOpt);
+        }
+
+        public boolean hasExcludeInternalTopicsOpt() {
+            return options.has(excludeInternalTopicsOpt);
+        }
     }
 
-    public Map<TopicPartition, Long> fetchOffsets() throws IOException, ExecutionException, InterruptedException {
+    public Map<TopicPartition, Long> fetchOffsets(GetOffsetShellOptions options) throws IOException, ExecutionException, InterruptedException, TerseException {
         String clientId = "GetOffsetShell";
-        String brokerList = options.valueOf(effectiveBrokerListOpt);
+        String brokerList = options.effectiveBrokerListOpt();
 
-        if (options.has(topicPartitionsOpt) && (options.has(topicOpt) || options.has(partitionsOpt))) {
-            throw new IllegalArgumentException("--topic-partitions cannot be used with --topic or --partitions");
+        if (options.hasTopicPartitionsOpt() && (options.hasTopicOpt() || options.hasPartitionsOpt())) {
+            throw new TerseException("--topic-partitions cannot be used with --topic or --partitions");
         }
 
-        boolean excludeInternalTopics = options.has(excludeInternalTopicsOpt);
-        OffsetSpec offsetSpec = parseOffsetSpec(options.valueOf(timeOpt));
+        boolean excludeInternalTopics = options.hasExcludeInternalTopicsOpt();
+        OffsetSpec offsetSpec = parseOffsetSpec(options.timeOpt());
 
         TopicPartitionFilter topicPartitionFilter;
 
-        if (options.has(topicPartitionsOpt)) {
-            topicPartitionFilter = createTopicPartitionFilterWithPatternList(options.valueOf(topicPartitionsOpt));
+        if (options.hasTopicPartitionsOpt()) {
+            topicPartitionFilter = createTopicPartitionFilterWithPatternList(options.topicPartitionsOpt());
         } else {
             topicPartitionFilter = createTopicPartitionFilterWithTopicAndPartitionPattern(
-                    options.has(topicOpt) ? options.valueOf(topicOpt) : null,
-                    options.valueOf(partitionsOpt)
+                    options.hasTopicOpt() ? options.topicOpt() : null,
+                    options.partitionsOpt()
             );
         }
 
         Properties config;
 
-        if (options.has(commandConfigOpt)) {
-            config = Utils.loadProps(options.valueOf(commandConfigOpt));
+        if (options.hasCommandConfigOpt()) {
+            config = Utils.loadProps(options.commandConfigOpt());
         } else {
             config = new Properties();
         }
@@ -192,7 +241,7 @@ public class GetOffsetShell {
             List<TopicPartition> partitionInfos = listPartitionInfos(adminClient, topicPartitionFilter, excludeInternalTopics);
 
             if (partitionInfos.isEmpty()) {
-                throw new IllegalArgumentException("Could not match any topic-partitions with the specified filters");
+                throw new TerseException("Could not match any topic-partitions with the specified filters");
             }
 
             Map<TopicPartition, OffsetSpec> timestampsToSearch = partitionInfos.stream().collect(Collectors.toMap(tp -> tp, tp -> offsetSpec));
@@ -223,7 +272,7 @@ public class GetOffsetShell {
         }
     }
 
-    private OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) {
+    private OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
         switch (listOffsetsTimestamp) {
             case "earliest":
                 return OffsetSpec.earliest();
@@ -237,8 +286,8 @@ public class GetOffsetShell {
                 try {
                     timestamp = Long.parseLong(listOffsetsTimestamp);
                 } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Malformed time argument " + listOffsetsTimestamp + ". " +
-                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp, or a specified long format timestamp", e);
+                    throw new TerseException("Malformed time argument " + listOffsetsTimestamp + ". " +
+                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp, or a specified long format timestamp");
                 }
 
                 if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
@@ -263,7 +312,13 @@ public class GetOffsetShell {
      */
     public TopicPartitionFilter createTopicPartitionFilterWithPatternList(String topicPartitions) {
         List<String> ruleSpecs = Arrays.asList(topicPartitions.split(","));
-        List<TopicPartitionFilter> rules = ruleSpecs.stream().map(this::parseRuleSpec).collect(Collectors.toList());
+        List<TopicPartitionFilter> rules = ruleSpecs.stream().map(ruleSpec -> {
+            try {
+                return parseRuleSpec(ruleSpec);
+            } catch (TerseException e) {
+                throw new RuntimeException(e);
+            }
+        }).collect(Collectors.toList());
 
         return new CompositeTopicPartitionFilter(rules);
     }
@@ -271,14 +326,14 @@ public class GetOffsetShell {
     /**
      * Creates a topic-partition filter based on a topic pattern and a set of partition ids.
      */
-    public TopicPartitionFilter createTopicPartitionFilterWithTopicAndPartitionPattern(String topicOpt, String partitionIds) {
+    public TopicPartitionFilter createTopicPartitionFilterWithTopicAndPartitionPattern(String topicOpt, String partitionIds) throws TerseException {
         return new TopicFilterAndPartitionFilter(
-                new IncludeList(topicOpt != null ? topicOpt : ".*"),
+                new TopicFilter.IncludeList(topicOpt != null ? topicOpt : ".*"),
                 new PartitionsSetFilter(createPartitionSet(partitionIds))
         );
     }
 
-    private Set<Integer> createPartitionSet(String partitionsString) {
+    private Set<Integer> createPartitionSet(String partitionsString) throws TerseException {
         Set<Integer> partitions;
 
         if (partitionsString == null || partitionsString.isEmpty()) {
@@ -287,7 +342,7 @@ public class GetOffsetShell {
             try {
                 partitions = Arrays.stream(partitionsString.split(",")).map(Integer::parseInt).collect(Collectors.toSet());
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("--partitions expects a comma separated list of numeric " +
+                throw new TerseException("--partitions expects a comma separated list of numeric " +
                         "partition ids, but received: " + partitionsString);
             }
         }
@@ -314,15 +369,15 @@ public class GetOffsetShell {
         ).collect(Collectors.toList());
     }
 
-    private TopicPartitionFilter parseRuleSpec(String ruleSpec) {
-        Matcher matcher = topicPartitionPattern.matcher(ruleSpec);
+    private TopicPartitionFilter parseRuleSpec(String ruleSpec) throws TerseException, RuntimeException {
+        Matcher matcher = TOPIC_PARTITION_PATTERN.matcher(ruleSpec);
 
         if (!matcher.matches())
-            throw new IllegalArgumentException("Invalid rule specification: " + ruleSpec);
+            throw new TerseException("Invalid rule specification: " + ruleSpec);
 
         IntFunction<String> group = (int g) -> (matcher.group(g) != null && !matcher.group(g).isEmpty()) ? matcher.group(g) : null;
 
-        IncludeList topicFilter = group.apply(1) != null ? new IncludeList(group.apply(1)) : new IncludeList(".*");
+        TopicFilter.IncludeList topicFilter = group.apply(1) != null ? new TopicFilter.IncludeList(group.apply(1)) : new TopicFilter.IncludeList(".*");
 
         PartitionFilter partitionFilter;
 
