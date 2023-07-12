@@ -320,7 +320,7 @@ public class MirrorSourceConnector extends SourceConnector {
         // or if topic-partitions are missing from the target cluster
         if (!knownSourceTopicPartitionsSet.equals(sourceTopicPartitionsSet) || !missingInTarget.isEmpty()) {
 
-            Set<TopicPartition> newTopicPartitions = sourceTopicPartitionsSet;
+            Set<TopicPartition> newTopicPartitions = new HashSet<>(sourceTopicPartitions);
             newTopicPartitions.removeAll(knownSourceTopicPartitionsSet);
 
             Set<TopicPartition> deletedTopicPartitions = knownSourceTopicPartitionsSet;
