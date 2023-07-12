@@ -711,9 +711,9 @@ class ReplicaManager(val config: KafkaConfig,
         if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
           (entriesPerPartition, Map.empty[TopicPartition, MemoryRecords], Map.empty[TopicPartition, Errors])
         else {
-          val verifiedEntries: mutable.Map[TopicPartition, MemoryRecords] = mutable.Map[TopicPartition, MemoryRecords]()
-          val unverifiedEntries: mutable.Map[TopicPartition, MemoryRecords] = mutable.Map[TopicPartition, MemoryRecords]()
-          val errorEntries: mutable.Map[TopicPartition, Errors] = mutable.Map[TopicPartition, Errors]()
+          val verifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
+          val unverifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
+          val errorEntries = mutable.Map[TopicPartition, Errors]()
           partitionEntriesForVerification(verificationGuards, entriesPerPartition, verifiedEntries, unverifiedEntries, errorEntries)
           (verifiedEntries.toMap, unverifiedEntries.toMap, errorEntries.toMap)
         }
