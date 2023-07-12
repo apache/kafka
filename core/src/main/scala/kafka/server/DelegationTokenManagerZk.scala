@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.utils.Json
+import kafka.utils.{CoreUtils, Json}
 import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.protocol.Errors
@@ -114,12 +114,6 @@ class DelegationTokenManagerZk(config: KafkaConfig,
     }
   }
 
-  override def shutdown(): Unit = {
-    if (config.tokenAuthEnabled) {
-      if (tokenChangeListener != null) tokenChangeListener.close()
-    }
-  }
-
   private def loadCache(): Unit = {
     println("Nothing to load")
     lock.synchronized {
@@ -148,6 +142,56 @@ class DelegationTokenManagerZk(config: KafkaConfig,
         None
     }
   }
+  
+  override def shutdown(): Unit = {
+    if (config.tokenAuthEnabled) {
+      if (tokenChangeListener != null) tokenChangeListener.close()
+    }
+  }
+
+  /**
+   * @param token
+   */
+  override def updateToken(token: DelegationToken): Unit = {
+    zkClient.setOrCreateDelegationToken(token)
+    updateCache(token)
+    zkClient.createTokenChangeNotification(token.tokenInfo.tokenId())
+  }
+
+  /**
+   *
+   * @param owner
+   * @param renewers
+   * @param maxLifeTimeMs
+   * @param responseCallback
+   */
+  override def createToken(owner: KafkaPrincipal,
+                  tokenRequester: KafkaPrincipal,
+                  renewers: List[KafkaPrincipal],
+                  maxLifeTimeMs: Long,
+                  responseCallback: CreateResponseCallback): Unit = {
+
+    if (!config.tokenAuthEnabled) {
+      responseCallback(CreateTokenResult(owner, tokenRequester, -1, -1, -1, "", Array[Byte](), Errors.DELEGATION_TOKEN_AUTH_DISABLED))
+    } else {
+      lock.synchronized {
+        val tokenId = CoreUtils.generateUuidAsBase64()
+
+        val issueTimeStamp = time.milliseconds
+        val maxLifeTime = if (maxLifeTimeMs <= 0) tokenMaxLifetime else Math.min(maxLifeTimeMs, tokenMaxLifetime)
+        val maxLifeTimeStamp = issueTimeStamp + maxLifeTime
+        val expiryTimeStamp = Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
+
+        val tokenInfo = new TokenInformation(tokenId, owner, tokenRequester, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
+
+        val hmac = createHmac(tokenId, secretKey)
+        val token = new DelegationToken(tokenInfo, hmac)
+        updateToken(token)
+        info(s"Created a delegation token: $tokenId for owner: $owner")
+        responseCallback(CreateTokenResult(owner, tokenRequester, issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE))
+      }
+    }
+  }
 
   /**
    *
@@ -166,15 +210,6 @@ class DelegationTokenManagerZk(config: KafkaConfig,
         error("Exception while getting token for hmac", e)
         None
     }
-  }
-
-  /**
-   * @param token
-   */
-  override def updateToken(token: DelegationToken): Unit = {
-    zkClient.setOrCreateDelegationToken(token)
-    updateCache(token)
-    zkClient.createTokenChangeNotification(token.tokenInfo.tokenId())
   }
 
   /**
