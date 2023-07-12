@@ -94,7 +94,7 @@ public class CoordinatorResult<T, U> {
     public CoordinatorResult(
         List<U> records
     ) {
-        this(records, null);
+        this(records, null, null);
     }
 
     /**
@@ -133,23 +133,25 @@ public class CoordinatorResult<T, U> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        CoordinatorResult<?, ?> result = (CoordinatorResult<?, ?>) o;
+        CoordinatorResult<?, ?> that = (CoordinatorResult<?, ?>) o;
 
-        if (!records.equals(result.records)) return false;
-        return response.equals(result.response);
+        if (!Objects.equals(records, that.records)) return false;
+        if (!Objects.equals(response, that.response)) return false;
+        return Objects.equals(appendFuture, that.appendFuture);
     }
 
     @Override
     public int hashCode() {
-        int result = records.hashCode();
-        result = 31 * result + response.hashCode();
+        int result = records != null ? records.hashCode() : 0;
+        result = 31 * result + (response != null ? response.hashCode() : 0);
+        result = 31 * result + (appendFuture != null ? appendFuture.hashCode() : 0);
         return result;
     }
-
     @Override
     public String toString() {
-        return "Result(records=" + records +
+        return "CoordinatorResult(records=" + records +
             ", response=" + response +
+            ", appendFuture=" + appendFuture +
             ")";
     }
 }
