@@ -110,9 +110,9 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val password = DelegationTokenManager.createHmac(tokenId, secretKey)
     assertEquals(CreateTokenResult(owner, owner, issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
-    val token = tokenManager.getToken(tokenId)
-    assertFalse(token.isEmpty )
-    assertTrue(password sameElements token.get.hmac)
+    val tokenInfo = tokenCache.token(tokenId)
+    val token = tokenManager.getDelegationToken(tokenInfo)
+    assertTrue(password sameElements token.hmac)
   }
 
   @Test
@@ -197,9 +197,9 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
     //try expire token immediately, even if it is an expired token
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
-    assert(tokenManager.getToken(tokenId).isEmpty)
     assertEquals(Errors.NONE, error)
     assertEquals(time.milliseconds, expiryTimeStamp)
+    assert(tokenCache.token(tokenId) == null)
   }
 
   @Test
@@ -223,7 +223,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     assertNull(tokenInformation)
 
     //check that the token is removed
-    assert(tokenManager.getToken(tokenId).isEmpty)
+    assert(tokenCache.token(tokenId) == null)
   }
 
   @Test

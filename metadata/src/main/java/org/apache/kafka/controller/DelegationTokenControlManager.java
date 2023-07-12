@@ -190,11 +190,10 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
         }
 
-        if (metadataVersion.isDelegationTokenSupported()) {
+        if (!metadataVersion.isDelegationTokenSupported()) {
             // DelegationTokens are not supported in this metadata version
             return ControllerResult.atomicOf(records, responseData.setErrorCode(UNSUPPORTED_VERSION.code()));
         }
-
 
         for (CreatableRenewers renewer : requestData.renewers()) {
             if (renewer.principalType().equals(KafkaPrincipal.USER_TYPE)) {

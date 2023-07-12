@@ -24,7 +24,7 @@ import java.util.Base64
 
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Mac, SecretKey}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMechanism}
@@ -177,6 +177,13 @@ class DelegationTokenManager(val config: KafkaConfig,
   }
 
   /**
+   * @param token
+   */
+  def updateToken(token: DelegationToken): Unit = {
+    updateCache(token)
+  }
+
+  /**
    *
    * @param owner
    * @param renewers
@@ -189,27 +196,8 @@ class DelegationTokenManager(val config: KafkaConfig,
                   renewers: List[KafkaPrincipal],
                   maxLifeTimeMs: Long,
                   responseCallback: CreateResponseCallback): Unit = {
-
-    if (!config.tokenAuthEnabled) {
-      responseCallback(CreateTokenResult(owner, tokenRequester, -1, -1, -1, "", Array[Byte](), Errors.DELEGATION_TOKEN_AUTH_DISABLED))
-    } else {
-      lock.synchronized {
-        val tokenId = CoreUtils.generateUuidAsBase64()
-
-        val issueTimeStamp = time.milliseconds
-        val maxLifeTime = if (maxLifeTimeMs <= 0) tokenMaxLifetime else Math.min(maxLifeTimeMs, tokenMaxLifetime)
-        val maxLifeTimeStamp = issueTimeStamp + maxLifeTime
-        val expiryTimeStamp = Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
-
-        val tokenInfo = new TokenInformation(tokenId, owner, tokenRequester, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
-
-        val hmac = createHmac(tokenId, secretKey)
-        val token = new DelegationToken(tokenInfo, hmac)
-        updateToken(token)
-        info(s"Created a delegation token: $tokenId for owner: $owner")
-        responseCallback(CreateTokenResult(owner, tokenRequester, issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE))
-      }
-    }
+    // Must be forwarded to KRaft Controller or handled in DelegationTokenManagerZk
+    throw new IllegalStateException("API createToken was not forwarded to a handler.")
   }
 
   /**
@@ -227,32 +215,9 @@ class DelegationTokenManager(val config: KafkaConfig,
     throw new IllegalStateException("API renewToken was not forwarded to a handler.")
   }
 
-  /**
-   * @param token
-   */
-  def updateToken(token: DelegationToken): Unit = {
-    updateCache(token)
-  }
-
   def getDelegationToken(tokenInfo: TokenInformation): DelegationToken = {
     val hmac = createHmac(tokenInfo.tokenId, secretKey)
     new DelegationToken(tokenInfo, hmac)
-  }
-
-  /**
-   *
-   * @param tokenId
-   * @return
-   */
-  def getToken(tokenId: String): Option[DelegationToken] = {
-    val tokenInfo = tokenCache.token(tokenId)
-    if (tokenInfo != null) Some(getDelegationToken(tokenInfo)) else None
-  }
-
-  def getAllTokenInformation: List[TokenInformation] = tokenCache.tokens.asScala.toList
-
-  def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] = {
-    getAllTokenInformation.filter(filterToken).map(token => getDelegationToken(token))
   }
 
   /**
@@ -300,6 +265,12 @@ class DelegationTokenManager(val config: KafkaConfig,
         }
       }
     }
+  }
+
+  def getAllTokenInformation: List[TokenInformation] = tokenCache.tokens.asScala.toList
+
+  def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] = {
+    getAllTokenInformation.filter(filterToken).map(token => getDelegationToken(token))
   }
 
 }
