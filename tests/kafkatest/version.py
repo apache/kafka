@@ -245,7 +245,8 @@ LATEST_3_3 = V_3_3_1
 
 # 3.4.x versions
 V_3_4_0 = KafkaVersion("3.4.0")
-LATEST_3_4 = V_3_4_0
+V_3_4_1 = KafkaVersion("3.4.1")
+LATEST_3_4 = V_3_4_1
 
 # 3.5.x versions
 V_3_5_0 = KafkaVersion("3.5.0")
