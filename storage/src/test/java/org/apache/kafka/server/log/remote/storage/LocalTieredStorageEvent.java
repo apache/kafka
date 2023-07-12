@@ -36,7 +36,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
      * The nature of the interaction.
      */
     public enum EventType {
-        OFFLOAD_SEGMENT,
+        COPY_SEGMENT,
         FETCH_SEGMENT,
         FETCH_OFFSET_INDEX,
         FETCH_TIME_INDEX,

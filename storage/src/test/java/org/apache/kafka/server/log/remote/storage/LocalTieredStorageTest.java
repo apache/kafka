@@ -96,8 +96,8 @@ public final class LocalTieredStorageTest {
         storageDir = generateStorageId(testName);
 
         Map<String, Object> config = new HashMap<>();
-        config.put(LocalTieredStorage.STORAGE_DIR_PROP, storageDir);
-        config.put(LocalTieredStorage.DELETE_ON_CLOSE_PROP, "true");
+        config.put(LocalTieredStorage.STORAGE_DIR_CONFIG, storageDir);
+        config.put(LocalTieredStorage.DELETE_ON_CLOSE_CONFIG, "true");
         config.put(LocalTieredStorage.BROKER_ID, 1);
         config.putAll(extraConfig);
 
@@ -248,7 +248,7 @@ public final class LocalTieredStorageTest {
 
     @Test
     public void segmentsAreNotDeletedIfDeleteApiIsDisabled(TestInfo testInfo) throws RemoteStorageException {
-        init(Collections.singletonMap(LocalTieredStorage.ENABLE_DELETE_API_PROP, "false"), testInfo.getDisplayName());
+        init(Collections.singletonMap(LocalTieredStorage.ENABLE_DELETE_API_CONFIG, "false"), testInfo.getDisplayName());
 
         final RemoteLogSegmentId id = newRemoteLogSegmentId();
         final LogSegmentData segment = localLogSegments.nextSegment();
