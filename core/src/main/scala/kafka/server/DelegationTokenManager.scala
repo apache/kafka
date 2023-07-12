@@ -182,6 +182,7 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param renewers
    * @param maxLifeTimeMs
    * @param responseCallback
+   * XXX Move to ZK
    */
   def createToken(owner: KafkaPrincipal,
                   tokenRequester: KafkaPrincipal,

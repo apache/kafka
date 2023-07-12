@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
+import org.apache.kafka.metadata.DelegationTokenData
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
@@ -289,6 +290,25 @@ class ZkMigrationClient(
     })
   }
 
+  def migrateDelegationTokens(
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
+  ): Unit = wrapZkException {
+    val batch = new util.ArrayList[ApiMessageAndVersion]()
+    val tokens = zkClient.getChildren(DelegationTokensZNode.path)
+    for (tokenId <- tokens) {
+      zkClient.getDelegationTokenInfo(tokenId) match {
+        case Some(tokenInformation) => {
+          val newDelegationTokenData = new DelegationTokenData(tokenInformation)
+          batch.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), 0.toShort))
+        }
+        case None =>
+      }
+    }
+    if (!batch.isEmpty) {
+      recordConsumer.accept(batch)
+    }
+  }
+
   override def readAllMetadata(
     batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
     brokerIdConsumer: Consumer[Integer]
@@ -298,6 +318,7 @@ class ZkMigrationClient(
     migrateClientQuotas(batchConsumer)
     migrateProducerId(batchConsumer)
     migrateAcls(batchConsumer)
+    migrateDelegationTokens(batchConsumer)
   }
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
