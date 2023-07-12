@@ -211,19 +211,7 @@ public class Graph<V extends Comparable<V>> {
         }
     }
 
-    private void validateMinCostGraph() {
-        if (isResidualGraph) {
-            throw new IllegalStateException("Should not be residual graph to solve min cost flow");
-        }
-
-        /*
-         Check provided flow satisfying below constraints:
-         1. Input flow and output flow for each node should be the same except for source and destination node
-         2. Output flow of source and input flow of destination should be the same
-        */
-
-        final Map<V, Long> inFlow = new HashMap<>();
-        final Map<V, Long> outFlow = new HashMap<>();
+    private void populateInOutFlow(final Map<V, Long> inFlow, final Map<V, Long> outFlow) {
         for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final V node = nodeEdges.getKey();
             if (node.equals(sinkNode)) {
@@ -250,6 +238,22 @@ public class Graph<V extends Comparable<V>> {
                 }
             }
         }
+    }
+
+    private void validateMinCostGraph() {
+        if (isResidualGraph) {
+            throw new IllegalStateException("Should not be residual graph to solve min cost flow");
+        }
+
+        /*
+         Check provided flow satisfying below constraints:
+         1. Input flow and output flow for each node should be the same except for source and destination node
+         2. Output flow of source and input flow of destination should be the same
+        */
+
+        final Map<V, Long> inFlow = new HashMap<>();
+        final Map<V, Long> outFlow = new HashMap<>();
+        populateInOutFlow(inFlow, outFlow);
 
         for (final Entry<V, Long> in : inFlow.entrySet()) {
             if (in.getKey().equals(sourceNode) || in.getKey().equals(sinkNode)) {
@@ -280,7 +284,7 @@ public class Graph<V extends Comparable<V>> {
             for (final V node : nodes) {
                 final Map<V, V> parentNodes = new HashMap<>();
                 final Map<V, Edge> parentEdges = new HashMap<>();
-                V nodeInCycle = detectNegativeCycles(node, parentNodes, parentEdges);
+                final V nodeInCycle = detectNegativeCycles(node, parentNodes, parentEdges);
                 if (nodeInCycle == null) {
                     continue;
                 }
