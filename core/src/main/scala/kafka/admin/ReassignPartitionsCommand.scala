@@ -20,7 +20,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.ExecutionException
 import kafka.common.AdminCommandFailedException
-import kafka.server.DynamicConfig
+import kafka.server.{KafkaConfig, DynamicConfig}
 import kafka.utils.{CoreUtils, Exit, Json, Logging}
 import kafka.utils.Implicits._
 import kafka.utils.json.JsonValue
@@ -57,9 +57,9 @@ object ReassignPartitionsCommand extends Logging {
 
   // Throttles that are set at the level of an individual broker.
   private[admin] val brokerLevelLeaderThrottle =
-    DynamicConfig.Broker.LeaderReplicationThrottledRateProp
+    KafkaConfig.LeaderReplicationThrottledRateProp
   private[admin] val brokerLevelFollowerThrottle =
-    DynamicConfig.Broker.FollowerReplicationThrottledRateProp
+    KafkaConfig.FollowerReplicationThrottledRateProp
   private[admin] val brokerLevelLogDirThrottle =
     DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp
   private[admin] val brokerLevelThrottles = Seq(

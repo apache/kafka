@@ -35,8 +35,6 @@ object DynamicConfig {
 
   object Broker {
     // Properties
-    val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
-    val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
     val ReplicaAlterLogDirsIoMaxBytesPerSecondProp = "replica.alter.log.dirs.io.max.bytes.per.second"
 
     // Defaults
@@ -55,8 +53,6 @@ object DynamicConfig {
     // Definitions
     val brokerConfigDef = new ConfigDef()
       // Round minimum value down, to make it easier for users.
-      .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
-      .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
       .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
     DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
     val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala

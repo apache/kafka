@@ -219,8 +219,8 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
-      quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
-      quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
+      quotaManagers.leader.updateQuota(upperBound(getOrDefault(KafkaConfig.LeaderReplicationThrottledRateProp).toDouble))
+      quotaManagers.follower.updateQuota(upperBound(getOrDefault(KafkaConfig.FollowerReplicationThrottledRateProp).toDouble))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
     }
   }
