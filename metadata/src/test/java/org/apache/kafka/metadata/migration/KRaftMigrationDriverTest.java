@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
+import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClusterImage;
@@ -63,9 +64,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -88,6 +91,22 @@ public class KRaftMigrationDriverTest {
         apiVersions,
         QuorumFeatures.defaultFeatureMap(),
         controllerNodes);
+
+    static class MockControllerMetrics extends QuorumControllerMetrics {
+        final AtomicBoolean closed = new AtomicBoolean(false);
+
+        MockControllerMetrics() {
+            super(Optional.empty(), Time.SYSTEM);
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            closed.set(true);
+        }
+    }
+    MockControllerMetrics metrics = new MockControllerMetrics();
+
     Time mockTime = new MockTime(1) {
         public long nanoseconds() {
             // We poll the event for each 1 sec, make it happen for each 10 ms to speed up the test
@@ -216,6 +235,7 @@ public class KRaftMigrationDriverTest {
             new MockFaultHandler("test"),
             quorumFeatures,
             KafkaConfigSchema.EMPTY,
+            metrics,
             mockTime
         )) {
 
@@ -302,6 +322,7 @@ public class KRaftMigrationDriverTest {
             faultHandler,
             quorumFeatures,
             KafkaConfigSchema.EMPTY,
+            metrics,
             mockTime
         )) {
             MetadataImage image = MetadataImage.EMPTY;
@@ -348,9 +369,9 @@ public class KRaftMigrationDriverTest {
             new MockFaultHandler("test"),
             quorumFeatures,
             KafkaConfigSchema.EMPTY,
+            metrics,
             mockTime
         )) {
-
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
@@ -395,6 +416,7 @@ public class KRaftMigrationDriverTest {
                 faultHandler,
                 quorumFeatures,
                 KafkaConfigSchema.EMPTY,
+                metrics,
                 mockTime
         )) {
             MetadataImage image = MetadataImage.EMPTY;
@@ -467,6 +489,7 @@ public class KRaftMigrationDriverTest {
             new MockFaultHandler("test"),
             quorumFeatures,
             KafkaConfigSchema.EMPTY,
+            metrics,
             mockTime
         )) {
             verifier.verify(driver, migrationClient, topicClient, configClient);

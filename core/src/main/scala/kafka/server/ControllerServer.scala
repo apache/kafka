@@ -268,7 +268,8 @@ class ControllerServer(
             () => {}
           ),
           quorumFeatures,
-          configSchema
+          configSchema,
+          quorumControllerMetrics
         )
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
