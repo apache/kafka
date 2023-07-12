@@ -943,7 +943,6 @@ public class GenericGroup implements Group {
                     // The consumer protocol is parsed with V0 which is the based prefix of all versions.
                     // This way the consumer group manager does not depend on any specific existing or
                     // future versions of the consumer protocol. VO must prefix all new versions.
-
                     ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
                     ConsumerProtocol.deserializeVersion(buffer);
                     allSubscribedTopics.addAll(new HashSet<>(

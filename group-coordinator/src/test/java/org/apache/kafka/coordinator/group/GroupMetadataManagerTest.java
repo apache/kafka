@@ -47,6 +47,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
+import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ScheduledTimeout;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
@@ -331,8 +332,6 @@ public class GroupMetadataManagerTest {
                     timer,
                     snapshotRegistry,
                     new GroupMetadataManager.Builder()
-                        .withTime(time)
-                        .withTimer(timer)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
                         .withTime(time)
@@ -465,12 +464,12 @@ public class GroupMetadataManagerTest {
             timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result));
         }
 
-        public MockCoordinatorTimer.ScheduledTimeout<Void, Record> assertSessionTimeout(
+        public ScheduledTimeout<Void, Record> assertSessionTimeout(
             String groupId,
             String memberId,
             long delayMs
         ) {
-            MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            ScheduledTimeout<Void, Record> timeout =
                 timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
             assertNotNull(timeout);
             assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
@@ -481,17 +480,17 @@ public class GroupMetadataManagerTest {
             String groupId,
             String memberId
         ) {
-            MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            ScheduledTimeout<Void, Record> timeout =
                 timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
             assertNull(timeout);
         }
 
-        public MockCoordinatorTimer.ScheduledTimeout<Void, Record> assertRevocationTimeout(
+        public ScheduledTimeout<Void, Record> assertRevocationTimeout(
             String groupId,
             String memberId,
             long delayMs
         ) {
-            MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            ScheduledTimeout<Void, Record> timeout =
                 timer.timeout(consumerGroupRevocationTimeoutKey(groupId, memberId));
             assertNotNull(timeout);
             assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
@@ -502,7 +501,7 @@ public class GroupMetadataManagerTest {
             String groupId,
             String memberId
         ) {
-            MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            ScheduledTimeout<Void, Record> timeout =
                 timer.timeout(consumerGroupRevocationTimeoutKey(groupId, memberId));
             assertNull(timeout);
         }
@@ -3015,7 +3014,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that there is a revocation timeout. Keep a reference
         // to the timeout for later.
-        MockCoordinatorTimer.ScheduledTimeout<Void, Record> scheduledTimeout =
+        ScheduledTimeout<Void, Record> scheduledTimeout =
             context.assertRevocationTimeout(groupId, memberId1, 90000);
 
         assertEquals(

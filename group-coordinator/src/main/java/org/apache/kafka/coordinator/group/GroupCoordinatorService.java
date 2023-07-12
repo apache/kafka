@@ -65,6 +65,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -89,6 +90,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private PartitionWriter<Record> writer;
         private CoordinatorLoader<Record> loader;
         private Time time;
+        private Timer timer;
 
         public Builder(
             int nodeId,
@@ -113,6 +115,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -122,6 +129,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Loader must be set.");
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
