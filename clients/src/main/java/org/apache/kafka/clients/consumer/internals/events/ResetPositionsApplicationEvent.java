@@ -18,7 +18,10 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * Event for resetting offsets for all assigned partitions that require it.
+ * Event for resetting offsets for all assigned partitions that require it. This is an
+ * asynchronous event that may complete right away if no partitions need reset, or may issue an
+ * asynchronous request to ListOffsets and then update positions in memory when a response is
+ * received.
  */
 public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 

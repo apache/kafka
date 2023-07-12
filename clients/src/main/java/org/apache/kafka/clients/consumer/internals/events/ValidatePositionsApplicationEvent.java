@@ -14,27 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
-
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * Event for validating offsets for all assigned partitions for which a leader change has been
+ * detected. This is an asynchronous event that may complete right away if no partitions need
+ * validation, or may issue an asynchronous request to OffsetForLeaderEpoch and then update
+ * positions in memory when a response is received.
  */
-public abstract class ApplicationEvent {
+public class ValidatePositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 
-    public enum Type {
-        NOOP, COMMIT, POLL, FETCH, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, UNSUBSCRIBE,
-        LIST_OFFSETS, TOPIC_METADATA, RESET_POSITIONS, VALIDATE_POSITIONS
+    public ValidatePositionsApplicationEvent() {
+        super(Type.VALIDATE_POSITIONS);
     }
 
-    protected final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
-    }
-
-    public Type type() {
-        return type;
+    @Override
+    public String toString() {
+        return "ValidatePositions{" +
+                "future=" + future +
+                ", type=" + type +
+                '}';
     }
 }

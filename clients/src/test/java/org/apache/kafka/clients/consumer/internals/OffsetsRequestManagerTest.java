@@ -73,9 +73,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class ListOffsetsRequestManagerTest {
+public class OffsetsRequestManagerTest {
 
-    private ListOffsetsRequestManager requestManager;
+    private OffsetsRequestManager requestManager;
     private ConsumerMetadata metadata;
     private SubscriptionState subscriptionState;
     private MockTime time;
@@ -93,7 +93,7 @@ public class ListOffsetsRequestManagerTest {
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         this.time = new MockTime(0);
-        requestManager = new ListOffsetsRequestManager(subscriptionState, metadata,
+        requestManager = new OffsetsRequestManager(subscriptionState, metadata,
                 DEFAULT_ISOLATION_LEVEL, time, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
                 mock(ApiVersions.class), new LogContext());
     }

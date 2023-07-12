@@ -66,7 +66,7 @@ public class DefaultBackgroundThreadTest {
     private CoordinatorRequestManager coordinatorManager;
     private CommitRequestManager commitManager;
     private TopicMetadataRequestManager topicMetadataRequestManager;
-    private ListOffsetsRequestManager listOffsetsRequestManager;
+    private OffsetsRequestManager offsetsRequestManager;
     private DefaultBackgroundThread<String, String> backgroundThread;
 
     @BeforeEach
@@ -80,7 +80,7 @@ public class DefaultBackgroundThreadTest {
         this.coordinatorManager = testBuilder.coordinatorRequestManager;
         this.commitManager = testBuilder.commitRequestManager;
         this.topicMetadataRequestManager = testBuilder.topicMetadataRequestManager;
-        this.listOffsetsRequestManager = testBuilder.listOffsetsRequestManager;
+        this.offsetsRequestManager = testBuilder.offsetsRequestManager;
         this.backgroundThread = testBuilder.backgroundThread;
         this.backgroundThread.initializeResources();
     }
@@ -165,7 +165,7 @@ public class DefaultBackgroundThreadTest {
     @Test
     public void testResetPositionsProcessFailureInterruptsBackgroundThread() {
         TopicAuthorizationException authException = new TopicAuthorizationException("Topic authorization failed");
-        doThrow(authException).when(listOffsetsRequestManager).resetPositionsIfNeeded();
+        doThrow(authException).when(offsetsRequestManager).resetPositionsIfNeeded();
 
         ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent();
         this.applicationEventsQueue.add(event);

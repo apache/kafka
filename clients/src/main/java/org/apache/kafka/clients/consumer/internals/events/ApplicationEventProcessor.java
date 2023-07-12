@@ -87,6 +87,8 @@ public class ApplicationEventProcessor<K, V> {
                 return process((FetchEvent<K, V>) event);
             case RESET_POSITIONS:
                 return process((ResetPositionsApplicationEvent) event);
+            case VALIDATE_POSITIONS:
+                return process((ValidatePositionsApplicationEvent) event);
         }
         return false;
     }
@@ -160,7 +162,7 @@ public class ApplicationEventProcessor<K, V> {
 
     private boolean process(final ListOffsetsApplicationEvent event) {
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.listOffsetsRequestManager.fetchOffsets(event.timestampsToSearch,
+                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch,
                         event.requireTimestamps);
         event.chain(future);
         return true;
@@ -168,14 +170,28 @@ public class ApplicationEventProcessor<K, V> {
 
     /**
      * To process a ResetPositionsApplicationEvent, this will determine the partitions needing
-     * reset and, if any, it will perform a ListOffsetRequest to retrieve its offsets based on
+     * reset and, if any, it will perform a ListOffset request to retrieve its offsets based on
      * the reset strategy defined. It will also update in-memory positions based on the retrieved
      * offsets.
      * <p>
      * This may throw an exception cached in memory from the previous request if it failed.
      */
     private boolean process(final ResetPositionsApplicationEvent event) {
-        requestManagers.listOffsetsRequestManager.resetPositionsIfNeeded();
+        requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+        // TODO: chain future to process failures at a higher level once the caching logic for
+        //  exceptions is reviewed/removed
+        return true;
+    }
+
+    /**
+     * This will determine the partitions needing validation and, if any, it will perform an
+     * OffsetForLeaderEpoch request. It will also update in-memory positions based on the retrieved
+     * offsets.
+     * <p>
+     * This may throw an exception cached in memory from the previous request if it failed.
+     */
+    private boolean process(final ValidatePositionsApplicationEvent event) {
+        requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
         // TODO: chain future to process failures at a higher level once the caching logic for
         //  exceptions is reviewed/removed
         return true;

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -36,8 +37,10 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -256,6 +259,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     backgroundEvent.ifPresent(event -> log.warn("Do something with this background event: {}", event));
                 }
 
+                updateAssignmentMetadataIfNeeded();
+
                 // Create our event as a means to request the background thread to return any completed fetches.
                 // If there are any
                 Queue<CompletedFetch<K, V>> completedFetches = eventHandler.addAndGet(new FetchEvent<>(), timeout);
@@ -277,6 +282,39 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
 
         return ConsumerRecords.empty();
+    }
+
+    boolean updateAssignmentMetadataIfNeeded() {
+        // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
+        // in the previous implementation, because it will eventually involve group coordination
+        // logic
+        return updateFetchPositions();
+    }
+
+    /**
+     * Set the fetch position to the committed position (if there is one)
+     * or reset it using the offset reset policy the user has configured.
+     *
+     * @return true if the operation completed without timing out
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws NoOffsetForPartitionException                          If no offset is stored for a given partition and no offset reset policy is
+     *                                                                defined
+     */
+    private boolean updateFetchPositions() {
+        // If any partitions have been truncated due to a leader change, we need to validate the offsets
+        ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
+        eventHandler.add(validatePositionsEvent);
+
+        // If there are partitions still needing a position and a reset policy is defined,
+        // request reset using the default policy. If no reset strategy is defined and there
+        // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
+        subscriptions.resetInitializingPositions();
+
+        // Finally send an asynchronous request to look up and update the positions of any
+        // partitions which are awaiting reset.
+        ResetPositionsApplicationEvent resetPositionsEvent = new ResetPositionsApplicationEvent();
+        eventHandler.add(resetPositionsEvent);
+        return true;
     }
 
     /**

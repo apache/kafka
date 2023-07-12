@@ -47,7 +47,7 @@ public class RequestManagers<K, V> implements Closeable {
     private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
-    public final ListOffsetsRequestManager listOffsetsRequestManager;
+    public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager<K, V> fetchRequestManager;
 
@@ -55,13 +55,13 @@ public class RequestManagers<K, V> implements Closeable {
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public RequestManagers(LogContext logContext,
-                           ListOffsetsRequestManager listOffsetsRequestManager,
+                           OffsetsRequestManager offsetsRequestManager,
                            TopicMetadataRequestManager topicMetadataRequestManager,
                            FetchRequestManager<K, V> fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager) {
         this.log = logContext.logger(RequestManagers.class);
-        this.listOffsetsRequestManager = requireNonNull(listOffsetsRequestManager, "ListOffsetsRequestManager cannot be null");
+        this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
         this.topicMetadataRequestManager = topicMetadataRequestManager;
@@ -70,7 +70,7 @@ public class RequestManagers<K, V> implements Closeable {
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
-        list.add(Optional.of(listOffsetsRequestManager));
+        list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         list.add(Optional.of(fetchRequestManager));
         entries = Collections.unmodifiableList(list);
@@ -124,7 +124,7 @@ public class RequestManagers<K, V> implements Closeable {
                 final FetchConfig<K, V> fetchConfig = createFetchConfig(config);
                 final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 final long requestTimeoutMs = config.getLong(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-                final ListOffsetsRequestManager listOffsets = new ListOffsetsRequestManager(subscriptions,
+                final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
                         metadata,
                         isolationLevel,
                         time,

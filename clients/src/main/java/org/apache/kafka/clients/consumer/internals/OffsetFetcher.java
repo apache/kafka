@@ -21,12 +21,10 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
-import org.apache.kafka.clients.consumer.LogTruncationException;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
-import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
+import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochUtils.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -41,13 +39,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -278,53 +273,16 @@ public class OffsetFetcher {
             future.addListener(new RequestFutureListener<OffsetForEpochResult>() {
                 @Override
                 public void onSuccess(OffsetForEpochResult offsetsResult) {
-                    List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
-                    if (!offsetsResult.partitionsToRetry().isEmpty()) {
-                        subscriptions.setNextAllowedRetry(offsetsResult.partitionsToRetry(), time.milliseconds() + retryBackoffMs);
-                        metadata.requestUpdate();
-                    }
-
-                    // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
-                    // for the partition. If so, it means we have experienced log truncation and need to reposition
-                    // that partition's offset.
-                    //
-                    // In addition, check whether the returned offset and epoch are valid. If not, then we should reset
-                    // its offset if reset policy is configured, or throw out of range exception.
-                    offsetsResult.endOffsets().forEach((topicPartition, respEndOffset) -> {
-                        FetchPosition requestPosition = fetchPositions.get(topicPartition);
-                        Optional<SubscriptionState.LogTruncation> truncationOpt =
-                                subscriptions.maybeCompleteValidation(topicPartition, requestPosition, respEndOffset);
-                        truncationOpt.ifPresent(truncations::add);
-                    });
-
-                    if (!truncations.isEmpty()) {
-                        offsetFetcherUtils.maybeSetOffsetForLeaderException(buildLogTruncationException(truncations));
-                    }
+                    offsetFetcherUtils.onSuccessfulRequestForValidatingPositions(fetchPositions,
+                            offsetsResult);
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    subscriptions.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
-                    metadata.requestUpdate();
-
-                    if (!(e instanceof RetriableException)) {
-                        offsetFetcherUtils.maybeSetOffsetForLeaderException(e);
-                    }
+                    offsetFetcherUtils.onFailedRequestForValidatingPositions(fetchPositions, e);
                 }
             });
         });
-    }
-
-    private LogTruncationException buildLogTruncationException(List<SubscriptionState.LogTruncation> truncations) {
-        Map<TopicPartition, OffsetAndMetadata> divergentOffsets = new HashMap<>();
-        Map<TopicPartition, Long> truncatedFetchOffsets = new HashMap<>();
-        for (SubscriptionState.LogTruncation truncation : truncations) {
-            truncation.divergentOffsetOpt.ifPresent(divergentOffset ->
-                    divergentOffsets.put(truncation.topicPartition, divergentOffset));
-            truncatedFetchOffsets.put(truncation.topicPartition, truncation.fetchPosition.offset);
-        }
-        return new LogTruncationException("Detected truncated partitions: " + truncations,
-                truncatedFetchOffsets, divergentOffsets);
     }
 
     /**

@@ -66,7 +66,7 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchConfig<String, String> fetchConfig;
     final FetchMetricsManager metricsManager;
     final NetworkClientDelegate networkClientDelegate;
-    final ListOffsetsRequestManager listOffsetsRequestManager;
+    final OffsetsRequestManager offsetsRequestManager;
     final TopicMetadataRequestManager topicMetadataRequestManager;
     final CoordinatorRequestManager coordinatorRequestManager;
     final CommitRequestManager commitRequestManager;
@@ -111,7 +111,7 @@ public class ConsumerTestBuilder implements Closeable {
                 config,
                 logContext,
                 client));
-        this.listOffsetsRequestManager = spy(new ListOffsetsRequestManager(subscriptions,
+        this.offsetsRequestManager = spy(new OffsetsRequestManager(subscriptions,
                 metadata,
                 isolationLevel,
                 time,
@@ -140,7 +140,7 @@ public class ConsumerTestBuilder implements Closeable {
                 metricsManager,
                 networkClientDelegate));
         this.requestManagers = new RequestManagers<>(logContext,
-                listOffsetsRequestManager,
+                offsetsRequestManager,
                 topicMetadataRequestManager,
                 fetchRequestManager,
                 Optional.of(coordinatorRequestManager),
