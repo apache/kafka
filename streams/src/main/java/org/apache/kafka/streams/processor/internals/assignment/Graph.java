@@ -96,7 +96,7 @@ public class Graph<V extends Comparable<V>> {
         this(false);
     }
 
-    public Graph(final boolean isResidualGraph) {
+    private Graph(final boolean isResidualGraph) {
         this.isResidualGraph = isResidualGraph;
     }
 
@@ -227,12 +227,12 @@ public class Graph<V extends Comparable<V>> {
         for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final V node = nodeEdges.getKey();
             if (node.equals(sinkNode)) {
-                throw new IllegalArgumentException("Sink node " + sinkNode + " shouldn't have output");
+                throw new IllegalStateException("Sink node " + sinkNode + " shouldn't have output");
             }
             for (final Entry<V, Edge> nodeEdge : nodeEdges.getValue().entrySet()) {
                 final V destination = nodeEdge.getKey();
                 if (destination.equals(sourceNode)) {
-                    throw new IllegalArgumentException("Source node " + sourceNode + " shouldn't have input " + node);
+                    throw new IllegalStateException("Source node " + sourceNode + " shouldn't have input " + node);
                 }
                 final Edge edge = nodeEdge.getValue();
                 Long count = outFlow.get(node);
