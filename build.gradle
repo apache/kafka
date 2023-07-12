@@ -203,7 +203,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'TROGDOR.md',
+        'trogdor/README.md',
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
@@ -419,8 +419,7 @@ subprojects {
       "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
-      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*"
+      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*"
     ])
   }
 
@@ -876,7 +875,6 @@ project(':core') {
 
 
     implementation libs.argparse4j
-    implementation libs.caffeine
     implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
@@ -931,7 +929,8 @@ project(':core') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-
+    testImplementation libs.caffeine
+    
     generator project(':generator')
   }
 
@@ -1704,6 +1703,7 @@ project(':storage') {
     implementation project(':storage:api')
     implementation project(':server-common')
     implementation project(':clients')
+    implementation libs.caffeine
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
     implementation libs.metrics
