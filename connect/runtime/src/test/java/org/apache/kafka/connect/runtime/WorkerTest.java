@@ -124,6 +124,7 @@ import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
+import static org.apache.kafka.connect.json.JsonConverterConfig.SCHEMAS_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
@@ -2013,6 +2014,33 @@ public class WorkerTest {
         verify(offsetWriter).doFlush(any());
         verify(offsetStore, timeout(1000)).stop();
         verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testNormalizeOffsets() throws Exception {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap("filename", "/path/to/filename"),
+                Collections.singletonMap("position", 20)
+        );
+
+        assertTrue(offsets.values().iterator().next().get("position") instanceof Integer);
+
+        JsonConverter jsonConverter = new JsonConverter();
+        jsonConverter.configure(Collections.singletonMap(SCHEMAS_ENABLE_CONFIG, false), false);
+        when(plugins.newInternalConverter(eq(true), anyString(), anyMap()))
+                .thenReturn(jsonConverter);
+        when(plugins.newInternalConverter(eq(false), anyString(), anyMap()))
+                .thenReturn(jsonConverter);
+
+        mockKafkaClusterId();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy, null);
+
+        Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = worker.normalizeOffsets(offsets);
+        assertEquals(1, normalizedOffsets.size());
+
+        // The integer value 20 gets deserialized as a long value by the JsonConverter
+        assertTrue(normalizedOffsets.values().iterator().next().get("position") instanceof Long);
     }
 
     @Test
