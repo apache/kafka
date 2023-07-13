@@ -23,12 +23,14 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
@@ -49,20 +51,27 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -88,10 +97,14 @@ public class GroupMetadataManager {
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
+        private Time time = null;
+        private CoordinatorTimer<Record> timer = null;
         private List<PartitionAssignor> assignors = null;
-        private TopicsImage topicsImage = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
+        private int consumerGroupSessionTimeoutMs = 45000;
         private int consumerGroupHeartbeatIntervalMs = 5000;
+        private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
+        private MetadataImage metadataImage = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -100,6 +113,16 @@ public class GroupMetadataManager {
 
         Builder withSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        Builder withTimer(CoordinatorTimer<Record> timer) {
+            this.timer = timer;
             return this;
         }
 
@@ -113,32 +136,48 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withConsumerGroupSessionTimeout(int consumerGroupSessionTimeoutMs) {
+            this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
+            return this;
+        }
+
         Builder withConsumerGroupHeartbeatInterval(int consumerGroupHeartbeatIntervalMs) {
             this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
             return this;
         }
 
-        Builder withTopicsImage(TopicsImage topicsImage) {
-            this.topicsImage = topicsImage;
+        Builder withConsumerGroupMetadataRefreshIntervalMs(int consumerGroupMetadataRefreshIntervalMs) {
+            this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+            return this;
+        }
+
+        Builder withMetadataImage(MetadataImage metadataImage) {
+            this.metadataImage = metadataImage;
             return this;
         }
 
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            if (topicsImage == null) topicsImage = TopicsImage.EMPTY;
+            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+            if (time == null) time = Time.SYSTEM;
 
-            if (assignors == null || assignors.isEmpty()) {
-                throw new IllegalStateException("Assignors must be set before building.");
-            }
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
+            if (assignors == null || assignors.isEmpty())
+                throw new IllegalArgumentException("Assignors must be set before building.");
 
             return new GroupMetadataManager(
                 snapshotRegistry,
                 logContext,
+                time,
+                timer,
                 assignors,
-                topicsImage,
+                metadataImage,
                 consumerGroupMaxSize,
-                consumerGroupHeartbeatIntervalMs
+                consumerGroupSessionTimeoutMs,
+                consumerGroupHeartbeatIntervalMs,
+                consumerGroupMetadataRefreshIntervalMs
             );
         }
     }
@@ -152,6 +191,16 @@ public class GroupMetadataManager {
      * The snapshot registry.
      */
     private final SnapshotRegistry snapshotRegistry;
+
+    /**
+     * The system time.
+     */
+    private final Time time;
+
+    /**
+     * The system timer.
+     */
+    private final CoordinatorTimer<Record> timer;
 
     /**
      * The supported partition assignors keyed by their name.
@@ -169,6 +218,11 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, Group> groups;
 
     /**
+     * The group ids keyed by topic names.
+     */
+    private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
+
+    /**
      * The maximum number of members allowed in a single consumer group.
      */
     private final int consumerGroupMaxSize;
@@ -179,26 +233,52 @@ public class GroupMetadataManager {
     private final int consumerGroupHeartbeatIntervalMs;
 
     /**
-     * The topics metadata (or image).
+     * The session timeout for consumer groups.
      */
-    private TopicsImage topicsImage;
+    private final int consumerGroupSessionTimeoutMs;
+
+    /**
+     * The metadata refresh interval.
+     */
+    private final int consumerGroupMetadataRefreshIntervalMs;
+
+    /**
+     * The metadata image.
+     */
+    private MetadataImage metadataImage;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
+        Time time,
+        CoordinatorTimer<Record> timer,
         List<PartitionAssignor> assignors,
-        TopicsImage topicsImage,
+        MetadataImage metadataImage,
         int consumerGroupMaxSize,
-        int consumerGroupHeartbeatIntervalMs
+        int consumerGroupSessionTimeoutMs,
+        int consumerGroupHeartbeatIntervalMs,
+        int consumerGroupMetadataRefreshIntervalMs
     ) {
         this.log = logContext.logger(GroupMetadataManager.class);
         this.snapshotRegistry = snapshotRegistry;
-        this.topicsImage = topicsImage;
+        this.time = time;
+        this.timer = timer;
+        this.metadataImage = metadataImage;
         this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.consumerGroupMaxSize = consumerGroupMaxSize;
+        this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
+        this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+    }
+
+    /**
+     * @return The current metadata image used by the group metadata manager.
+     */
+    public MetadataImage image() {
+        return metadataImage;
     }
 
     /**
@@ -472,7 +552,8 @@ public class GroupMetadataManager {
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
-        List<Record> records = new ArrayList<>();
+        final long currentTimeMs = time.milliseconds();
+        final List<Record> records = new ArrayList<>();
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
@@ -485,7 +566,7 @@ public class GroupMetadataManager {
         throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
 
         if (memberEpoch == 0) {
-            log.info("[GroupId " + groupId + "] Member " + memberId + " joins the consumer group.");
+            log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
         }
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
@@ -506,30 +587,47 @@ public class GroupMetadataManager {
             .setClientHost(clientHost)
             .build();
 
+        boolean bumpGroupEpoch = false;
         if (!updatedMember.equals(member)) {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
 
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
-                log.info("[GroupId " + groupId + "] Member " + memberId + " updated its subscribed topics to: " +
-                    updatedMember.subscribedTopicNames());
+                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicNames());
+                bumpGroupEpoch = true;
+            }
 
-                subscriptionMetadata = group.computeSubscriptionMetadata(
-                    member,
-                    updatedMember,
-                    topicsImage
-                );
+            if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
+                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicRegex());
+                bumpGroupEpoch = true;
+            }
+        }
 
-                if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                    log.info("[GroupId " + groupId + "] Computed new subscription metadata: "
-                        + subscriptionMetadata + ".");
-                    records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
-                }
+        if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
+            // The subscription metadata is updated in two cases:
+            // 1) The member has updated its subscriptions;
+            // 2) The refresh deadline has been reached.
+            subscriptionMetadata = group.computeSubscriptionMetadata(
+                member,
+                updatedMember,
+                metadataImage.topics()
+            );
 
+            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+                log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                    groupId, subscriptionMetadata);
+                bumpGroupEpoch = true;
+                records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            }
+
+            if (bumpGroupEpoch) {
                 groupEpoch += 1;
                 records.add(newGroupEpochRecord(groupId, groupEpoch));
-
-                log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
+                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             }
+
+            group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
@@ -551,15 +649,16 @@ public class GroupMetadataManager {
                         .addOrUpdateMember(memberId, updatedMember)
                         .build();
 
-                log.info("[GroupId " + groupId + "] Computed a new target assignment for epoch " + groupEpoch + ": "
-                    + assignmentResult.targetAssignment() + ".");
+                log.info("[GroupId {}] Computed a new target assignment for epoch {}: {}.",
+                    groupId, groupEpoch, assignmentResult.targetAssignment());
 
                 records.addAll(assignmentResult.records());
                 targetAssignment = assignmentResult.targetAssignment().get(memberId);
                 targetAssignmentEpoch = groupEpoch;
             } catch (PartitionAssignorException ex) {
-                String msg = "Failed to compute a new target assignment for epoch " + groupEpoch + ": " + ex + ".";
-                log.error("[GroupId " + groupId + "] " + msg);
+                String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
+                    groupEpoch, ex.getMessage());
+                log.error("[GroupId {}] {}.", groupId, msg);
                 throw new UnknownServerException(msg, ex);
             }
         }
@@ -581,14 +680,23 @@ public class GroupMetadataManager {
                 assignmentUpdated = true;
                 records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
-                log.info("[GroupId " + groupId + "] Member " + memberId + " transitioned from " +
-                    member.currentAssignmentSummary() + " to " + updatedMember.currentAssignmentSummary() + ".");
+                log.info("[GroupId {}] Member {} transitioned from {} to {}.",
+                    groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
 
-                // TODO(dajac) Starts or restarts the timer for the revocation timeout.
+                if (updatedMember.state() == ConsumerGroupMember.MemberState.REVOKING) {
+                    scheduleConsumerGroupRevocationTimeout(
+                        groupId,
+                        memberId,
+                        updatedMember.rebalanceTimeoutMs(),
+                        updatedMember.memberEpoch()
+                    );
+                } else {
+                    cancelConsumerGroupRevocationTimeout(groupId, memberId);
+                }
             }
         }
 
-        // TODO(dajac) Starts or restarts the timer for the session timeout.
+        scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
         // Prepare the response.
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
@@ -619,39 +727,156 @@ public class GroupMetadataManager {
         String groupId,
         String memberId
     ) throws ApiException {
-        List<Record> records = new ArrayList<>();
-
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
         ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
         log.info("[GroupId " + groupId + "] Member " + memberId + " left the consumer group.");
 
+        List<Record> records = consumerGroupFenceMember(group, member);
+        return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
+            .setMemberId(memberId)
+            .setMemberEpoch(-1));
+    }
+
+    /**
+     * Fences a member from a consumer group.
+     *
+     * @param group       The group.
+     * @param member      The member.
+     *
+     * @return A list of records to be applied to the state.
+     */
+    private List<Record> consumerGroupFenceMember(
+        ConsumerGroup group,
+        ConsumerGroupMember member
+    ) {
+        List<Record> records = new ArrayList<>();
+
         // Write tombstones for the member. The order matters here.
-        records.add(newCurrentAssignmentTombstoneRecord(groupId, memberId));
-        records.add(newTargetAssignmentTombstoneRecord(groupId, memberId));
-        records.add(newMemberSubscriptionTombstoneRecord(groupId, memberId));
+        records.add(newCurrentAssignmentTombstoneRecord(group.groupId(), member.memberId()));
+        records.add(newTargetAssignmentTombstoneRecord(group.groupId(), member.memberId()));
+        records.add(newMemberSubscriptionTombstoneRecord(group.groupId(), member.memberId()));
 
         // We update the subscription metadata without the leaving member.
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
             member,
             null,
-            topicsImage
+            metadataImage.topics()
         );
 
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId " + groupId + "] Computed new subscription metadata: "
-                + subscriptionMetadata + ".");
-            records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                group.groupId(), subscriptionMetadata);
+            records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
         }
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newGroupEpochRecord(groupId, groupEpoch));
+        records.add(newGroupEpochRecord(group.groupId(), groupEpoch));
 
-        return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
-            .setMemberId(memberId)
-            .setMemberEpoch(-1)
-        );
+        // Cancel all the timers of the member.
+        cancelConsumerGroupSessionTimeout(group.groupId(), member.memberId());
+        cancelConsumerGroupRevocationTimeout(group.groupId(), member.memberId());
+
+        return records;
+    }
+
+    /**
+     * Schedules (or reschedules) the session timeout for the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void scheduleConsumerGroupSessionTimeout(
+        String groupId,
+        String memberId
+    ) {
+        String key = consumerGroupSessionTimeoutKey(groupId, memberId);
+        timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+            try {
+                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+                log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
+                    groupId, memberId);
+                return consumerGroupFenceMember(group, member);
+            } catch (GroupIdNotFoundException ex) {
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
+                    groupId, memberId);
+            } catch (UnknownMemberIdException ex) {
+                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                    groupId, memberId);
+            }
+
+            return Collections.emptyList();
+        });
+    }
+
+    /**
+     * Cancels the session timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelConsumerGroupSessionTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(consumerGroupSessionTimeoutKey(groupId, memberId));
+    }
+
+    /**
+     * Schedules a revocation timeout for the member.
+     *
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param revocationTimeoutMs   The revocation timeout.
+     * @param expectedMemberEpoch   The expected member epoch.
+     */
+    private void scheduleConsumerGroupRevocationTimeout(
+        String groupId,
+        String memberId,
+        long revocationTimeoutMs,
+        int expectedMemberEpoch
+    ) {
+        String key = consumerGroupRevocationTimeoutKey(groupId, memberId);
+        timer.schedule(key, revocationTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+            try {
+                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+
+                if (member.state() != ConsumerGroupMember.MemberState.REVOKING ||
+                    member.memberEpoch() != expectedMemberEpoch) {
+                    log.debug("[GroupId {}] Ignoring revocation timeout for {} because the member " +
+                        "state does not match the expected state.", groupId, memberId);
+                    return Collections.emptyList();
+                }
+
+                log.info("[GroupId {}] Member {} fenced from the group because " +
+                    "it failed to revoke partitions within {}ms.", groupId, memberId, revocationTimeoutMs);
+                return consumerGroupFenceMember(group, member);
+            } catch (GroupIdNotFoundException ex) {
+                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                    groupId, memberId);
+            } catch (UnknownMemberIdException ex) {
+                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                    groupId, memberId);
+            }
+
+            return Collections.emptyList();
+        });
+    }
+
+    /**
+     * Cancels the revocation timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelConsumerGroupRevocationTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(consumerGroupRevocationTimeoutKey(groupId, memberId));
     }
 
     /**
@@ -709,14 +934,15 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
         String memberId = key.memberId();
 
+        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, value != null);
+        Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
+
         if (value != null) {
-            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, true);
             consumerGroup.updateMember(new ConsumerGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build());
         } else {
-            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
             if (oldMember.memberEpoch() != -1) {
                 throw new IllegalStateException("Received a tombstone record to delete member " + memberId
@@ -727,6 +953,81 @@ public class GroupMetadataManager {
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
             consumerGroup.removeMember(memberId);
+        }
+
+        updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames());
+    }
+
+    /**
+     * @return The set of groups subscribed to the topic.
+     */
+    public Set<String> groupsSubscribedToTopic(String topicName) {
+        Set<String> groups = groupsByTopics.get(topicName);
+        return groups != null ? groups : Collections.emptySet();
+    }
+
+    /**
+     * Subscribes a group to a topic.
+     *
+     * @param groupId   The group id.
+     * @param topicName The topic name.
+     */
+    private void subscribeGroupToTopic(
+        String groupId,
+        String topicName
+    ) {
+        groupsByTopics
+            .computeIfAbsent(topicName, __ -> new TimelineHashSet<>(snapshotRegistry, 1))
+            .add(groupId);
+    }
+
+    /**
+     * Unsubscribes a group from a topic.
+     *
+     * @param groupId   The group id.
+     * @param topicName The topic name.
+     */
+    private void unsubscribeGroupFromTopic(
+        String groupId,
+        String topicName
+    ) {
+        groupsByTopics.computeIfPresent(topicName, (__, groupIds) -> {
+            groupIds.remove(groupId);
+            return groupIds.isEmpty() ? null : groupIds;
+        });
+    }
+
+    /**
+     * Updates the group by topics mapping.
+     *
+     * @param groupId               The group id.
+     * @param oldSubscribedTopics   The old group subscriptions.
+     * @param newSubscribedTopics   The new group subscriptions.
+     */
+    private void updateGroupsByTopics(
+        String groupId,
+        Set<String> oldSubscribedTopics,
+        Set<String> newSubscribedTopics
+    ) {
+        if (oldSubscribedTopics.isEmpty()) {
+            newSubscribedTopics.forEach(topicName ->
+                subscribeGroupToTopic(groupId, topicName)
+            );
+        } else if (newSubscribedTopics.isEmpty()) {
+            oldSubscribedTopics.forEach(topicName ->
+                unsubscribeGroupFromTopic(groupId, topicName)
+            );
+        } else {
+            oldSubscribedTopics.forEach(topicName -> {
+                if (!newSubscribedTopics.contains(topicName)) {
+                    unsubscribeGroupFromTopic(groupId, topicName);
+                }
+            });
+            newSubscribedTopics.forEach(topicName -> {
+                if (!oldSubscribedTopics.contains(topicName)) {
+                    subscribeGroupToTopic(groupId, topicName);
+                }
+            });
         }
     }
 
@@ -873,5 +1174,73 @@ public class GroupMetadataManager {
                 .build();
             consumerGroup.updateMember(newMember);
         }
+    }
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The delta image.
+     */
+    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+        metadataImage = newImage;
+
+        // Notify all the groups subscribed to the created, updated or
+        // deleted topics.
+        Set<String> allGroupIds = new HashSet<>();
+        delta.topicsDelta().changedTopics().forEach((topicId, topicDelta) -> {
+            String topicName = topicDelta.name();
+            allGroupIds.addAll(groupsSubscribedToTopic(topicName));
+        });
+        delta.topicsDelta().deletedTopicIds().forEach(topicId -> {
+            TopicImage topicImage = delta.image().topics().getTopic(topicId);
+            allGroupIds.addAll(groupsSubscribedToTopic(topicImage.name()));
+        });
+        allGroupIds.forEach(groupId -> {
+            Group group = groups.get(groupId);
+            if (group != null && group.type() == Group.GroupType.CONSUMER) {
+                ((ConsumerGroup) group).requestMetadataRefresh();
+            }
+        });
+    }
+
+    /**
+     * The coordinator has been loaded. Session timeouts are registered
+     * for all members.
+     */
+    public void onLoaded() {
+        groups.forEach((groupId, group) -> {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    log.info("Loaded consumer group {} with {} members.", groupId, consumerGroup.members().size());
+                    consumerGroup.members().forEach((memberId, member) -> {
+                        log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
+                        scheduleConsumerGroupSessionTimeout(groupId, memberId);
+                        if (member.state() == ConsumerGroupMember.MemberState.REVOKING) {
+                            scheduleConsumerGroupRevocationTimeout(
+                                groupId,
+                                memberId,
+                                member.rebalanceTimeoutMs(),
+                                member.memberEpoch()
+                            );
+                        }
+                    });
+                    break;
+
+                case GENERIC:
+                    GenericGroup genericGroup = (GenericGroup) group;
+                    log.info("Loaded generic group {} with {} members.", groupId, genericGroup.allMembers().size());
+                    break;
+            }
+        });
+    }
+
+    public static String consumerGroupSessionTimeoutKey(String groupId, String memberId) {
+        return "session-timeout-" + groupId + "-" + memberId;
+    }
+
+    public static String consumerGroupRevocationTimeoutKey(String groupId, String memberId) {
+        return "revocation-timeout-" + groupId + "-" + memberId;
     }
 }

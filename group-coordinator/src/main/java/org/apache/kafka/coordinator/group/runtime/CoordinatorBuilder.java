@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 /**
@@ -48,6 +49,28 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      */
     CoordinatorBuilder<S, U> withLogContext(
         LogContext logContext
+    );
+
+    /**
+     * Sets the time.
+     *
+     * @param time The system time.
+     *
+     * @return The builder.
+     */
+    CoordinatorBuilder<S, U> withTime(
+        Time time
+    );
+
+    /**
+     * Sets the coordinator timer.
+     *
+     * @param timer The coordinator timer.
+     *
+     * @return The builder.
+     */
+    CoordinatorBuilder<S, U> withTimer(
+        CoordinatorTimer<U> timer
     );
 
     /**

@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -36,6 +37,9 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.runtime.Coordinator;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilder;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -55,6 +59,8 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         private final GroupCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
+        private Time time;
+        private CoordinatorTimer<Record> timer;
 
         public Builder(
             GroupCoordinatorConfig config
@@ -67,6 +73,22 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
             LogContext logContext
         ) {
             this.logContext = logContext;
+            return this;
+        }
+
+        @Override
+        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withTime(
+            Time time
+        ) {
+            this.time = time;
+            return this;
+        }
+
+        @Override
+        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withTimer(
+            CoordinatorTimer<Record> timer
+        ) {
+            this.timer = timer;
             return this;
         }
 
@@ -85,11 +107,17 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
                 throw new IllegalArgumentException("Config must be set.");
             if (snapshotRegistry == null)
                 throw new IllegalArgumentException("SnapshotRegistry must be set.");
+            if (time == null)
+                throw new IllegalArgumentException("Time must be set.");
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
 
             return new ReplicatedGroupCoordinator(
                 new GroupMetadataManager.Builder()
                     .withLogContext(logContext)
                     .withSnapshotRegistry(snapshotRegistry)
+                    .withTime(time)
+                    .withTimer(timer)
                     .withAssignors(config.consumerGroupAssignors)
                     .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
                     .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
@@ -128,6 +156,29 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         ConsumerGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
+    }
+
+    /**
+     * The coordinator has been loaded. This is used to apply any
+     * post loading operations (e.g. registering timers).
+     *
+     * @param newImage  The metadata image.
+     */
+    @Override
+    public void onLoaded(MetadataImage newImage) {
+        groupMetadataManager.onNewMetadataImage(newImage, new MetadataDelta(newImage));
+        groupMetadataManager.onLoaded();
+    }
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The delta image.
+     */
+    @Override
+    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+        groupMetadataManager.onNewMetadataImage(newImage, delta);
     }
 
     /**

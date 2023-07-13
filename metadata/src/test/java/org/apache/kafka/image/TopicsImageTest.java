@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
@@ -225,6 +226,11 @@ public class TopicsImageTest {
             ),
             changes.followers().keySet()
         );
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(IMAGE1);
+        imageRecords.addAll(topicRecords);
+        testToImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
@@ -265,6 +271,11 @@ public class TopicsImageTest {
         assertEquals(new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))), changes.deletes());
         assertEquals(Collections.emptyMap(), changes.leaders());
         assertEquals(Collections.emptyMap(), changes.followers());
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
+        imageRecords.addAll(topicRecords);
+        testToImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
@@ -365,35 +376,58 @@ public class TopicsImageTest {
             new HashSet<>(Arrays.asList(new TopicPartition("zoo", 1), new TopicPartition("zoo", 5))),
             changes.followers().keySet()
         );
+
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
+        imageRecords.addAll(topicRecords);
+        testToImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(TopicsImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(TopicsImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(TopicsImage image) throws Throwable {
+    private static void testToImage(TopicsImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(TopicsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(TopicsImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image stopping each of the various intermediate images along the way
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> TopicsImage.EMPTY,
+            TopicsDelta::new
+        ).test(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(TopicsImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
-        TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
-        TopicsImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
+        return writer.records();
     }
 
     @Test
