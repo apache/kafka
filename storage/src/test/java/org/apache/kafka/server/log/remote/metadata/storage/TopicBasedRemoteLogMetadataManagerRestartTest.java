@@ -120,7 +120,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         // Register these partitions to RLMM.
         topicBasedRlmm().onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
 
-        // Add segments for these partitions but they are not available as they have not yet been subscribed.
+        // Add segments for these partitions, but they are not available as they have not yet been subscribed.
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,

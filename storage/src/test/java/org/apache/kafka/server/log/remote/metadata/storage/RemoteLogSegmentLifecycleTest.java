@@ -271,11 +271,13 @@ public class RemoteLogSegmentLifecycleTest {
             throws RemoteStorageException {
         // cache.listRemoteLogSegments(leaderEpoch) should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> segmentsIter = remoteLogSegmentLifecycleManager.listRemoteLogSegments(leaderEpoch);
-        Assertions.assertTrue(segmentsIter.hasNext() && Objects.equals(segmentsIter.next(), expectedSegment));
+        Assertions.assertTrue(segmentsIter.hasNext());
+        Assertions.assertEquals(expectedSegment, segmentsIter.next());
 
         // cache.listAllRemoteLogSegments() should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> allSegmentsIter = remoteLogSegmentLifecycleManager.listAllRemoteLogSegments();
-        Assertions.assertTrue(allSegmentsIter.hasNext() && Objects.equals(allSegmentsIter.next(), expectedSegment));
+        Assertions.assertTrue(allSegmentsIter.hasNext());
+        Assertions.assertEquals(expectedSegment, allSegmentsIter.next());
     }
 
     @ParameterizedTest(name = "remoteLogSegmentLifecycleManager = {0}")
@@ -285,7 +287,7 @@ public class RemoteLogSegmentLifecycleTest {
         try {
             remoteLogSegmentLifecycleManager.initialize(topicIdPartition);
 
-                // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
+            // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L, -1L, BROKER_ID_0,

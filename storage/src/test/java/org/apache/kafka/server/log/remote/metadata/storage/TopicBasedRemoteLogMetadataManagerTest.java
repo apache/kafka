@@ -124,15 +124,15 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
         // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
         // fetching those events and build the cache.
-        waitUntilConsumerCatchesup(newLeaderTopicIdPartition, newFollowerTopicIdPartition, 30_000L);
+        waitUntilConsumerCatchesUp(newLeaderTopicIdPartition, newFollowerTopicIdPartition, 30_000L);
 
         Assertions.assertTrue(topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition).hasNext());
         Assertions.assertTrue(topicBasedRlmm().listRemoteLogSegments(newFollowerTopicIdPartition).hasNext());
     }
 
-    private void waitUntilConsumerCatchesup(TopicIdPartition newLeaderTopicIdPartition,
-                                          TopicIdPartition newFollowerTopicIdPartition,
-                                          long timeoutMs) throws TimeoutException {
+    private void waitUntilConsumerCatchesUp(TopicIdPartition newLeaderTopicIdPartition,
+                                            TopicIdPartition newFollowerTopicIdPartition,
+                                            long timeoutMs) throws TimeoutException {
         int leaderMetadataPartition = topicBasedRlmm().metadataPartition(newLeaderTopicIdPartition);
         int followerMetadataPartition = topicBasedRlmm().metadataPartition(newFollowerTopicIdPartition);
 
