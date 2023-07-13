@@ -26,10 +26,12 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.slf4j.Logger;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -48,11 +50,38 @@ import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_
 
 
 public class ClientQuotaControlManager {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        ClientQuotaControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            return new ClientQuotaControlManager(logContext, snapshotRegistry);
+        }
+    }
+
+    private final Logger log;
+
     private final SnapshotRegistry snapshotRegistry;
 
     final TimelineHashMap<ClientQuotaEntity, TimelineHashMap<String, Double>> clientQuotaData;
 
-    ClientQuotaControlManager(SnapshotRegistry snapshotRegistry) {
+    ClientQuotaControlManager(
+        LogContext logContext,
+        SnapshotRegistry snapshotRegistry
+    ) {
+        this.log = logContext.logger(ClientQuotaControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.clientQuotaData = new TimelineHashMap<>(snapshotRegistry, 0);
     }
@@ -113,8 +142,11 @@ public class ClientQuotaControlManager {
             if (quotas.size() == 0) {
                 clientQuotaData.remove(entity);
             }
+            log.info("Replayed ClientQuotaRecord for {} removing {}.", entity, record.key());
         } else {
             quotas.put(record.key(), record.value());
+            log.info("Replayed ClientQuotaRecord for {} setting {} to {}.",
+                    entity, record.key(), record.value());
         }
     }
 
