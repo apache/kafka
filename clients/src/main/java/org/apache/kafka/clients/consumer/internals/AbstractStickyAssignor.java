@@ -158,7 +158,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // generation amongst
             for (final TopicPartition tp : memberData.partitions) {
                 if (allTopics.contains(tp.topic())) {
-                    String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
+                    String otherConsumer = allPreviousPartitionsToOwner.get(tp);
                     if (otherConsumer == null) {
                         // this partition is not owned by other consumer in the same generation
                         ownedPartitions.add(tp);
@@ -184,6 +184,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                     otherConsumer, otherMemberGeneration,
                                     tp,
                                     memberGeneration);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
                         } else {
                             // let the other member continue to own the topic partition
                             log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
@@ -193,7 +194,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                     otherConsumer, otherMemberGeneration,
                                     tp,
                                     otherMemberGeneration);
-                            allPreviousPartitionsToOwner.put(tp, otherConsumer);
                         }
                     }
                 }
