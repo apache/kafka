@@ -733,8 +733,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     int assignmentCount = assignment.get(consumer).size() + 1;
                     if (assignmentCount >= minQuota) {
                         unfilledMembersWithUnderMinQuotaPartitions.remove(consumer);
-                        if (assignmentCount < maxQuota)
+                        if (assignmentCount < maxQuota && (currentNumMembersWithOverMinQuotaPartitions < expectedNumMembersWithOverMinQuotaPartitions)) {
                             unfilledMembersWithExactlyMinQuotaPartitions.add(consumer);
+                        }
                     } else {
                         nextIndex++;
                     }
@@ -743,8 +744,13 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     int firstIndex = rackInfo.nextRackConsumer(unassignedPartition, unfilledMembersWithExactlyMinQuotaPartitions, 0);
                     if (firstIndex >= 0) {
                         consumer = unfilledMembersWithExactlyMinQuotaPartitions.get(firstIndex);
-                        if (assignment.get(consumer).size() + 1 == maxQuota)
+                        if (assignment.get(consumer).size() + 1 == maxQuota) {
                             unfilledMembersWithExactlyMinQuotaPartitions.remove(firstIndex);
+                            currentNumMembersWithOverMinQuotaPartitions++;
+                            if (currentNumMembersWithOverMinQuotaPartitions == expectedNumMembersWithOverMinQuotaPartitions) {
+                                unfilledMembersWithExactlyMinQuotaPartitions.clear();
+                            }
+                        }
                     }
                 }
 
