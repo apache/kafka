@@ -21,6 +21,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
@@ -50,6 +51,7 @@ public class DefaultTaskManagerTest {
     private final StreamTask task = mock(StreamTask.class);
     private final TasksRegistry tasks = mock(TasksRegistry.class);
     private final TaskExecutor taskExecutor = mock(TaskExecutor.class);
+    private final StreamsException exception = mock(StreamsException.class);
 
     private final StreamsConfig config = new StreamsConfig(configProps());
     private final TaskManager taskManager = new DefaultTaskManager(time, "TaskManager", tasks, config,
@@ -164,6 +166,36 @@ public class DefaultTaskManagerTest {
         assertTrue(taskManager.lockAllTasks().isDone());
 
         assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    @Test
+    public void shouldNotSetUncaughtExceptionsForUnassignedTasks() {
+        taskManager.add(Collections.singleton(task));
+
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        assertEquals("An uncaught exception can only be set as long as the task is still assigned", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotSetUncaughtExceptionsTwice() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        taskManager.assignNextTask(taskExecutor);
+        taskManager.setUncaughtException(exception, task.id());
+
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        assertEquals("The uncaught exception must be cleared before restarting processing", e.getMessage());
+    }
+
+    @Test
+    public void shouldReturnAndClearExceptionsOnDrainExceptions() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        taskManager.assignNextTask(taskExecutor);
+        taskManager.setUncaughtException(exception, task.id());
+
+        assertEquals(taskManager.drainUncaughtExceptions(), Collections.singletonMap(task.id(), exception));
+        assertEquals(taskManager.drainUncaughtExceptions(), Collections.emptyMap());
     }
 
     @Test
