@@ -624,7 +624,7 @@ public class GroupMetadataManagerTest {
 
             try {
                 CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-                 sendGenericGroupJoin(
+                sendGenericGroupJoin(
                     request,
                     responseFuture,
                     requireKnownMemberId,
@@ -3334,7 +3334,9 @@ public class GroupMetadataManagerTest {
             assertTrue(responseFuture.isDone());
             try {
                 assertEquals(Errors.MEMBER_ID_REQUIRED.code(), responseFuture.get().errorCode());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+
+            }
             assertTrue(result.records().isEmpty());
         });
 
@@ -3907,7 +3909,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testJoinGroupSecondJoinInconsistentProtocol() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();        context.createGenericGroup("group-id");
+            .build();
+        context.createGenericGroup("group-id");
 
         JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
         protocols.add(new JoinGroupRequestProtocol()
@@ -3958,7 +3961,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testStaticMemberJoinAsFirstMember() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();        context.createGenericGroup("group-id");
+            .build();
+        context.createGenericGroup("group-id");
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -3973,7 +3977,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testStaticMemberRejoinWithExplicitUnknownMemberId() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();        context.createGenericGroup("group-id");
+            .build();
+        context.createGenericGroup("group-id");
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -4001,7 +4006,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testJoinGroupUnknownConsumerExistingGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();        context.createGenericGroup("group-id");
+            .build();
+        context.createGenericGroup("group-id");
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -4067,7 +4073,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testJoinGroupReturnsTheProtocolType() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();        context.createGenericGroup("group-id");
+            .build();
+        context.createGenericGroup("group-id");
 
         // Leader joins
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
@@ -4309,7 +4316,7 @@ public class GroupMetadataManagerTest {
         String memberId = group.leaderOrNull();
         // Advance clock by new member join timeout. Member should be removed from group as heartbeat expires.
         // A group that transitions to Empty after completing join phase will generate records.
-       List<ExpiredTimeout<Void, Record>> timeouts = context.sleep(context.genericGroupNewMemberJoinTimeoutMs);
+        List<ExpiredTimeout<Void, Record>> timeouts = context.sleep(context.genericGroupNewMemberJoinTimeoutMs);
 
         List<Record> expectedRecords = Collections.singletonList(newGroupMetadataRecord("group-id",
             new GroupMetadataValue()
@@ -4321,11 +4328,11 @@ public class GroupMetadataManagerTest {
                 .setCurrentStateTimestamp(context.time.milliseconds()),
             MetadataVersion.latest()));
 
-       assertEquals(1, timeouts.size());
-       timeouts.forEach(timeout -> {
-           assertEquals(heartbeatKey("group-id", memberId), timeout.key);
-           assertEquals(expectedRecords, timeout.result.records());
-       });
+        assertEquals(1, timeouts.size());
+        timeouts.forEach(timeout -> {
+            assertEquals(heartbeatKey("group-id", memberId), timeout.key);
+            assertEquals(expectedRecords, timeout.result.records());
+        });
 
         assertTrue(responseFuture.isDone());
         assertEquals(Errors.UNKNOWN_MEMBER_ID.code(), responseFuture.get().errorCode());
