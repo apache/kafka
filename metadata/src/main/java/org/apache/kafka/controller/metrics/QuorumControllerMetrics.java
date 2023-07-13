@@ -26,6 +26,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -44,8 +45,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "ControllerEventManager", "EventQueueTimeMs");
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
-    private final static MetricName DUAL_WRITE_OFFSET = getMetricName(
-            "KafkaController", "DualWriteOffset");
+    private final static MetricName ZOO_KEEPER_WRITE_BEHIND_LAG = getMetricName(
+            "KafkaController", "ZooKeeperWriteBehindLag");
     private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
@@ -61,6 +62,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
     private final AtomicLong dualWriteOffset = new AtomicLong(0);
+    private final AtomicBoolean dualWriteModeState = new AtomicBoolean(false);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
     private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
@@ -112,12 +114,15 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return time.milliseconds() - lastAppliedRecordTimestamp();
             }
         }));
-        registry.ifPresent(r -> r.newGauge(DUAL_WRITE_OFFSET, new Gauge<Long>() {
-            @Override
-            public Long value() {
-                return dualWriteOffset();
-            }
-        }));
+
+        if (dualWriteModeState.get()) {
+            registry.ifPresent(r -> r.newGauge(ZOO_KEEPER_WRITE_BEHIND_LAG, new Gauge<Long>() {
+                @Override
+                public Long value() {
+                    return lastCommittedRecordOffset() - dualWriteOffset();
+                }
+            }));
+        }
     }
 
     public void setActive(boolean active) {
@@ -160,8 +165,9 @@ public class QuorumControllerMetrics implements AutoCloseable {
         return lastAppliedRecordTimestamp.get();
     }
 
-    public void updateDualWriteOffset(long offset) {
+    public void updateDualWriteOffset(long offset, boolean allowDualWrite) {
         dualWriteOffset.set(offset);
+        dualWriteModeState.set(allowDualWrite);
     }
 
     public long dualWriteOffset() {
@@ -190,7 +196,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
             LAST_COMMITTED_RECORD_OFFSET,
             LAST_APPLIED_RECORD_TIMESTAMP,
             LAST_APPLIED_RECORD_LAG_MS,
-            DUAL_WRITE_OFFSET
+            ZOO_KEEPER_WRITE_BEHIND_LAG
         ).forEach(r::removeMetric));
     }
 

@@ -503,7 +503,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             ZkMigrationLeadershipState zkStateAfterDualWrite = migrationLeadershipState.withKRaftMetadataOffsetAndEpoch(
                     image.highestOffsetAndEpoch().offset(), image.highestOffsetAndEpoch().epoch());
             //update the dual write offset metric
-            controllerMetrics.updateDualWriteOffset(image.highestOffsetAndEpoch().offset());
+            controllerMetrics.updateDualWriteOffset(image.highestOffsetAndEpoch().offset(), migrationState.allowDualWrite());
 
             applyMigrationOperation("Updating ZK migration state after " + metadataType,
                     state -> zkMigrationClient.setMigrationRecoveryState(zkStateAfterDualWrite));
