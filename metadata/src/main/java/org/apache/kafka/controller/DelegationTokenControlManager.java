@@ -66,11 +66,6 @@ import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
  * Manages DelegationTokens.
  */
 public class DelegationTokenControlManager {
-    // XXX private static final long defaultTokenMaxTime = config.delegationTokenMaxLifeMs;
-    // XXX private static final long defaultTokenRenewTime = config.delegationTokenExpiryTimeMs;
-
-    private static final long DEFAULTTOKENMAXTIME = 0;
-    private static final long DEFAULTTOKENRENEWTIME = 0;
     private Time time = Time.SYSTEM;
 
     static class Builder {
@@ -78,6 +73,9 @@ public class DelegationTokenControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private DelegationTokenCache tokenCache = null;
         private String secretKeyString = null;
+        private long tokenDefaultMaxLifetime = 0;
+        private long tokenDefaultRenewLifetime = 0;
+        private long tokenRemoverScanInterval = 0;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -99,6 +97,21 @@ public class DelegationTokenControlManager {
             return this;
         }
 
+        Builder setDelegationTokenMaxLifeMs(long tokenDefaultMaxLifetime) {
+            this.tokenDefaultMaxLifetime = tokenDefaultMaxLifetime;
+            return this;
+        }
+
+        Builder setDelegationTokenExpiryTimeMs(long tokenDefaultRenewLifetime) {
+            this.tokenDefaultRenewLifetime = tokenDefaultRenewLifetime;
+            return this;
+        }
+
+        Builder setDelegationTokenExpiryCheckIntervalMs(long tokenRemoverScanInterval) {
+            this.tokenRemoverScanInterval = tokenRemoverScanInterval;
+            return this;
+        }
+
         DelegationTokenControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -106,34 +119,39 @@ public class DelegationTokenControlManager {
               logContext,
               snapshotRegistry,
               tokenCache,
-              secretKeyString);
+              secretKeyString,
+              tokenDefaultMaxLifetime,
+              tokenDefaultRenewLifetime,
+              tokenRemoverScanInterval);
         }
     }
 
     private final Logger log;
     private final DelegationTokenCache tokenCache;
     private final String secretKeyString;
-    // private final Mac mac;
+    private final long tokenDefaultMaxLifetime;
+    private final long tokenDefaultRenewLifetime;
+    private final long tokenRemoverScanInterval;
+    long tokenRemoverScanLastTime;
+
     // private final TimelineHashMap<ScramCredentialKey, ScramCredentialValue> credentials;
 
     private DelegationTokenControlManager(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         DelegationTokenCache tokenCache,
-        String secretKeyString
+        String secretKeyString,
+        long tokenDefaultMaxLifetime,
+        long tokenDefaultRenewLifetime,
+        long tokenRemoverScanInterval
     ) {
         this.log = logContext.logger(DelegationTokenControlManager.class);
         this.tokenCache = tokenCache;
         this.secretKeyString = secretKeyString;
-
-        // this.credentials = new TimelineHashMap<>(snapshotRegistry, 0);
-//        try {
-//            this.mac = Mac.getInstance("HmacSHA512");
-//            this.secretKey = new SecretKeySpec(toBytes("testKey"), mac.getAlgorithm());
-//        } catch (NoSuchAlgorithmException e) {
-//            System.out.println("Caught an exception");
-//            this.secretKey = null;
-//        }
+        this.tokenDefaultMaxLifetime = tokenDefaultMaxLifetime;
+        this.tokenDefaultRenewLifetime = tokenDefaultRenewLifetime;
+        this.tokenRemoverScanInterval = tokenRemoverScanInterval;
+        this.tokenRemoverScanLastTime = time.milliseconds();
     }
 
     public static byte[] toBytes(String str) {
@@ -149,6 +167,7 @@ public class DelegationTokenControlManager {
             mac.init(secretKey);
             result = mac.doFinal(toBytes(tokenId));
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            // XXX
             System.out.println("Caught an exception 2");
         }
         return result;
@@ -170,9 +189,13 @@ public class DelegationTokenControlManager {
         MetadataVersion metadataVersion
     ) {
         long now = time.milliseconds();
-        // XXX Handle default vs requested
-        long maxTimestamp = now + DEFAULTTOKENMAXTIME + 10000000;
-        long expiryTimestamp = Math.min(maxTimestamp, now + DEFAULTTOKENRENEWTIME + 1000000);
+        long maxLifeTime = tokenDefaultMaxLifetime;
+        if (requestData.maxLifetimeMs() > 0) {
+            maxLifeTime = Math.min(maxLifeTime, requestData.maxLifetimeMs());
+        }
+
+        long maxTimestamp = now + maxLifeTime;
+        long expiryTimestamp = Math.min(maxTimestamp, now + tokenDefaultRenewLifetime);
 
         String tokenId = Uuid.randomUuid().toString();
         KafkaPrincipal owner = context.principal();
@@ -232,6 +255,7 @@ public class DelegationTokenControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         RenewDelegationTokenResponseData responseData = new RenewDelegationTokenResponseData();
 
+// XXX
 //        if (!allowedToRenew(principal, tokenInfo)
 //            renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
 //            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
@@ -247,9 +271,15 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
         }
 
-        long renewTimeStamp = now + 1000000;
+        long renewLifeTime = tokenDefaultRenewLifetime;
+        if (requestData.renewPeriodMs() > 0) {
+            renewLifeTime = Math.min(renewLifeTime, requestData.renewPeriodMs());
+        }
+        long renewTimeStamp = now + renewLifeTime;
         long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(), renewTimeStamp);
 
+        
+        System.out.println("Setting expiryTimestamp to " + expiryTimestamp);
         myTokenInformation.setExpiryTimestamp(expiryTimestamp);
 
         DelegationTokenData newDelegationTokenData = new DelegationTokenData(myTokenInformation);

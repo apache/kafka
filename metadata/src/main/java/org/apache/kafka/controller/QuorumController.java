@@ -213,6 +213,9 @@ public final class QuorumController implements Controller {
         private boolean zkMigrationEnabled = false;
         private DelegationTokenCache tokenCache;
         private String tokenKeyString;
+        private long delegationTokenMaxLifeMs;
+        private long delegationTokenExpiryTimeMs;
+        private long delegationTokenExpiryCheckIntervalMs;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -343,6 +346,21 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setDelegationTokenMaxLifeMs(long delegationTokenMaxLifeMs) {
+            this.delegationTokenMaxLifeMs = delegationTokenMaxLifeMs;
+            return this;
+        }
+
+        public Builder setDelegationTokenExpiryTimeMs(long delegationTokenExpiryTimeMs) {
+            this.delegationTokenExpiryTimeMs = delegationTokenExpiryTimeMs;
+            return this;
+        }
+
+        public Builder setDelegationTokenExpiryCheckIntervalMs(long delegationTokenExpiryCheckIntervalMs) {
+            this.delegationTokenExpiryCheckIntervalMs = delegationTokenExpiryCheckIntervalMs;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -396,7 +414,10 @@ public final class QuorumController implements Controller {
                     maxRecordsPerBatch,
                     zkMigrationEnabled,
                     tokenCache,
-                    tokenKeyString
+                    tokenKeyString,
+                    delegationTokenMaxLifeMs,
+                    delegationTokenExpiryTimeMs,
+                    delegationTokenExpiryCheckIntervalMs
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1744,7 +1765,10 @@ public final class QuorumController implements Controller {
         int maxRecordsPerBatch,
         boolean zkMigrationEnabled,
         DelegationTokenCache tokenCache,
-        String tokenKeyString
+        String tokenKeyString,
+        long delegationTokenMaxLifeMs,
+        long delegationTokenExpiryTimeMs,
+        long delegationTokenExpiryCheckIntervalMs
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1825,6 +1849,9 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setTokenCache(tokenCache).
             setTokenKeyString(tokenKeyString).
+            setDelegationTokenMaxLifeMs(delegationTokenMaxLifeMs).
+            setDelegationTokenExpiryTimeMs(delegationTokenExpiryTimeMs).
+            setDelegationTokenExpiryCheckIntervalMs(delegationTokenExpiryCheckIntervalMs).
             build();
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).

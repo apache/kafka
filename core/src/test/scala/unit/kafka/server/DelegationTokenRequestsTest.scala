@@ -63,7 +63,6 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft", "zk"))
-//  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
@@ -103,10 +102,20 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val renewResult = adminClient.renewDelegationToken(token1.hmac())
     var expiryTimestamp = renewResult.expiryTimestamp().get()
 
+    // Create a new delegtion token so we can wait for size of token cache to change
+    // create token3 with renewer3
+    val renewer3 = List(SecurityUtils.parseKafkaPrincipal("User:renewer3")).asJava
+    val createResult3 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer3))
+    val token3 = createResult3.delegationToken().get()
+
+    TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 3),
+          "Timed out waiting for token to propagate to all servers")
+
     val describeResult = adminClient.describeDelegationToken()
     val tokenId = token1.tokenInfo().tokenId()
+
     token1 = describeResult.delegationTokens().get().asScala.filter(dt => dt.tokenInfo().tokenId() == tokenId).head
-//    assertEquals(expiryTimestamp, token1.tokenInfo().expiryTimestamp())
+    assertEquals(expiryTimestamp, token1.tokenInfo().expiryTimestamp())
 
     //test expire tokens
     val expireResult1 = adminClient.expireDelegationToken(token1.hmac())
@@ -115,6 +124,9 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val expireResult2 = adminClient.expireDelegationToken(token2.hmac())
     expiryTimestamp = expireResult2.expiryTimestamp().get()
 
+    val expireResult3 = adminClient.expireDelegationToken(token3.hmac())
+    expiryTimestamp = expireResult3.expiryTimestamp().get()
+
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 0),
           "Timed out waiting for token to propagate to all servers")
 
@@ -122,9 +134,9 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     assertTrue(tokens.size == 0)
 
     //create token with invalid principal type
-    val renewer3 = List(SecurityUtils.parseKafkaPrincipal("Group:Renewer3")).asJava
-    val createResult3 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer3))
-    assertThrows(classOf[ExecutionException], () => createResult3.delegationToken().get()).getCause.isInstanceOf[InvalidPrincipalTypeException]
+    val renewer4 = List(SecurityUtils.parseKafkaPrincipal("Group:Renewer4")).asJava
+    val createResult4 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer4))
+    assertThrows(classOf[ExecutionException], () => createResult4.delegationToken().get()).getCause.isInstanceOf[InvalidPrincipalTypeException]
 
     // try describing tokens for unknown owner
     val unknownOwner = List(SecurityUtils.parseKafkaPrincipal("User:Unknown")).asJava
