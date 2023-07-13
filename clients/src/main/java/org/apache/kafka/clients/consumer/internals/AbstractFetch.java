@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import static org.apache.kafka.common.requests.FetchResponse.INVALID_LEADER_ID;
+
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -29,6 +33,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -594,14 +599,32 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                                                       final Errors error) {
         final TopicPartition tp = completedFetch.partition;
         final long fetchOffset = completedFetch.nextFetchOffset;
+        final FetchResponseData.PartitionData partition = completedFetch.partitionData;
 
-        if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
-                error == Errors.REPLICA_NOT_AVAILABLE ||
+        if ( error == Errors.REPLICA_NOT_AVAILABLE ||
                 error == Errors.KAFKA_STORAGE_ERROR ||
-                error == Errors.FENCED_LEADER_EPOCH ||
                 error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(tp);
+        } else if(error == Errors.NOT_LEADER_OR_FOLLOWER ||
+            error == Errors.FENCED_LEADER_EPOCH ) {
+            log.debug("Leader or epoch changed in fetch for partition {}: {}", tp, error.exceptionName());
+            LeaderIdAndEpoch responseLeaderEpoch = partition.currentLeader();
+            Metadata.LeaderAndEpoch currentLeaderEpoch = metadata.currentLeader(tp);
+
+            log.debug("Fetch - Leader/epoch changed response leaderAndEpoch: {}, existing LeaderAndEpoch {}, error: {}",
+                responseLeaderEpoch, currentLeaderEpoch, error.exceptionName());
+
+            // Validate if response leader epoch is ahead of existing leader epoch then redirect next fetch call to leader.
+            // Note: The leader update is done on best effort basis i.e. there might be scenarios where changed leader
+            // has epoch lesser than current assigned leader epoch in which case the update will not be successful from
+            // Fetch Response, and we shall fall back to metadata update.
+            if (responseLeaderEpoch.leaderEpoch() > currentLeaderEpoch.epoch.orElse(-1)) {
+                handleLeaderEpochUpdate(tp, responseLeaderEpoch, currentLeaderEpoch);
+            } else {
+                log.warn("Leader epoch is not updated for topic partition {}", tp);
+                requestMetadataUpdate(tp);
+            }
         } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
             log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
             requestMetadataUpdate(tp);
@@ -649,6 +672,49 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                     + fetchOffset
                     + " from topic-partition " + tp);
         }
+    }
+
+    private void handleLeaderEpochUpdate(TopicPartition tp, LeaderIdAndEpoch responseLeaderEpoch,
+        Metadata.LeaderAndEpoch currentLeaderEpoch) {
+        log.debug("Leader epoch {} has been changed for topic partition {}", responseLeaderEpoch.leaderEpoch(), tp);
+        // Clear preferred read replica, force next fetch call to leader itself.
+        subscriptions.clearPreferredReadReplica(tp);
+        // Note: Ideally we should update the partition metadata with current leader and required information.
+        // This also might require additional information like host, port, etc. hence for POC let's
+        // evaluate the impact of first version change and then evaluate if we need complete metadata
+        // like response in Fetch to support the metadata update.
+
+        // Response should have new leader information unless new leader cannot be elected for the partition.
+        if (responseLeaderEpoch.leaderId() == INVALID_LEADER_ID) {
+            log.warn("Leader not available for partition {}", tp);
+            requestMetadataUpdate(tp);
+            return;
+        }
+
+        int currentLeader = currentLeaderEpoch.leader.map(Node::id).orElse(INVALID_LEADER_ID);
+        if (responseLeaderEpoch.leaderId() != currentLeader) {
+            handleLeaderUpdate(tp, responseLeaderEpoch);
+        }
+        // Do nothing if leader remains same as next fetch call will be re-directed to leader itself which has updated
+        // replica and other information.
+    }
+
+    private void handleLeaderUpdate(TopicPartition tp, LeaderIdAndEpoch responseLeaderEpoch) {
+        log.debug("Leader change detected for topic partition {} to {}", tp, responseLeaderEpoch.leaderId());
+
+        // Update subscriptions current position to new leader for topic partition.
+        Optional<Node> leaderNode = metadata.fetchNodeByLeaderId(responseLeaderEpoch.leaderId());
+        if (!leaderNode.isPresent()) {
+            log.error("Leader {} not yet known in client metadata. Request metadata update for partition {}", responseLeaderEpoch.leaderId(), tp);
+            requestMetadataUpdate(tp);
+            return;
+        }
+
+        FetchPosition fetchPosition = subscriptions.position(tp);
+        subscriptions.seekUnvalidated(tp, new FetchPosition(fetchPosition.offset, fetchPosition.offsetEpoch,
+            new Metadata.LeaderAndEpoch(leaderNode, Optional.of(responseLeaderEpoch.leaderEpoch()))));
+
+        log.info("Leader successfully updated for topic partition {}", tp);
     }
 
     private void handleOffsetOutOfRange(final SubscriptionState.FetchPosition fetchPosition,

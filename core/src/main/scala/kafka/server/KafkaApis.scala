@@ -839,6 +839,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setRecords(unconvertedRecords)
               .setPreferredReadReplica(partitionData.preferredReadReplica)
               .setDivergingEpoch(partitionData.divergingEpoch)
+              // Do not check request version for POC
+              .setCurrentLeader(partitionData.currentLeader())
         }
       }
     }
@@ -860,6 +862,18 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setAbortedTransactions(abortedTransactions)
           .setRecords(data.records)
           .setPreferredReadReplica(data.preferredReadReplica.orElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+
+        data.error match {
+          case Errors.NOT_LEADER_OR_FOLLOWER | Errors.FENCED_LEADER_EPOCH =>
+            val partitionInfo = metadataCache.getPartitionInfo(tp.topic, tp.partition)
+            partitionInfo.foreach { info =>
+              partitionData.currentLeader()
+                .setLeaderId(info.leader())
+                .setLeaderEpoch(info.leaderEpoch)
+            }
+          case _ =>
+        }
+
         data.divergingEpoch.ifPresent(partitionData.setDivergingEpoch(_))
         partitions.put(tp, partitionData)
       }

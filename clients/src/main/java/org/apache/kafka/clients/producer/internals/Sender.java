@@ -39,6 +39,8 @@ import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -50,6 +52,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -608,16 +611,19 @@ public class Sender implements Runnable {
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
                             p.baseOffset(),
+                            ProduceResponse.INVALID_OFFSET,
                             p.logAppendTimeMs(),
                             p.logStartOffset(),
                             p.recordErrors()
                                 .stream()
                                 .map(e -> new ProduceResponse.RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
                                 .collect(Collectors.toList()),
-                            p.errorMessage());
+                            p.errorMessage(),
+                            p.currentLeader());
                     ProducerBatch batch = batches.get(tp);
                     completeBatch(batch, partResp, correlationId, now);
                 }));
+
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
             } else {
                 // this is the acks = 0 case, just complete all requests
@@ -687,7 +693,27 @@ public class Sender implements Runnable {
                             "to request metadata update now", batch.topicPartition,
                             error.exception(response.errorMessage).toString());
                 }
-                metadata.requestUpdate();
+
+                TopicPartition tp = batch.topicPartition;
+                LeaderIdAndEpoch responseLeaderEpoch = response.currentLeader;
+                Metadata.LeaderAndEpoch currentLeaderEpoch = metadata.currentLeader(tp);
+
+                log.debug("Produce - Response leaderAndEpoch: {}, existing LeaderAndEpoch {}", responseLeaderEpoch,
+                    currentLeaderEpoch);
+
+                // Validate if response leader epoch is ahead of existing leader epoch then update metadata cache with
+                // response leader and epoch.
+                // Note: The leader update is done on best effort basis i.e. there might be scenarios where changed leader
+                // has epoch lesser than current assigned leader epoch in which case the update will not be successful from
+                // Produce Response, and we shall fall back to metadata update.
+                if (responseLeaderEpoch.leaderEpoch() > currentLeaderEpoch.epoch.orElse(-1)) {
+                    log.debug("Leader/epoch changed. Response leaderAndEpoch: {}, existing LeaderAndEpoch {}, error: {}",
+                        responseLeaderEpoch, currentLeaderEpoch, error.exceptionName());
+                    handleLeaderAndEpochUpdate(tp, responseLeaderEpoch);
+                } else {
+                    log.warn("Produce leader epoch is not updated for topic partition {}", tp);
+                    metadata.requestUpdate();
+                }
             }
         } else {
             completeBatch(batch, response);
@@ -890,6 +916,20 @@ public class Sender implements Runnable {
                 requestTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
+    }
+
+    /**
+     * Handle leader and epoch update from Produce Response.
+     */
+    private void handleLeaderAndEpochUpdate(TopicPartition tp, LeaderIdAndEpoch responseLeaderEpoch) {
+        log.debug("Produce leader epoch {} has been changed for topic partition {}", responseLeaderEpoch.leaderEpoch(), tp);
+
+        // Update metadata cache with response leader and epoch. The produce request builder checks and validates leader
+        // and other information from metadata cache.
+        if (!metadata.updatePartitionLeaderAndEpoch(tp, responseLeaderEpoch.leaderId(), responseLeaderEpoch.leaderEpoch(), time.milliseconds())) {
+            log.debug("Unable to update partition leader, Requesting metadata update.");
+            metadata.requestUpdate();
+        }
     }
 
     /**

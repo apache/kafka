@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -235,6 +237,10 @@ public class Metadata implements Closeable {
         return new LeaderAndEpoch(leaderNodeOpt, leaderEpochOpt);
     }
 
+    public Optional<Node> fetchNodeByLeaderId(int leaderId) {
+        return cache.nodeById(leaderId);
+    }
+
     public synchronized void bootstrap(List<InetSocketAddress> addresses) {
         this.needFullUpdate = true;
         this.updateVersion += 1;
@@ -248,6 +254,55 @@ public class Metadata implements Closeable {
      */
     public synchronized void updateWithCurrentRequestVersion(MetadataResponse response, boolean isPartialUpdate, long nowMs) {
         this.update(this.requestVersion, response, isPartialUpdate, nowMs);
+    }
+
+    /**
+     * Update metadata cache for topic partition with leader id and epoch. This method is written only for metadata redirection POC.
+     */
+    public synchronized boolean updatePartitionLeaderAndEpoch(TopicPartition tp, int leaderId, int leaderEpoch, long nowMs) {
+        if (isClosed()) {
+            throw new IllegalStateException("Update requested after metadata close");
+        }
+
+        String clusterId = cache.clusterResource().clusterId();
+        MetadataResponse.PartitionMetadata partitionMetadata = cache.partitionMetadata(tp).orElseThrow(
+            () -> new IllegalStateException("No partition metadata present"));
+
+        // Check node exists for leader as POC doesn't support new node details in response rather relies on existing metadata.
+        Optional<Node> leaderNode = cache.nodeById(leaderId);
+        if (!leaderNode.isPresent()) {
+            log.error("Leader {} not yet known in client metadata. Request metadata update for partition {}", leaderNode, tp);
+            return false;
+        }
+
+        // Clone and change leader and epoch.
+        MetadataResponse.PartitionMetadata updatedPartitionMetadata = new PartitionMetadata(
+            partitionMetadata.error,
+            partitionMetadata.topicPartition,
+            Optional.of(leaderId),
+            Optional.of(leaderEpoch),
+            partitionMetadata.replicaIds,
+            partitionMetadata.inSyncReplicaIds,
+            partitionMetadata.offlineReplicaIds
+        );
+
+        log.debug("Metadata cache prior update: {}", this.cache);
+
+        lastSeenLeaderEpochs.put(tp, leaderEpoch);
+        // May be controller needs to be updated as well when existent leader node is the cluster controller or
+        // request for metadata update to completely refresh.
+        this.cache = cache.mergeWith(clusterId, cache.cluster().nodes().stream().collect(
+                Collectors.toMap(Node::id, e -> e)),
+            Collections.singletonList(updatedPartitionMetadata), Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), cache.cluster().controller(), cache.topicIds(),
+            (topic, isInternal) -> true);
+
+        this.lastSeenLeaderEpochs.keySet().removeIf(topicPartition -> !retainTopic(topicPartition.topic(), false, nowMs));
+        clusterResourceListeners.onUpdate(cache.clusterResource());
+        log.debug("Metadata cache after update: {}", this.cache);
+
+        log.info("Updated producer partition metadata using leader id and epoch");
+        return true;
     }
 
     /**

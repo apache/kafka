@@ -47,6 +47,7 @@ import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.ProduceResponseData.BatchIndexAndErrorMessage;
+import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -109,6 +110,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
+import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -1813,7 +1815,7 @@ public class SenderTest {
         assertEquals(OptionalLong.of(1000), transactionManager.lastAckedOffset(tp0));
         assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
 
-        client.respondToRequest(firstClientRequest, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.DUPLICATE_SEQUENCE_NUMBER, 0));
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, INVALID_OFFSET, Errors.DUPLICATE_SEQUENCE_NUMBER, 0));
 
         sender.runOnce(); // receive response 0
 
@@ -3057,6 +3059,94 @@ public class SenderTest {
         assertEquals(RETRY_BACKOFF_MS, time.milliseconds() - request2);
     }
 
+
+    @Test
+    public void testLeaderIdAndEpochUpdate() throws Exception {
+        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("test", 2)));
+
+        long offset = 0;
+        Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
+        sender.runOnce(); // connect
+        sender.runOnce(); // send produce request
+
+        String id = client.requests().peek().destination();
+        // Should be sent to node id 0.
+        assertEquals(0, Integer.parseInt(id));
+
+        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+
+        // Send node leader id 1 in response which should update cluster metadata.
+        client.respond(produceResponse(tp0, offset, Errors.NOT_LEADER_OR_FOLLOWER, 0, -1L, null, 1, 1));
+        sender.runOnce(); // receive error
+        assertEquals(0, client.inFlightRequestCount(), "All requests completed.");
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertFalse(client.hasInFlightRequests());
+
+        // Request should be re-enqueued.
+        sender.runOnce(); // resend queued request
+
+        id = client.requests().peek().destination();
+        // Should auto update leader node to 1 without metadata refresh.
+        assertEquals(1, Integer.parseInt(id));
+
+        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+
+        client.respond(produceResponse(tp0, offset, Errors.NONE, 0, -1L, null));
+        assertEquals(0, client.inFlightRequestCount(), "All requests completed.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertFalse(client.hasInFlightRequests());
+
+        sender.runOnce(); // complete batch
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        assertTrue(future.isDone(), "Request should be completed");
+        assertEquals(offset, future.get().offset());
+    }
+
+    @Test
+    public void testInvalidLeaderIdUpdate() throws Exception {
+        long offset = 0;
+        Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
+        sender.runOnce(); // connect
+        sender.runOnce(); // send produce request
+
+        String id = client.requests().peek().destination();
+        // Should be sent to node id 0.
+        assertEquals(0, Integer.parseInt(id));
+
+        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+
+        // Send non-existent node leader id 1 in response which should trigger metadata update.
+        client.respond(produceResponse(tp0, offset, Errors.NOT_LEADER_OR_FOLLOWER, 0, -1L, null, 1, 1));
+        sender.runOnce(); // receive error
+        assertEquals(0, client.inFlightRequestCount(), "All requests completed.");
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertFalse(client.hasInFlightRequests());
+
+        // Request should be re-enqueued.
+        sender.runOnce(); // resend and complete metadata update
+        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+
+        client.respond(produceResponse(tp0, offset, Errors.NONE, 0, -1L, null));
+        assertEquals(0, client.inFlightRequestCount(), "All requests completed.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertFalse(client.hasInFlightRequests());
+
+        sender.runOnce(); // complete batch
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        assertTrue(future.isDone(), "Request should be completed");
+        assertEquals(offset, future.get().offset());
+    }
+
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
         sender.runOnce(); // connect
@@ -3176,10 +3266,16 @@ public class SenderTest {
                 null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(), TestUtils.singletonCluster()).future;
     }
 
-    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, String errorMessage) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset,
-                RecordBatch.NO_TIMESTAMP, logStartOffset, Collections.emptyList(), errorMessage);
+        return produceResponse(tp, offset, error, throttleTimeMs, logStartOffset, errorMessage, -1, -1);
+    }
+
+    @SuppressWarnings("deprecation")
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs,
+        long logStartOffset, String errorMessage, int leaderId, int leaderEpoch) {
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, INVALID_OFFSET,
+            RecordBatch.NO_TIMESTAMP, logStartOffset, Collections.emptyList(), errorMessage,
+            new LeaderIdAndEpoch().setLeaderId(leaderId).setLeaderEpoch(leaderEpoch));
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }

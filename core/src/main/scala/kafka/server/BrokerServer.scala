@@ -172,6 +172,7 @@ class BrokerServer(
       sharedServer.startForBroker()
 
       info("Starting broker")
+      info("MSN: starting broker")
 
       config.dynamicConfig.initialize(zkClientOpt = None)
 

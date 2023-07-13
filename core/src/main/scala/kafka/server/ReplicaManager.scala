@@ -39,6 +39,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.{LeaderAndIsrPartitionError, LeaderAndIsrTopicError}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
+import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
@@ -753,6 +754,36 @@ class ReplicaManager(val config: KafkaConfig,
         val allResults = localProduceResults ++ unverifiedResults
 
         val produceStatus = allResults.map { case (topicPartition, result) =>
+
+          val currentLeaderIdAndEpoch =
+            result.error match {
+              case Errors.NOT_LEADER_OR_FOLLOWER =>
+                val partitionInfoOrError = getPartitionOrError(topicPartition)
+                val partitionInfo = metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
+                val leaderIdAndEpoch = new LeaderIdAndEpoch()
+                partitionInfo.foreach { info =>
+                  leaderIdAndEpoch
+                    .setLeaderId(info.leader())
+                    .setLeaderEpoch(info.leaderEpoch())
+                }
+                partitionInfoOrError match {
+                  case Right(x) =>
+                    if (x.leaderReplicaIdOpt.get != leaderIdAndEpoch.leaderId() || x.getLeaderEpoch != leaderIdAndEpoch.leaderEpoch()) {
+                      info(s"crispin appendRecords mismatch between metadata and local between leaderId or leaderEpoch " +
+                        s"cache leaderId ${x.leaderReplicaIdOpt.get} cache leaderEpoch ${x.getLeaderEpoch} metadata leaderId ${leaderIdAndEpoch.leaderId()} metadata leaderEpoch ${leaderIdAndEpoch.leaderEpoch()}")
+                    } else {
+                      info(s"crispin appendRecords same metadata and local leaderId and leaderEpoch " +
+                        s"cache leaderId ${x.leaderReplicaIdOpt.get} cache leaderEpoch ${x.getLeaderEpoch} metadata leaderId ${leaderIdAndEpoch.leaderId()} metadata leaderEpoch ${leaderIdAndEpoch.leaderEpoch()}")
+                    }
+                  case Left(x) =>
+                    info(s"crispin appendRecords unable to retrieve local leaderId and Epoch with error $x " +
+                      s"metadata leaderId ${leaderIdAndEpoch.leaderId()} metadata leaderEpoch ${leaderIdAndEpoch.leaderEpoch()}")
+                }
+                leaderIdAndEpoch
+              case _ =>
+                new LeaderIdAndEpoch()
+            }
+
           topicPartition -> ProducePartitionStatus(
             result.info.lastOffset + 1, // required offset
             new PartitionResponse(
@@ -762,7 +793,8 @@ class ReplicaManager(val config: KafkaConfig,
               result.info.logAppendTime,
               result.info.logStartOffset,
               result.info.recordErrors,
-              result.info.errorMessage
+              result.info.errorMessage,
+              currentLeaderIdAndEpoch
             )
           ) // response status
         }

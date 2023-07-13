@@ -69,6 +69,7 @@ public class FetchResponse extends AbstractResponse {
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
+    public static final int INVALID_LEADER_ID = -1;
 
     private final FetchResponseData data;
     // we build responseData when needed.

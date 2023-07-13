@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -45,6 +46,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.FetchResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
@@ -3467,6 +3469,139 @@ public class FetcherTest {
         assertThrows(KafkaException.class, this::fetchedRecords);
     }
 
+    @Test
+    public void testFetchMetadataWithLeaderEpochChange() {
+        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+            Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
+
+        subscriptions.assignFromUser(singleton(tp0));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds, false));
+        subscriptions.seek(tp0, 0);
+
+        // Pre-check - Node preferred replica before first fetch response
+        Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(-1, selected.id());
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(1)));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+
+        // Pre-check - Verify that selected read replicas exist.
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(1, selected.id());
+
+        // Pre-check - Validate exiting leader and epoch.
+        Metadata.LeaderAndEpoch currentLeaderEpoch = metadata.currentLeader(tp0);
+        assertTrue(currentLeaderEpoch.leader.isPresent());
+        assertEquals(0, currentLeaderEpoch.leader.get().id());
+        assertTrue(currentLeaderEpoch.epoch.isPresent());
+        assertEquals(0, currentLeaderEpoch.epoch.get());
+
+        // Pre-check - Validate existing fetch position.
+        FetchPosition fetchPosition = subscriptions.position(tp0);
+        assertEquals(new FetchPosition(4, Optional.empty(), currentLeaderEpoch), fetchPosition);
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Leader epoch updated  - preferred read replica should be cleared.
+        client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.EMPTY, Errors.NOT_LEADER_OR_FOLLOWER, -1L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(2), 0, 1));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        fetchedRecords();
+
+        // Validate read replica is cleared.
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(-1, selected.id());
+
+        // Validate exiting leader and epoch, no change.
+        currentLeaderEpoch = metadata.currentLeader(tp0);
+        assertTrue(currentLeaderEpoch.leader.isPresent());
+        assertEquals(0, currentLeaderEpoch.leader.get().id());
+        assertTrue(currentLeaderEpoch.epoch.isPresent());
+        assertEquals(0, currentLeaderEpoch.epoch.get());
+
+        // Validate existing fetch position, no change.
+        fetchPosition = subscriptions.position(tp0);
+        assertEquals(new FetchPosition(4, Optional.empty(), currentLeaderEpoch), fetchPosition);
+    }
+
+    @Test
+    public void testFetchMetadataWithLeaderIdChange() {
+        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+            Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
+
+        subscriptions.assignFromUser(singleton(tp0));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds, false));
+        subscriptions.seek(tp0, 0);
+
+        // Pre-check - Node preferred replica before first fetch response
+        Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(-1, selected.id());
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(1)));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+
+        // Pre-check - Verify that selected read replicas exist.
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(1, selected.id());
+
+        // Pre-check - Validate exiting leader and epoch.
+        Metadata.LeaderAndEpoch currentLeaderEpoch = metadata.currentLeader(tp0);
+        assertTrue(currentLeaderEpoch.leader.isPresent());
+        assertEquals(0, currentLeaderEpoch.leader.get().id());
+        assertTrue(currentLeaderEpoch.epoch.isPresent());
+        assertEquals(0, currentLeaderEpoch.epoch.get());
+
+        // Pre-check - Validate existing fetch position.
+        FetchPosition fetchPosition = subscriptions.position(tp0);
+        assertEquals(new FetchPosition(4, Optional.empty(), currentLeaderEpoch), fetchPosition);
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Leader id and epoch updated  - preferred read replica should be cleared, leader should be changed.
+        client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.EMPTY, Errors.NOT_LEADER_OR_FOLLOWER, -1L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(2), 1, 1));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        fetchedRecords();
+
+        // Validate read replica is cleared.
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(-1, selected.id());
+
+        // Validate exiting leader and epoch, no change.
+        currentLeaderEpoch = metadata.currentLeader(tp0);
+        assertTrue(currentLeaderEpoch.leader.isPresent());
+        assertEquals(0, currentLeaderEpoch.leader.get().id());
+        assertTrue(currentLeaderEpoch.epoch.isPresent());
+        assertEquals(0, currentLeaderEpoch.epoch.get());
+
+        // Validate existing fetch position, no change.
+        fetchPosition = subscriptions.position(tp0);
+        assertEquals(new FetchPosition(4, Optional.empty(), new Metadata.LeaderAndEpoch(
+            metadata.fetchNodeByLeaderId(1), Optional.of(1))), fetchPosition);
+    }
+
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
         TopicPartition topicPartition,
         Errors error,
@@ -3538,16 +3673,25 @@ public class FetcherTest {
     }
 
     private FetchResponse fullFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error, long hw,
-                                            long lastStableOffset, int throttleTime, Optional<Integer> preferredReplicaId) {
+        long lastStableOffset, int throttleTime, Optional<Integer> preferredReplicaId) {
+        return fullFetchResponse(tp, records, error, hw, lastStableOffset, throttleTime, preferredReplicaId, -1, -1);
+    }
+
+    private FetchResponse fullFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error, long hw,
+        long lastStableOffset, int throttleTime, Optional<Integer> preferredReplicaId, int leaderId, int leaderEpoch) {
+        LeaderIdAndEpoch leaderIdAndEpoch = new LeaderIdAndEpoch()
+            .setLeaderId(leaderId)
+            .setLeaderEpoch(leaderEpoch);
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
-                new FetchResponseData.PartitionData()
-                        .setPartitionIndex(tp.topicPartition().partition())
-                        .setErrorCode(error.code())
-                        .setHighWatermark(hw)
-                        .setLastStableOffset(lastStableOffset)
-                        .setLogStartOffset(0)
-                        .setRecords(records)
-                        .setPreferredReadReplica(preferredReplicaId.orElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID)));
+            new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp.topicPartition().partition())
+                .setErrorCode(error.code())
+                .setHighWatermark(hw)
+                .setLastStableOffset(lastStableOffset)
+                .setLogStartOffset(0)
+                .setRecords(records)
+                .setPreferredReadReplica(preferredReplicaId.orElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+                .setCurrentLeader(leaderIdAndEpoch));
         return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
     }
 
