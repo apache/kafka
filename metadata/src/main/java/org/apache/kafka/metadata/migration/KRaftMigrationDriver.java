@@ -473,6 +473,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                         "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 completionHandler.accept(null);
+                wakeup();
                 return;
             }
 
