@@ -105,24 +105,24 @@ public class GraphTest {
         assertEquals(3, edges.size());
         assertEquals(new Graph<Integer>().new Edge(1, 1, 3, 0, 1), edges.get(1));
         assertEquals(new Graph<Integer>().new Edge(3, 1, 1, 1, 0), edges.get(3));
-        assertEquals(new Graph<Integer>().new Edge(4, 1, 0, 1, 0), edges.get(4));
+        assertEquals(new Graph<Integer>().new Edge(4, 1, 0, 1, 0, false), edges.get(4));
 
         edges = residualGraph.edges(2);
         assertEquals(3, edges.size());
         assertEquals(new Graph<Integer>().new Edge(1, 1, 1, 1, 0), edges.get(1));
         assertEquals(new Graph<Integer>().new Edge(3, 1, 2, 0, 1), edges.get(3));
-        assertEquals(new Graph<Integer>().new Edge(4, 1, 0, 1, 0), edges.get(4));
+        assertEquals(new Graph<Integer>().new Edge(4, 1, 0, 1, 0, false), edges.get(4));
 
         edges = residualGraph.edges(1);
         assertEquals(3, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(0, 1, -3, 1, 0), edges.get(0));
-        assertEquals(new Graph<Integer>().new Edge(2, 1, -1, 0, 0), edges.get(2));
+        assertEquals(new Graph<Integer>().new Edge(0, 1, -3, 1, 0, false), edges.get(0));
+        assertEquals(new Graph<Integer>().new Edge(2, 1, -1, 0, 0, false), edges.get(2));
         assertEquals(new Graph<Integer>().new Edge(5, 1, 0, 0, 1), edges.get(5));
 
         edges = residualGraph.edges(3);
         assertEquals(3, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(0, 1, -1, 0, 0), edges.get(0));
-        assertEquals(new Graph<Integer>().new Edge(2, 1, -2, 1, 0), edges.get(2));
+        assertEquals(new Graph<Integer>().new Edge(0, 1, -1, 0, 0, false), edges.get(0));
+        assertEquals(new Graph<Integer>().new Edge(2, 1, -2, 1, 0, false), edges.get(2));
         assertEquals(new Graph<Integer>().new Edge(5, 1, 0, 0, 1), edges.get(5));
 
         assertTrue(residualGraph.isResidualGraph());
@@ -350,7 +350,4 @@ public class GraphTest {
             this.flow = flow;
         }
     }
-
-
-
 }

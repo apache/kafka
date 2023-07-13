@@ -35,8 +35,14 @@ public class Graph<V extends Comparable<V>> {
         int residualFlow;
         int flow;
         Edge counterEdge;
+        boolean forwardEdge;
 
         public Edge(final V destination, final int capacity, final int cost, final int residualFlow, final int flow) {
+            this(destination, capacity, cost, residualFlow, flow, true);
+        }
+
+        public Edge(final V destination, final int capacity, final int cost, final int residualFlow, final int flow,
+            final boolean forwardEdge) {
             Objects.requireNonNull(destination);
             if (capacity < 0) {
                 throw new IllegalArgumentException("Edge capacity cannot be negative");
@@ -51,6 +57,7 @@ public class Graph<V extends Comparable<V>> {
             this.cost = cost;
             this.residualFlow = residualFlow;
             this.flow = flow;
+            this.forwardEdge = forwardEdge;
         }
 
         @Override
@@ -65,18 +72,19 @@ public class Graph<V extends Comparable<V>> {
             final Graph<?>.Edge otherEdge = (Graph<?>.Edge) other;
 
             return destination.equals(otherEdge.destination) && capacity == otherEdge.capacity
-                && cost == otherEdge.cost && residualFlow == otherEdge.residualFlow && flow == otherEdge.flow;
+                && cost == otherEdge.cost && residualFlow == otherEdge.residualFlow && flow == otherEdge.flow
+                && forwardEdge == otherEdge.forwardEdge;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(destination, capacity, cost, residualFlow, flow);
+            return Objects.hash(destination, capacity, cost, residualFlow, flow, forwardEdge);
         }
 
         @Override
         public String toString() {
             return "{destination= " + destination + ", capacity=" + capacity + ", cost=" + cost
-                + ", residualFlow=" + residualFlow + ", flow=" + flow;
+                + ", residualFlow=" + residualFlow + ", flow=" + flow + ", forwardEdge=" + forwardEdge;
         }
     }
 
@@ -128,7 +136,7 @@ public class Graph<V extends Comparable<V>> {
         return totalCost;
     }
 
-    private void addEdge(final V u, final Edge edge) {
+    public void addEdge(final V u, final Edge edge) {
         if (!isResidualGraph) {
             // Check if there's already an edge from u to v
             final Map<V, Edge> edgeMap = adjList.get(edge.destination);
@@ -166,7 +174,7 @@ public class Graph<V extends Comparable<V>> {
             for (final Entry<V, Edge> nodeEdge : edges.entrySet()) {
                 final Edge edge = nodeEdge.getValue();
                 final Edge forwardEdge = new Edge(edge.destination, edge.capacity, edge.cost, edge.capacity - edge.flow, edge.flow);
-                final Edge backwardEdge = new Edge(node, edge.capacity, edge.cost * -1, edge.flow, 0);
+                final Edge backwardEdge = new Edge(node, edge.capacity, edge.cost * -1, edge.flow, 0, false);
                 forwardEdge.counterEdge = backwardEdge;
                 backwardEdge.counterEdge = forwardEdge;
                 residualGraph.addEdge(node, forwardEdge);
@@ -274,55 +282,67 @@ public class Graph<V extends Comparable<V>> {
                     continue;
                 }
                 cyclePossible = true;
-                V parentNode = parentNodes.get(nodeInCycle);
-                Edge parentEdge = parentEdges.get(nodeInCycle);
+                cancelNegativeCycle(nodeInCycle, parentNodes, parentEdges);
+            }
+        }
+    }
 
-                // Find max possible negative flow
-                int possibleFlow = parentEdge.residualFlow;
-                for (V curNode = parentNode; curNode != nodeInCycle; curNode = parentNodes.get(curNode)) {
-                    parentEdge = parentEdges.get(curNode);
-                    possibleFlow = Math.min(possibleFlow, parentEdge.residualFlow);
-                }
+    private void cancelNegativeCycle(final V nodeInCycle, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
+        // Start from parentNode since nodeInCyle is used as exit condition in below loops
+        final V parentNode = parentNodes.get(nodeInCycle);
+        Edge parentEdge = parentEdges.get(nodeInCycle);
 
-                // Update graph by removing negative flow
-                parentNode = parentNodes.get(nodeInCycle);
-                parentEdge = parentEdges.get(nodeInCycle);
-                Edge counterEdge = parentEdge.counterEdge;
-                parentEdge.residualFlow -= possibleFlow;
+        // Find max possible negative flow
+        int possibleFlow = parentEdge.residualFlow;
+        for (V curNode = parentNode; curNode != nodeInCycle; curNode = parentNodes.get(curNode)) {
+            parentEdge = parentEdges.get(curNode);
+            possibleFlow = Math.min(possibleFlow, parentEdge.residualFlow);
+        }
+
+        // Update graph by removing negative flow
+        parentEdge = parentEdges.get(nodeInCycle);
+        Edge counterEdge = parentEdge.counterEdge;
+        parentEdge.residualFlow -= possibleFlow;
+        if (parentEdge.forwardEdge) {
+            parentEdge.flow += possibleFlow;
+        }
+        counterEdge.residualFlow += possibleFlow;
+        if (counterEdge.forwardEdge && counterEdge.flow >= possibleFlow) {
+            counterEdge.flow -= possibleFlow;
+        }
+        for (V curNode = parentNode; curNode != nodeInCycle; curNode = parentNodes.get(curNode)) {
+            parentEdge = parentEdges.get(curNode);
+            counterEdge = parentEdge.counterEdge;
+            parentEdge.residualFlow -= possibleFlow;
+            if (parentEdge.forwardEdge) {
                 parentEdge.flow += possibleFlow;
-                counterEdge.residualFlow += possibleFlow;
-                if (counterEdge.flow >= possibleFlow) {
-                    counterEdge.flow -= possibleFlow;
-                }
-                for (V curNode = parentNode; curNode != nodeInCycle; curNode = parentNodes.get(curNode)) {
-                    parentEdge = parentEdges.get(curNode);
-                    counterEdge = parentEdge.counterEdge;
-                    parentEdge.residualFlow -= possibleFlow;
-                    parentEdge.flow += possibleFlow;
-                    counterEdge.residualFlow += possibleFlow;
-                    if (counterEdge.flow >= possibleFlow) {
-                        counterEdge.flow -= possibleFlow;
-                    }
-                }
+            }
+            counterEdge.residualFlow += possibleFlow;
+            if (counterEdge.forwardEdge && counterEdge.flow >= possibleFlow) {
+                counterEdge.flow -= possibleFlow;
             }
         }
     }
 
     /**
-     * Detect negative cycle using Bellman-ford shortest path algorithm
+     * Detect negative cycle using Bellman-ford shortest path algorithm.
      * @param source Source node
      * @param parentNodes Parent nodes to store negative cycle nodes
      * @param parentEdges Parent edges to store negative cycle edges
      *
      * @return One node in negative cycle if exists or null if there's no negative cycle
      */
-    private V detectNegativeCycles(final V source, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
+    V detectNegativeCycles(final V source, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
         // Use long to account for any overflow
         final Map<V, Long> distance = nodes.stream().collect(Collectors.toMap(node -> node, node -> (long) Integer.MAX_VALUE));
         distance.put(source, 0L);
         final int nodeCount = nodes.size();
 
+        // Iterate nodeCount iterations since Bellaman-Ford will find shortest path in nodeCount - 1
+        // iterations. If the distance can still be relaxed in nodeCount iteration, there's a negative
+        // cycle
         for (int i = 0; i < nodeCount; i++) {
+            // Iterate through all edges
             for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
                 final V u = nodeEdges.getKey();
                 for (final Entry<V, Edge> nodeEdge : nodeEdges.getValue().entrySet()) {
@@ -342,7 +362,6 @@ public class Graph<V extends Comparable<V>> {
                 }
             }
         }
-
         return null;
     }
 }
