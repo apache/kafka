@@ -28,7 +28,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public class Graph<V extends Comparable<V>> {
-    public class Edge implements Comparable<Edge> {
+    public class Edge {
         final V destination;
         final int capacity;
         final int cost;
@@ -38,26 +38,19 @@ public class Graph<V extends Comparable<V>> {
 
         public Edge(final V destination, final int capacity, final int cost, final int residualFlow, final int flow) {
             Objects.requireNonNull(destination);
+            if (capacity < 0) {
+                throw new IllegalArgumentException("Edge capacity cannot be negative");
+            }
+            if (flow > capacity) {
+                throw new IllegalArgumentException(String.format("Edge flow %d cannot exceed capacity %d",
+                    flow, capacity));
+            }
+
             this.destination = destination;
             this.capacity = capacity;
             this.cost = cost;
             this.residualFlow = residualFlow;
             this.flow = flow;
-        }
-
-        @Override
-        public int compareTo(final Edge o) {
-            int compare = destination.compareTo(o.destination);
-            if (compare != 0) {
-                return compare;
-            }
-
-            compare = capacity - o.capacity;
-            if (compare != 0) {
-                return compare;
-            }
-
-            return cost - o.cost;
         }
 
         @Override
@@ -104,11 +97,11 @@ public class Graph<V extends Comparable<V>> {
         addEdge(u, new Edge(v, capacity, cost, capacity - flow, flow));
     }
 
-    public Set<V> getNodes() {
+    public Set<V> nodes() {
         return nodes;
     }
 
-    public Map<V, Edge> getEdges(final V node) {
+    public Map<V, Edge> edges(final V node) {
         return adjList.get(node);
     }
 
@@ -124,7 +117,7 @@ public class Graph<V extends Comparable<V>> {
         sinkNode = node;
     }
 
-    public int getTotalCost() {
+    public int totalCost() {
         int totalCost = 0;
         for (final Map.Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final SortedMap<V, Edge> edges = nodeEdges.getValue();
@@ -136,14 +129,6 @@ public class Graph<V extends Comparable<V>> {
     }
 
     private void addEdge(final V u, final Edge edge) {
-        if (edge.capacity < 0) {
-            throw new IllegalArgumentException("Edge capacity cannot be negative");
-        }
-        if (edge.flow > edge.capacity) {
-            throw new IllegalArgumentException(String.format("Edge flow %d cannot exceed capacity %d",
-                edge.flow, edge.capacity));
-        }
-
         if (!isResidualGraph) {
             // Check if there's already an edge from u to v
             final Map<V, Edge> edgeMap = adjList.get(edge.destination);
@@ -169,12 +154,12 @@ public class Graph<V extends Comparable<V>> {
      *
      * @return Residual graph
      */
-    public Graph<V> getResidualGraph() {
+    public Graph<V> residualGraph() {
         if (isResidualGraph) {
             return this;
         }
 
-        final Graph<V> residulGraph = new Graph<>(true);
+        final Graph<V> residualGraph = new Graph<>(true);
         for (final Map.Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final V node = nodeEdges.getKey();
             final SortedMap<V, Edge> edges = nodeEdges.getValue();
@@ -184,11 +169,11 @@ public class Graph<V extends Comparable<V>> {
                 final Edge backwardEdge = new Edge(node, edge.capacity, edge.cost * -1, edge.flow, 0);
                 forwardEdge.counterEdge = backwardEdge;
                 backwardEdge.counterEdge = forwardEdge;
-                residulGraph.addEdge(node, forwardEdge);
-                residulGraph.addEdge(edge.destination, backwardEdge);
+                residualGraph.addEdge(node, forwardEdge);
+                residualGraph.addEdge(edge.destination, backwardEdge);
             }
         }
-        return residulGraph;
+        return residualGraph;
     }
 
     /**
@@ -196,7 +181,7 @@ public class Graph<V extends Comparable<V>> {
      */
     public void solveMinCostFlow() {
         validateMinCostGraph();
-        final Graph<V> residualGraph = getResidualGraph();
+        final Graph<V> residualGraph = residualGraph();
         residualGraph.cancelNegativeCycles();
 
         for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
