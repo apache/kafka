@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
@@ -101,11 +102,12 @@ public class MirrorMaker {
 
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 60L;
 
-    private static final List<Class<?>> CONNECTOR_CLASSES = Arrays.asList(
-        MirrorSourceConnector.class,
-        MirrorHeartbeatConnector.class,
-        MirrorCheckpointConnector.class);
- 
+    public static final List<Class<?>> CONNECTOR_CLASSES = Collections.unmodifiableList(
+        Arrays.asList(
+            MirrorSourceConnector.class,
+            MirrorHeartbeatConnector.class,
+            MirrorCheckpointConnector.class));
+
     private final Map<SourceAndTarget, Herder> herders = new HashMap<>();
     private CountDownLatch startLatch;
     private CountDownLatch stopLatch;
@@ -328,6 +330,11 @@ public class MirrorMaker {
                 MirrorMaker.this.stop();
             }
         }
+    }
+
+    public ConnectorStateInfo connectorStatus(SourceAndTarget sourceAndTarget, String connector) {
+        checkHerder(sourceAndTarget);
+        return herders.get(sourceAndTarget).connectorStatus(connector);
     }
 
     public static void main(String[] args) {

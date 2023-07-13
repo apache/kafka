@@ -53,6 +53,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
@@ -64,6 +65,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -83,6 +85,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private final GroupCoordinatorConfig config;
         private PartitionWriter<Record> writer;
         private CoordinatorLoader<Record> loader;
+        private Time time;
+        private Timer timer;
 
         public Builder(
             int nodeId,
@@ -102,6 +106,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public Builder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -109,6 +123,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Writer must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
+            if (time == null)
+                throw new IllegalArgumentException("Time must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d ", nodeId);
             LogContext logContext = new LogContext(String.format("[%s ]", logPrefix));

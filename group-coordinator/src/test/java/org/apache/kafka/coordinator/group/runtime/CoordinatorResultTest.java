@@ -33,8 +33,7 @@ public class CoordinatorResultTest {
     }
 
     @Test
-    public void testAttributesCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new CoordinatorResult<>(Collections.emptyList(), null));
+    public void testRecordsCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new CoordinatorResult<>(null, "response"));
     }
 

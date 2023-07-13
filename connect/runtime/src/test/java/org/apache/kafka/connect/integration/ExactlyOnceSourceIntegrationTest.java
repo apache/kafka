@@ -394,9 +394,12 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
         props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
 
-        // expect all records to be consumed and committed by the connector
-        connectorHandle.expectedRecords(MINIMUM_MESSAGES);
-        connectorHandle.expectedCommits(MINIMUM_MESSAGES);
+        // the connector aborts some transactions, which causes records that it has emitted (and for which
+        // SourceTask::commitRecord has been invoked) to be invisible to consumers; we expect the task to
+        // emit at most 233 records in total before 100 records have been emitted as part of one or more
+        // committed transactions
+        connectorHandle.expectedRecords(233);
+        connectorHandle.expectedCommits(233);
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -413,10 +416,10 @@ public class ExactlyOnceSourceIntegrationTest {
         consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka().consumeAll(
-                CONSUME_RECORDS_TIMEOUT_MS,
-                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
-                null,
-                topic
+            CONSUME_RECORDS_TIMEOUT_MS,
+            Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+            null,
+            topic
         );
         assertTrue("Not enough records produced by source connector. Expected at least: " + MINIMUM_MESSAGES + " + but got " + sourceRecords.count(),
                 sourceRecords.count() >= MINIMUM_MESSAGES);

@@ -32,7 +32,6 @@ import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
-import kafka.utils.timer.MockTimer
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
@@ -71,6 +70,7 @@ import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
+import org.apache.kafka.server.util.timer.MockTimer
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -112,11 +112,12 @@ class ReplicaManagerTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    // validate that the shutdown is working correctly by ensuring no lingering threads.
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
     TestUtils.clearYammerMetrics()
     Option(quotaManager).foreach(_.shutdown())
     metrics.close()
+    // validate that the shutdown is working correctly by ensuring no lingering threads.
+    // assert at the very end otherwise the other tear down steps will not be performed
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test

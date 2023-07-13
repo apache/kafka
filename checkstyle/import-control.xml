@@ -269,6 +269,7 @@
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage.internals"/>
     <allow pkg="org.apache.kafka.common" />
+    <allow pkg="com.github.benmanes.caffeine.cache" />
   </subpackage>
 
   <subpackage name="shell">

@@ -25,12 +25,12 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.UnifiedLog
 import kafka.server._
 import kafka.utils._
-import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
