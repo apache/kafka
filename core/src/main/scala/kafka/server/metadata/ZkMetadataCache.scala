@@ -202,26 +202,14 @@ class ZkMetadataCache(
                        errorUnavailableListeners: Boolean = false): Seq[MetadataResponseTopic] = {
     val snapshot = metadataSnapshot
 
-    // broker isn't yet available
-    if (!isInitialized()) {
-      topics.toSeq.map(topic =>
+    topics.toSeq.flatMap { topic =>
+      getPartitionMetadata(snapshot, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
         new MetadataResponseTopic()
-          .setErrorCode(Errors.BROKER_NOT_AVAILABLE.code)
+          .setErrorCode(Errors.NONE.code)
           .setName(topic)
-          .setTopicId(Uuid.ZERO_UUID)
+          .setTopicId(snapshot.topicIds.getOrElse(topic, Uuid.ZERO_UUID))
           .setIsInternal(Topic.isInternal(topic))
-          .setPartitions(Seq.empty.asJava)
-      )
-    } else {
-      topics.toSeq.flatMap { topic =>
-        getPartitionMetadata(snapshot, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
-          new MetadataResponseTopic()
-            .setErrorCode(Errors.NONE.code)
-            .setName(topic)
-            .setTopicId(snapshot.topicIds.getOrElse(topic, Uuid.ZERO_UUID))
-            .setIsInternal(Topic.isInternal(topic))
-            .setPartitions(partitionMetadata.toBuffer.asJava)
-        }
+          .setPartitions(partitionMetadata.toBuffer.asJava)
       }
     }
   }

@@ -50,7 +50,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.storage.internals.log.LogConfig
 
-import scala.collection.{Map, mutable, _}
+import scala.collection.{mutable, Map, _}
 import scala.jdk.CollectionConverters._
 
 object ZkAdminManager {
@@ -161,97 +161,101 @@ class ZkAdminManager(val config: KafkaConfig,
                    controllerMutationQuota: ControllerMutationQuota,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
-    // 1. map over topics creating assignment and calling zookeeper
-    val brokers = metadataCache.getAliveBrokers()
-    val metadata = toCreate.values.map(topic =>
-      try {
-        if (metadataCache.contains(topic.name))
-          throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
-
-        val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
-        if (nullConfigs.nonEmpty)
-          throw new InvalidConfigurationException(s"Null value not supported for topic configs: ${nullConfigs.mkString(",")}")
-
-        if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
-            && !topic.assignments().isEmpty) {
-          throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
-            "Both cannot be used at the same time.")
-        }
-
-        val resolvedNumPartitions = if (topic.numPartitions == NO_NUM_PARTITIONS)
-          defaultNumPartitions else topic.numPartitions
-        val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
-          defaultReplicationFactor else topic.replicationFactor
-
-        val assignments = if (topic.assignments.isEmpty) {
-          CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(
-            brokers.asJavaCollection, resolvedNumPartitions, resolvedReplicationFactor))
-        } else {
-          val assignments = new mutable.HashMap[Int, Seq[Int]]
-          // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
-          // this follows the existing logic in TopicCommand
-          topic.assignments.forEach { assignment =>
-            assignments(assignment.partitionIndex) = assignment.brokerIds.asScala.map(a => a: Int)
-          }
-          assignments
-        }
-        trace(s"Assignments for topic $topic are $assignments ")
-
-        val configs = new Properties()
-        topic.configs.forEach(entry => configs.setProperty(entry.name, entry.value))
-        adminZkClient.validateTopicCreate(topic.name, assignments, configs)
-        validateTopicCreatePolicy(topic, resolvedNumPartitions, resolvedReplicationFactor, assignments)
-
-        // For responses with DescribeConfigs permission, populate metadata and configs. It is
-        // safe to populate it before creating the topic because the values are unset if the
-        // creation fails.
-        maybePopulateMetadataAndConfigs(includeConfigsAndMetadata, topic.name, configs, assignments)
-
-        if (validateOnly) {
-          CreatePartitionsMetadata(topic.name, assignments.keySet)
-        } else {
-          controllerMutationQuota.record(assignments.size)
-          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId)
-          populateIds(includeConfigsAndMetadata, topic.name)
-          CreatePartitionsMetadata(topic.name, assignments.keySet)
-        }
-      } catch {
-        // Log client errors at a lower level than unexpected exceptions
-        case e: TopicExistsException =>
-          debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
-          CreatePartitionsMetadata(topic.name, e)
-        case e: ThrottlingQuotaExceededException =>
-          debug(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
-          CreatePartitionsMetadata(topic.name, e)
-        case e: ApiException =>
-          info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, e)
-        case e: ConfigException =>
-          info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, new InvalidConfigurationException(e.getMessage, e.getCause))
-        case e: Throwable =>
-          error(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, e)
-      }).toBuffer
-
-    // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
-    if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
-      val results = metadata.map { createTopicMetadata =>
-        // ignore topics that already have errors
-        if (createTopicMetadata.error.isSuccess && !validateOnly) {
-          (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
-        } else {
-          (createTopicMetadata.topic, createTopicMetadata.error)
-        }
-      }.toMap
-      responseCallback(results)
+    if (!metadataCache.isInitialized()) {
+      responseCallback(toCreate.view.mapValues(_ => new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)).toMap)
     } else {
-      // 3. else pass the assignments and errors to the delayed operation and set the keys
-      val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this,
-        responseCallback)
-      val delayedCreateKeys = toCreate.values.map(topic => TopicKey(topic.name)).toBuffer
-      // try to complete the request immediately, otherwise put it into the purgatory
-      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+      // 1. map over topics creating assignment and calling zookeeper
+      val brokers = metadataCache.getAliveBrokers()
+      val metadata = toCreate.values.map(topic =>
+        try {
+          if (metadataCache.contains(topic.name))
+            throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
+
+          val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
+          if (nullConfigs.nonEmpty)
+            throw new InvalidConfigurationException(s"Null value not supported for topic configs: ${nullConfigs.mkString(",")}")
+
+          if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
+            && !topic.assignments().isEmpty) {
+            throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
+              "Both cannot be used at the same time.")
+          }
+
+          val resolvedNumPartitions = if (topic.numPartitions == NO_NUM_PARTITIONS)
+            defaultNumPartitions else topic.numPartitions
+          val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
+            defaultReplicationFactor else topic.replicationFactor
+
+          val assignments = if (topic.assignments.isEmpty) {
+            CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(
+              brokers.asJavaCollection, resolvedNumPartitions, resolvedReplicationFactor))
+          } else {
+            val assignments = new mutable.HashMap[Int, Seq[Int]]
+            // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
+            // this follows the existing logic in TopicCommand
+            topic.assignments.forEach { assignment =>
+              assignments(assignment.partitionIndex) = assignment.brokerIds.asScala.map(a => a: Int)
+            }
+            assignments
+          }
+          trace(s"Assignments for topic $topic are $assignments ")
+
+          val configs = new Properties()
+          topic.configs.forEach(entry => configs.setProperty(entry.name, entry.value))
+          adminZkClient.validateTopicCreate(topic.name, assignments, configs)
+          validateTopicCreatePolicy(topic, resolvedNumPartitions, resolvedReplicationFactor, assignments)
+
+          // For responses with DescribeConfigs permission, populate metadata and configs. It is
+          // safe to populate it before creating the topic because the values are unset if the
+          // creation fails.
+          maybePopulateMetadataAndConfigs(includeConfigsAndMetadata, topic.name, configs, assignments)
+
+          if (validateOnly) {
+            CreatePartitionsMetadata(topic.name, assignments.keySet)
+          } else {
+            controllerMutationQuota.record(assignments.size)
+            adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId)
+            populateIds(includeConfigsAndMetadata, topic.name)
+            CreatePartitionsMetadata(topic.name, assignments.keySet)
+          }
+        } catch {
+          // Log client errors at a lower level than unexpected exceptions
+          case e: TopicExistsException =>
+            debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
+            CreatePartitionsMetadata(topic.name, e)
+          case e: ThrottlingQuotaExceededException =>
+            debug(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
+            CreatePartitionsMetadata(topic.name, e)
+          case e: ApiException =>
+            info(s"Error processing create topic request $topic", e)
+            CreatePartitionsMetadata(topic.name, e)
+          case e: ConfigException =>
+            info(s"Error processing create topic request $topic", e)
+            CreatePartitionsMetadata(topic.name, new InvalidConfigurationException(e.getMessage, e.getCause))
+          case e: Throwable =>
+            error(s"Error processing create topic request $topic", e)
+            CreatePartitionsMetadata(topic.name, e)
+        }).toBuffer
+
+      // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
+      if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
+        val results = metadata.map { createTopicMetadata =>
+          // ignore topics that already have errors
+          if (createTopicMetadata.error.isSuccess && !validateOnly) {
+            (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
+          } else {
+            (createTopicMetadata.topic, createTopicMetadata.error)
+          }
+        }.toMap
+        responseCallback(results)
+      } else {
+        // 3. else pass the assignments and errors to the delayed operation and set the keys
+        val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this,
+          responseCallback)
+        val delayedCreateKeys = toCreate.values.map(topic => TopicKey(topic.name)).toBuffer
+        // try to complete the request immediately, otherwise put it into the purgatory
+        topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+      }
     }
   }
 

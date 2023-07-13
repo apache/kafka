@@ -170,17 +170,6 @@ public class TopicMetadataFetcherTest {
     }
 
     @Test
-    public void testGetTopicMetadataBrokerNotAvailable() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        client.prepareResponse(newMetadataResponse(Errors.BROKER_NOT_AVAILABLE));
-        client.prepareResponse(newMetadataResponse(Errors.NONE));
-
-        List<PartitionInfo> topicMetadata = topicMetadataFetcher.getTopicMetadata(topicName, true, time.timer(5000L));
-        assertNotNull(topicMetadata);
-    }
-
-    @Test
     public void testGetTopicMetadataOfflinePartitions() {
         buildFetcher();
         assignFromUser(singleton(tp0));
