@@ -13,7 +13,9 @@
  # See the License for the specific language governing permissions and
  # limitations under the License.
 
-test.plugins.CoLocatedPlugin
-test.plugins.MissingSuperclassConverter
-test.plugins.NoDefaultConstructorConverter
-test.plugins.NoDefaultConstructorConverter
+test.plugins.DefaultConstructorPrivateConnector
+test.plugins.DefaultConstructorThrowsConnector
+test.plugins.NoDefaultConstructorConnector
+test.plugins.StaticInitializerThrowsConnector
+test.plugins.OuterClass$InnerClass
+test.plugins.VersionMethodThrowsConnector
