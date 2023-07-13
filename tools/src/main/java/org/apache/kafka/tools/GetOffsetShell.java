@@ -17,6 +17,7 @@
 
 package org.apache.kafka.tools;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
@@ -147,7 +148,11 @@ public class GetOffsetShell {
                 CommandLineUtils.printUsageAndExit(parser, "An interactive shell for getting topic-partition offsets.");
             }
 
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+            } catch (OptionException e) {
+                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+            }
 
             if (options.has(bootstrapServerOpt)) {
                 effectiveBrokerListOpt = bootstrapServerOpt;
