@@ -42,8 +42,8 @@ public class SystemTimerReaper implements Timer {
         }
     }
 
-    private Timer timer;
-    private Reaper reaper;
+    private final Timer timer;
+    private final Reaper reaper;
 
     public SystemTimerReaper(String reaperThreadName, Timer timer) {
         this.timer = timer;
@@ -69,7 +69,7 @@ public class SystemTimerReaper implements Timer {
     @Override
     public void close() throws Exception {
         reaper.initiateShutdown();
-        // Improve shutdown time by waking up any ShutdownableThread(s)
+        // Improve shutdown time by waking up the reaper thread
         // blocked on poll by sending a no-op.
         timer.add(new TimerTask(0) {
             @Override
