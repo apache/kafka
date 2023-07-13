@@ -33,13 +33,11 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.util.Deadline;
 import org.apache.kafka.server.util.FutureUtils;
 import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Map;
@@ -51,7 +49,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -185,7 +182,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private boolean isControllerQuorumReadyForMigration() {
         Optional<String> notReadyMsg = this.quorumFeatures.reasonAllControllersZkMigrationNotReady();
         if (notReadyMsg.isPresent()) {
-            log.info("Still waiting for all controller nodes ready to begin the migration. Not ready due to:" + notReadyMsg.get());
+            log.warn("Still waiting for all controller nodes ready to begin the migration. Not ready due to:" + notReadyMsg.get());
             return false;
         }
         return true;
@@ -612,10 +609,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             try {
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
+                        log.info("Migrating {} records from ZK", batch.size());
                         if (log.isTraceEnabled()) {
-                            log.trace("Migrating {} records from ZK: {}", batch.size(), batchToRedactedString(batch));
-                        } else {
-                            log.info("Migrating {} records from ZK", batch.size());
+                            batch.forEach(apiMessageAndVersion ->
+                                log.trace(recordRedactor.toLoggableString(apiMessageAndVersion.message())));
                         }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
                         FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, "",
@@ -623,6 +620,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                             future, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
                         manifestBuilder.acceptBatch(batch);
                     } catch (Throwable e) {
+                        // This will cause readAllMetadata to throw since this batch consumer is called directly from readAllMetadata
                         throw new RuntimeException(e);
                     }
                 }, brokersInMetadata::add);
@@ -733,13 +731,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     new EventQueue.DeadlineFunction(deadline),
                     new PollEvent());
         }
-    }
-
-    String batchToRedactedString(Collection<ApiMessageAndVersion> batch) {
-        String batchString = batch.stream()
-            .map(apiMessageAndVersion -> recordRedactor.toLoggableString(apiMessageAndVersion.message()))
-            .collect(Collectors.joining(","));
-        return "[" + batchString + "]";
     }
 
     static KRaftMigrationOperationConsumer countingOperationConsumer(
