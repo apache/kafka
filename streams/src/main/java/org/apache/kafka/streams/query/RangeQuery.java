@@ -48,6 +48,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
     /**
      * Interactive range query using a lower and upper bound to filter the keys returned.
+     * If both <K,V> are null, RangQuery returns a full range scan.
      * @param lower The key that specifies the lower bound of the range
      * @param upper The key that specifies the upper bound of the range
      * @param <K> The key type
