@@ -379,7 +379,19 @@ public class ReplicationControlManager {
     }
 
     public void replay(TopicRecord record) {
-        topicsByName.put(record.name(), record.topicId());
+        Uuid existingUuid = topicsByName.put(record.name(), record.topicId());
+        if (existingUuid != null) {
+            // We don't currently support sending a second TopicRecord for the same topic name...
+            // unless, of course, there is a RemoveTopicRecord in between.
+            if (existingUuid.equals(record.topicId())) {
+                throw new RuntimeException("Found duplicate TopicRecord for " + record.name() +
+                        " with topic ID " + record.topicId());
+            } else {
+                throw new RuntimeException("Found duplicate TopicRecord for " + record.name() +
+                        " with a different ID than before. Previous ID was " + existingUuid +
+                        " and new ID is " + record.topicId());
+            }
+        }
         if (Topic.hasCollisionChars(record.name())) {
             String normalizedName = Topic.unifyCollisionChars(record.name());
             TimelineHashSet<String> topicNames = topicsWithCollisionChars.get(normalizedName);
@@ -391,7 +403,7 @@ public class ReplicationControlManager {
         }
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
-        log.info("Created topic {} with topic ID {}.", record.name(), record.topicId());
+        log.info("Replayed TopicRecord for topic {} with topic ID {}.", record.name(), record.topicId());
     }
 
     public void replay(PartitionRecord record) {
@@ -405,13 +417,16 @@ public class ReplicationControlManager {
         String description = topicInfo.name + "-" + record.partitionId() +
             " with topic ID " + record.topicId();
         if (prevPartInfo == null) {
-            log.info("Created partition {} and {}.", description, newPartInfo);
+            log.info("Replayed PartitionRecord for new partition {} and {}.", description,
+                    newPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
             updateReassigningTopicsIfNeeded(record.topicId(), record.partitionId(),
                     false,  isReassignmentInProgress(newPartInfo));
         } else if (!newPartInfo.equals(prevPartInfo)) {
+            log.info("Replayed PartitionRecord for existing partition {} and {}.", description,
+                    newPartInfo);
             newPartInfo.maybeLogPartitionChange(log, description, prevPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), prevPartInfo.isr,
@@ -475,8 +490,8 @@ public class ReplicationControlManager {
 
         if (record.removingReplicas() != null || record.addingReplicas() != null) {
             log.info("Replayed partition assignment change {} for topic {}", record, topicInfo.name);
-        } else if (log.isTraceEnabled()) {
-            log.trace("Replayed partition change {} for topic {}", record, topicInfo.name);
+        } else if (log.isDebugEnabled()) {
+            log.debug("Replayed partition change {} for topic {}", record, topicInfo.name);
         }
     }
 
@@ -516,7 +531,7 @@ public class ReplicationControlManager {
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
 
-        log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
+        log.info("Replayed RemoveTopicRecord for topic {} with ID {}.", topic.name, record.topicId());
     }
 
     ControllerResult<CreateTopicsResponseData> createTopics(

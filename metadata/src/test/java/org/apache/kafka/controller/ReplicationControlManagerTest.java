@@ -2571,4 +2571,26 @@ public class ReplicationControlManagerTest {
         return Arrays.stream(isr).map(brokerId -> brokerState(brokerId, defaultBrokerEpoch(brokerId)))
             .collect(Collectors.toList());
     }
+
+    @Test
+    public void testDuplicateTopicIdReplay() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        replicationControl.replay(new TopicRecord().
+                setName("foo").
+                setTopicId(Uuid.fromString("Ktv3YkMQRe-MId4VkkrMyw")));
+        assertEquals("Found duplicate TopicRecord for foo with topic ID Ktv3YkMQRe-MId4VkkrMyw",
+            assertThrows(RuntimeException.class,
+                () -> replicationControl.replay(new TopicRecord().
+                    setName("foo").
+                    setTopicId(Uuid.fromString("Ktv3YkMQRe-MId4VkkrMyw")))).
+                        getMessage());
+        assertEquals("Found duplicate TopicRecord for foo with a different ID than before. " +
+            "Previous ID was Ktv3YkMQRe-MId4VkkrMyw and new ID is 8auUWq8zQqe_99H_m2LAmw",
+                assertThrows(RuntimeException.class,
+                        () -> replicationControl.replay(new TopicRecord().
+                                setName("foo").
+                                setTopicId(Uuid.fromString("8auUWq8zQqe_99H_m2LAmw")))).
+                        getMessage());
+    }
 }
