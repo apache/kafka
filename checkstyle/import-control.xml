@@ -448,6 +448,7 @@
     <subpackage name="sink">
       <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.connect.connector" />
+      <allow pkg="org.apache.kafka.connect.transforms" />
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 

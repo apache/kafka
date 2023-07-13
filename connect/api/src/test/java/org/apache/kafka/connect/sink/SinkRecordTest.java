@@ -125,4 +125,19 @@ public class SinkRecordTest {
         Header header = record.headers().lastWithName("intHeader");
         assertEquals(100, (int) Values.convertToInteger(header.schema(), header.value()));
     }
+
+    @Test
+    public void shouldRetainOriginalTopicPartition() {
+        SinkRecord transformed = record.newRecord("transformed-topic", PARTITION_NUMBER + 1, Schema.STRING_SCHEMA, "key",
+                Schema.BOOLEAN_SCHEMA, false, KAFKA_TIMESTAMP);
+
+        assertEquals(TOPIC_NAME, transformed.originalTopic());
+        assertEquals(PARTITION_NUMBER, transformed.originalKafkaPartition());
+
+        SinkRecord transformed2 = transformed.newRecord("transformed-topic-2", PARTITION_NUMBER + 2, Schema.STRING_SCHEMA, "key",
+                Schema.BOOLEAN_SCHEMA, false, KAFKA_TIMESTAMP);
+
+        assertEquals(TOPIC_NAME, transformed2.originalTopic());
+        assertEquals(PARTITION_NUMBER, transformed2.originalKafkaPartition());
+    }
 }
