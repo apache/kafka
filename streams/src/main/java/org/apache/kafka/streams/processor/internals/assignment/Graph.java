@@ -136,7 +136,7 @@ public class Graph<V extends Comparable<V>> {
         return totalCost;
     }
 
-    public void addEdge(final V u, final Edge edge) {
+    private void addEdge(final V u, final Edge edge) {
         if (!isResidualGraph) {
             // Check if there's already an edge from u to v
             final Map<V, Edge> edgeMap = adjList.get(edge.destination);
