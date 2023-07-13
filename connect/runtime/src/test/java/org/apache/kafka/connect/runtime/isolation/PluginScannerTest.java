@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
@@ -42,7 +43,7 @@ public class PluginScannerTest {
     @Rule
     public TemporaryFolder pluginDir = new TemporaryFolder();
 
-    public PluginScanner scanner;
+    private final PluginScanner scanner;
 
     @Parameterized.Parameters
     public static Collection<Object[]> parameters() {
@@ -81,10 +82,8 @@ public class PluginScannerTest {
         );
         Set<String> classes = new HashSet<>();
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertTrue("Expected " + pluginClassName + "to be discovered but it was not",
-                    classes.contains(pluginClassName));
-        }
+        Set<String> expectedClasses = new HashSet<>(TestPlugins.pluginClasses());
+        assertEquals(expectedClasses, classes);
     }
 
     @Test
@@ -142,10 +141,8 @@ public class PluginScannerTest {
         );
         Set<String> classes = new HashSet<>();
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertTrue("Expected " + pluginClassName + "to be discovered but it was not",
-                    classes.contains(pluginClassName));
-        }
+        Set<String> expectedClasses = new HashSet<>(TestPlugins.pluginClasses());
+        assertEquals(expectedClasses, classes);
     }
 
     private PluginScanResult scan(List<Path> pluginLocations) {

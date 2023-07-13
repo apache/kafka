@@ -63,7 +63,8 @@ import java.util.TreeSet;
  * </ul>
  * <p>Note: This scanner has a runtime proportional to the number of overall classes in the passed-in
  * {@link PluginSource} objects, which may be significant for plugins with large dependencies. For a more performant
- * implementation, consider using {@link ServiceLoaderScanner} and follow migration instructions for KIP-898.
+ * implementation, consider using {@link ServiceLoaderScanner} and follow migration instructions for
+ * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-898%3A+Modernize+Connect+plugin+discovery">KIP-898</a>.
  */
 public class ReflectionScanner extends PluginScanner {
 
