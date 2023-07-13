@@ -41,6 +41,8 @@ import org.apache.kafka.server.util.TopicFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter.CompositeTopicPartitionFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter.TopicFilterAndPartitionFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -58,6 +60,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class GetOffsetShell {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GetOffsetShell.class);
     private static final Pattern TOPIC_PARTITION_PATTERN = Pattern.compile("([^:,]*)(?::(?:([0-9]*)|(?:([0-9]*)-([0-9]*))))?");
 
     public static void main(String... args) {
@@ -150,6 +153,8 @@ public class GetOffsetShell {
                 effectiveBrokerListOpt = bootstrapServerOpt;
             } else {
                 effectiveBrokerListOpt = brokerListOpt;
+
+                LOGGER.warn("The 'broker-list' option is deprecated and will be removed in the next major release. Use the `bootstrap-server` option with the same syntax.");
             }
 
             CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
