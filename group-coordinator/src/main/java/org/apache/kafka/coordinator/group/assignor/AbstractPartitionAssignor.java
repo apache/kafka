@@ -34,8 +34,9 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
       return null;
   }
 
+  @Override
   public GroupAssignment assign(TopicAndClusterMetadata metadataImages, AssignmentSpec assignmentSpec) {
-    List<RackAwareTopicIdPartition> rackAwareTopicIdPartitions = new ArrayList<>(assignmentSpec.topics().entrySet().stream()
+    List<RackAwareTopicIdPartition> rackAwareTopicIdPartitions = assignmentSpec.topics().entrySet().stream()
         .flatMap(entry -> {
           Uuid topicId = entry.getKey();
           AssignmentTopicMetadata topicSpec = entry.getValue();
@@ -48,12 +49,13 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                 }
                 return new RackAwareTopicIdPartition(topicId, partition, Optional.of(racks));
               });
-        }).collect(Collectors.toList()));
+        }).collect(Collectors.toList());
 
-        return assign(Optional.of(rackAwareTopicIdPartitions), assignmentSpec);
+        return assign(rackAwareTopicIdPartitions, assignmentSpec);
   }
 
-  public GroupAssignment assign(Optional<List<RackAwareTopicIdPartition>> partitionRackInfo, AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+  @Override
+  public GroupAssignment assign(List<RackAwareTopicIdPartition> partitionRackInfo, AssignmentSpec assignmentSpec) throws PartitionAssignorException {
       throw new PartitionAssignorException("Implementation doesn't exist");
   }
 
