@@ -201,7 +201,6 @@ class ZkMetadataCache(
                        errorUnavailableEndpoints: Boolean = false,
                        errorUnavailableListeners: Boolean = false): Seq[MetadataResponseTopic] = {
     val snapshot = metadataSnapshot
-
     topics.toSeq.flatMap { topic =>
       getPartitionMetadata(snapshot, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
         new MetadataResponseTopic()

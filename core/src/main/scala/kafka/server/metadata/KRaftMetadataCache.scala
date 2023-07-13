@@ -174,7 +174,6 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                                 errorUnavailableEndpoints: Boolean = false,
                                 errorUnavailableListeners: Boolean = false): Seq[MetadataResponseTopic] = {
     val image = _currentImage
-
     topics.toSeq.flatMap { topic =>
       getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
         new MetadataResponseTopic()
