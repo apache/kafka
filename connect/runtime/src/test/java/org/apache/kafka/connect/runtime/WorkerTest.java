@@ -2020,7 +2020,7 @@ public class WorkerTest {
     }
 
     @Test
-    public void testNormalizeOffsets() throws Exception {
+    public void testNormalizeSourceConnectorOffsets() throws Exception {
         Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
                 Collections.singletonMap("filename", "/path/to/filename"),
                 Collections.singletonMap("position", 20)
@@ -2039,7 +2039,7 @@ public class WorkerTest {
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                 noneConnectorClientConfigOverridePolicy, null);
 
-        Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = worker.normalizeOffsets(offsets);
+        Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = worker.normalizeSourceConnectorOffsets(offsets);
         assertEquals(1, normalizedOffsets.size());
 
         // The integer value 20 gets deserialized as a long value by the JsonConverter

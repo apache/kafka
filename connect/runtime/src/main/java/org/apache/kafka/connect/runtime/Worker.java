@@ -1549,7 +1549,7 @@ public class Worker {
                     offsetsToWrite = offsets;
                 }
 
-                Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = normalizeOffsets(offsetsToWrite);
+                Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = normalizeSourceConnectorOffsets(offsetsToWrite);
 
                 boolean alterOffsetsResult;
                 try {
@@ -1623,7 +1623,7 @@ public class Worker {
      * @return the normalized offsets
      */
     @SuppressWarnings("unchecked")
-    Map<Map<String, ?>, Map<String, ?>> normalizeOffsets(Map<Map<String, ?>, Map<String, ?>> originalOffsets) {
+    Map<Map<String, ?>, Map<String, ?>> normalizeSourceConnectorOffsets(Map<Map<String, ?>, Map<String, ?>> originalOffsets) {
         Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = new HashMap<>();
         for (Map.Entry<Map<String, ?>, Map<String, ?>> entry : originalOffsets.entrySet()) {
             OffsetUtils.validateFormat(entry.getKey());
