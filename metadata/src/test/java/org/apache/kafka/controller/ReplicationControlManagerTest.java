@@ -2574,7 +2574,7 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testDuplicateTopicIdReplay() {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        final ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         replicationControl.replay(new TopicRecord().
                 setName("foo").
