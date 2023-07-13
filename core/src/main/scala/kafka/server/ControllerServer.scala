@@ -246,7 +246,10 @@ class ControllerServer(
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
           setZkMigrationEnabled(config.migrationEnabled).
           setDelegationTokenCache(tokenCache).
-          setDelegationTokenSecretKeyString(delegationTokenKeyString)
+          setDelegationTokenSecretKeyString(delegationTokenKeyString).
+          setDelegationTokenMaxLifeMs(config.delegationTokenMaxLifeMs).
+          setDelegationTokenExpiryTimeMs(config.delegationTokenExpiryTimeMs).
+          setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
