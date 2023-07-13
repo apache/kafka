@@ -137,13 +137,13 @@ public class FileStreamSourceConnector extends SourceConnector {
             }
 
             // The 'position' in the offset represents the position in the file's byte stream and should be a non-negative long value
-            try {
-                long offsetPosition = Long.parseLong(String.valueOf(offset.get(POSITION_FIELD)));
-                if (offsetPosition < 0) {
-                    throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset should be a non-negative number");
-                }
-            } catch (NumberFormatException e) {
-                throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset should be a number");
+            if (!(offset.get(POSITION_FIELD) instanceof Long)) {
+                throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset is expected to be a Long value");
+            }
+
+            long offsetPosition = (Long) offset.get(POSITION_FIELD);
+            if (offsetPosition < 0) {
+                throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset should be a non-negative value");
             }
         }
 
