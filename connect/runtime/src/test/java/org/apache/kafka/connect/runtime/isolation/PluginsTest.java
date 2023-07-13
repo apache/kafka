@@ -503,7 +503,7 @@ public class PluginsTest {
         assertTrue("Should find plugin in plugin classloader",
                 plugins.converters().stream().anyMatch(desc -> desc.loader() instanceof PluginClassLoader));
         assertTrue("Should find plugin in parent classloader",
-                plugins.converters().stream().anyMatch(desc -> !(desc.loader() instanceof PluginClassLoader)));
+                plugins.converters().stream().anyMatch(desc -> parent.equals(desc.loader())));
 
         Converter converter = plugins.newPlugin(
                 className,
