@@ -244,7 +244,7 @@ netty-transport-4.1.94.Final
 netty-transport-classes-epoll-4.1.94.Final
 netty-transport-native-epoll-4.1.94.Final
 netty-transport-native-unix-common-4.1.94.Final
-plexus-utils-3.3.0
+plexus-utils-3.3.1
 reload4j-1.2.25
 rocksdbjni-7.1.2
 scala-collection-compat_2.13-2.10.0
@@ -307,7 +307,6 @@ argparse4j-0.7.0, see: licenses/argparse-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
 slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
-classgraph-4.8.138, see: license/classgraph-MIT
 
 ---------------------------------------
 BSD 2-Clause
