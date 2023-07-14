@@ -2028,12 +2028,7 @@ public class WorkerTest {
 
         assertTrue(offsets.values().iterator().next().get("position") instanceof Integer);
 
-        JsonConverter jsonConverter = new JsonConverter();
-        jsonConverter.configure(Collections.singletonMap(SCHEMAS_ENABLE_CONFIG, false), false);
-        when(plugins.newInternalConverter(eq(true), anyString(), anyMap()))
-                .thenReturn(jsonConverter);
-        when(plugins.newInternalConverter(eq(false), anyString(), anyMap()))
-                .thenReturn(jsonConverter);
+        mockInternalConverters();
 
         mockKafkaClusterId();
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,

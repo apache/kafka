@@ -1629,9 +1629,9 @@ public class Worker {
             OffsetUtils.validateFormat(entry.getKey());
             OffsetUtils.validateFormat(entry.getValue());
             byte[] serializedKey = internalKeyConverter.fromConnectData("", null, entry.getKey());
-            byte[] serializedValue = internalKeyConverter.fromConnectData("", null, entry.getValue());
+            byte[] serializedValue = internalValueConverter.fromConnectData("", null, entry.getValue());
             Object deserializedKey = internalKeyConverter.toConnectData("", serializedKey).value();
-            Object deserializedValue = internalKeyConverter.toConnectData("", serializedValue).value();
+            Object deserializedValue = internalValueConverter.toConnectData("", serializedValue).value();
             normalizedOffsets.put((Map<String, ?>) deserializedKey, (Map<String, ?>) deserializedValue);
         }
 
