@@ -316,9 +316,6 @@ class ReplicaManager(val config: KafkaConfig,
   // Visible for testing
   private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
-  // Visible for testing
-  private[kafka] def getAllPartitions: Pool[TopicPartition, HostedPartition] = allPartitions
-
   metricsGroup.newGauge(LeaderCountMetricName, () => leaderPartitionsIterator.size)
   // Visible for testing
   private[kafka] val partitionCount = metricsGroup.newGauge(PartitionCountMetricName, () => allPartitions.size)
@@ -561,6 +558,9 @@ class ReplicaManager(val config: KafkaConfig,
         }
         partitionsToDelete += topicPartition
       }
+      // Whether the `topicPartition` is deleted or the broker where the `topicPartition` is located is stopped,
+      // the metrics in `Partition` should be removed.
+      Partition.removeMetrics(topicPartition)
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
       completeDelayedFetchOrProduceRequests(topicPartition)
@@ -2221,7 +2221,6 @@ class ReplicaManager(val config: KafkaConfig,
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
     removeAllTopicMetrics()
-    removeAllPartitionMetrics()
     addPartitionsToTxnManager.foreach(_.shutdown())
     info("Shut down completely")
   }
@@ -2232,16 +2231,6 @@ class ReplicaManager(val config: KafkaConfig,
       if (allTopics.add(partition.topic())) {
         brokerTopicStats.removeMetrics(partition.topic())
       })
-  }
-
-  private def removeAllPartitionMetrics(): Unit = {
-    allPartitions.values.foreach { hostedPartition =>
-      hostedPartition match {
-        case HostedPartition.Online(partition) =>
-          partition.removeMetrics(partition.topicPartition)
-        case _ =>    // In the other two cases, the metrics has been removed when the partition state changes
-      }
-    }
   }
 
   protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {

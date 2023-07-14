@@ -20,7 +20,6 @@ import java.net.InetAddress
 import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log._
-import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
@@ -47,21 +46,19 @@ import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
-import org.apache.kafka.server.util.{KafkaScheduler, MockScheduler, MockTime}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
@@ -2651,57 +2648,9 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertTrue(Partition.MetricNames.forall(getMetric(_).isDefined))
 
-    partition.removeMetrics(topicPartition)
+    Partition.removeMetrics(topicPartition)
 
     assertEquals(Set(), KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
-  }
-
-  @Test
-  def testRemovePartitionMetricsWhenShutdown(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
-    val config = KafkaConfig.fromProps(props)
-    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
-    try {
-      val rm = new ReplicaManager(
-        metrics = mock(classOf[Metrics]),
-        config = config,
-        time = time,
-        scheduler = new MockScheduler(time),
-        logManager = logManager,
-        quotaManagers = mock(classOf[QuotaManagers]),
-        metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
-        logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-        alterPartitionManager = alterPartitionManager,
-        threadNamePrefix = Option(this.getClass.getName))
-      val partition = new Partition(topicPartition,
-        replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
-        interBrokerProtocolVersion = MetadataVersion.latest,
-        localBrokerId = config.brokerId,
-        () => config.brokerId + 1000L,
-        time,
-        TestUtils.createIsrChangeListener(),
-        mock(classOf[DelayedOperations]),
-        MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
-        logManager,
-        alterPartitionManager)
-      rm.getAllPartitions.put(topicPartition, HostedPartition.Online(partition))
-
-      // shutdown ReplicaManager so that metrics are removed
-      rm.shutdown(checkpointHW = false)
-
-      // Use the last instance of metrics group that is constructed by `new Partition`
-      val mockMetricsGroup = mockMetricsGroupCtor.constructed().get(mockMetricsGroupCtor.constructed().size() - 1)
-      val tag = Map("topic" -> partition.topic, "partition" -> partition.partitionId.toString).asJava
-      Partition.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any(), ArgumentMatchers.eq(tag)))
-      Partition.MetricNames.foreach(metricName => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricName), ArgumentMatchers.eq(tag)))
-
-      // assert that we have verified all invocations on
-      verifyNoMoreInteractions(mockMetricsGroup)
-    } finally {
-      if (mockMetricsGroupCtor != null) {
-        mockMetricsGroupCtor.close()
-      }
-    }
   }
 
   @Test
