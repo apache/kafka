@@ -117,6 +117,13 @@ public class CommitRequestManager implements RequestManager {
         autocommit.setInflightCommitStatus(true);
     }
 
+    public void maybeTriggerAutoCommit() {
+        if (!autoCommitState.isPresent()) {
+            return;
+        }
+        autoCommitState.get().expireTimer();
+    }
+
     /**
      * Handles {@link org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent}. It creates an
      * {@link OffsetCommitRequestState} and enqueue it to send later.
@@ -487,6 +494,10 @@ public class CommitRequestManager implements RequestManager {
 
         public void resetTimer() {
             this.timer.reset(autoCommitInterval);
+        }
+
+        public void expireTimer() {
+            this.timer.reset(0);
         }
 
         public void ack(final long currentTimeMs) {

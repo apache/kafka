@@ -54,6 +54,8 @@ public class ApplicationEventProcessor {
                 return process((OffsetFetchApplicationEvent) event);
             case METADATA_UPDATE:
                 return process((NewTopicsMetadataUpdateRequestEvent) event);
+            case ASSIGNMENT_CHANGE:
+                return process((AssignmentChangeApplicationEvent) event);
         }
         return false;
     }
@@ -115,6 +117,13 @@ public class ApplicationEventProcessor {
 
     private boolean process(final NewTopicsMetadataUpdateRequestEvent event) {
         metadata.requestUpdateForNewTopics();
+        return true;
+    }
+
+    private boolean process(final AssignmentChangeApplicationEvent event) {
+        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
+        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
+        manager.maybeTriggerAutoCommit();
         return true;
     }
 }

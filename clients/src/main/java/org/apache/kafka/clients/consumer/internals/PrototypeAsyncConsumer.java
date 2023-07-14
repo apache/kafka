@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
@@ -543,9 +544,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // TODO: implementation of refactored Fetcher will be included in forthcoming commits.
         // fetcher.clearBufferedDataForUnassignedPartitions(partitions);
 
-        // make sure the offsets of topic partitions the consumer is unsubscribing from
-        // are committed since there will be no following rebalance
-        commit(subscriptions.allConsumed());
+        // assignment change event will trigger autocommit if is it configured and the group id is specified. This is
+        // to make sure offsets of topic partitions the consumer is unsubscribing from are committed since there will
+        // be no following rebalance
+        eventHandler.add(new AssignmentChangeApplicationEvent());
 
         log.info("Assigned to partition(s): {}", Utils.join(partitions, ", "));
         if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
