@@ -64,6 +64,9 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         Assertions.assertEquals(props.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP), rlmmConfig.metadataTopicPartitionsCount());
 
         // Check for common client configs.
+        Assertions.assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.producerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+        Assertions.assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.consumerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+
         for (Map.Entry<String, Object> entry : commonClientConfig.entrySet()) {
             log.info("Checking config: " + entry.getKey());
             Assertions.assertEquals(entry.getValue(),
@@ -118,7 +121,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
                                                        Map<String, Object> producerConfig,
                                                        Map<String, Object> consumerConfig) {
         Map<String, Object> props = new HashMap<>();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
+        props.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         props.put(BROKER_ID, 1);
         props.put(LOG_DIR, TestUtils.tempDirectory().getAbsolutePath());
 

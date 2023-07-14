@@ -32,7 +32,7 @@ import javax.security.auth.Subject;
  * overrides the standard {@link #equals(Object)} and {@link #hashCode()} methods calling their
  * respective {@link Object#equals(Object)} and {@link Object#hashCode()} implementations. In so
  * doing, it provides equality <em>only</em> via reference identity and will not base equality on
- * the underlying values of its {@link #extensionsMap extentions map}.
+ * the underlying values of its {@link #extensionsMap extensions map}.
  *
  * <p/>
  *

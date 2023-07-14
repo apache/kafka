@@ -73,8 +73,8 @@ public final class SinkUtils {
      * and then parse them into a mapping from {@link TopicPartition}s to their corresponding {@link Long}
      * valued offsets.
      *
-     * @param partitionOffsets the partitions to offset map that needs to be validated and parsed.
-     * @return the parsed mapping from {@link TopicPartition} to its corresponding {@link Long} valued offset.
+     * @param partitionOffsets the partitions to offset map that needs to be validated and parsed; may not be null or empty
+     * @return the parsed mapping from {@link TopicPartition}s to their corresponding {@link Long} valued offsets; may not be null or empty
      *
      * @throws BadRequestException if the provided offsets aren't in the expected format
      */
