@@ -229,6 +229,7 @@ public class GroupMetadataManager {
             }
 
             return new GroupMetadataManager(
+                topicPartition,
                 snapshotRegistry,
                 logContext,
                 time,
@@ -239,7 +240,6 @@ public class GroupMetadataManager {
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
                 consumerGroupMetadataRefreshIntervalMs,
-                topicPartition,
                 genericGroupMaxSize,
                 genericGroupInitialRebalanceDelayMs,
                 genericGroupNewMemberJoinTimeoutMs,
@@ -248,6 +248,11 @@ public class GroupMetadataManager {
             );
         }
     }
+
+    /**
+     * The topic partition associated with the metadata manager.
+     */
+    private final TopicPartition topicPartition;
 
     /**
      * The log context.
@@ -278,11 +283,6 @@ public class GroupMetadataManager {
      * The supported partition assignors keyed by their name.
      */
     private final Map<String, PartitionAssignor> assignors;
-
-    /**
-     * The topic partition associated with the metadata manager.
-     */
-    private final TopicPartition topicPartition;
 
     /**
      * The default assignor used.
@@ -359,6 +359,7 @@ public class GroupMetadataManager {
     private final int genericGroupMaxSessionTimeoutMs;
 
     private GroupMetadataManager(
+        TopicPartition topicPartition,
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
@@ -369,7 +370,6 @@ public class GroupMetadataManager {
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMetadataRefreshIntervalMs,
-        TopicPartition topicPartition,
         int genericGroupMaxSize,
         int genericGroupInitialRebalanceDelayMs,
         int genericGroupNewMemberJoinTimeoutMs,
@@ -387,10 +387,10 @@ public class GroupMetadataManager {
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
         this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
-        this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.genericGroupMaxSize = genericGroupMaxSize;
         this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
         this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
@@ -451,8 +451,8 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A GenericGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a consumer group.
+     * @throws UnknownMemberIdException if the group does not exist and createIfNotExists is false.
+     * @throws GroupIdNotFoundException if the group is not a generic group.
      *
      * Package private for testing.
      */
@@ -961,7 +961,7 @@ public class GroupMetadataManager {
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
-                return new CoordinatorResult<>(consumerGroupFenceMember(group, member), null);
+                return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -970,7 +970,7 @@ public class GroupMetadataManager {
                     groupId, memberId);
             }
 
-            return new CoordinatorResult<>(Collections.emptyList(), null);
+            return new CoordinatorResult<>(Collections.emptyList());
         });
     }
 
@@ -1011,12 +1011,12 @@ public class GroupMetadataManager {
                     member.memberEpoch() != expectedMemberEpoch) {
                     log.debug("[GroupId {}] Ignoring revocation timeout for {} because the member " +
                         "state does not match the expected state.", groupId, memberId);
-                    return new CoordinatorResult<>(Collections.emptyList(), null);
+                    return new CoordinatorResult<>(Collections.emptyList());
                 }
 
                 log.info("[GroupId {}] Member {} fenced from the group because " +
                     "it failed to revoke partitions within {}ms.", groupId, memberId, revocationTimeoutMs);
-                return new CoordinatorResult<>(consumerGroupFenceMember(group, member), null);
+                return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
                     groupId, memberId);
@@ -1025,7 +1025,7 @@ public class GroupMetadataManager {
                     groupId, memberId);
             }
 
-            return new CoordinatorResult<>(Collections.emptyList(), null);
+            return new CoordinatorResult<>(Collections.emptyList());
         });
     }
 
@@ -1409,7 +1409,8 @@ public class GroupMetadataManager {
         return "revocation-timeout-" + groupId + "-" + memberId;
     }
 
-     /** Replays GroupMetadataKey/Value to update the soft state of
+    /**
+     * Replays GroupMetadataKey/Value to update the soft state of
      * the generic group.
      *
      * @param key   A GroupMetadataKey key.
@@ -1423,7 +1424,7 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            groups.remove(groupId);
+            removeGroup(groupId);
         } else {
             List<GenericGroupMember> loadedMembers = new ArrayList<>();
             for (GroupMetadataValue.MemberMetadata member : value.members()) {
@@ -1464,11 +1465,8 @@ public class GroupMetadataManager {
                 value.currentStateTimestamp() == -1 ? Optional.empty() : Optional.of(value.currentStateTimestamp())
             );
 
-            loadedMembers.forEach(member -> {
-                genericGroup.add(member, null);
-                log.info("Loaded member {} in group {} with generation {}.",
-                    member.memberId(), groupId, genericGroup.generationId());
-            });
+            loadedMembers.forEach(member -> genericGroup.add(member, null));
+            groups.put(groupId, genericGroup);
 
             genericGroup.setSubscribedTopics(
                 genericGroup.computeSubscribedTopics()
@@ -1710,10 +1708,10 @@ public class GroupMetadataManager {
                 group.groupId(), group.currentState(), newMemberId);
 
             group.addPendingMember(newMemberId);
-            String heartbeatKey = heartbeatKey(group.groupId(), newMemberId);
+            String genericGroupHeartbeatKey = genericGroupHeartbeatKey(group.groupId(), newMemberId);
 
             timer.schedule(
-                heartbeatKey,
+                genericGroupHeartbeatKey,
                 request.sessionTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
@@ -1902,7 +1900,7 @@ public class GroupMetadataManager {
     private CoordinatorResult<Void, Record> completeGenericGroupJoin(
         GenericGroup group
     ) {
-        timer.cancel(joinKey(group.groupId()));
+        timer.cancel(genericGroupJoinKey(group.groupId()));
         String groupId = group.groupId();
 
         Map<String, GenericGroupMember> notYetRejoinedDynamicMembers =
@@ -1913,7 +1911,7 @@ public class GroupMetadataManager {
         if (!notYetRejoinedDynamicMembers.isEmpty()) {
             notYetRejoinedDynamicMembers.values().forEach(failedMember -> {
                 group.remove(failedMember.memberId());
-                timer.cancel(heartbeatKey(group.groupId(), failedMember.memberId()));
+                timer.cancel(genericGroupHeartbeatKey(group.groupId(), failedMember.memberId()));
             });
 
             log.info("Group {} removed dynamic members who haven't joined: {}",
@@ -1929,7 +1927,7 @@ public class GroupMetadataManager {
             log.error("Group {} could not complete rebalance because no members rejoined.", groupId);
 
             timer.schedule(
-                joinKey(groupId),
+                genericGroupJoinKey(groupId),
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
@@ -1981,7 +1979,7 @@ public class GroupMetadataManager {
                         .setErrorCode(Errors.NONE.code());
 
                     group.completeJoinFuture(member, response);
-                    timer.cancel(heartbeatKey(groupId, member.memberId()));
+                    timer.cancel(genericGroupHeartbeatKey(groupId, member.memberId()));
                     member.setIsNew(false);
 
                     group.addPendingSyncMember(member.memberId());
@@ -2000,7 +1998,7 @@ public class GroupMetadataManager {
      * @param group The group.
      */
     private void schedulePendingSync(GenericGroup group) {
-        timer.schedule(syncKey(group.groupId()),
+        timer.schedule(genericGroupSyncKey(group.groupId()),
             group.rebalanceTimeoutMs(),
             TimeUnit.MILLISECONDS,
             false,
@@ -2272,7 +2270,7 @@ public class GroupMetadataManager {
             int remainingMs = Math.max(group.rebalanceTimeoutMs() - genericGroupInitialRebalanceDelayMs, 0);
 
             timer.schedule(
-                joinKey(group.groupId()),
+                genericGroupJoinKey(group.groupId()),
                 delayMs,
                 TimeUnit.MILLISECONDS,
                 false,
@@ -2299,13 +2297,13 @@ public class GroupMetadataManager {
     private CoordinatorResult<Void, Record> maybeCompleteJoinElseSchedule(
         GenericGroup group
     ) {
-        String joinKey = joinKey(group.groupId());
+        String genericGroupJoinKey = genericGroupJoinKey(group.groupId());
         if (group.hasAllMembersJoined()) {
             // All members have joined. Proceed to sync phase.
             return completeGenericGroupJoin(group);
         } else {
             timer.schedule(
-                joinKey,
+                genericGroupJoinKey,
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
@@ -2335,7 +2333,7 @@ public class GroupMetadataManager {
             int newRemainingMs = Math.max(remainingMs - delayMs, 0);
 
             timer.schedule(
-                joinKey(group.groupId()),
+                genericGroupJoinKey(group.groupId()),
                 newDelayMs,
                 TimeUnit.MILLISECONDS,
                 false,
@@ -2426,10 +2424,10 @@ public class GroupMetadataManager {
         GenericGroupMember member,
         long timeoutMs
     ) {
-        String heartbeatKey = heartbeatKey(group.groupId(), member.memberId());
+        String genericGroupHeartbeatKey = genericGroupHeartbeatKey(group.groupId(), member.memberId());
 
         // Reschedule the next heartbeat expiration deadline
-        timer.schedule(heartbeatKey,
+        timer.schedule(genericGroupHeartbeatKey,
             timeoutMs,
             TimeUnit.MILLISECONDS,
             false,
@@ -2444,7 +2442,7 @@ public class GroupMetadataManager {
      */
     private void removeSyncExpiration(GenericGroup group) {
         group.clearPendingSyncMembers();
-        timer.cancel(syncKey(group.groupId()));
+        timer.cancel(genericGroupSyncKey(group.groupId()));
     }
 
     /**
@@ -2471,7 +2469,7 @@ public class GroupMetadataManager {
                     Set<String> pendingSyncMembers = group.allPendingSyncMembers();
                     pendingSyncMembers.forEach(memberId -> {
                         group.remove(memberId);
-                        timer.cancel(heartbeatKey(group.groupId(), memberId));
+                        timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
                     });
 
                     log.debug("Group {} removed members who haven't sent their sync requests: {}",
@@ -2658,7 +2656,7 @@ public class GroupMetadataManager {
      *
      * @return the heartbeat key.
      */
-    static String heartbeatKey(String groupId, String memberId) {
+    static String genericGroupHeartbeatKey(String groupId, String memberId) {
         return "heartbeat-" + groupId + "-" + memberId;
     }
 
@@ -2671,7 +2669,7 @@ public class GroupMetadataManager {
      *
      * @return the join key.
      */
-    static String joinKey(String groupId) {
+    static String genericGroupJoinKey(String groupId) {
         return "join-" + groupId;
     }
 
@@ -2684,7 +2682,7 @@ public class GroupMetadataManager {
      *
      * @return the sync key.
      */
-    static String syncKey(String groupId) {
+    static String genericGroupSyncKey(String groupId) {
         return "sync-" + groupId;
     }
 }

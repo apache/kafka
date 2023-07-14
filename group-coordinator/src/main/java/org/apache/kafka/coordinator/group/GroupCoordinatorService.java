@@ -309,7 +309,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 request, exception.getMessage());
 
             if (!responseFuture.isDone()) {
-                Errors clientError = toResponseError(Errors.forException(exception));
+                Errors clientError = appendGroupMetadataErrorToResponseError(Errors.forException(exception));
                 responseFuture.complete(new JoinGroupResponseData()
                     .setErrorCode(clientError.code()));
             }
@@ -632,7 +632,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return groupId != null && !groupId.isEmpty();
     }
 
-    private static Errors toResponseError(Errors appendError) {
+    private static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
         switch (appendError) {
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:

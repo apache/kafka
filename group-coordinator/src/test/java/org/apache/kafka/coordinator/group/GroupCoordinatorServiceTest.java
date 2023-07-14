@@ -355,7 +355,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testAppendErrorConversion() throws Exception {
+    public void testJoinGroupAppendErrorConversion() throws Exception {
         CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
