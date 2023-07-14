@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.Set;
@@ -126,7 +127,8 @@ public abstract class PluginScanner {
     protected <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
-        for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
+        Iterator<T> iterator = serviceLoader.iterator();
+        while (serviceLoaderHasNext(klass, iterator)) {
             try (LoaderSwap loaderSwap = withClassLoader(loader)) {
                 T pluginImpl;
                 try {
@@ -145,6 +147,46 @@ public abstract class PluginScanner {
             }
         }
         return result;
+    }
+
+    /**
+     * Helper to evaluate {@link Iterator#hasNext()} while handling {@link LinkageError}s.
+     * @param klass The class which was passed to {@link ServiceLoader#load(Class, ClassLoader)}
+     * @param serviceLoaderIterator An {@link Iterator} which was returned by {@link ServiceLoader#iterator()}
+     * @return true if the iterator returns true. false if the iterator has returned false.
+     * @throws LinkageError if the iterator throws LinkageError repeatedly and cannot discover further implementations.
+     * @param <T> Type being iterated over by the ServiceLoader.
+     */
+    private <T> boolean serviceLoaderHasNext(Class<T> klass, Iterator<T> serviceLoaderIterator) {
+        // It's difficult to know for sure if the iterator was able to advance past the first broken
+        // plugin class, or if it will continue to fail on that broken class for any subsequent calls
+        // to Iterator::hasNext or Iterator::next
+        // For reference, see https://bugs.openjdk.org/browse/JDK-8196182, which describes
+        // the behavior we are trying to mitigate with this logic as buggy, but indicates that a fix
+        // in the JDK standard library ServiceLoader implementation is unlikely to land
+        LinkageError lastError = null;
+        // Try a fixed maximum number of times in case the ServiceLoader cannot move past a faulty plugin,
+        // but the LinkageError varies between calls. This limit is chosen to be higher than the typical number
+        // of plugins in a single plugin location, and to limit the amount of log-spam on startup.
+        for (int i = 0; i < 100; i++) {
+            try {
+                return serviceLoaderIterator.hasNext();
+            } catch (LinkageError t) {
+                // As an optimization, hide subsequent error logs if two consecutive errors look similar.
+                // This reduces log-spam for iterators which cannot advance and rethrow the same exception.
+                if (lastError == null
+                        || !Objects.equals(lastError.getClass(), t.getClass())
+                        || !Objects.equals(lastError.getMessage(), t.getMessage())) {
+                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t), t);
+                }
+                lastError = t;
+            }
+        }
+        log.error("Received excessive ServiceLoader errors: assuming the runtime ServiceLoader implementation cannot " +
+                        "skip faulty implementations. Use a different JRE, resolve error within {} plugin, or " +
+                        "disable service loader scanning.",
+                klass.getSimpleName(), lastError);
+        throw lastError;
     }
 
     protected static <T> String versionFor(T pluginImpl) {
@@ -169,6 +211,8 @@ public abstract class PluginScanner {
             return ": Failed to statically initialize plugin class";
         } else if (t instanceof InvocationTargetException) {
             return ": Failed to invoke plugin constructor";
+        } else if (t instanceof LinkageError) {
+            return ": Plugin class has a dependency which is missing or invalid";
         } else {
             return "";
         }
