@@ -397,6 +397,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
                 recordDropped(preTransformRecord);
+                processed++;
                 continue;
             }
 

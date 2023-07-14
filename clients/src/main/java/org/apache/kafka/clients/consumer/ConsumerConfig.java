@@ -149,7 +149,14 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>auto.offset.reset</code>
      */
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
-    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
+    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server " +
+            "(e.g. because that data has been deleted): " +
+            "<ul><li>earliest: automatically reset the offset to the earliest offset" +
+            "<li>latest: automatically reset the offset to the latest offset</li>" +
+            "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
+            "<li>anything else: throw exception to the consumer.</li></ul>" +
+            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
+            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
 
     /**
      * <code>fetch.min.bytes</code>

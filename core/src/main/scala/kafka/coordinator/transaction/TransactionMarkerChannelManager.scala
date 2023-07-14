@@ -17,6 +17,8 @@
 package kafka.coordinator.transaction
 
 
+import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendRetryQueueSizeMetricName, MetricNames, UnknownDestinationQueueSizeMetricName}
+
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
@@ -39,6 +41,15 @@ import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
 
 object TransactionMarkerChannelManager {
+  private val UnknownDestinationQueueSizeMetricName = "UnknownDestinationQueueSize"
+  private val LogAppendRetryQueueSizeMetricName = "LogAppendRetryQueueSize"
+
+  // Visible for testing
+  private[transaction] val MetricNames = Set(
+    UnknownDestinationQueueSizeMetricName,
+    LogAppendRetryQueueSizeMetricName
+  )
+
   def apply(config: KafkaConfig,
             metrics: Metrics,
             metadataCache: MetadataCache,
@@ -152,12 +163,20 @@ class TransactionMarkerChannelManager(
     if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 1
     else 0
 
-  metricsGroup.newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
-  metricsGroup.newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
+  metricsGroup.newGauge(UnknownDestinationQueueSizeMetricName, () => markersQueueForUnknownBroker.totalNumMarkers)
+  metricsGroup.newGauge(LogAppendRetryQueueSizeMetricName, () => txnLogAppendRetryQueue.size)
 
   override def shutdown(): Unit = {
-    super.shutdown()
-    markersQueuePerBroker.clear()
+    try {
+      super.shutdown()
+      markersQueuePerBroker.clear()
+    } finally {
+      removeMetrics()
+    }
+  }
+
+  private def removeMetrics(): Unit = {
+    MetricNames.foreach(metricsGroup.removeMetric(_))
   }
 
   // visible for testing

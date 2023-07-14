@@ -20,9 +20,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashSet;
 import org.junit.jupiter.api.Test;
@@ -30,14 +32,17 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
@@ -57,10 +62,10 @@ public class CoordinatorRuntimeTest {
     private static final TopicPartition TP = new TopicPartition("__consumer_offsets", 0);
 
     /**
-     * An CoordinatorEventProcessor that directly executes the operations. This is
+     * A CoordinatorEventProcessor that directly executes the operations. This is
      * useful in unit tests where execution in threads is not required.
      */
-    private static class MockEventProcessor implements CoordinatorEventProcessor {
+    private static class DirectEventProcessor implements CoordinatorEventProcessor {
         @Override
         public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
             try {
@@ -72,6 +77,41 @@ public class CoordinatorRuntimeTest {
 
         @Override
         public void close() throws Exception {}
+    }
+
+    /**
+     * A CoordinatorEventProcessor that queues event and execute the next one
+     * when poll() is called.
+     */
+    private static class ManualEventProcessor implements CoordinatorEventProcessor {
+        private Queue<CoordinatorEvent> queue = new LinkedList<>();
+
+        @Override
+        public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
+            queue.add(event);
+        }
+
+        public boolean poll() {
+            CoordinatorEvent event = queue.poll();
+            if (event == null) return false;
+
+            try {
+                event.run();
+            } catch (Throwable ex) {
+                event.complete(ex);
+            }
+
+            return true;
+        }
+
+        public int size() {
+            return queue.size();
+        }
+
+        @Override
+        public void close() throws Exception {
+
+        }
     }
 
     /**
@@ -128,11 +168,14 @@ public class CoordinatorRuntimeTest {
      */
     private static class MockCoordinator implements Coordinator<String> {
         private final TimelineHashSet<String> records;
+        private final CoordinatorTimer<String> timer;
 
         MockCoordinator(
-            SnapshotRegistry snapshotRegistry
+            SnapshotRegistry snapshotRegistry,
+            CoordinatorTimer<String> timer
         ) {
-            records = new TimelineHashSet<>(snapshotRegistry, 0);
+            this.records = new TimelineHashSet<>(snapshotRegistry, 0);
+            this.timer = timer;
         }
 
         @Override
@@ -143,6 +186,10 @@ public class CoordinatorRuntimeTest {
         Set<String> records() {
             return Collections.unmodifiableSet(new HashSet<>(records));
         }
+
+        CoordinatorTimer<String> timer() {
+            return timer;
+        }
     }
 
     /**
@@ -150,6 +197,7 @@ public class CoordinatorRuntimeTest {
      */
     private static class MockCoordinatorBuilder implements CoordinatorBuilder<MockCoordinator, String> {
         private SnapshotRegistry snapshotRegistry;
+        private CoordinatorTimer<String> timer;
 
         @Override
         public CoordinatorBuilder<MockCoordinator, String> withSnapshotRegistry(
@@ -167,8 +215,26 @@ public class CoordinatorRuntimeTest {
         }
 
         @Override
+        public CoordinatorBuilder<MockCoordinator, String> withTime(
+            Time time
+        ) {
+            return this;
+        }
+
+        @Override
+        public CoordinatorBuilder<MockCoordinator, String> withTimer(
+            CoordinatorTimer<String> timer
+        ) {
+            this.timer = timer;
+            return this;
+        }
+
+        @Override
         public MockCoordinator build() {
-            return new MockCoordinator(Objects.requireNonNull(this.snapshotRegistry));
+            return new MockCoordinator(
+                Objects.requireNonNull(this.snapshotRegistry),
+                Objects.requireNonNull(this.timer)
+            );
         }
     }
 
@@ -184,6 +250,7 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleLoading() {
+        MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
@@ -192,14 +259,18 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(loader)
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -232,10 +303,17 @@ public class CoordinatorRuntimeTest {
             eq(TP),
             any(PartitionWriter.Listener.class)
         );
+
+        // Verify that the builder got all the expected objects.
+        verify(builder, times(1)).withSnapshotRegistry(eq(ctx.snapshotRegistry));
+        verify(builder, times(1)).withLogContext(eq(ctx.logContext));
+        verify(builder, times(1)).withTime(eq(timer.time()));
+        verify(builder, times(1)).withTimer(eq(ctx.timer));
     }
 
     @Test
     public void testScheduleLoadingWithFailure() {
+        MockTimer timer = new MockTimer();
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
@@ -244,14 +322,18 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(loader)
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -282,6 +364,7 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleLoadingWithStalePartitionEpoch() {
+        MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
         MockCoordinatorBuilder builder = mock(MockCoordinatorBuilder.class);
@@ -289,14 +372,18 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(loader)
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -325,6 +412,7 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleLoadingAfterLoadingFailure() {
+        MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
         MockCoordinatorBuilder builder = mock(MockCoordinatorBuilder.class);
@@ -332,14 +420,18 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(loader)
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -385,6 +477,7 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleUnloading() {
+        MockTimer timer = new MockTimer();
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
         MockCoordinatorBuilder builder = mock(MockCoordinatorBuilder.class);
@@ -392,14 +485,18 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
 
@@ -428,20 +525,27 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleUnloadingWithStalePartitionEpoch() {
+        MockTimer timer = new MockTimer();
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
         MockCoordinatorBuilder builder = mock(MockCoordinatorBuilder.class);
         MockCoordinator coordinator = mock(MockCoordinator.class);
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
 
@@ -460,12 +564,15 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleWriteOp() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
         MockPartitionWriter writer = new MockPartitionWriter();
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -567,10 +674,13 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleWriteOpWhenInactive() {
+        MockTimer timer = new MockTimer();
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -584,10 +694,13 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleWriteOpWhenOpFails() {
+        MockTimer timer = new MockTimer();
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -605,10 +718,13 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleWriteOpWhenReplayFails() {
+        MockTimer timer = new MockTimer();
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -624,7 +740,7 @@ public class CoordinatorRuntimeTest {
 
         // Override the coordinator with a coordinator that throws
         // an exception when replay is called.
-        ctx.coordinator = new MockCoordinator(ctx.snapshotRegistry) {
+        ctx.coordinator = new MockCoordinator(ctx.snapshotRegistry, ctx.timer) {
             @Override
             public void replay(String record) throws RuntimeException {
                 throw new IllegalArgumentException("error");
@@ -644,13 +760,16 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleWriteOpWhenWriteFails() {
+        MockTimer timer = new MockTimer();
         // The partition writer only accept on write.
         MockPartitionWriter writer = new MockPartitionWriter(2);
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -689,12 +808,15 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleReadOp() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
         MockPartitionWriter writer = new MockPartitionWriter();
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -742,10 +864,13 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleReadOpWhenPartitionInactive() {
+        MockTimer timer = new MockTimer();
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -758,12 +883,15 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleReadOpWhenOpsFails() {
+        MockTimer timer = new MockTimer();
         MockPartitionWriter writer = new MockPartitionWriter();
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(new MockCoordinatorLoader())
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -798,11 +926,13 @@ public class CoordinatorRuntimeTest {
     @Test
     public void testClose() throws Exception {
         MockCoordinatorLoader loader = spy(new MockCoordinatorLoader());
-
+        MockTimer timer = new MockTimer();
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(loader)
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
                 .build();
@@ -827,6 +957,16 @@ public class CoordinatorRuntimeTest {
         assertFalse(write1.isDone());
         assertFalse(write2.isDone());
 
+        // The coordinator timer should be empty.
+        assertEquals(0, ctx.timer.size());
+
+        // Timer #1. This is never executed.
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.SECONDS, true,
+            () -> Arrays.asList("record5", "record6"));
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
         // Close the runtime.
         runtime.close();
 
@@ -836,6 +976,9 @@ public class CoordinatorRuntimeTest {
 
         // Verify that the loader was closed.
         verify(loader).close();
+
+        // The coordinator timer should be empty.
+        assertEquals(0, ctx.timer.size());
     }
 
     @Test
@@ -843,6 +986,7 @@ public class CoordinatorRuntimeTest {
         TopicPartition tp0 = new TopicPartition("__consumer_offsets", 0);
         TopicPartition tp1 = new TopicPartition("__consumer_offsets", 1);
 
+        MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
@@ -850,8 +994,10 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
                 .withLoader(loader)
-                .withEventProcessor(new MockEventProcessor())
+                .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
@@ -862,6 +1008,8 @@ public class CoordinatorRuntimeTest {
         when(supplier.get()).thenReturn(builder);
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
         when(builder.build())
             .thenReturn(coordinator0)
             .thenReturn(coordinator1);
@@ -892,5 +1040,290 @@ public class CoordinatorRuntimeTest {
         // that is the new image.
         future1.complete(null);
         verify(coordinator1).onLoaded(newImage);
+    }
+
+    @Test
+    public void testScheduleTimer() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinator, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinator, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.lastWrittenOffset);
+        assertEquals(0, ctx.lastCommittedOffset);
+
+        // The coordinator timer should be empty.
+        assertEquals(0, ctx.timer.size());
+
+        // Timer #1.
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
+            () -> Arrays.asList("record1", "record2"));
+
+        // Timer #2.
+        ctx.coordinator.timer.schedule("timer-2", 20, TimeUnit.MILLISECONDS, true,
+            () -> Arrays.asList("record3", "record4"));
+
+        // The coordinator timer should have two pending tasks.
+        assertEquals(2, ctx.timer.size());
+
+        // Advance time to fire timer #1,
+        timer.advanceClock(10 + 1);
+
+        // Verify that the operation was executed.
+        assertEquals(mkSet("record1", "record2"), ctx.coordinator.records());
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire timer #2,
+        timer.advanceClock(10 + 1);
+
+        // Verify that the operation was executed.
+        assertEquals(mkSet("record1", "record2", "record3", "record4"), ctx.coordinator.records());
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
+    public void testRescheduleTimer() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        ManualEventProcessor processor = new ManualEventProcessor();
+        CoordinatorRuntime<MockCoordinator, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Poll twice to process the pending events related to the loading.
+        processor.poll();
+        processor.poll();
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinator, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        // The processor should be empty.
+        assertEquals(0, processor.size());
+
+        // Timer #1.
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
+            () -> Collections.singletonList("record1"));
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire the pending timer.
+        timer.advanceClock(10 + 1);
+
+        // An event should be waiting in the processor.
+        assertEquals(1, processor.size());
+
+        // Schedule a second timer with the same key.
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
+            () -> Collections.singletonList("record2"));
+
+        // The coordinator timer should still have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Schedule a third timer with the same key.
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
+            () -> Collections.singletonList("record3"));
+
+        // The coordinator timer should still have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire the pending timer.
+        timer.advanceClock(10 + 1);
+
+        // Another event should be waiting in the processor.
+        assertEquals(2, processor.size());
+
+        // Poll twice to execute the two pending events.
+        assertTrue(processor.poll());
+        assertTrue(processor.poll());
+
+        // Verify that the correct operation was executed. Only the third
+        // instance should have been executed here.
+        assertEquals(mkSet("record3"), ctx.coordinator.records());
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
+    public void testCancelTimer() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        ManualEventProcessor processor = new ManualEventProcessor();
+        CoordinatorRuntime<MockCoordinator, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Poll twice to process the pending events related to the loading.
+        processor.poll();
+        processor.poll();
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinator, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        // The processor should be empty.
+        assertEquals(0, processor.size());
+
+        // Timer #1.
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
+            () -> Collections.singletonList("record1"));
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire the pending timer.
+        timer.advanceClock(10 + 1);
+
+        // An event should be waiting in the processor.
+        assertEquals(1, processor.size());
+
+        // Schedule a second timer with the same key.
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
+            () -> Collections.singletonList("record2"));
+
+        // The coordinator timer should still have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Cancel the timer.
+        ctx.coordinator.timer.cancel("timer-1");
+
+        // The coordinator timer have no pending timers.
+        assertEquals(0, ctx.timer.size());
+
+        // Advance time to fire the cancelled timer.
+        timer.advanceClock(10 + 1);
+
+        // No new event expected because the timer was cancelled before
+        // it expired.
+        assertEquals(1, processor.size());
+
+        // Poll to execute the pending event.
+        assertTrue(processor.poll());
+
+        // Verify that no operation was executed.
+        assertEquals(Collections.emptySet(), ctx.coordinator.records());
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
+    public void testRetryableTimer() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinator, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinator, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        // Timer #1.
+        AtomicInteger cnt = new AtomicInteger(0);
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true, () -> {
+            cnt.incrementAndGet();
+            throw new KafkaException("error");
+        });
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire the pending timer.
+        timer.advanceClock(10 + 1);
+
+        // The timer should have been called and the timer should have one pending task.
+        assertEquals(1, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Advance past the retry backoff.
+        timer.advanceClock(500 + 1);
+
+        // The timer should have been called and the timer should have one pending task.
+        assertEquals(2, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Advance past the retry backoff.
+        timer.advanceClock(500 + 1);
+
+        // The timer should have been called and the timer should have one pending task.
+        assertEquals(3, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Cancel Timer #1.
+        ctx.coordinator.timer.cancel("timer-1");
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
+    public void testNonRetryableTimer() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinator, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinator, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinator, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        // Timer #1.
+        AtomicInteger cnt = new AtomicInteger(0);
+        ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, false, () -> {
+            cnt.incrementAndGet();
+            throw new KafkaException("error");
+        });
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire the pending timer.
+        timer.advanceClock(10 + 1);
+
+        // The timer should have been called and the timer should have no pending tasks
+        // because the timer is not retried.
+        assertEquals(1, cnt.get());
+        assertEquals(0, ctx.timer.size());
     }
 }

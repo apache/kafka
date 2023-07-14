@@ -1850,7 +1850,10 @@ public final class QuorumController implements Controller {
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
             build();
-        this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
+        this.clientQuotaControlManager = new ClientQuotaControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            build();
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1872,7 +1875,11 @@ public final class QuorumController implements Controller {
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
             build();
-        this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
+        this.producerIdControlManager = new ProducerIdControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            setClusterControlManager(clusterControl).
+            build();
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
         this.maxIdleIntervalNs = maxIdleIntervalNs;
         this.replicationControl = new ReplicationControlManager.Builder().
@@ -1892,10 +1899,14 @@ public final class QuorumController implements Controller {
             build();
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));
-        this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
+        this.aclControlManager = new AclControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            setClusterMetadataAuthorizer(authorizer).
+            build();
         this.logReplayTracker = new LogReplayTracker.Builder().
-                setLogContext(logContext).
-                build();
+            setLogContext(logContext).
+            build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
         this.maxRecordsPerBatch = maxRecordsPerBatch;
