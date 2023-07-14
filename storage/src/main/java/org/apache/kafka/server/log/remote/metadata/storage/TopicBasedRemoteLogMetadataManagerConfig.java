@@ -105,6 +105,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     private final long initializationRetryMaxTimeoutMs;
     private final long initializationRetryIntervalMs;
 
+    private Map<String, Object> commonProps;
     private Map<String, Object> consumerProps;
     private Map<String, Object> producerProps;
 
@@ -149,6 +150,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
             }
         }
 
+        commonProps = new HashMap<>(commonClientConfigs);
+
         HashMap<String, Object> allProducerConfigs = new HashMap<>(commonClientConfigs);
         allProducerConfigs.putAll(producerOnlyConfigs);
         producerProps = createProducerProps(allProducerConfigs);
@@ -188,6 +191,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     public String logDir() {
         return logDir;
+    }
+
+    public Map<String, Object> commonProperties() {
+        return commonProps;
     }
 
     public Map<String, Object> consumerProperties() {
@@ -232,6 +239,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", metadataTopicReplicationFactor=" + metadataTopicReplicationFactor +
                 ", initializationRetryMaxTimeoutMs=" + initializationRetryMaxTimeoutMs +
                 ", initializationRetryIntervalMs=" + initializationRetryIntervalMs +
+                ", commonProps=" + commonProps +
                 ", consumerProps=" + consumerProps +
                 ", producerProps=" + producerProps +
                 '}';
