@@ -160,28 +160,27 @@ public class ChunkedBytesStreamTest {
         }
     }
 
-    @Test
-    public void testEdgeCaseInputForMethodSkip() throws IOException {
-        int bufferLength = 16;
+    @ParameterizedTest
+    @MethodSource("provideEdgeCaseInputForMethodSkip")
+    public void testEdgeCaseInputForMethodSkip(int bufferLength, long toSkip, boolean delegateSkipToSourceStream, long expected) throws IOException {
         ByteBuffer inputBuf = ByteBuffer.allocate(bufferLength);
         RANDOM.nextBytes(inputBuf.array());
         inputBuf.rewind();
 
-        // delegateSkipToSourceStream true
-        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(inputBuf.duplicate()), supplier, 10, true)) {
-            // toSkip larger than int
-            assertEquals(bufferLength, is.skip(Integer.MAX_VALUE + 1000L));
-            // toSkip negative
-            assertEquals(0, is.skip(-1));
+        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(inputBuf.duplicate()), supplier, 10, delegateSkipToSourceStream)) {
+            assertEquals(expected, is.skip(toSkip));
         }
+    }
 
-        // delegateSkipToSourceStream false
-        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(inputBuf.duplicate()), supplier, 10, false)) {
-            // toSkip larger than int
-            assertEquals(bufferLength, is.skip(Integer.MAX_VALUE + 1000L));
-            // toSkip negative
-            assertEquals(0, is.skip(-1));
-        }
+    private static Stream<Arguments> provideEdgeCaseInputForMethodSkip() {
+        int bufferLength = 16;
+        // Test toSkip larger than int and negative for both delegateToSourceStream true and false
+        return Stream.of(
+            Arguments.of(bufferLength, Integer.MAX_VALUE + 1L, true, bufferLength),
+            Arguments.of(bufferLength, -1, true, 0),
+            Arguments.of(bufferLength, Integer.MAX_VALUE + 1L, false, bufferLength),
+            Arguments.of(bufferLength, -1, false, 0)
+        );
     }
 
     private static Stream<Arguments> provideCasesWithInvalidInputsForMethodRead() {
