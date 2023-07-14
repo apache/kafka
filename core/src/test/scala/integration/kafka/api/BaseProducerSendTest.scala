@@ -25,7 +25,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TimeoutException
@@ -58,7 +58,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     ).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  private var consumer: Consumer[Array[Byte], Array[Byte]] = _
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   protected var admin: Admin = _
 

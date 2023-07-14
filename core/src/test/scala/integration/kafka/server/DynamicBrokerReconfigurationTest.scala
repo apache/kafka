@@ -41,7 +41,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconfigurable, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
@@ -90,7 +90,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private val numServers = 3
   private val numPartitions = 10
   private val producers = new ArrayBuffer[KafkaProducer[String, String]]
-  private val consumers = new ArrayBuffer[KafkaConsumer[String, String]]
+  private val consumers = new ArrayBuffer[Consumer[String, String]]
   private val adminClients = new ArrayBuffer[Admin]()
   private val clientThreads = new ArrayBuffer[ShutdownableThread]()
   private val executors = new ArrayBuffer[ExecutorService]
@@ -1351,7 +1351,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
   }
 
-  private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
+  private def awaitInitialPositions(consumer: Consumer[_, _]): Unit = {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Timed out while waiting for assignment")
     consumer.assignment.forEach(consumer.position(_))
   }
@@ -1377,7 +1377,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def verifyProduceConsume(producer: KafkaProducer[String, String],
-                                   consumer: KafkaConsumer[String, String],
+                                   consumer: Consumer[String, String],
                                    numRecords: Int,
                                    topic: String): Unit = {
     val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
@@ -1670,7 +1670,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     future
   }
 
-  private def verifyConnectionFailure(consumer: KafkaConsumer[String, String]): Future[_] = {
+  private def verifyConnectionFailure(consumer: Consumer[String, String]): Future[_] = {
     val executor = Executors.newSingleThreadExecutor
     executors += executor
     val future = executor.submit(new Runnable() {
@@ -1780,7 +1780,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
   }
 
-  private case class ConsumerBuilder(group: String) extends ClientBuilder[KafkaConsumer[String, String]] {
+  private case class ConsumerBuilder(group: String) extends ClientBuilder[Consumer[String, String]] {
     private var _autoOffsetReset = "earliest"
     private var _enableAutoCommit = false
     private var _topic = DynamicBrokerReconfigurationTest.this.topic
@@ -1789,7 +1789,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     def enableAutoCommit(enable: Boolean): ConsumerBuilder = { _enableAutoCommit = enable; this }
     def topic(topic: String): ConsumerBuilder = { _topic = topic; this }
 
-    override def build(): KafkaConsumer[String, String] = {
+    override def build(): Consumer[String, String] = {
       val consumerProps = propsOverride
       consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
       consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, _autoOffsetReset)
