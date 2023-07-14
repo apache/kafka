@@ -96,7 +96,7 @@ public class KRaftMigrationDriverTest {
         final AtomicBoolean closed = new AtomicBoolean(false);
 
         MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM);
+            super(Optional.empty(), Time.SYSTEM, false);
         }
 
         @Override
@@ -238,7 +238,6 @@ public class KRaftMigrationDriverTest {
             metrics,
             mockTime
         )) {
-
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
@@ -408,16 +407,16 @@ public class KRaftMigrationDriverTest {
             new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient());
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
         try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
-                3000,
-                new NoOpRecordConsumer(),
-                migrationClient,
-                metadataPropagator,
-                metadataPublisher -> { },
-                faultHandler,
-                quorumFeatures,
-                KafkaConfigSchema.EMPTY,
-                metrics,
-                mockTime
+            3000,
+            new NoOpRecordConsumer(),
+            migrationClient,
+            metadataPropagator,
+            metadataPublisher -> { },
+            faultHandler,
+            quorumFeatures,
+            KafkaConfigSchema.EMPTY,
+            metrics,
+            mockTime
         )) {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
