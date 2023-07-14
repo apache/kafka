@@ -22,7 +22,7 @@ import kafka.api.QuotaTestClients._
 import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, KafkaBroker, KafkaConfig, QuotaType}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -201,7 +201,7 @@ abstract class QuotaTestClients(topic: String,
                                 producerClientId: String,
                                 consumerClientId: String,
                                 val producer: KafkaProducer[Array[Byte], Array[Byte]],
-                                val consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                val consumer: Consumer[Array[Byte], Array[Byte]],
                                 val adminClient: Admin) {
 
   def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit
