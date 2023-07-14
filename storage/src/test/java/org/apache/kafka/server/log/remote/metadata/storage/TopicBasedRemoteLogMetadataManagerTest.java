@@ -122,50 +122,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         topicBasedRlmm().onPartitionLeadershipChanges(Collections.singleton(newLeaderTopicIdPartition),
                                                       Collections.singleton(newFollowerTopicIdPartition));
 
-        // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
-        // fetching those events and build the cache.
-        waitUntilConsumerCatchesUp(newLeaderTopicIdPartition, newFollowerTopicIdPartition, 30_000L);
-
         Assertions.assertTrue(topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition).hasNext());
         Assertions.assertTrue(topicBasedRlmm().listRemoteLogSegments(newFollowerTopicIdPartition).hasNext());
     }
-
-    private void waitUntilConsumerCatchesUp(TopicIdPartition newLeaderTopicIdPartition,
-                                            TopicIdPartition newFollowerTopicIdPartition,
-                                            long timeoutMs) throws TimeoutException {
-        int leaderMetadataPartition = topicBasedRlmm().metadataPartition(newLeaderTopicIdPartition);
-        int followerMetadataPartition = topicBasedRlmm().metadataPartition(newFollowerTopicIdPartition);
-
-        log.debug("Metadata partition for newLeaderTopicIdPartition: [{}], is: [{}]", newLeaderTopicIdPartition, leaderMetadataPartition);
-        log.debug("Metadata partition for newFollowerTopicIdPartition: [{}], is: [{}]", newFollowerTopicIdPartition, followerMetadataPartition);
-
-        long sleepMs = 100L;
-        long time = System.currentTimeMillis();
-
-        while (true) {
-            if (System.currentTimeMillis() - time > timeoutMs) {
-                throw new TimeoutException("Timed out after " + timeoutMs + "ms ");
-            }
-
-            // If both the leader and follower partitions are mapped to the same metadata partition then it should have at least
-            // 2 messages. That means, received offset should be >= 1 (including duplicate messages if any).
-            if (leaderMetadataPartition == followerMetadataPartition) {
-                if (topicBasedRlmm().receivedOffsetForPartition(leaderMetadataPartition).orElse(-1L) >= 1) {
-                    break;
-                }
-            } else {
-                // If the leader partition and the follower partition are mapped to different metadata partitions then
-                // each of those metadata partitions will have at least 1 message. That means, received offset should
-                // be >= 0 (including duplicate messages if any).
-                if (topicBasedRlmm().receivedOffsetForPartition(leaderMetadataPartition).orElse(-1L) >= 0 ||
-                        topicBasedRlmm().receivedOffsetForPartition(followerMetadataPartition).orElse(-1L) >= 0) {
-                    break;
-                }
-            }
-
-            log.debug("Sleeping for: " + sleepMs);
-            Utils.sleep(sleepMs);
-        }
-    }
-
 }
