@@ -1162,7 +1162,7 @@ class LogManager(logDirs: Seq[File],
         }
         addLogToBeDeleted(removedLog)
         if (deleteRemote && removedLog.remoteLogEnabled())
-          RemoteLogManager.addTopicIdToBeDeleted(removedLog.topicIdAsJava)
+          removedLog.addLogToBeRemoteDeleted()
 
         info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
 
