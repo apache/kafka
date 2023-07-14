@@ -47,11 +47,9 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
     private final Path logDir;
 
-    private Map<TopicIdPartition, RemotePartitionDeleteMetadata> idToPartitionDeleteMetadata =
-            new ConcurrentHashMap<>();
+    private Map<TopicIdPartition, RemotePartitionDeleteMetadata> idToPartitionDeleteMetadata = new ConcurrentHashMap<>();
 
-    private Map<TopicIdPartition, FileBasedRemoteLogMetadataCache> idToRemoteLogMetadataCache =
-            new ConcurrentHashMap<>();
+    private Map<TopicIdPartition, FileBasedRemoteLogMetadataCache> idToRemoteLogMetadataCache = new ConcurrentHashMap<>();
 
     public RemotePartitionMetadataStore(Path logDir) {
         this.logDir = logDir;
