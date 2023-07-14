@@ -16,32 +16,34 @@
  */
 package org.apache.kafka.common.security.ssl;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SslClientAuth;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.auth.SslEngineFactory;
-import org.apache.kafka.common.utils.SecurityUtils;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.Principal;
 import java.security.PrivateKey;
+import java.security.Provider;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.SignatureException;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
+import java.security.cert.CertificateNotYetValidException;
+import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
@@ -56,7 +58,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
 import javax.crypto.Cipher;
 import javax.crypto.EncryptedPrivateKeyInfo;
 import javax.crypto.SecretKey;
@@ -64,10 +65,26 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.TrustManagerFactorySpi;
+import javax.net.ssl.X509TrustManager;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SslClientAuth;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.auth.SslEngineFactory;
+import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class DefaultSslEngineFactory implements SslEngineFactory {
 
@@ -578,4 +595,211 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             return entries;
         }
     }
+
+    /**
+     * A trust manager factory for creating common name logging trust managers.
+     * These trust managers log the common name of an expired but otherwise valid (client) certificate before rejecting the connection attempt.
+     * This allows to identify misconfigured clients in complex network environments, where the IP address is not sufficient.
+     */
+    static class CommonNameLoggingTrustManagerFactory {
+
+    }
+
+    /**
+     * A trust manager which logs the common name of an expired but otherwise valid (client) certificate before rejecting the connection attempt.
+     * This allows to identify misconfigured clients in complex network environments, where the IP address is not sufficient.
+     * this class wraps a standard trust manager and delegates almost all requests to it, except for cases where an invalid certificate is reported by the
+     * standard trust manager. In this cases this manager checks whether the provided certificate is invalid only due to being expired and logs the common
+     * name if that is the case. This trust manager will always return the results of the wrapped standard trust manager, i.e. return if the certificate is valid
+     * or rethrow the original exception if it is not.
+     */
+    static class CommonNameLoggingTrustManager implements X509TrustManager {
+
+        public CommonNameLoggingTrustManager(KeyStore trustStore) {
+
+        }
+
+        @Override
+        public void checkClientTrusted(X509Certificate[] arg0, String arg1)
+                throws CertificateException {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'checkClientTrusted'");
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] arg0, String arg1)
+                throws CertificateException {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'checkServerTrusted'");
+        }
+
+        @Override
+        public X509Certificate[] getAcceptedIssuers() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getAcceptedIssuers'");
+        }
+
+    }
+
+    static class NeverExpiringX509Certificate extends X509Certificate {
+
+        private X509Certificate origCertificate;
+
+        public NeverExpiringX509Certificate(X509Certificate origCertificate) {
+            this.origCertificate = origCertificate;
+            if (this.origCertificate == null)
+            {
+                throw new KafkaException("No X509 certificate provided in constructor NeverExpiringX509Certificate");
+            }
+        }
+
+        @Override
+        public Set<String> getCriticalExtensionOIDs() {
+            return this.origCertificate.getCriticalExtensionOIDs();
+        }
+
+        @Override
+        public byte[] getExtensionValue(String oid) {
+            return this.origCertificate.getExtensionValue(oid);
+        }
+
+        @Override
+        public Set<String> getNonCriticalExtensionOIDs() {
+            return this.origCertificate.getNonCriticalExtensionOIDs();
+        }
+
+        @Override
+        public boolean hasUnsupportedCriticalExtension() {
+            return this.origCertificate.hasUnsupportedCriticalExtension();
+        }
+
+        @Override
+        public void checkValidity()
+                throws CertificateExpiredException, CertificateNotYetValidException {
+            Date now = new Date();
+            // Do nothing for certificates which are not valid anymore now
+            if (this.origCertificate.getNotAfter().before(now))
+            {
+                return;
+            }
+            // Check validity as usual
+            this.origCertificate.checkValidity();
+        }
+
+        @Override
+        public void checkValidity(Date date)
+                throws CertificateExpiredException, CertificateNotYetValidException {
+            // Do nothing for certificates which are not valid anymore at the supplied date
+            if (this.origCertificate.getNotAfter().before(date))
+            {
+                return;
+            }
+            // Check validity as usual
+            this.origCertificate.checkValidity(date);
+        }
+
+        @Override
+        public int getBasicConstraints() {
+            return this.origCertificate.getBasicConstraints();
+        }
+
+        @Override
+        public Principal getIssuerDN() {
+            return this.origCertificate.getIssuerDN();
+        }
+
+        @Override
+        public boolean[] getIssuerUniqueID() {
+            return this.origCertificate.getIssuerUniqueID();
+        }
+
+        @Override
+        public boolean[] getKeyUsage() {
+            return this.getKeyUsage();
+        }
+
+        @Override
+        public Date getNotAfter() {
+            return this.origCertificate.getNotAfter();
+        }
+
+        @Override
+        public Date getNotBefore() {
+            return this.origCertificate.getNotBefore();
+        }
+
+        @Override
+        public BigInteger getSerialNumber() {
+            return this.origCertificate.getSerialNumber();
+        }
+
+        @Override
+        public String getSigAlgName() {
+            return this.origCertificate.getSigAlgName();
+        }
+
+        @Override
+        public String getSigAlgOID() {
+            return this.getSigAlgOID();
+        }
+
+        @Override
+        public byte[] getSigAlgParams() {
+            return this.origCertificate.getSigAlgParams();
+        }
+
+        @Override
+        public byte[] getSignature() {
+            return this.origCertificate.getSignature();
+        }
+
+        @Override
+        public Principal getSubjectDN() {
+            return this.origCertificate.getSubjectDN();
+        }
+
+        @Override
+        public boolean[] getSubjectUniqueID() {
+            return this.origCertificate.getSubjectUniqueID();
+        }
+
+        @Override
+        public byte[] getTBSCertificate() throws CertificateEncodingException {
+            return this.origCertificate.getTBSCertificate();
+        }
+
+        @Override
+        public int getVersion() {
+            return this.origCertificate.getVersion();
+        }
+
+        @Override
+        public byte[] getEncoded() throws CertificateEncodingException {
+            return this.origCertificate.getEncoded();
+        }
+
+        @Override
+        public PublicKey getPublicKey() {
+            return this.origCertificate.getPublicKey();
+        }
+
+        @Override
+        public String toString() {
+            return this.origCertificate.toString();
+        }
+
+        @Override
+        public void verify(PublicKey publicKey) throws CertificateException, NoSuchAlgorithmException,
+                InvalidKeyException, NoSuchProviderException, SignatureException {
+            this.origCertificate.verify(publicKey);
+        }
+
+        @Override
+        public void verify(PublicKey publicKey, String sigProvider)
+                throws CertificateException, NoSuchAlgorithmException, InvalidKeyException,
+                NoSuchProviderException, SignatureException {
+            this.origCertificate.verify(publicKey, sigProvider);
+        }
+    }
+
 }
