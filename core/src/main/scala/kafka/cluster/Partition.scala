@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
-import kafka.cluster.Partition.{AtMinIsrMetricName, InSyncReplicasCountMetricName, LastStableOffsetLagMetricName, ReplicasCountMetricName, UnderMinIsrMetricName, UnderReplicatedMetricName, removeMetrics}
+import kafka.cluster.Partition.{AtMinIsrMetricName, InSyncReplicasCountMetricName, LastStableOffsetLagMetricName, MetricNames, ReplicasCountMetricName, UnderMinIsrMetricName, UnderReplicatedMetricName}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -111,6 +111,7 @@ object Partition {
   private val LastStableOffsetLagMetricName = "LastStableOffsetLag"
   private val AtMinIsrMetricName = "AtMinIsr"
 
+  // Visible for testing
   private[cluster] val MetricNames = Set(
     UnderReplicatedMetricName,
     UnderMinIsrMetricName,
@@ -119,8 +120,6 @@ object Partition {
     LastStableOffsetLagMetricName,
     AtMinIsrMetricName
   )
-
-  private[cluster] val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
 
   def apply(topicPartition: TopicPartition,
             time: Time,
@@ -155,11 +154,6 @@ object Partition {
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
       alterIsrManager = replicaManager.alterPartitionManager)
-  }
-
-  def removeMetrics(topicPartition: TopicPartition): Unit = {
-    val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString).asJava
-    MetricNames.foreach(metricsGroup.removeMetric(_, tags))
   }
 }
 
@@ -304,7 +298,7 @@ class Partition(val topicPartition: TopicPartition,
                 logManager: LogManager,
                 alterIsrManager: AlterPartitionManager) extends Logging {
 
-  import Partition.metricsGroup
+  private[cluster] val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -654,7 +648,6 @@ class Partition(val topicPartition: TopicPartition,
       }
       listeners.clear()
     }
-    removeMetrics(topicPartition)
   }
 
   private def clear(): Unit = {
@@ -665,6 +658,12 @@ class Partition(val topicPartition: TopicPartition,
     partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
     leaderReplicaIdOpt = None
     leaderEpochStartOffsetOpt = None
+    removeMetrics(topicPartition)
+  }
+
+  private[kafka] def removeMetrics(topicPartition: TopicPartition): Unit = {
+    val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString).asJava
+    MetricNames.foreach(metricsGroup.removeMetric(_, tags))
   }
 
   def getLeaderEpoch: Int = this.leaderEpoch
