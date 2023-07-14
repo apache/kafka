@@ -474,7 +474,11 @@ public final class QuorumController implements Controller {
         }
         EventHandlerExceptionInfo info = EventHandlerExceptionInfo.
                 fromInternal(exception, () -> latestController());
-        String failureMessage = info.failureMessage(lastCommittedEpoch, deltaUs,
+        int epoch = curClaimEpoch;
+        if (epoch == -1) {
+            epoch = lastCommittedEpoch;
+        }
+        String failureMessage = info.failureMessage(epoch, deltaUs,
                 isActiveController(), lastCommittedOffset);
         if (info.isFault()) {
             nonFatalFaultHandler.handleFault(name + ": " + failureMessage, exception);
@@ -735,21 +739,24 @@ public final class QuorumController implements Controller {
                             // Start by trying to apply the record to our in-memory state. This should always
                             // succeed; if it does not, that's a fatal error. It is important to do this before
                             // scheduling the record for Raft replication.
-                            int i = 0;
+                            int recordIndex = 0;
                             for (ApiMessageAndVersion message : records) {
+                                long recordOffset = prevEndOffset + 1 + recordIndex;
                                 try {
-                                    replay(message.message(), Optional.empty(), prevEndOffset + i + 1);
+                                    replay(message.message(), Optional.empty(), recordOffset);
                                 } catch (Throwable e) {
-                                    String failureMessage = String.format("Unable to apply %s record, which was " +
-                                            "%d of %d record(s) in the batch following last write offset %d.",
-                                            message.message().getClass().getSimpleName(), i + 1, records.size(),
-                                            prevEndOffset);
+                                    String failureMessage = String.format("Unable to apply %s " +
+                                        "record at offset %d on active controller, from the " +
+                                        "batch with baseOffset %d",
+                                        message.message().getClass().getSimpleName(),
+                                        recordOffset, prevEndOffset + 1);
                                     throw fatalFaultHandler.handleFault(failureMessage, e);
                                 }
-                                i++;
+                                recordIndex++;
                             }
-                            long nextEndOffset = prevEndOffset + i;
+                            long nextEndOffset = prevEndOffset + recordIndex;
                             raftClient.scheduleAtomicAppend(controllerEpoch, OptionalLong.of(nextEndOffset), records);
+                            snapshotRegistry.getOrCreateSnapshot(nextEndOffset);
                             snapshotRegistry.getOrCreateSnapshot(nextEndOffset);
                             prevEndOffset = nextEndOffset;
                             return nextEndOffset;
@@ -970,18 +977,20 @@ public final class QuorumController implements Controller {
                                 log.debug("Replaying commits from the active node up to " +
                                     "offset {} and epoch {}.", offset, epoch);
                             }
-                            int i = 0;
+                            int recordIndex = 0;
                             for (ApiMessageAndVersion message : messages) {
+                                long recordOffset = batch.baseOffset() + recordIndex;
                                 try {
-                                    replay(message.message(), Optional.empty(), batch.baseOffset() + i);
+                                    replay(message.message(), Optional.empty(), recordOffset);
                                 } catch (Throwable e) {
-                                    String failureMessage = String.format("Unable to apply %s record on standby " +
-                                            "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
-                                            message.message().getClass().getSimpleName(), i + 1, messages.size(),
-                                            batch.baseOffset());
+                                    String failureMessage = String.format("Unable to apply %s " +
+                                        "record at offset %d on standby controller, from the " +
+                                        "batch with baseOffset %d",
+                                        message.message().getClass().getSimpleName(),
+                                        recordOffset, batch.baseOffset());
                                     throw fatalFaultHandler.handleFault(failureMessage, e);
                                 }
-                                i++;
+                                recordIndex++;
                             }
                         }
 
@@ -990,13 +999,6 @@ public final class QuorumController implements Controller {
                             epoch,
                             batch.appendTimestamp()
                         );
-
-                        if (offset >= raftClient.latestSnapshotId().map(OffsetAndEpoch::offset).orElse(0L)) {
-                            oldestNonSnapshottedTimestamp = Math.min(
-                                oldestNonSnapshottedTimestamp,
-                                batch.appendTimestamp()
-                            );
-                        }
                     }
                 } finally {
                     reader.close();
@@ -1154,8 +1156,6 @@ public final class QuorumController implements Controller {
                         "active controller.");
             }
             curClaimEpoch = epoch;
-            lastCommittedOffset = newLastWriteOffset;
-            lastCommittedEpoch = epoch;
             controllerMetrics.setActive(true);
             updateWriteOffset(newLastWriteOffset);
             clusterControl.activate();
@@ -1746,11 +1746,6 @@ public final class QuorumController implements Controller {
      * If we have called scheduleWrite, this is the last offset we got back from it.
      */
     private long writeOffset;
-
-    /**
-     * Timestamp for the oldest record that was committed but not included in a snapshot.
-     */
-    private long oldestNonSnapshottedTimestamp = Long.MAX_VALUE;
 
     /**
      * How long to delay partition leader balancing operations.

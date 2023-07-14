@@ -36,7 +36,8 @@ import java.util.function.Supplier;
 
 public final class EventHandlerExceptionInfo {
     /**
-     * True if this exception should be treated as a fault.
+     * True if this exception should be treated as a fault, and tracked via the metadata errors
+     * metric.
      */
     private final boolean isFault;
 
@@ -91,7 +92,7 @@ public final class EventHandlerExceptionInfo {
             // The active controller picked the wrong end offset for its next batch. It must now
             // fail over. This should be pretty rare.
             return new EventHandlerExceptionInfo(false, true, internal,
-                new NotControllerException("Unexpected end offset. Controller not known."));
+                new NotControllerException("Unexpected end offset. Controller will resign."));
         } else if (internal instanceof InterruptedException) {
             // The controller event queue has been interrupted. This normally only happens during
             // a JUnit test that has hung. The test framework sometimes sends an InterruptException
@@ -162,9 +163,9 @@ public final class EventHandlerExceptionInfo {
     ) {
         StringBuilder bld = new StringBuilder();
         if (deltaUs.isPresent()) {
-            bld.append("failed with ");
+            bld.append("event failed with ");
         } else {
-            bld.append("unable to start processing because of ");
+            bld.append("event unable to start processing because of ");
         }
         bld.append(internalException.getClass().getSimpleName());
         if (externalException.isPresent()) {

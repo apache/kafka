@@ -74,7 +74,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testTopicExistsExceptionFailureMessage() {
-        assertEquals("failed with TopicExistsException in 234 microseconds.",
+        assertEquals("event failed with TopicExistsException in 234 microseconds.",
             TOPIC_EXISTS.failureMessage(123, OptionalLong.of(234L), true, 456L));
     }
 
@@ -88,7 +88,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testRejectedExecutionExceptionFailureMessage() {
-        assertEquals("unable to start processing because of RejectedExecutionException (treated " +
+        assertEquals("event unable to start processing because of RejectedExecutionException (treated " +
             "as TimeoutException).",
             REJECTED_EXECUTION.failureMessage(123, OptionalLong.empty(), true, 456L));
     }
@@ -103,7 +103,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testInterruptedExceptionFailureMessageWhenActive() {
-        assertEquals("unable to start processing because of InterruptedException (treated as " +
+        assertEquals("event unable to start processing because of InterruptedException (treated as " +
             "UnknownServerException) at epoch 123. Renouncing leadership and reverting to the " +
             "last committed offset 456.",
             INTERRUPTED.failureMessage(123, OptionalLong.empty(), true, 456L));
@@ -111,7 +111,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testInterruptedExceptionFailureMessageWhenInactive() {
-        assertEquals("unable to start processing because of InterruptedException (treated as " +
+        assertEquals("event unable to start processing because of InterruptedException (treated as " +
             "UnknownServerException) at epoch 123. The controller is already in standby mode.",
                 INTERRUPTED.failureMessage(123, OptionalLong.empty(), false, 456L));
     }
@@ -126,7 +126,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testNullPointerExceptionFailureMessageWhenActive() {
-        assertEquals("failed with NullPointerException (treated as UnknownServerException) " +
+        assertEquals("event failed with NullPointerException (treated as UnknownServerException) " +
             "at epoch 123 in 40 microseconds. Renouncing leadership and reverting to the last " +
             "committed offset 456.",
                 NULL_POINTER.failureMessage(123, OptionalLong.of(40L), true, 456L));
@@ -134,7 +134,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testNullPointerExceptionFailureMessageWhenInactive() {
-        assertEquals("failed with NullPointerException (treated as UnknownServerException) " +
+        assertEquals("event failed with NullPointerException (treated as UnknownServerException) " +
             "at epoch 123 in 40 microseconds. The controller is already in standby mode.",
                 NULL_POINTER.failureMessage(123, OptionalLong.of(40L), false, 456L));
     }
@@ -149,7 +149,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testNotLeaderExceptionFailureMessage() {
-        assertEquals("unable to start processing because of NotLeaderException (treated as " +
+        assertEquals("event unable to start processing because of NotLeaderException (treated as " +
             "NotControllerException) at epoch 123. Renouncing leadership and reverting to the " +
             "last committed offset 456.",
             NOT_LEADER.failureMessage(123, OptionalLong.empty(), true, 456L));
@@ -159,13 +159,13 @@ public class EventHandlerExceptionInfoTest {
     public void testUnexpectedEndOffsetExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, true,
             new UnexpectedEndOffsetException("Wanted end offset 3, but next available was 4"),
-            new NotControllerException("Unexpected end offset. Controller not known.")),
+            new NotControllerException("Unexpected end offset. Controller will resign.")),
                 UNEXPECTED_END_OFFSET);
     }
 
     @Test
     public void testUnepxectedEndOffsetFailureMessage() {
-        assertEquals("failed with UnexpectedEndOffsetException (treated as " +
+        assertEquals("event failed with UnexpectedEndOffsetException (treated as " +
             "NotControllerException) at epoch 123 in 90 microseconds. Renouncing leadership " +
             "and reverting to the last committed offset 456.",
                 UNEXPECTED_END_OFFSET.failureMessage(123, OptionalLong.of(90L), true, 456L));

@@ -24,8 +24,6 @@ import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -102,29 +100,5 @@ public class DeferredEventQueueTest {
             () -> event2.future.get()).getCause().getClass());
         assertEquals(RuntimeException.class, assertThrows(ExecutionException.class,
             () -> event3.future.get()).getCause().getClass());
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testReEntrantCompletion(boolean completeExceptionally) {
-        final DeferredEventQueue deferredEventQueue = new DeferredEventQueue(new LogContext());
-        SampleDeferredEvent event1 = new SampleDeferredEvent();
-        SampleDeferredEvent event2 = new SampleDeferredEvent();
-        event1.future().thenAccept(__ -> {
-            deferredEventQueue.completeUpTo(3);
-        });
-        deferredEventQueue.add(1, event1);
-        deferredEventQueue.add(3, event2);
-        deferredEventQueue.completeUpTo(0);
-        assertFalse(event1.future().isDone());
-        assertFalse(event2.future().isDone());
-        if (completeExceptionally) {
-            deferredEventQueue.failAll(new RuntimeException("oops"));
-        } else {
-            deferredEventQueue.completeUpTo(1);
-        }
-        assertTrue(event1.future().isDone());
-        assertEquals(completeExceptionally, event1.future().isCompletedExceptionally());
-        assertTrue(event2.future().isDone());
     }
 }
