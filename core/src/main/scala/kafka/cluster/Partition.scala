@@ -111,6 +111,7 @@ object Partition {
   private val LastStableOffsetLagMetricName = "LastStableOffsetLag"
   private val AtMinIsrMetricName = "AtMinIsr"
 
+  // Visible for testing
   private[cluster] val MetricNames = Set(
     UnderReplicatedMetricName,
     UnderMinIsrMetricName,
@@ -157,7 +158,7 @@ object Partition {
       alterIsrManager = replicaManager.alterPartitionManager)
   }
 
-  def removeMetrics(topicPartition: TopicPartition): Unit = {
+  private[kafka] def removeMetrics(topicPartition: TopicPartition): Unit = {
     val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString).asJava
     MetricNames.foreach(metricsGroup.removeMetric(_, tags))
   }
@@ -654,7 +655,6 @@ class Partition(val topicPartition: TopicPartition,
       }
       listeners.clear()
     }
-    removeMetrics(topicPartition)
   }
 
   private def clear(): Unit = {
@@ -665,6 +665,7 @@ class Partition(val topicPartition: TopicPartition,
     partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
     leaderReplicaIdOpt = None
     leaderEpochStartOffsetOpt = None
+    removeMetrics(topicPartition)
   }
 
   def getLeaderEpoch: Int = this.leaderEpoch
