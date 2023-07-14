@@ -186,6 +186,10 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               requestHandlerAvgIdleMetricName: String,
                               logAndThreadNamePrefix : String) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Visible for testing
+  var metricNames = Set(
+    requestHandlerAvgIdleMetricName
+  )
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
@@ -219,11 +223,20 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 
   def shutdown(): Unit = synchronized {
     info("shutting down")
-    for (handler <- runnables)
-      handler.initiateShutdown()
-    for (handler <- runnables)
-      handler.awaitShutdown()
+    try {
+      for (handler <- runnables)
+        handler.initiateShutdown()
+      for (handler <- runnables)
+        handler.awaitShutdown()
+    } finally {
+      removeMetrics()
+    }
     info("shut down completely")
+  }
+
+  private def removeMetrics(): Unit = {
+    metricNames.foreach(metricsGroup.removeMetric(_))
+    metricNames = Set()
   }
 }
 
