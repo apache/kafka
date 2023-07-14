@@ -710,6 +710,8 @@ public class Sender implements Runnable {
                     log.debug("Leader/epoch changed. Response leaderAndEpoch: {}, existing LeaderAndEpoch {}, error: {}",
                         responseLeaderEpoch, currentLeaderEpoch, error.exceptionName());
                     handleLeaderAndEpochUpdate(tp, responseLeaderEpoch);
+                    // Try to force an immediate retry
+                    batch.resetAttempts();
                 } else {
                     log.warn("Produce leader epoch is not updated for topic partition {}", tp);
                     metadata.requestUpdate();

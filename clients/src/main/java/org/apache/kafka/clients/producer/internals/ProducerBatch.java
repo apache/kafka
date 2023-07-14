@@ -123,6 +123,11 @@ public final class ProducerBatch {
         }
     }
 
+    void resetAttempts() {
+        log.info("MSN: ProduceBatch reset batch-attempts.");
+        attempts.set(0);
+    }
+
     /**
      * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
      * @return true if the record has been successfully appended, false otherwise.
