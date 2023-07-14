@@ -1692,7 +1692,7 @@ class GroupMetadataManagerTest {
 
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
@@ -1740,7 +1740,7 @@ class GroupMetadataManagerTest {
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     val records = recordsCapture.getValue.records.asScala.toList
@@ -1783,7 +1783,7 @@ class GroupMetadataManagerTest {
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     val records = recordsCapture.getValue.records.asScala.toList
@@ -1851,7 +1851,7 @@ class GroupMetadataManagerTest {
 
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     // verify the tombstones are correct and only for the expired offsets
@@ -1959,7 +1959,7 @@ class GroupMetadataManagerTest {
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     // group is empty now, only one offset should expire
@@ -1984,7 +1984,7 @@ class GroupMetadataManagerTest {
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     // one more offset should expire
@@ -2041,7 +2041,7 @@ class GroupMetadataManagerTest {
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     // group and all its offsets should be gone now
@@ -2131,7 +2131,7 @@ class GroupMetadataManagerTest {
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
     groupMetadataManager.cleanupGroupMetadata()
 
     // group and all its offsets should be gone now
@@ -2283,13 +2283,13 @@ class GroupMetadataManagerTest {
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
+      any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
 
     groupMetadataManager.cleanupGroupMetadata()
 
     verify(partition).appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
-      any())
+      any(), any())
     verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
