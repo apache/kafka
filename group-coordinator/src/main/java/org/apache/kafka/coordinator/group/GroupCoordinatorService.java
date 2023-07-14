@@ -128,8 +128,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
 
-            String logPrefix = String.format("GroupCoordinator id=%d ", nodeId);
-            LogContext logContext = new LogContext(String.format("[%s ]", logPrefix));
+            String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
+            LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
             CoordinatorBuilderSupplier<ReplicatedGroupCoordinator, Record> supplier = () ->
                 new ReplicatedGroupCoordinator.Builder(config);
@@ -142,6 +142,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime =
                 new CoordinatorRuntime.Builder<ReplicatedGroupCoordinator, Record>()
+                    .withTime(time)
+                    .withTimer(timer)
                     .withLogPrefix(logPrefix)
                     .withLogContext(logContext)
                     .withEventProcessor(processor)
