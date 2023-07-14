@@ -21,6 +21,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -187,6 +189,18 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         return groupMetadataManager.genericGroupJoin(
+            context,
+            request,
+            responseFuture
+        );
+    }
+
+    public CoordinatorResult<Void, Record> genericGroupSync(
+        RequestContext context,
+        SyncGroupRequestData request,
+        CompletableFuture<SyncGroupResponseData> responseFuture
+    ) {
+        return groupMetadataManager.genericGroupSync(
             context,
             request,
             responseFuture

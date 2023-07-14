@@ -127,6 +127,12 @@ public class GenericGroup implements Group {
     private int generationId;
 
     /**
+     * The group's generation id when the current
+     * pending sync operation was scheduled.
+     */
+    private int pendingSyncGenerationId = -1;
+
+    /**
      * The id of the group's leader.
      */
     private Optional<String> leaderId;
@@ -252,6 +258,13 @@ public class GenericGroup implements Group {
     }
 
     /**
+     * @return the pending sync generation id.
+     */
+    public int pendingSyncGenerationId() {
+        return this.pendingSyncGenerationId;
+    }
+
+    /**
      * @return the protocol name.
      */
     public Optional<String> protocolName() {
@@ -360,6 +373,15 @@ public class GenericGroup implements Group {
      */
     public void setSubscribedTopics(Optional<Set<String>> subscribedTopics) {
         this.subscribedTopics = subscribedTopics;
+    }
+
+    /**
+     * Sets pendingSyncGenerationId.
+     *
+     * @param generationId the value to set.
+     */
+    public void setPendingSyncGenerationId(int generationId) {
+        this.pendingSyncGenerationId = generationId;
     }
 
     /**
@@ -694,7 +716,7 @@ public class GenericGroup implements Group {
     }
 
     // For testing only.
-    Set<String> allDynamicMemberIds() {
+    public Set<String> allDynamicMemberIds() {
         Set<String> dynamicMemberSet = new HashSet<>(allMemberIds());
         staticMembers.values().forEach(dynamicMemberSet::remove);
         return dynamicMemberSet;

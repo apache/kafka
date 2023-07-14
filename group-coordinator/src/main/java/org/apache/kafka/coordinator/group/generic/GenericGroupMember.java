@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * This class encapsulates a generic group member's metadata.
@@ -400,13 +401,15 @@ public class GenericGroupMember {
     public String toString() {
         return "GenericGroupMember(" +
             "memberId='" + memberId + '\'' +
-            ", groupInstanceId='" + groupInstanceId + '\'' +
+            ", groupInstanceId='" + groupInstanceId.orElse("") + '\'' +
             ", clientId='" + clientId + '\'' +
             ", clientHost='" + clientHost + '\'' +
             ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
             ", sessionTimeoutMs=" + sessionTimeoutMs +
             ", protocolType='" + protocolType + '\'' +
-            ", supportedProtocols=" + supportedProtocols +
+            ", supportedProtocols=" + supportedProtocols.stream()
+                .map(JoinGroupRequestProtocol::name)
+                .collect(Collectors.toList()) +
             ')';
     }
 }
