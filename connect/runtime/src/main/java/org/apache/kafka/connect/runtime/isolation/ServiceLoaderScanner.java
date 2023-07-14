@@ -34,6 +34,7 @@ import java.util.SortedSet;
  * <p>This implements the modern discovery strategy, which uses only service loading in order to discover plugins.
  * Specifically, a plugin appears in the scan result if all the following conditions are true:
  * <ul>
+ *     <li>The class and direct dependencies can be loaded</li>
  *     <li>The class is concrete</li>
  *     <li>The class is public</li>
  *     <li>The class has a no-args constructor</li>
