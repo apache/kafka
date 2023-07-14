@@ -133,8 +133,8 @@ public abstract class PluginScanner {
                 T pluginImpl;
                 try {
                     pluginImpl = iterator.next();
-                } catch (ServiceConfigurationError t) {
-                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
+                } catch (ServiceConfigurationError | LinkageError t) {
+                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t instanceof LinkageError ? t : t.getCause()), t);
                     continue;
                 }
                 Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
