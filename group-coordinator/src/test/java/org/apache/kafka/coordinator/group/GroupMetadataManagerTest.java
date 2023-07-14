@@ -2361,6 +2361,19 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testOnNewMetadataImageWithEmptyDelta() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .build();
+
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        assertEquals(image, context.groupMetadataManager.image());
+    }
+
+    @Test
     public void testOnNewMetadataImage() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))

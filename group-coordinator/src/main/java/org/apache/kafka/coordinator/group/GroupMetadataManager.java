@@ -1187,20 +1187,22 @@ public class GroupMetadataManager {
 
         // Notify all the groups subscribed to the created, updated or
         // deleted topics.
-        Set<String> allGroupIds = new HashSet<>();
-        delta.topicsDelta().changedTopics().forEach((topicId, topicDelta) -> {
-            String topicName = topicDelta.name();
-            allGroupIds.addAll(groupsSubscribedToTopic(topicName));
-        });
-        delta.topicsDelta().deletedTopicIds().forEach(topicId -> {
-            TopicImage topicImage = delta.image().topics().getTopic(topicId);
-            allGroupIds.addAll(groupsSubscribedToTopic(topicImage.name()));
-        });
-        allGroupIds.forEach(groupId -> {
-            Group group = groups.get(groupId);
-            if (group != null && group.type() == Group.GroupType.CONSUMER) {
-                ((ConsumerGroup) group).requestMetadataRefresh();
-            }
+        Optional.ofNullable(delta.topicsDelta()).ifPresent(topicsDelta -> {
+            Set<String> allGroupIds = new HashSet<>();
+            topicsDelta.changedTopics().forEach((topicId, topicDelta) -> {
+                String topicName = topicDelta.name();
+                allGroupIds.addAll(groupsSubscribedToTopic(topicName));
+            });
+            topicsDelta.deletedTopicIds().forEach(topicId -> {
+                TopicImage topicImage = delta.image().topics().getTopic(topicId);
+                allGroupIds.addAll(groupsSubscribedToTopic(topicImage.name()));
+            });
+            allGroupIds.forEach(groupId -> {
+                Group group = groups.get(groupId);
+                if (group != null && group.type() == Group.GroupType.CONSUMER) {
+                    ((ConsumerGroup) group).requestMetadataRefresh();
+                }
+            });
         });
     }
 

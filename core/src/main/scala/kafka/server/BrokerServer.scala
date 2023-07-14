@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.EndPoint
-import kafka.coordinator.group.GroupCoordinatorAdapter
+import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter, GroupCoordinatorAdapter}
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
@@ -38,7 +38,9 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException, TopicPartition}
-import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.group
+import org.apache.kafka.coordinator.group.util.SystemTimerReaper
+import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
@@ -48,6 +50,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
+import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
@@ -284,14 +287,7 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time , null)
       tokenManager.startup() // does nothing, we just need a token manager in order to compile right now...
 
-      // Create group coordinator, but don't start it until we've started replica manager.
-      // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
-      groupCoordinator = GroupCoordinatorAdapter(
-        config,
-        replicaManager,
-        Time.SYSTEM,
-        metrics
-      )
+      groupCoordinator = createGroupCoordinator()
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
@@ -519,6 +515,52 @@ class BrokerServer(
         fatal("Fatal error during broker startup. Prepare to shutdown", e)
         shutdown()
         throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
+    }
+  }
+
+  private def createGroupCoordinator(): GroupCoordinator = {
+    // Create group coordinator, but don't start it until we've started replica manager.
+    // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good
+    // to fix the underlying issue.
+    if (config.isNewGroupCoordinatorEnabled) {
+      val time = Time.SYSTEM
+      val serde = new RecordSerde
+      val groupCoordinatorConfig = new GroupCoordinatorConfig(
+        config.groupCoordinatorNumThreads,
+        config.consumerGroupSessionTimeoutMs,
+        config.consumerGroupHeartbeatIntervalMs,
+        config.consumerGroupMaxSize,
+        config.consumerGroupAssignors,
+        config.offsetsTopicSegmentBytes
+      )
+      val timer = new SystemTimerReaper(
+        "group-coordinator-reaper",
+        new SystemTimer("group-coordinator")
+      )
+      val loader = new CoordinatorLoaderImpl[group.Record](
+        replicaManager,
+        serde,
+        config.offsetsLoadBufferSize
+      )
+      val writer = new CoordinatorPartitionWriter[group.Record](
+        replicaManager,
+        serde,
+        config.offsetsTopicCompressionType,
+        time
+      )
+      new GroupCoordinatorService.Builder(config.brokerId, groupCoordinatorConfig)
+        .withTime(time)
+        .withTimer(timer)
+        .withLoader(loader)
+        .withWriter(writer)
+        .build()
+    } else {
+      GroupCoordinatorAdapter(
+        config,
+        replicaManager,
+        Time.SYSTEM,
+        metrics
+      )
     }
   }
 

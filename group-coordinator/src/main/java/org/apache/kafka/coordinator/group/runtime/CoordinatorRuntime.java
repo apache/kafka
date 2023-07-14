@@ -886,7 +886,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         @Override
         public void complete(Throwable exception) {
             if (exception != null) {
-                log.error("Execution of {} failed due to {}.", name, exception);
+                log.error("Execution of {} failed due to {}.", name, exception.getMessage());
             }
         }
 
