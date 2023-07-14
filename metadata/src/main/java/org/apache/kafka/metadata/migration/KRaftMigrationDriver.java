@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.metadata.ConfigRecord;
-import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
@@ -28,17 +27,17 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LoaderManifestType;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.util.RecordRedactor;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.util.Deadline;
 import org.apache.kafka.server.util.FutureUtils;
 import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Map;
@@ -48,19 +47,38 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * This class orchestrates and manages the state related to a ZK to KRaft migration. A single event thread is used to
  * serialize events coming from various threads and listeners.
  */
 public class KRaftMigrationDriver implements MetadataPublisher {
+
+    private static class PollTimeSupplier {
+        private final ExponentialBackoff pollBackoff;
+        private long pollCount;
+
+        PollTimeSupplier() {
+            this.pollCount = 0;
+            this.pollBackoff = new ExponentialBackoff(100, 2, 60000, 0.02);
+        }
+
+        void reset() {
+            this.pollCount = 0;
+        }
+
+        public long nextPollTimeMs() {
+            long next = pollBackoff.backoff(pollCount);
+            pollCount++;
+            return next;
+        }
+    }
+
     private final static Consumer<Throwable> NO_OP_HANDLER = ex -> { };
 
     /**
@@ -78,8 +96,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final LegacyPropagator propagator;
     private final ZkRecordConsumer zkRecordConsumer;
     private final KafkaEventQueue eventQueue;
+    private final PollTimeSupplier pollTimeSupplier;
     private final FaultHandler faultHandler;
     private final QuorumFeatures quorumFeatures;
+    private final RecordRedactor recordRedactor;
     /**
      * A callback for when the migration state has been recovered from ZK. This is used to delay the installation of this
      * MetadataPublisher with MetadataLoader.
@@ -98,6 +118,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         Consumer<MetadataPublisher> initialZkLoadHandler,
         FaultHandler faultHandler,
         QuorumFeatures quorumFeatures,
+        KafkaConfigSchema configSchema,
         Time time
     ) {
         this.nodeId = nodeId;
@@ -110,12 +131,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "controller-" + nodeId + "-migration-driver-");
+        this.pollTimeSupplier = new PollTimeSupplier();
         this.image = MetadataImage.EMPTY;
         this.firstPublish = false;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
         this.quorumFeatures = quorumFeatures;
         this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient);
+        this.recordRedactor = new RecordRedactor(configSchema);
     }
 
     public KRaftMigrationDriver(
@@ -125,9 +148,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         LegacyPropagator propagator,
         Consumer<MetadataPublisher> initialZkLoadHandler,
         FaultHandler faultHandler,
-        QuorumFeatures quorumFeatures
+        QuorumFeatures quorumFeatures,
+        KafkaConfigSchema configSchema
     ) {
-        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, Time.SYSTEM);
+        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, configSchema, Time.SYSTEM);
     }
 
 
@@ -158,7 +182,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private boolean isControllerQuorumReadyForMigration() {
         Optional<String> notReadyMsg = this.quorumFeatures.reasonAllControllersZkMigrationNotReady();
         if (notReadyMsg.isPresent()) {
-            log.info("Still waiting for all controller nodes ready to begin the migration. due to:" + notReadyMsg.get());
+            log.warn("Still waiting for all controller nodes ready to begin the migration. Not ready due to:" + notReadyMsg.get());
             return false;
         }
         return true;
@@ -287,11 +311,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         if (newState != migrationState) {
             log.debug("{} transitioning from {} to {} state", nodeId, migrationState, newState);
+            pollTimeSupplier.reset();
+            wakeup();
         } else {
             log.trace("{} transitioning from {} to {} state", nodeId, migrationState, newState);
         }
 
         migrationState = newState;
+    }
+
+    private void wakeup() {
+        eventQueue.append(new PollEvent());
     }
 
     // MetadataPublisher methods
@@ -440,6 +470,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                         "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 completionHandler.accept(null);
+                wakeup();
                 return;
             }
 
@@ -510,7 +541,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     case PRE_MIGRATION:
                         if (isControllerQuorumReadyForMigration()) {
                             // Base case when starting the migration
-                            log.debug("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
+                            log.info("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
                             transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
                         }
                         break;
@@ -520,7 +551,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                             transitionTo(MigrationDriverState.INACTIVE);
                         } else {
                             // Base case when rebooting a controller during migration
-                            log.debug("Migration is in already progress, not waiting on ZK brokers.");
+                            log.info("Migration is in already progress, not waiting on ZK brokers.");
                             transitionTo(MigrationDriverState.BECOME_CONTROLLER);
                         }
                         break;
@@ -539,7 +570,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             switch (migrationState) {
                 case WAIT_FOR_BROKERS:
                     if (areZkBrokersReadyForMigration()) {
-                        log.debug("Zk brokers are registered and ready for migration");
+                        log.info("Zk brokers are registered and ready for migration");
                         transitionTo(MigrationDriverState.BECOME_CONTROLLER);
                     }
                     break;
@@ -556,7 +587,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
                 applyMigrationOperation("Claiming ZK controller leadership", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
-                    log.debug("Unable to claim leadership, will retry until we learn of a different KRaft leader");
+                    log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
                 } else {
                     if (!migrationLeadershipState.initialZkMigrationComplete()) {
                         transitionTo(MigrationDriverState.ZK_MIGRATION);
@@ -573,22 +604,23 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         public void run() throws Exception {
             Set<Integer> brokersInMetadata = new HashSet<>();
             log.info("Starting ZK migration");
+            MigrationManifest.Builder manifestBuilder = MigrationManifest.newBuilder(time);
             zkRecordConsumer.beginMigration();
             try {
-                AtomicInteger count = new AtomicInteger(0);
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
+                        log.info("Migrating {} records from ZK", batch.size());
                         if (log.isTraceEnabled()) {
-                            log.trace("Migrating {} records from ZK: {}", batch.size(), recordBatchToString(batch));
-                        } else {
-                            log.info("Migrating {} records from ZK", batch.size());
+                            batch.forEach(apiMessageAndVersion ->
+                                log.trace(recordRedactor.toLoggableString(apiMessageAndVersion.message())));
                         }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
                         FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, "",
                             "the metadata layer to commit migration record batch",
                             future, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
-                        count.addAndGet(batch.size());
+                        manifestBuilder.acceptBatch(batch);
                     } catch (Throwable e) {
+                        // This will cause readAllMetadata to throw since this batch consumer is called directly from readAllMetadata
                         throw new RuntimeException(e);
                     }
                 }, brokersInMetadata::add);
@@ -597,10 +629,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     KRaftMigrationDriver.this.log, "",
                     "the metadata layer to complete the migration",
                     completeMigrationFuture, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
-                log.info("Completed migration of metadata from Zookeeper to KRaft. A total of {} metadata records were " +
-                         "generated. The current metadata offset is now {} with an epoch of {}. Saw {} brokers in the " +
+                MigrationManifest manifest = manifestBuilder.build();
+                log.info("Completed migration of metadata from ZooKeeper to KRaft. {}. " +
+                         "The current metadata offset is now {} with an epoch of {}. Saw {} brokers in the " +
                          "migrated metadata {}.",
-                    count.get(),
+                    manifest,
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch(),
                     brokersInMetadata.size(),
@@ -615,6 +648,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();
+                MigrationManifest partialManifest = manifestBuilder.build();
+                log.error("Aborted metadata migration from ZooKeeper to KRaft. {}.", partialManifest);
                 super.handleException(t);
             }
         }
@@ -690,37 +725,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             // Poll again after some time
-            long deadline = time.nanoseconds() + NANOSECONDS.convert(1, SECONDS);
+            long deadline = time.nanoseconds() + NANOSECONDS.convert(pollTimeSupplier.nextPollTimeMs(), MILLISECONDS);
             eventQueue.scheduleDeferred(
                     "poll",
                     new EventQueue.DeadlineFunction(deadline),
                     new PollEvent());
         }
-    }
-
-    static String recordBatchToString(Collection<ApiMessageAndVersion> batch) {
-        String batchString = batch.stream().map(apiMessageAndVersion -> {
-            if (apiMessageAndVersion.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id()) {
-                StringBuilder sb = new StringBuilder();
-                sb.append("ApiMessageAndVersion(");
-                ConfigRecord record = (ConfigRecord) apiMessageAndVersion.message();
-                sb.append("ConfigRecord(");
-                sb.append("resourceType=");
-                sb.append(record.resourceType());
-                sb.append(", resourceName=");
-                sb.append(record.resourceName());
-                sb.append(", name=");
-                sb.append(record.name());
-                sb.append(")");
-                sb.append(" at version ");
-                sb.append(apiMessageAndVersion.version());
-                sb.append(")");
-                return sb.toString();
-            } else {
-                return apiMessageAndVersion.toString();
-            }
-        }).collect(Collectors.joining(","));
-        return "[" + batchString + "]";
     }
 
     static KRaftMigrationOperationConsumer countingOperationConsumer(
