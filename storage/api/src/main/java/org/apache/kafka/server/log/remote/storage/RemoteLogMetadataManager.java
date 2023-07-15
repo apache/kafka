@@ -196,7 +196,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
      * This method is invoked only when the topic partitions are stopped on this broker. This can happen when a
-     * partition is emigrated to other broker or a partition is deleted.
+     * partition is immigrated to other broker or a partition is deleted.
      *
      * @param partitions topic partitions that have been stopped.
      */

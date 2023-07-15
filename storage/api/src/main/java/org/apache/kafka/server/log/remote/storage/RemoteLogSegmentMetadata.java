@@ -183,7 +183,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
     }
 
     /**
-     * @return Maximum timestamp in milli seconds of a record within this segment.
+     * @return Maximum timestamp in milliseconds of a record within this segment.
      */
     public long maxTimestampMs() {
         return maxTimestampMs;
