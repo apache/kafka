@@ -70,7 +70,7 @@ public class KafkaExactlyOnceDemo {
             // stage 2: send demo records to the input-topic
             CountDownLatch producerLatch = new CountDownLatch(1);
             Producer producerThread = new Producer(
-                "producer",
+                    "producer",
                     KafkaProperties.BOOTSTRAP_SERVERS,
                     INPUT_TOPIC,
                     false,
@@ -90,7 +90,7 @@ public class KafkaExactlyOnceDemo {
             CountDownLatch processorsLatch = new CountDownLatch(numInstances);
             List<ExactlyOnceMessageProcessor> processors = IntStream.range(0, numInstances)
                 .mapToObj(id -> new ExactlyOnceMessageProcessor(
-                    "processor-" + id,
+                        "processor-" + id,
                         KafkaProperties.BOOTSTRAP_SERVERS,
                         INPUT_TOPIC,
                         OUTPUT_TOPIC,
@@ -106,7 +106,7 @@ public class KafkaExactlyOnceDemo {
             // stage 4: check consuming records from the output-topic
             CountDownLatch consumerLatch = new CountDownLatch(1);
             Consumer consumerThread = new Consumer(
-                "consumer",
+                    "consumer",
                     KafkaProperties.BOOTSTRAP_SERVERS,
                     OUTPUT_TOPIC,
                     GROUP_NAME,
