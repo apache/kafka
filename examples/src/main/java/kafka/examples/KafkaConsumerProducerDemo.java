@@ -22,11 +22,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * This example can be decomposed into the following stages:
- *
+ * <p>
  * 1. Clean any topics left from previous runs.
  * 2. Create a producer thread to send a set of records to topic1.
  * 3. Create a consumer thread to fetch all previously sent records from topic1.
- *
+ * <p>
  * If you are using IntelliJ IDEA, the above arguments should be put in `Modify Run Configuration - Program Arguments`.
  * You can also set an output log file in `Modify Run Configuration - Modify options - Save console output to file` to
  * record all the log output together.
