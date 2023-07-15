@@ -189,6 +189,10 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void disconnect(String node) {
+        disconnect(node, false);
+    }
+
+    public void disconnect(String node, boolean allowLateResponses) {
         long now = time.milliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
@@ -197,7 +201,8 @@ public class MockClient implements KafkaClient {
                 short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), now, true, null, null, null));
-                iter.remove();
+                if (!allowLateResponses)
+                    iter.remove();
             }
         }
         CompletableFuture<String> curDisconnectFuture = disconnectFuture;
