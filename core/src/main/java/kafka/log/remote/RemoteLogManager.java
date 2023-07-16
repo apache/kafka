@@ -922,8 +922,11 @@ public class RemoteLogManager implements Closeable {
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
                 rlmScheduledThreadPool.close();
-                removeMetrics();
-                shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
+                try {
+                    shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
+                } finally {
+                    removeMetrics();
+                }
 
                 leaderOrFollowerTasks.clear();
                 closed = true;
