@@ -757,7 +757,6 @@ public final class QuorumController implements Controller {
                             long nextEndOffset = prevEndOffset + recordIndex;
                             raftClient.scheduleAtomicAppend(controllerEpoch, OptionalLong.of(nextEndOffset), records);
                             snapshotRegistry.getOrCreateSnapshot(nextEndOffset);
-                            snapshotRegistry.getOrCreateSnapshot(nextEndOffset);
                             prevEndOffset = nextEndOffset;
                             return nextEndOffset;
                         }
