@@ -119,17 +119,28 @@ public class UtilsTest {
 
     @Test
     public void testByteBufferMurmur2() {
-        final int capacity = 64;
+        final int capacity = 256;
+        final Random random = new Random();
         final ByteBuffer heapBuffer0 = ByteBuffer.allocate(capacity).order(LITTLE_ENDIAN);
         final ByteBuffer heapBuffer1 = ByteBuffer.allocate(capacity).order(BIG_ENDIAN);
+        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(capacity).order(LITTLE_ENDIAN);
+        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(capacity).order(BIG_ENDIAN);
         for (int i = 0; i < capacity / 4; i++) {
-            heapBuffer0.putInt(1 << i);
-            heapBuffer1.putInt(1 << i);
+            final int randomInt = random.nextInt();
+            heapBuffer0.putInt(randomInt);
+            heapBuffer1.putInt(randomInt);
+            directBuffer0.putInt(randomInt);
+            directBuffer1.putInt(randomInt);
         }
+
         heapBuffer0.flip();
         heapBuffer1.flip();
+        directBuffer0.flip();
+        directBuffer1.flip();
         assertEquals(murmur2(Utils.toArray(heapBuffer0)), murmur2(heapBuffer0));
         assertEquals(murmur2(Utils.toArray(heapBuffer1)), murmur2(heapBuffer1));
+        assertEquals(murmur2(Utils.toArray(directBuffer0)), murmur2(directBuffer0));
+        assertEquals(murmur2(Utils.toArray(directBuffer1)), murmur2(directBuffer1));
     }
 
     @Test

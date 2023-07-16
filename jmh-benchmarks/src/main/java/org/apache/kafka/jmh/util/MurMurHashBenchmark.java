@@ -32,6 +32,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.nio.ByteBuffer;
 import java.util.SplittableRandom;
 
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.openjdk.jmh.annotations.Mode.Throughput;
 
@@ -53,7 +54,7 @@ public class MurMurHashBenchmark {
     private boolean direct;
 
     @Param({"false", "true"})
-    private boolean readonly;
+    private boolean littleEndian;
 
     private ByteBuffer byteBuffer;
 
@@ -66,12 +67,17 @@ public class MurMurHashBenchmark {
         byteBuffer = direct ? ByteBuffer.allocateDirect(bytes) : ByteBuffer.allocate(bytes);
         for (int i = 0; i < bytes; i++) {
             final byte b = (byte) random.nextInt(Byte.MIN_VALUE, Byte.MAX_VALUE + 1);
-            byteBuffer.put(i, b);
+            byteBuffer.put(b);
             bytesArray[i] = b;
         }
 
-        if (readonly) {
-            byteBuffer = byteBuffer.asReadOnlyBuffer();
+        if (littleEndian) {
+            byteBuffer.order(LITTLE_ENDIAN);
+        }
+        byteBuffer.flip();
+
+        if (byteArrayMurmur2() != byteBufferMurmur2() || byteBufferMurmur2() != byteBufferMurmur2()) {
+            throw new IllegalStateException();
         }
     }
 
