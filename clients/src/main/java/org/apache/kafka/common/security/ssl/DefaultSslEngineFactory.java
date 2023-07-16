@@ -23,7 +23,6 @@ import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
-import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyFactory;
@@ -33,7 +32,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Principal;
 import java.security.PrivateKey;
-import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.SignatureException;
@@ -51,6 +49,8 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -65,14 +65,13 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.TrustManagerFactorySpi;
 import javax.net.ssl.X509TrustManager;
+import javax.security.auth.x500.X500Principal;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.SslConfigs;
@@ -272,7 +271,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             }
 
             String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+            CommonNameLoggingTrustManagerFactoryWrapper tmf = CommonNameLoggingTrustManagerFactoryWrapper.getInstance(tmfAlgorithm);
             KeyStore ts = truststore == null ? null : truststore.get();
             tmf.init(ts);
 
@@ -601,8 +600,47 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
      * These trust managers log the common name of an expired but otherwise valid (client) certificate before rejecting the connection attempt.
      * This allows to identify misconfigured clients in complex network environments, where the IP address is not sufficient.
      */
-    static class CommonNameLoggingTrustManagerFactory {
+    static class CommonNameLoggingTrustManagerFactoryWrapper {
 
+        private TrustManagerFactory origTmf;
+
+        /**
+         * Create a wrapped trust manager factory
+         * @param kmfAlgorithm the algorithm
+         * @return A wrapped trust manager factory
+         * @throws NoSuchAlgorithmException
+         */
+        protected CommonNameLoggingTrustManagerFactoryWrapper(String kmfAlgorithm) throws NoSuchAlgorithmException {
+            this.origTmf = TrustManagerFactory.getInstance(kmfAlgorithm);
+        }
+        /**
+         * Factory for creating a wrapped trust manager factory
+         * @param kmfAlgorithm the algorithm
+         * @return A wrapped trust manager factory
+         * @throws NoSuchAlgorithmException
+         */
+        public static CommonNameLoggingTrustManagerFactoryWrapper getInstance(String kmfAlgorithm) throws NoSuchAlgorithmException {
+            return new CommonNameLoggingTrustManagerFactoryWrapper(kmfAlgorithm);
+        }
+
+        public void init(KeyStore ts) throws KeyStoreException {
+            this.origTmf.init(ts);
+        }
+
+        public TrustManager[] getTrustManagers() {
+            TrustManager[] origTrustManagers = this.origTmf.getTrustManagers();
+            TrustManager[] wrappedTrustManagers = new TrustManager[origTrustManagers.length];
+            for (int i = 0; i < origTrustManagers.length; i++) {
+                TrustManager tm = origTrustManagers[i];
+                if (tm instanceof X509TrustManager) {
+                    // Wrap only X509 trust managers
+                    wrappedTrustManagers[i] = new CommonNameLoggingTrustManager((X509TrustManager) tm);
+                } else {
+                    wrappedTrustManagers[i] = tm;
+                }
+            }
+            return wrappedTrustManagers;
+        }
     }
 
     /**
@@ -615,30 +653,91 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
      */
     static class CommonNameLoggingTrustManager implements X509TrustManager {
 
-        public CommonNameLoggingTrustManager(KeyStore trustStore) {
+        private X509TrustManager origTm;
 
+        public CommonNameLoggingTrustManager(X509TrustManager origTm) {
+            this.origTm = origTm;
         }
 
         @Override
-        public void checkClientTrusted(X509Certificate[] arg0, String arg1)
+        public void checkClientTrusted(X509Certificate[] chain, String authType)
                 throws CertificateException {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'checkClientTrusted'");
+            CertificateException origException = null;
+            try {
+                this.origTm.checkClientTrusted(chain, authType);
+                // If the last line did not throw, the chain is valid (including that none of the certificates is expired)
+            } catch (CertificateException e) {
+                origException = e;
+                try {
+                    X509Certificate[] wrappedChain = sortChainAnWrapLeafCertificate(chain);
+                    this.origTm.checkClientTrusted(wrappedChain, authType);
+                    // No exception occurred this time. The certificate is invalid due to being expired, but otherwise valid.
+                    String commonName = wrappedChain[0].getSubjectX500Principal().toString();
+                    String notValidAfter = wrappedChain[0].getNotAfter().toString();
+                    log.info("Certificate with common name \""+commonName+"\" expired on "+notValidAfter);
+                } catch (CertificateException innerException) {
+                    // Ignore this exception as we throw the original one below
+                } catch (NoSuchAlgorithmException innerException) {
+                    // Ignore this exception as we throw the original one below
+                }
+            }
+            if (origException != null) {
+                throw origException;
+            }
+        }
+
+        /**
+         * This method sorts the certificate chain from leaf to root certificate and wraps the leaf certificate to make it "never-expireing"
+         * @param origChain The original (unsorted) certificate chain
+         * @return The sorted and wrapped certificate chain
+         * @throws CertificateException
+         * @throws NoSuchAlgorithmException
+         */
+        private X509Certificate[] sortChainAnWrapLeafCertificate(X509Certificate[] origChain) throws CertificateException, NoSuchAlgorithmException {
+            // Find the leaf certificate by looking at all issuers and find the one not referred to by any other certificate
+            HashMap<X500Principal, X509Certificate> usedCertificatesMap = new HashMap<>();
+            for (X509Certificate cert: origChain) {
+                X500Principal issuerPrincipal = cert.getIssuerX500Principal();
+                usedCertificatesMap.put(issuerPrincipal, cert);
+            }
+            // Expect certificate chain to be broken, e.g. containing multiple leaf certificates
+            HashSet<X509Certificate> leafCertificates = new HashSet<>();
+            for (X509Certificate cert: origChain) {
+                X500Principal subjectPrincipal = cert.getSubjectX500Principal();
+                if (!usedCertificatesMap.containsKey(subjectPrincipal)) {
+                    leafCertificates.add(cert);
+                }
+            }
+            // There should be exactly one leaf certificate
+            if (leafCertificates.size()!=1) {
+                throw new CertificateException("Multiple leaf certificates in chain");
+            }
+            X509Certificate leafCertificate = leafCertificates.iterator().next();
+            X509Certificate[] wrappedChain = new X509Certificate[origChain.length];
+            // Add the wrapped certificate as first element in the new certificate chain array
+            wrappedChain[0] = new NeverExpiringX509Certificate(leafCertificate);
+            // Add all other (potential) certificates in order of dependencies (result will be sorted from leaf certificate to last intermediate/root certificate)
+            for (int i = 1; i < origChain.length; i++) {
+                X500Principal siblingCertificateIssuer = wrappedChain[i-1].getIssuerX500Principal();
+                if (usedCertificatesMap.containsKey(siblingCertificateIssuer)) {
+                    wrappedChain[i] = usedCertificatesMap.get(siblingCertificateIssuer);
+                } else {
+                    throw new CertificateException("Certificate chain contains certificates not belonging to the chain");
+                }
+            }
+            return wrappedChain;
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] arg0, String arg1)
+        public void checkServerTrusted(X509Certificate[] chain, String authType)
                 throws CertificateException {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'checkServerTrusted'");
+            this.origTm.checkServerTrusted(chain, authType);
         }
 
         @Override
         public X509Certificate[] getAcceptedIssuers() {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getAcceptedIssuers'");
+            return this.origTm.getAcceptedIssuers();
         }
-
     }
 
     static class NeverExpiringX509Certificate extends X509Certificate {
@@ -647,8 +746,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
 
         public NeverExpiringX509Certificate(X509Certificate origCertificate) {
             this.origCertificate = origCertificate;
-            if (this.origCertificate == null)
-            {
+            if (this.origCertificate == null) {
                 throw new KafkaException("No X509 certificate provided in constructor NeverExpiringX509Certificate");
             }
         }
@@ -678,8 +776,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                 throws CertificateExpiredException, CertificateNotYetValidException {
             Date now = new Date();
             // Do nothing for certificates which are not valid anymore now
-            if (this.origCertificate.getNotAfter().before(now))
-            {
+            if (this.origCertificate.getNotAfter().before(now)) {
                 return;
             }
             // Check validity as usual
@@ -690,8 +787,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         public void checkValidity(Date date)
                 throws CertificateExpiredException, CertificateNotYetValidException {
             // Do nothing for certificates which are not valid anymore at the supplied date
-            if (this.origCertificate.getNotAfter().before(date))
-            {
+            if (this.origCertificate.getNotAfter().before(date)) {
                 return;
             }
             // Check validity as usual
@@ -715,7 +811,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
 
         @Override
         public boolean[] getKeyUsage() {
-            return this.getKeyUsage();
+            return this.origCertificate.getKeyUsage();
         }
 
         @Override
@@ -740,7 +836,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
 
         @Override
         public String getSigAlgOID() {
-            return this.getSigAlgOID();
+            return this.origCertificate.getSigAlgOID();
         }
 
         @Override
