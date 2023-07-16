@@ -460,6 +460,7 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsMaybeToDeleteRemote = mutable.Set.empty[TopicPartition]
         partitionStates.forKeyValue { (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition()
+          val requestLeaderEpoch = partitionState.leaderEpoch
 
           getPartition(topicPartition) match {
             case HostedPartition.Offline =>
@@ -471,7 +472,6 @@ class ReplicaManager(val config: KafkaConfig,
 
             case HostedPartition.Online(partition) =>
               val currentLeaderEpoch = partition.getLeaderEpoch
-              val requestLeaderEpoch = partitionState.leaderEpoch
 
               if (requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete && remoteLogManager.isDefined)
                 partitionsMaybeToDeleteRemote += topicPartition
@@ -504,7 +504,7 @@ class ReplicaManager(val config: KafkaConfig,
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
               stoppedPartitions += topicPartition -> deletePartition
-              if (remoteLogManager.isDefined)
+              if (requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete && remoteLogManager.isDefined)
                 partitionsMaybeToDeleteRemote += topicPartition
               responseMap.put(topicPartition, Errors.NONE)
           }
@@ -576,7 +576,12 @@ class ReplicaManager(val config: KafkaConfig,
     val errorMap = new mutable.HashMap[TopicPartition, Throwable]()
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
-      logManager.asyncDelete(partitionsToDelete, partitionsMaybeToDeleteRemote, (tp, e) => errorMap.put(tp, e))
+      logManager.asyncDelete(partitionsToDelete, (tp, e) => errorMap.put(tp, e))
+
+      // Delete the remote log segments
+      partitionsToDelete.foreach { topicPartition =>
+        getLog(topicPartition).foreach(_.maybeDeleteRemote(partitionsMaybeToDeleteRemote.contains(topicPartition)))
+      }
     }
     errorMap
   }

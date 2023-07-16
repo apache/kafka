@@ -1621,8 +1621,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  def addLogToBeRemoteDeleted(): Unit = {
-    RemoteLogManager.addTopicIdToBeDeleted(_topicId.asJava)
+  def maybeDeleteRemote(deleteRemote: Boolean): Unit = {
+    if (deleteRemote && remoteLogEnabled())
+      RemoteLogManager.addTopicIdToBeDeleted(_topicId.asJava)
   }
 
   // visible for testing

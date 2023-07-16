@@ -1134,13 +1134,11 @@ class LogManager(logDirs: Seq[File],
     * @param topicPartition TopicPartition that needs to be deleted
     * @param isFuture True iff the future log of the specified partition should be deleted
     * @param checkpoint True if checkpoints must be written
-    * @param deleteRemote True if the topicPartition needs to delete remote
     * @return the removed log
     */
   def asyncDelete(topicPartition: TopicPartition,
                   isFuture: Boolean = false,
-                  checkpoint: Boolean = true,
-                  deleteRemote: Boolean = false): Option[UnifiedLog] = {
+                  checkpoint: Boolean = true): Option[UnifiedLog] = {
     val removedLog: Option[UnifiedLog] = logCreationOrDeletionLock synchronized {
       removeLogAndMetrics(if (isFuture) futureLogs else currentLogs, topicPartition)
     }
@@ -1161,9 +1159,6 @@ class LogManager(logDirs: Seq[File],
           checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         }
         addLogToBeDeleted(removedLog)
-        if (deleteRemote && removedLog.remoteLogEnabled())
-          removedLog.addLogToBeRemoteDeleted()
-
         info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
 
       case None =>
@@ -1180,25 +1175,22 @@ class LogManager(logDirs: Seq[File],
    * deletion. Checkpoints are updated once all the directories have been renamed.
    *
    * @param topicPartitions The set of topic-partitions to delete asynchronously
-   * @param deleteRemotePartitions The set of topic-partitions that may need to delete remote
    * @param errorHandler The error handler that will be called when a exception for a particular
    *                     topic-partition is raised
    */
   def asyncDelete(topicPartitions: Set[TopicPartition],
-                  deleteRemotePartitions: Set[TopicPartition],
                   errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
     val logDirs = mutable.Set.empty[File]
 
     topicPartitions.foreach { topicPartition =>
       try {
-        val deleteRemote = deleteRemotePartitions.contains(topicPartition)
         getLog(topicPartition).foreach { log =>
           logDirs += log.parentDirFile
-          asyncDelete(topicPartition, checkpoint = false, deleteRemote = deleteRemote)
+          asyncDelete(topicPartition, checkpoint = false)
         }
         getLog(topicPartition, isFuture = true).foreach { log =>
           logDirs += log.parentDirFile
-          asyncDelete(topicPartition, isFuture = true, checkpoint = false, deleteRemote = deleteRemote)
+          asyncDelete(topicPartition, isFuture = true, checkpoint = false)
         }
       } catch {
         case e: Throwable => errorHandler(topicPartition, e)
