@@ -76,6 +76,10 @@ public class RemoteLogReaderTest {
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteReadRequestRate().count());
         assertEquals(100, brokerTopicStats.topicStats(TOPIC).remoteBytesInRate().count());
         assertEquals(0, brokerTopicStats.topicStats(TOPIC).failedRemoteReadRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteReadRequestRate().count());
+        assertEquals(100, brokerTopicStats.allTopicsStats().remoteBytesInRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteReadRequestRate().count());
     }
 
     @Test
@@ -98,5 +102,9 @@ public class RemoteLogReaderTest {
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteReadRequestRate().count());
         assertEquals(0, brokerTopicStats.topicStats(TOPIC).remoteBytesInRate().count());
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).failedRemoteReadRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteReadRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteBytesInRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteReadRequestRate().count());
     }
 }

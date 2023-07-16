@@ -319,6 +319,10 @@ public class RemoteLogManagerTest {
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteBytesOutRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
@@ -358,6 +362,11 @@ public class RemoteLogManagerTest {
         assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
         // Verify we did not report any failure for remote writes
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(10, brokerTopicStats.allTopicsStats().remoteBytesOutRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
+
     }
 
     @Test
@@ -415,6 +424,9 @@ public class RemoteLogManagerTest {
         // Verify the metrics for remote write requests/failures is zero before attempt to copy log segment
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
@@ -427,6 +439,9 @@ public class RemoteLogManagerTest {
         // Verify the metric for remote write requests/failures was updated.
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
     }
 
     @Test
