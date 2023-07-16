@@ -626,7 +626,7 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
-                .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
+                .remoteBytesOutRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             copiedOffsetOption = OptionalLong.of(endOffset);
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());

@@ -59,7 +59,7 @@ public class RemoteLogReader implements Callable<Void> {
             logger.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
 
             FetchDataInfo fetchDataInfo = rlm.read(fetchInfo);
-            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteBytesInRate().mark(fetchDataInfo.records.sizeInBytes());
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
         } catch (OffsetOutOfRangeException e) {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
