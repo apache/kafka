@@ -547,7 +547,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // assignment change event will trigger autocommit if is it configured and the group id is specified. This is
         // to make sure offsets of topic partitions the consumer is unsubscribing from are committed since there will
         // be no following rebalance
-        eventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed()));
+        eventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed(), time.milliseconds()));
 
         log.info("Assigned to partition(s): {}", Utils.join(partitions, ", "));
         if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))

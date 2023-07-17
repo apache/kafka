@@ -23,9 +23,11 @@ import java.util.Map;
 
 public class AssignmentChangeApplicationEvent extends ApplicationEvent {
     final Map<TopicPartition, OffsetAndMetadata> offsets;
+    final long currentTimeMs;
 
-    public AssignmentChangeApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public AssignmentChangeApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long currentTimeMs) {
         super(Type.ASSIGNMENT_CHANGE);
         this.offsets = offsets;
+        this.currentTimeMs = currentTimeMs;
     }
 }

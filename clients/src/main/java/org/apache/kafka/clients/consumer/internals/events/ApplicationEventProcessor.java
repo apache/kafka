@@ -123,6 +123,7 @@ public class ApplicationEventProcessor {
     private boolean process(final AssignmentChangeApplicationEvent event) {
         Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
+        manager.updateAutoCommitTimer(event.currentTimeMs);
         manager.maybeAutoCommit(event.offsets);
         return true;
     }
