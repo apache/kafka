@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -51,14 +50,6 @@ final class MirrorUtils {
 
     // utility class
     private MirrorUtils() {}
-
-    static ConfigDef mergeConnectorConfigDef(ConfigDef configDef) {
-        ConfigDef connectorConfigDef = new ConfigDef(MirrorConnectorConfig.BASE_CONNECTOR_CONFIG_DEF);
-        configDef.configKeys().entrySet().forEach(config -> {
-            connectorConfigDef.define(config.getValue().displayName, config.getValue().type(), config.getValue().defaultValue, config.getValue().validator, config.getValue().importance, config.getValue().documentation);
-        });
-        return connectorConfigDef;
-    }
 
     static KafkaProducer<byte[], byte[]> newProducer(Map<String, Object> props) {
         return new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
