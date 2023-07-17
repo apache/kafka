@@ -72,7 +72,10 @@ public class ProducerIdControlManagerTest {
             clusterControl.replay(brokerRecord, 100L);
         }
 
-        this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
+        this.producerIdControlManager = new ProducerIdControlManager.Builder().
+            setClusterControlManager(clusterControl).
+            setSnapshotRegistry(snapshotRegistry).
+            build();
     }
 
     @Test

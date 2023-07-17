@@ -26,7 +26,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{Consumer, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -75,7 +75,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     }
   }
 
-  def createNoAutoCommitConsumer(group: String): KafkaConsumer[String, String] = {
+  def createNoAutoCommitConsumer(group: String): Consumer[String, String] = {
     val props = new Properties
     props.put("bootstrap.servers", bootstrapServers())
     props.put("group.id", group)
