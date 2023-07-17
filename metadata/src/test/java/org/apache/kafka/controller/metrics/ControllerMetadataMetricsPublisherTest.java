@@ -53,7 +53,7 @@ public class ControllerMetadataMetricsPublisherTest {
         MockFaultHandler faultHandler =
                 new MockFaultHandler("ControllerMetadataMetricsPublisher");
         ControllerMetadataMetrics metrics =
-                new ControllerMetadataMetrics(Optional.empty());
+                new ControllerMetadataMetrics(Optional.empty(), false);
         ControllerMetadataMetricsPublisher publisher =
                 new ControllerMetadataMetricsPublisher(metrics, faultHandler);
 

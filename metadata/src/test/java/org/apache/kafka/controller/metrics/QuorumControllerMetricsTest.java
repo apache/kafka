@@ -73,8 +73,10 @@ public class QuorumControllerMetricsTest {
                         "kafka.controller:type=KafkaController,name=LastAppliedRecordOffset",
                         "kafka.controller:type=KafkaController,name=LastAppliedRecordTimestamp",
                         "kafka.controller:type=KafkaController,name=LastAppliedRecordOffset",
-                        "kafka.controller:type=KafkaController,name=ZKWriteBehindLag"
-                        )));
+                        "kafka.controller:type=KafkaController,name=ZkWriteBehindLag",
+                        "kafka.controller:type=KafkaController,name=ZkWriteSnapshotTimeMs",
+                        "kafka.controller:type=KafkaController,name=ZkWriteDeltaTimeMs"
+                    )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller",
                     Collections.emptySet());
@@ -154,8 +156,8 @@ public class QuorumControllerMetricsTest {
             metrics.updateDualWriteOffset(0);
             @SuppressWarnings("unchecked")
             Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
-                    .allMetrics()
-                    .get(metricName("KafkaController", "ZKWriteBehindLag"));
+                .allMetrics()
+                .get(metricName("KafkaController", "ZkWriteBehindLag"));
             assertEquals(0, zkWriteBehindLag.value());
         } finally {
             registry.shutdown();
@@ -167,8 +169,8 @@ public class QuorumControllerMetricsTest {
             metrics.setLastCommittedRecordOffset(100);
             @SuppressWarnings("unchecked")
             Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
-                    .allMetrics()
-                    .get(metricName("KafkaController", "ZKWriteBehindLag"));
+                .allMetrics()
+                .get(metricName("KafkaController", "ZkWriteBehindLag"));
             assertEquals(10, zkWriteBehindLag.value());
         } finally {
             registry.shutdown();

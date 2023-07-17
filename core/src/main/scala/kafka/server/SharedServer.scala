@@ -242,7 +242,10 @@ class SharedServer(
           brokerMetrics = BrokerServerMetrics(metrics)
         }
         if (sharedServerConfig.processRoles.contains(ControllerRole)) {
-          controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
+          controllerServerMetrics = new ControllerMetadataMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()),
+            sharedServerConfig.migrationEnabled
+          )
         }
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           metaProps,

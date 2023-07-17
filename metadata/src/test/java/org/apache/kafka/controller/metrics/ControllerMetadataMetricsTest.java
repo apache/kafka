@@ -36,7 +36,7 @@ public class ControllerMetadataMetricsTest {
     public void testMetricNames() {
         MetricsRegistry registry = new MetricsRegistry();
         try {
-            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), false)) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
@@ -57,9 +57,34 @@ public class ControllerMetadataMetricsTest {
     }
 
     @Test
+    public void testZkMigrationMetricNames() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try {
+            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), true)) {
+                ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
+                    new HashSet<>(Arrays.asList(
+                        "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
+                        "kafka.controller:type=KafkaController,name=FencedBrokerCount",
+                        "kafka.controller:type=KafkaController,name=MigratingZkBrokerCount",
+                        "kafka.controller:type=KafkaController,name=GlobalPartitionCount",
+                        "kafka.controller:type=KafkaController,name=GlobalTopicCount",
+                        "kafka.controller:type=KafkaController,name=MetadataErrorCount",
+                        "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
+                        "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
+                        "kafka.controller:type=KafkaController,name=ZkMigrationState"
+                    )));
+            }
+            ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
+                    Collections.emptySet());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @Test
     public void testMetadataErrorCount() {
         MetricsRegistry registry = new MetricsRegistry();
-        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), false)) {
             @SuppressWarnings("unchecked")
             Gauge<Integer> metadataErrorCount = (Gauge<Integer>) registry
                     .allMetrics()
@@ -84,7 +109,7 @@ public class ControllerMetadataMetricsTest {
         BiConsumer<ControllerMetadataMetrics, Integer> incrementer
     ) {
         MetricsRegistry registry = new MetricsRegistry();
-        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), false)) {
             assertEquals(0, metricsGetter.apply(metrics));
             assertEquals(0, registryGetter.apply(registry));
             setter.accept(metrics, 123);

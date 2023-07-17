@@ -43,6 +43,7 @@ class ControllerMetricsChanges {
 
     private int fencedBrokersChange = 0;
     private int activeBrokersChange = 0;
+    private int migratingZkBrokersChange = 0;
     private int globalTopicsChange = 0;
     private int globalPartitionsChange = 0;
     private int offlinePartitionsChange = 0;
@@ -54,6 +55,10 @@ class ControllerMetricsChanges {
 
     public int activeBrokersChange() {
         return activeBrokersChange;
+    }
+
+    public int migratingZkBrokersChange() {
+        return migratingZkBrokersChange;
     }
 
     public int globalTopicsChange() {
@@ -84,6 +89,9 @@ class ControllerMetricsChanges {
         if (next != null) {
             isFenced = next.fenced();
             isActive = !next.fenced();
+        }
+        if (prev == null && next != null && next.isMigratingZkBroker()) {
+            migratingZkBrokersChange += 1;
         }
         fencedBrokersChange += delta(wasFenced, isFenced);
         activeBrokersChange += delta(wasActive, isActive);
@@ -140,6 +148,9 @@ class ControllerMetricsChanges {
         }
         if (activeBrokersChange != 0) {
             metrics.addToActiveBrokerCount(activeBrokersChange);
+        }
+        if (migratingZkBrokersChange != 0) {
+            metrics.addToMigratingZkBrokerCount(migratingZkBrokersChange);
         }
         if (globalTopicsChange != 0) {
             metrics.addToGlobalTopicCount(globalTopicsChange);
