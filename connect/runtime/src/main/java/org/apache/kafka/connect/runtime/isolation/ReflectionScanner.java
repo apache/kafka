@@ -25,15 +25,13 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.reflections.Configuration;
 import org.reflections.Reflections;
 import org.reflections.ReflectionsException;
-import org.reflections.scanners.SubTypesScanner;
+import org.reflections.scanners.Scanners;
 import org.reflections.util.ConfigurationBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
 import java.util.Collections;
 import java.util.ServiceLoader;
 import java.util.Set;
@@ -79,9 +77,9 @@ public class ReflectionScanner extends PluginScanner {
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new ClassLoader[]{loader});
         builder.addUrls(source.urls());
-        builder.setScanners(new SubTypesScanner());
-        builder.useParallelExecutor();
-        Reflections reflections = new InternalReflections(builder);
+        builder.setScanners(Scanners.SubTypes);
+        builder.setParallel(true);
+        Reflections reflections = new Reflections(builder);
 
         return new PluginScanResult(
                 getPluginDesc(reflections, SinkConnector.class, loader),
@@ -138,26 +136,5 @@ public class ReflectionScanner extends PluginScanner {
             }
         }
         return result;
-    }
-
-    private static class InternalReflections extends Reflections {
-
-        public InternalReflections(Configuration configuration) {
-            super(configuration);
-        }
-
-        // When Reflections is used for parallel scans, it has a bug where it propagates ReflectionsException
-        // as RuntimeException.  Override the scan behavior to emulate the singled-threaded logic.
-        @Override
-        protected void scan(URL url) {
-            try {
-                super.scan(url);
-            } catch (ReflectionsException e) {
-                Logger log = Reflections.log;
-                if (log != null && log.isWarnEnabled()) {
-                    log.warn("could not create Vfs.Dir from url. ignoring the exception and continuing", e);
-                }
-            }
-        }
     }
 }
