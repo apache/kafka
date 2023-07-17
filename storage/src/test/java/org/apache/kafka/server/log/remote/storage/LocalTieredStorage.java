@@ -319,12 +319,10 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 storageListeners.onStorageEvent(eventBuilder.withFileset(fileset).build());
 
             } catch (final Exception e) {
-                //
                 // Keep the storage in a consistent state, i.e. a segment stored should always have with its
                 // associated offset and time indexes stored as well. Here, delete any file which was copied
                 // before the exception was hit. The exception is re-thrown as no remediation is expected in
                 // the current scope.
-                //
                 if (fileset != null) {
                     fileset.delete();
                 }
@@ -342,7 +340,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     @Override
     public InputStream fetchLogSegment(final RemoteLogSegmentMetadata metadata,
                                        final int startPos) throws RemoteStorageException {
-        return fetchLogSegment(metadata, startPos, Integer.MAX_VALUE);
+        return fetchLogSegment(metadata, startPos, metadata.segmentSizeInBytes());
     }
 
     @Override
@@ -352,6 +350,8 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         checkArgument(startPos >= 0, "Start position must be positive", startPos);
         checkArgument(endPos >= startPos,
                 "End position cannot be less than startPosition", startPos, endPos);
+        checkArgument(metadata.segmentSizeInBytes() >= endPos,
+                "End position cannot be greater than segment size", endPos, metadata.segmentSizeInBytes());
 
         return wrap(() -> {
 
@@ -469,11 +469,9 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             if (notADirectory.isPresent()) {
                 logger.warn("Found file [{}] which is not a remote topic-partition directory. " +
                         "Stopping the deletion process.", notADirectory.get());
-                //
                 // If an unexpected state is encountered, do not proceed with the delete of the local storage,
                 // keeping it for post-mortem analysis. Do not throw either, in an attempt to keep the close()
                 // method quiet.
-                //
                 return;
             }
 

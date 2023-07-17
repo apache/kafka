@@ -120,7 +120,7 @@ public final class LocalTieredStorageCondition {
      */
     public final LocalTieredStorageCondition and(final LocalTieredStorageCondition conjuct) {
         //
-        // To keep things simple, only authorize append to the condition chain of elementary (not composed)
+        // To keep things simple, only authorize to append to the condition chain of elementary (not composed)
         // conditions. It also allows to protect from cycles.
         //
         if (conjuct.next != null) {

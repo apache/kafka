@@ -123,7 +123,7 @@ public final class LocalTieredStorageTest {
         final RemoteLogSegmentMetadata metadata = newRemoteLogSegmentMetadata(id);
         tieredStorage.copyLogSegmentData(metadata, segment);
 
-        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id);
     }
 
     @Test
@@ -204,7 +204,7 @@ public final class LocalTieredStorageTest {
         final LogSegmentData segment = localLogSegments.nextSegment();
 
         tieredStorage.copyLogSegmentData(newRemoteLogSegmentMetadata(id), segment);
-        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id);
 
         tieredStorage.deleteLogSegmentData(newRemoteLogSegmentMetadata(id));
         remoteStorageVerifier.verifyLogSegmentFilesAbsent(id);
@@ -218,7 +218,7 @@ public final class LocalTieredStorageTest {
             final RemoteLogSegmentId id = newRemoteLogSegmentId();
             final LogSegmentData segment = localLogSegments.nextSegment();
             tieredStorage.copyLogSegmentData(newRemoteLogSegmentMetadata(id), segment);
-            remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+            remoteStorageVerifier.verifyContainsLogSegmentFiles(id);
             segmentIds.add(id);
         }
         tieredStorage.deletePartition(topicIdPartition);
@@ -254,10 +254,10 @@ public final class LocalTieredStorageTest {
         final LogSegmentData segment = localLogSegments.nextSegment();
 
         tieredStorage.copyLogSegmentData(newRemoteLogSegmentMetadata(id), segment);
-        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id);
 
         tieredStorage.deleteLogSegmentData(newRemoteLogSegmentMetadata(id));
-        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id);
     }
 
     @Test
@@ -338,7 +338,7 @@ public final class LocalTieredStorageTest {
         final RemoteLogSegmentMetadata metadata = newRemoteLogSegmentMetadata(newRemoteLogSegmentId());
 
         assertThrows(RemoteResourceNotFoundException.class,
-            () -> tieredStorage.fetchLogSegment(metadata, 0, Integer.MAX_VALUE));
+            () -> tieredStorage.fetchLogSegment(metadata, 0, metadata.segmentSizeInBytes()));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, OFFSET));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, TIMESTAMP));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, LEADER_EPOCH));
@@ -386,7 +386,7 @@ public final class LocalTieredStorageTest {
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH:mm:ss");
 
     private String generateStorageId(String testName) {
-        return format("%s-%s-%s",
+        return format("kafka-tiered-storage/%s-%s-%s",
                 getClass().getSimpleName(), testName, DATE_TIME_FORMATTER.format(LocalDateTime.now()));
     }
 
@@ -432,9 +432,8 @@ public final class LocalTieredStorageTest {
          * Verify the remote storage contains remote log segment and associated files for the provided {@code id}.
          *
          * @param id The unique ID of the remote log segment and associated resources (e.g. offset and time indexes).
-         * @param segment The segment stored on Kafka's local storage.
          */
-        public void verifyContainsLogSegmentFiles(final RemoteLogSegmentId id, final LogSegmentData segment) {
+        public void verifyContainsLogSegmentFiles(final RemoteLogSegmentId id) {
             expectedPaths(id).forEach(this::assertFileExists);
         }
 
