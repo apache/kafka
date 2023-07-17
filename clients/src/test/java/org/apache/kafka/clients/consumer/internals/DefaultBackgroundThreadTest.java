@@ -18,12 +18,15 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -52,6 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -92,6 +96,9 @@ public class DefaultBackgroundThreadTest {
                 true);
         this.groupState = new GroupState(rebalanceConfig);
         this.commitManager = mock(CommitRequestManager.class);
+        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
     }
 
     @Test
@@ -150,6 +157,32 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
+    public void testAssignmentChangeEvent() {
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        this.processor = spy(new ApplicationEventProcessor(this.backgroundEventsQueue, mockRequestManagerRegistry(),
+            metadata));
+
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
+
+        final long currentTimeMs = time.milliseconds();
+        ApplicationEvent e = new AssignmentChangeApplicationEvent(offset, currentTimeMs);
+        this.applicationEventsQueue.add(e);
+
+        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+
+        backgroundThread.runOnce();
+        verify(processor).process(any(AssignmentChangeApplicationEvent.class));
+        verify(networkClient, times(1)).poll(anyLong(), anyLong());
+        verify(commitManager, times(1)).updateAutoCommitTimer(currentTimeMs);
+        verify(commitManager, times(1)).maybeAutoCommit(offset);
+
+        backgroundThread.close();
+    }
+
+    @Test
     void testFindCoordinator() {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
@@ -175,10 +208,19 @@ public class DefaultBackgroundThreadTest {
         assertEquals(10, backgroundThread.handlePollResult(failure));
     }
 
+    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
+        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
+        return topicPartitionOffsets;
+    }
+
     private Map<RequestManager.Type, Optional<RequestManager>> mockRequestManagerRegistry() {
         Map<RequestManager.Type, Optional<RequestManager>> registry = new HashMap<>();
         registry.put(RequestManager.Type.COORDINATOR, Optional.of(coordinatorManager));
-        registry.put(RequestManager.Type.COMMIT, Optional.of(coordinatorManager));
+        registry.put(RequestManager.Type.COMMIT, Optional.of(commitManager));
         return registry;
     }
 
@@ -197,10 +239,6 @@ public class DefaultBackgroundThreadTest {
     }
 
     private DefaultBackgroundThread mockBackgroundThread() {
-        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
-
         return new DefaultBackgroundThread(
                 this.time,
                 new ConsumerConfig(properties),
