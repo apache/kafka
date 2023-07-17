@@ -24,6 +24,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.slf4j.Logger;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -35,7 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
     public static final String TASK_QUEUE_SIZE = "TaskQueueSize";
     public static final String AVG_IDLE_PERCENT = "AvgIdlePercent";
-    public static final Set<String> METRIC_SUFFIXES = new HashSet<>(Arrays.asList(TASK_QUEUE_SIZE, AVG_IDLE_PERCENT));
+    public static final Set<String> METRIC_SUFFIXES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(TASK_QUEUE_SIZE, AVG_IDLE_PERCENT)));
     private final Logger logger;
     private final String metricsNamePrefix;
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
