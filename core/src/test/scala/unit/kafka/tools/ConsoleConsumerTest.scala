@@ -18,7 +18,6 @@
 package kafka.tools
 
 import java.io.{ByteArrayOutputStream, PrintStream}
-import java.nio.file.Files
 import java.util.{HashMap, Optional, Map => JMap}
 import java.time.Duration
 import kafka.tools.ConsoleConsumer.ConsumerWrapper
@@ -366,11 +365,7 @@ class ConsoleConsumerTest {
 
   @Test
   def shouldParseConfigsFromFile(): Unit = {
-    val propsFile = TestUtils.tempFile()
-    val propsStream = Files.newOutputStream(propsFile.toPath)
-    propsStream.write("request.timeout.ms=1000\n".getBytes())
-    propsStream.write("group.id=group1".getBytes())
-    propsStream.close()
+    val propsFile = TestUtils.tempPropertiesFile(Map("request.timeout.ms" -> "1000", "group.id" -> "group1"))
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
@@ -388,10 +383,7 @@ class ConsoleConsumerTest {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     // different in all three places
-    var propsFile = TestUtils.tempFile()
-    var propsStream = Files.newOutputStream(propsFile.toPath)
-    propsStream.write("group.id=group-from-file".getBytes())
-    propsStream.close()
+    var propsFile = TestUtils.tempPropertiesFile(Map("group.id" -> "group-from-file"))
     var args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
@@ -403,10 +395,7 @@ class ConsoleConsumerTest {
     assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // the same in all three places
-    propsFile = TestUtils.tempFile()
-    propsStream = Files.newOutputStream(propsFile.toPath)
-    propsStream.write("group.id=test-group".getBytes())
-    propsStream.close()
+    propsFile = TestUtils.tempPropertiesFile(Map("group.id" -> "test-group"))
     args = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
@@ -420,10 +409,7 @@ class ConsoleConsumerTest {
     assertEquals("test-group", props.getProperty("group.id"))
 
     // different via --consumer-property and --consumer.config
-    propsFile = TestUtils.tempFile()
-    propsStream = Files.newOutputStream(propsFile.toPath)
-    propsStream.write("group.id=group-from-file".getBytes())
-    propsStream.close()
+    propsFile = TestUtils.tempPropertiesFile(Map("group.id" -> "group-from-file"))
     args = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
@@ -444,10 +430,7 @@ class ConsoleConsumerTest {
     assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // different via --group and --consumer.config
-    propsFile = TestUtils.tempFile()
-    propsStream = Files.newOutputStream(propsFile.toPath)
-    propsStream.write("group.id=group-from-file".getBytes())
-    propsStream.close()
+    propsFile = TestUtils.tempPropertiesFile(Map("group.id" -> "group-from-file"))
     args = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
@@ -492,12 +475,7 @@ class ConsoleConsumerTest {
 
   @Test
   def testCustomConfigShouldBePassedToConfigureMethod(): Unit = {
-    val propsFile = TestUtils.tempFile()
-    val propsStream = Files.newOutputStream(propsFile.toPath)
-    propsStream.write("key.deserializer.my-props=abc\n".getBytes())
-    propsStream.write("print.key=false".getBytes())
-    propsStream.close()
-
+    val propsFile = TestUtils.tempPropertiesFile(Map("key.deserializer.my-props" -> "abc", "print.key" -> "false"))
     val args = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",

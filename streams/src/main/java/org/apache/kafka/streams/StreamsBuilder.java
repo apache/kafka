@@ -49,7 +49,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 /**
- * {@code StreamsBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
+ * {@code StreamsBuilder} provides the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
  * <p>
  * It is a requirement that the processing logic ({@link Topology}) be defined in a deterministic way,
@@ -578,7 +578,7 @@ public class StreamsBuilder {
      * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
      * of the input topic.
      * <p>
-     * The provided {@link ProcessorSupplier}} will be used to create an
+     * The provided {@link ProcessorSupplier} will be used to create an
      * {@link Processor} that will receive all records forwarded from the {@link SourceNode}.
      * The supplier should always generate a new instance. Creating a single {@link Processor} object
      * and returning the same object reference in {@link ProcessorSupplier#get()} is a

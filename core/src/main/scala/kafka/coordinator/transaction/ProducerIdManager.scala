@@ -16,6 +16,7 @@
  */
 package kafka.coordinator.transaction
 
+import kafka.coordinator.transaction.ProducerIdManager.{IterationLimit, NoRetry, RetryBackoffMs}
 import kafka.server.{BrokerToControllerChannelManager, ControllerRequestCompletionHandler}
 import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
@@ -24,10 +25,11 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocateProducerIdsResponse}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.ProducerIdsBlock
 
-import java.util.concurrent.{ArrayBlockingQueue, TimeUnit}
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -41,6 +43,9 @@ import scala.util.{Failure, Success, Try}
 object ProducerIdManager {
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
   val PidPrefetchThreshold = 0.90
+  val IterationLimit = 3
+  val RetryBackoffMs = 50
+  val NoRetry = -1L
 
   // Creates a ProducerIdGenerate that directly interfaces with ZooKeeper, IBP < 3.0-IV0
   def zk(brokerId: Int, zkClient: KafkaZkClient): ZkProducerIdManager = {
@@ -49,16 +54,20 @@ object ProducerIdManager {
 
   // Creates a ProducerIdGenerate that uses AllocateProducerIds RPC, IBP >= 3.0-IV0
   def rpc(brokerId: Int,
-            brokerEpochSupplier: () => Long,
-            controllerChannel: BrokerToControllerChannelManager,
-            maxWaitMs: Int): RPCProducerIdManager = {
-    new RPCProducerIdManager(brokerId, brokerEpochSupplier, controllerChannel, maxWaitMs)
+          time: Time,
+          brokerEpochSupplier: () => Long,
+          controllerChannel: BrokerToControllerChannelManager): RPCProducerIdManager = {
+
+    new RPCProducerIdManager(brokerId, time, brokerEpochSupplier, controllerChannel)
   }
 }
 
 trait ProducerIdManager {
-  def generateProducerId(): Long
+  def generateProducerId(): Try[Long]
   def shutdown() : Unit = {}
+
+  // For testing purposes
+  def hasValidBlock: Boolean
 }
 
 object ZkProducerIdManager {
@@ -103,8 +112,7 @@ object ZkProducerIdManager {
   }
 }
 
-class ZkProducerIdManager(brokerId: Int,
-                          zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
+class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
 
   this.logIdent = "[ZK ProducerId Manager " + brokerId + "]: "
 
@@ -123,73 +131,103 @@ class ZkProducerIdManager(brokerId: Int,
     }
   }
 
-  def generateProducerId(): Long = {
+  def generateProducerId(): Try[Long] = {
     this synchronized {
       // grab a new block of producerIds if this block has been exhausted
       if (nextProducerId > currentProducerIdBlock.lastProducerId) {
-        allocateNewProducerIdBlock()
+        try {
+          allocateNewProducerIdBlock()
+        } catch {
+          case t: Throwable =>
+            return Failure(t)
+        }
         nextProducerId = currentProducerIdBlock.firstProducerId
       }
       nextProducerId += 1
-      nextProducerId - 1
+      Success(nextProducerId - 1)
+    }
+  }
+
+  override def hasValidBlock: Boolean = {
+    this synchronized {
+      !currentProducerIdBlock.equals(ProducerIdsBlock.EMPTY)
     }
   }
 }
 
+/**
+ * RPCProducerIdManager allocates producer id blocks asynchronously and will immediately fail requests
+ * for producers to retry if it does not have an available producer id and is waiting on a new block.
+ */
 class RPCProducerIdManager(brokerId: Int,
+                           time: Time,
                            brokerEpochSupplier: () => Long,
-                           controllerChannel: BrokerToControllerChannelManager,
-                           maxWaitMs: Int) extends ProducerIdManager with Logging {
+                           controllerChannel: BrokerToControllerChannelManager) extends ProducerIdManager with Logging {
 
   this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
 
-  private val nextProducerIdBlock = new ArrayBlockingQueue[Try[ProducerIdsBlock]](1)
+  // Visible for testing
+  private[transaction] var nextProducerIdBlock = new AtomicReference[ProducerIdsBlock](null)
+  private val currentProducerIdBlock: AtomicReference[ProducerIdsBlock] = new AtomicReference(ProducerIdsBlock.EMPTY)
   private val requestInFlight = new AtomicBoolean(false)
-  private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
-  private var nextProducerId: Long = -1L
+  private val backoffDeadlineMs = new AtomicLong(NoRetry)
 
-  override def generateProducerId(): Long = {
-    this synchronized {
-      if (nextProducerId == -1L) {
-        // Send an initial request to get the first block
-        maybeRequestNextBlock()
-        nextProducerId = 0L
-      } else {
-        nextProducerId += 1
+  override def hasValidBlock: Boolean = {
+    nextProducerIdBlock.get != null
+  }
 
-        // Check if we need to fetch the next block
-        if (nextProducerId >= (currentProducerIdBlock.firstProducerId + currentProducerIdBlock.size * ProducerIdManager.PidPrefetchThreshold)) {
-          maybeRequestNextBlock()
-        }
-      }
-
-      // If we've exhausted the current block, grab the next block (waiting if necessary)
-      if (nextProducerId > currentProducerIdBlock.lastProducerId) {
-        val block = nextProducerIdBlock.poll(maxWaitMs, TimeUnit.MILLISECONDS)
-        if (block == null) {
-          // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
-          // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
-          throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Timed out waiting for next producer ID block")
-        } else {
-          block match {
-            case Success(nextBlock) =>
-              currentProducerIdBlock = nextBlock
-              nextProducerId = currentProducerIdBlock.firstProducerId
-            case Failure(t) => throw t
+  override def generateProducerId(): Try[Long] = {
+    var result: Try[Long] = null
+    var iteration = 0
+    while (result == null) {
+      currentProducerIdBlock.get.claimNextId().asScala match {
+        case None =>
+          // Check the next block if current block is full
+          val block = nextProducerIdBlock.getAndSet(null)
+          if (block == null) {
+            // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
+            // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
+            maybeRequestNextBlock()
+            result = Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
+          } else {
+            currentProducerIdBlock.set(block)
+            requestInFlight.set(false)
+            iteration = iteration + 1
           }
-        }
+
+        case Some(nextProducerId) =>
+          // Check if we need to prefetch the next block
+          val prefetchTarget = currentProducerIdBlock.get.firstProducerId + (currentProducerIdBlock.get.size * ProducerIdManager.PidPrefetchThreshold).toLong
+          if (nextProducerId == prefetchTarget) {
+            maybeRequestNextBlock()
+          }
+          result = Success(nextProducerId)
       }
-      nextProducerId
+      if (iteration == IterationLimit) {
+        result = Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
+      }
     }
+    result
   }
 
 
-  private def maybeRequestNextBlock(): Unit = {
-    if (nextProducerIdBlock.isEmpty && requestInFlight.compareAndSet(false, true)) {
-      sendRequest()
+  // Visible for testing
+  private[transaction] def maybeRequestNextBlock(): Unit = {
+    val retryTimestamp = backoffDeadlineMs.get()
+    if (retryTimestamp == NoRetry || time.milliseconds() >= retryTimestamp) {
+      // Send a request only if we reached the retry deadline, or if no deadline was set.
+
+      if (nextProducerIdBlock.get == null &&
+        requestInFlight.compareAndSet(false, true) ) {
+
+        sendRequest()
+        // Reset backoff after a successful send.
+        backoffDeadlineMs.set(NoRetry)
+      }
     }
   }
 
+  // Visible for testing
   private[transaction] def sendRequest(): Unit = {
     val message = new AllocateProducerIdsRequestData()
       .setBrokerEpoch(brokerEpochSupplier.apply())
@@ -207,37 +245,40 @@ class RPCProducerIdManager(brokerId: Int,
     })
   }
 
+  // Visible for testing
   private[transaction] def handleAllocateProducerIdsResponse(response: AllocateProducerIdsResponse): Unit = {
-    requestInFlight.set(false)
     val data = response.data
+    var successfulResponse = false
     Errors.forCode(data.errorCode()) match {
       case Errors.NONE =>
         debug(s"Got next producer ID block from controller $data")
         // Do some sanity checks on the response
-        if (data.producerIdStart() < currentProducerIdBlock.lastProducerId) {
-          nextProducerIdBlock.put(Failure(new KafkaException(
-            s"Producer ID block is not monotonic with current block: current=$currentProducerIdBlock response=$data")))
+        if (data.producerIdStart() < currentProducerIdBlock.get.lastProducerId) {
+          error(s"Producer ID block is not monotonic with current block: current=$currentProducerIdBlock response=$data")
         } else if (data.producerIdStart() < 0 || data.producerIdLen() < 0 || data.producerIdStart() > Long.MaxValue - data.producerIdLen()) {
-          nextProducerIdBlock.put(Failure(new KafkaException(s"Producer ID block includes invalid ID range: $data")))
+          error(s"Producer ID block includes invalid ID range: $data")
         } else {
-          nextProducerIdBlock.put(
-            Success(new ProducerIdsBlock(brokerId, data.producerIdStart(), data.producerIdLen())))
+          nextProducerIdBlock.set(new ProducerIdsBlock(brokerId, data.producerIdStart(), data.producerIdLen()))
+          successfulResponse = true
         }
       case Errors.STALE_BROKER_EPOCH =>
-        warn("Our broker epoch was stale, trying again.")
-        maybeRequestNextBlock()
+        warn("Our broker currentBlockCount was stale, trying again.")
       case Errors.BROKER_ID_NOT_REGISTERED =>
         warn("Our broker ID is not yet known by the controller, trying again.")
-        maybeRequestNextBlock()
       case e: Errors =>
-        warn("Had an unknown error from the controller, giving up.")
-        nextProducerIdBlock.put(Failure(e.exception()))
+        error(s"Received an unexpected error code from the controller: $e")
+    }
+
+    if (!successfulResponse) {
+      // There is no need to compare and set because only one thread
+      // handles the AllocateProducerIds response.
+      backoffDeadlineMs.set(time.milliseconds() + RetryBackoffMs)
+      requestInFlight.set(false)
     }
   }
 
-  private[transaction] def handleTimeout(): Unit = {
+  private def handleTimeout(): Unit = {
     warn("Timed out when requesting AllocateProducerIds from the controller.")
     requestInFlight.set(false)
-    maybeRequestNextBlock()
   }
 }

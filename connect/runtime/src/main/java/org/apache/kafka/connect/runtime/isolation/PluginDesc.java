@@ -22,6 +22,7 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import java.util.Objects;
 
 public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
+    public static final String UNDEFINED_VERSION = "undefined";
     private final Class<? extends T> klass;
     private final String name;
     private final String version;

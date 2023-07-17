@@ -978,9 +978,9 @@ public final class Utils {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException outer) {
             try {
+                log.warn("Failed atomic move of {} to {} retrying with a non-atomic move", source, target, outer);
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
-                        outer.getMessage());
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed", source, target);
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -1262,7 +1262,7 @@ public final class Utils {
      * @return The length of the actual written data
      * @throws IOException If an I/O error occurs
      */
-    public static long tryWriteTo(TransferableChannel destChannel,
+    public static int tryWriteTo(TransferableChannel destChannel,
                                   int position,
                                   int length,
                                   ByteBuffer sourceBuffer) throws IOException {

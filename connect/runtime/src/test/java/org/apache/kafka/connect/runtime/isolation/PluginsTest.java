@@ -498,7 +498,7 @@ public class PluginsTest {
                 WorkerConfig.PLUGIN_PATH_CONFIG,
                 TestPlugins.pluginPathJoined(childResource)
         );
-        plugins = new Plugins(pluginProps, parent);
+        plugins = new Plugins(pluginProps, parent, new ClassLoaderFactory());
 
         Converter converter = plugins.newPlugin(
                 className,

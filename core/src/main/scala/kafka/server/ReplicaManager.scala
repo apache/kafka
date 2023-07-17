@@ -24,6 +24,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName}
 import kafka.server.ReplicaManager.createLogReadResult
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.server.metadata.ZkMetadataCache
@@ -177,6 +178,39 @@ object HostedPartition {
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
 
+  private val LeaderCountMetricName = "LeaderCount"
+  private val PartitionCountMetricName = "PartitionCount"
+  private val OfflineReplicaCountMetricName = "OfflineReplicaCount"
+  private val UnderReplicatedPartitionsMetricName = "UnderReplicatedPartitions"
+  private val UnderMinIsrPartitionCountMetricName = "UnderMinIsrPartitionCount"
+  private val AtMinIsrPartitionCountMetricName = "AtMinIsrPartitionCount"
+  private val ReassigningPartitionsMetricName = "ReassigningPartitions"
+  private val PartitionsWithLateTransactionsCountMetricName = "PartitionsWithLateTransactionsCount"
+  private val ProducerIdCountMetricName = "ProducerIdCount"
+  private val IsrExpandsPerSecMetricName = "IsrExpandsPerSec"
+  private val IsrShrinksPerSecMetricName = "IsrShrinksPerSec"
+  private val FailedIsrUpdatesPerSecMetricName = "FailedIsrUpdatesPerSec"
+
+  private[server] val GaugeMetricNames = Set(
+    LeaderCountMetricName,
+    PartitionCountMetricName,
+    OfflineReplicaCountMetricName,
+    UnderReplicatedPartitionsMetricName,
+    UnderMinIsrPartitionCountMetricName,
+    AtMinIsrPartitionCountMetricName,
+    ReassigningPartitionsMetricName,
+    PartitionsWithLateTransactionsCountMetricName,
+    ProducerIdCountMetricName
+  )
+
+  private[server] val MeterMetricNames = Set(
+    IsrExpandsPerSecMetricName,
+    IsrShrinksPerSecMetricName,
+    FailedIsrUpdatesPerSecMetricName
+  )
+
+  private[server] val MetricNames = GaugeMetricNames.union(MeterMetricNames)
+
   def createLogReadResult(highWatermark: Long,
                           leaderLogStartOffset: Long,
                           leaderLogEndOffset: Long,
@@ -282,16 +316,16 @@ class ReplicaManager(val config: KafkaConfig,
   // Visible for testing
   private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
-  metricsGroup.newGauge("LeaderCount", () => leaderPartitionsIterator.size)
+  metricsGroup.newGauge(LeaderCountMetricName, () => leaderPartitionsIterator.size)
   // Visible for testing
-  private[kafka] val partitionCount = metricsGroup.newGauge("PartitionCount", () => allPartitions.size)
-  metricsGroup.newGauge("OfflineReplicaCount", () => offlinePartitionCount)
-  metricsGroup.newGauge("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
-  metricsGroup.newGauge("UnderMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isUnderMinIsr))
-  metricsGroup.newGauge("AtMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isAtMinIsr))
-  metricsGroup.newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
-  metricsGroup.newGauge("PartitionsWithLateTransactionsCount", () => lateTransactionsCount)
-  metricsGroup.newGauge("ProducerIdCount", () => producerIdCount)
+  private[kafka] val partitionCount = metricsGroup.newGauge(PartitionCountMetricName, () => allPartitions.size)
+  metricsGroup.newGauge(OfflineReplicaCountMetricName, () => offlinePartitionCount)
+  metricsGroup.newGauge(UnderReplicatedPartitionsMetricName, () => underReplicatedPartitionCount)
+  metricsGroup.newGauge(UnderMinIsrPartitionCountMetricName, () => leaderPartitionsIterator.count(_.isUnderMinIsr))
+  metricsGroup.newGauge(AtMinIsrPartitionCountMetricName, () => leaderPartitionsIterator.count(_.isAtMinIsr))
+  metricsGroup.newGauge(ReassigningPartitionsMetricName, () => reassigningPartitionsCount)
+  metricsGroup.newGauge(PartitionsWithLateTransactionsCountMetricName, () => lateTransactionsCount)
+  metricsGroup.newGauge(ProducerIdCountMetricName, () => producerIdCount)
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -302,9 +336,9 @@ class ReplicaManager(val config: KafkaConfig,
 
   def producerIdCount: Int = onlinePartitionsIterator.map(_.producerIdCount).sum
 
-  val isrExpandRate: Meter = metricsGroup.newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
-  val isrShrinkRate: Meter = metricsGroup.newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
-  val failedIsrUpdatesRate: Meter = metricsGroup.newMeter("FailedIsrUpdatesPerSec", "failedUpdates", TimeUnit.SECONDS)
+  val isrExpandRate: Meter = metricsGroup.newMeter(IsrExpandsPerSecMetricName, "expands", TimeUnit.SECONDS)
+  val isrShrinkRate: Meter = metricsGroup.newMeter(IsrShrinksPerSecMetricName, "shrinks", TimeUnit.SECONDS)
+  val failedIsrUpdatesRate: Meter = metricsGroup.newMeter(FailedIsrUpdatesPerSecMetricName, "failedUpdates", TimeUnit.SECONDS)
 
   def underReplicatedPartitionCount: Int = leaderPartitionsIterator.count(_.isUnderReplicated)
 
@@ -671,28 +705,18 @@ class ReplicaManager(val config: KafkaConfig,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
-      
-      val transactionalProducerIds = mutable.HashSet[Long]()
-      val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) =
+
+      val verificationGuards: mutable.Map[TopicPartition, Object] = mutable.Map[TopicPartition, Object]()
+      val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition, errorsPerPartition) =
         if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
-          (entriesPerPartition, Map.empty)
+          (entriesPerPartition, Map.empty[TopicPartition, MemoryRecords], Map.empty[TopicPartition, Errors])
         else {
-          entriesPerPartition.partition { case (topicPartition, records) =>
-            // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
-            val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
-            transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
-            if (transactionalBatches.nonEmpty) {
-              getPartitionOrException(topicPartition).hasOngoingTransaction(transactionalBatches.head.producerId)
-            } else {
-              // If there is no producer ID in the batches, no need to verify.
-              true
-            }
-          }
+          val verifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
+          val unverifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
+          val errorEntries = mutable.Map[TopicPartition, Errors]()
+          partitionEntriesForVerification(verificationGuards, entriesPerPartition, verifiedEntries, unverifiedEntries, errorEntries)
+          (verifiedEntries.toMap, unverifiedEntries.toMap, errorEntries.toMap)
         }
-      // We should have exactly one producer ID for transactional records
-      if (transactionalProducerIds.size > 1) {
-        throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
-      }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
         val verifiedEntries = 
@@ -704,7 +728,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
         
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-          origin, verifiedEntries, requiredAcks, requestLocal)
+          origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
         
         val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
@@ -715,8 +739,15 @@ class ReplicaManager(val config: KafkaConfig,
             Some(error.exception(message))
           )
         }
+
+        val errorResults = errorsPerPartition.map { case (topicPartition, error) =>
+          topicPartition -> LogAppendResult(
+            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+            Some(error.exception())
+          )
+        }
         
-        val allResults = localProduceResults ++ unverifiedResults
+        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
 
         val produceStatus = allResults.map { case (topicPartition, result) =>
           topicPartition -> ProducePartitionStatus(
@@ -814,6 +845,40 @@ class ReplicaManager(val config: KafkaConfig,
         )
       }
       responseCallback(responseStatus)
+    }
+  }
+
+  private def partitionEntriesForVerification(verificationGuards: mutable.Map[TopicPartition, Object],
+                                              entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                                              verifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
+                                              unverifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
+                                              errorEntries: mutable.Map[TopicPartition, Errors]): Unit= {
+    val transactionalProducerIds = mutable.HashSet[Long]()
+    entriesPerPartition.foreach { case (topicPartition, records) =>
+      try {
+        // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
+        val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
+        transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
+
+        if (transactionalBatches.nonEmpty) {
+          // We return verification guard if the partition needs to be verified. If no state is present, no need to verify.
+          val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(records.firstBatch.producerId)
+          if (verificationGuard != null) {
+            verificationGuards.put(topicPartition, verificationGuard)
+            unverifiedEntries.put(topicPartition, records)
+          } else
+            verifiedEntries.put(topicPartition, records)
+        } else {
+          // If there is no producer ID or transactional records in the batches, no need to verify.
+          verifiedEntries.put(topicPartition, records)
+        }
+      } catch {
+        case e: Exception => errorEntries.put(topicPartition, Errors.forException(e))
+      }
+    }
+    // We should have exactly one producer ID for transactional records
+    if (transactionalProducerIds.size > 1) {
+      throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
     }
   }
 
@@ -1073,7 +1138,8 @@ class ReplicaManager(val config: KafkaConfig,
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short,
-                               requestLocal: RequestLocal): Map[TopicPartition, LogAppendResult] = {
+                               requestLocal: RequestLocal,
+                               verificationGuards: Map[TopicPartition, Object]): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
@@ -1099,7 +1165,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
-          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal)
+          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal, verificationGuards.getOrElse(topicPartition, null))
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
@@ -2160,18 +2226,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def removeMetrics(): Unit = {
-    metricsGroup.removeMetric("LeaderCount")
-    metricsGroup.removeMetric("PartitionCount")
-    metricsGroup.removeMetric("OfflineReplicaCount")
-    metricsGroup.removeMetric("UnderReplicatedPartitions")
-    metricsGroup.removeMetric("UnderMinIsrPartitionCount")
-    metricsGroup.removeMetric("AtMinIsrPartitionCount")
-    metricsGroup.removeMetric("ReassigningPartitions")
-    metricsGroup.removeMetric("PartitionsWithLateTransactionsCount")
-    metricsGroup.removeMetric("ProducerIdCount")
-    metricsGroup.removeMetric("IsrExpandsPerSec")
-    metricsGroup.removeMetric("IsrShrinksPerSec")
-    metricsGroup.removeMetric("FailedIsrUpdatesPerSec")
+    ReplicaManager.MetricNames.foreach(metricsGroup.removeMetric)
   }
 
   def beginControlledShutdown(): Unit = {
