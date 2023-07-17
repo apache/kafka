@@ -162,6 +162,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     if (otherConsumer == null) {
                         // this partition is not owned by other consumer in the same generation
                         ownedPartitions.add(tp);
+                        allPreviousPartitionsToOwner.put(tp, consumer);
                     } else {
                         final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
@@ -177,6 +178,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             // move partition from the member with an older generation to the member with the newer generation
                             ownedPartitions.add(tp);
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
                             log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
                                             "TopicPartition {} in different generations. The topic partition will be " +
                                             "assigned to the member with the higher generation {}.",
@@ -184,7 +186,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                     otherConsumer, otherMemberGeneration,
                                     tp,
                                     memberGeneration);
-                            allPreviousPartitionsToOwner.put(tp, consumer);
                         } else {
                             // let the other member continue to own the topic partition
                             log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
