@@ -27,7 +27,7 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, mockConstruction, verify, verifyNoMoreInteractions}
 
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters._
 
 /**
  * @Author: deqi.hu@shopee.com
