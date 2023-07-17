@@ -315,8 +315,8 @@ def sanitize_input(input_msg: str) -> str:
        Use this function instead of input where user input is needed.
     """
     input_from_user = input(input_msg)
-    print("Input from user: ", input_from_user)
     return input_from_user.replace(' ', '')
+     
 
 def command_release_announcement_email():
     tags = cmd_output('git tag').split()
