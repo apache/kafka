@@ -18,7 +18,7 @@ package kafka.zk
 
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.wrapZkException
-import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkTopicMigrationClient}
+import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkDelegationTokenMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.acl.AccessControlEntry
@@ -54,7 +54,8 @@ object ZkMigrationClient {
     val topicClient = new ZkTopicMigrationClient(zkClient)
     val configClient = new ZkConfigMigrationClient(zkClient, zkConfigEncoder)
     val aclClient = new ZkAclMigrationClient(zkClient)
-    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient)
+    val delegationTokenClient = new ZkDelegationTokenMigrationClient(zkClient)
+    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient, delegationTokenClient)
   }
 
   /**
@@ -97,7 +98,8 @@ class ZkMigrationClient(
   zkClient: KafkaZkClient,
   topicClient: TopicMigrationClient,
   configClient: ConfigMigrationClient,
-  aclClient: AclMigrationClient
+  aclClient: AclMigrationClient,
+  delegationTokenClient: DelegationTokenMigrationClient
 ) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(
@@ -347,4 +349,6 @@ class ZkMigrationClient(
   override def configClient(): ConfigMigrationClient = configClient
 
   override def aclClient(): AclMigrationClient = aclClient
+
+  override def delegationTokenClient(): DelegationTokenMigrationClient = delegationTokenClient
 }
