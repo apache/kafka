@@ -544,7 +544,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // TODO: implementation of refactored Fetcher will be included in forthcoming commits.
         // fetcher.clearBufferedDataForUnassignedPartitions(partitions);
 
-        // assignment change event will trigger autocommit if is it configured and the group id is specified. This is
+        // assignment change event will trigger autocommit if it is configured and the group id is specified. This is
         // to make sure offsets of topic partitions the consumer is unsubscribing from are committed since there will
         // be no following rebalance
         eventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed(), time.milliseconds()));
