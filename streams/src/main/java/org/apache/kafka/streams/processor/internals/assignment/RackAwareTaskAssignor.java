@@ -244,12 +244,13 @@ public class RackAwareTaskAssignor {
 
         final int sourceId = taskIdList.size() + clientList.size();
         final int sinkId = sourceId + 1;
-        for (int i = 0; i < taskIdList.size(); i++) {
-            graph.addEdge(sourceId, i, 1, 0, 1);
+        for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
+            graph.addEdge(sourceId, taskNodeId, 1, 0, 1);
         }
         for (int i = 0; i < clientList.size(); i++) {
             final int capacity = clientCapacity.getOrDefault(clientList.get(i), 0);
-            graph.addEdge(taskIdList.size() + i, sinkId, capacity, 0, 1);
+            final int clientNodeId = taskIdList.size() + i;
+            graph.addEdge(clientNodeId, sinkId, capacity, 0, capacity);
         }
         graph.setSourceNode(sourceId);
         graph.setSinkNode(sinkId);
@@ -274,8 +275,9 @@ public class RackAwareTaskAssignor {
             }
         }
 
-        for (int i = 0; i < taskIdList.size(); i++) {
-            final TaskId taskId = taskIdList.get(i);
+        // Make task and client Node id in graph deterministic
+        for (int taskNodeId  = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
+            final TaskId taskId = taskIdList.get(taskNodeId);
             for (int j = 0; j < clientList.size(); j++) {
                 final int clientNodeId = taskIdList.size() + j;
                 final UUID clientId = clientList.get(j);
@@ -286,7 +288,7 @@ public class RackAwareTaskAssignor {
                     taskClientMap.put(taskId, clientId);
                 }
 
-                graph.addEdge(i, clientNodeId, 1, cost, flow);
+                graph.addEdge(taskNodeId, clientNodeId, 1, cost, flow);
             }
         }
     }
@@ -299,9 +301,9 @@ public class RackAwareTaskAssignor {
                                                 final Map<UUID, Integer> originalClientCapacity,
                                                 final Map<TaskId, UUID> taskClientMap) {
         int taskAssigned = 0;
-        for (int i = 0; i < taskIdList.size(); i++) {
-            final TaskId taskId = taskIdList.get(i);
-            final Map<Integer, Graph<Integer>.Edge> edges = graph.edges(i);
+        for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
+            final TaskId taskId = taskIdList.get(taskNodeId);
+            final Map<Integer, Graph<Integer>.Edge> edges = graph.edges(taskNodeId);
             for (final Graph<Integer>.Edge edge : edges.values()) {
                 if (edge.flow > 0) {
                     taskAssigned++;
