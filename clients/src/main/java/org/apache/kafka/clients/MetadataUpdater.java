@@ -24,6 +24,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
 import java.io.Closeable;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 
@@ -84,6 +85,17 @@ public interface MetadataUpdater extends Closeable {
      * requests with special handling for completed receives of such requests.
      */
     void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
+
+    /**
+     * Returns true if the metadata has been bootstrapped.
+     */
+    boolean isBootstrapped();
+
+    /**
+     * Bootstrap the metadata cache with the given addresses.
+     * @param addresses list of addresses for the bootstrap servers
+     */
+    void bootstrap(List<InetSocketAddress> addresses);
 
     /**
      * Close this updater.

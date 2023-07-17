@@ -57,6 +57,41 @@ public final class ClientUtils {
         return parseAndValidateAddresses(urls, clientDnsLookupConfig);
     }
 
+    public static List<InetSocketAddress> validateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
+        List<InetSocketAddress> addresses = new ArrayList<>();
+        urls.forEach(url -> {
+            final String host = getHost(url);
+            final Integer port = getPort(url);
+
+            if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
+                InetAddress[] inetAddresses;
+                try {
+                    inetAddresses = InetAddress.getAllByName(host);
+                } catch (UnknownHostException e) {
+                    inetAddresses = new InetAddress[0];
+                }
+
+                for (InetAddress inetAddress : inetAddresses) {
+                    String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                    InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                    if (address.isUnresolved()) {
+                        log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
+                    } else {
+                        addresses.add(address);
+                    }
+                }
+            } else {
+                InetSocketAddress address = new InetSocketAddress(host, port);
+                if (address.isUnresolved()) {
+                    log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                } else {
+                    addresses.add(address);
+                }
+            }
+        });
+        return addresses;
+    }
+
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookupConfig) {
         return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
     }
@@ -117,6 +152,26 @@ public final class ClientUtils {
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
                 clientSaslMechanism, time, true, logContext);
+    }
+
+    public static List<String> parseAddresses(List<String> urls) {
+        List<String> addresses = new ArrayList<>();
+        urls.forEach(url -> {
+            if (url != null && !url.isEmpty()) {
+                try {
+                    String host = getHost(url);
+                    Integer port = getPort(url);
+                    if (host == null || port == null)
+                        throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                    addresses.add(host + ":" + port);
+                } catch (IllegalArgumentException e) {
+                    throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                }
+            }
+        });
+        if (addresses.isEmpty())
+            throw new ConfigException("No resolvable bootstrap urls given in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+        return addresses;
     }
 
     static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
@@ -213,6 +268,7 @@ public final class ClientUtils {
                                                     Sensor throttleTimeSensor) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
+        NetworkClient.BootstrapConfiguration bootstrapConfig = null;
 
         try {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
@@ -222,6 +278,10 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
+            bootstrapConfig = new NetworkClient.BootstrapConfiguration(
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,
@@ -234,6 +294,7 @@ public final class ClientUtils {
                     requestTimeoutMs,
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                    bootstrapConfig,
                     time,
                     true,
                     apiVersions,

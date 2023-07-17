@@ -86,9 +86,9 @@ public class DefaultEventHandler implements EventHandler {
         // Bootstrap a metadata object with the bootstrap server IP address, which will be used once for the
         // subsequent metadata refresh once the background thread has started up.
         final ConsumerMetadata metadata = new ConsumerMetadata(config,
-                subscriptionState,
-                logContext,
-                clusterResourceListeners);
+            subscriptionState,
+            logContext,
+            clusterResourceListeners);
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
         metadata.bootstrap(addresses);
 
@@ -139,6 +139,21 @@ public class DefaultEventHandler implements EventHandler {
         Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
         return event.get(timer);
+    }
+
+    private ConsumerMetadata instantiateMetadata(
+        final LogContext logContext,
+        final ClusterResourceListeners clusterResourceListeners,
+        final ConsumerConfig config,
+        final SubscriptionState subscriptions) {
+        final ConsumerMetadata metadata = new ConsumerMetadata(
+            config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+            config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
+            !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
+            config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+            subscriptions,
+            logContext, clusterResourceListeners);
+        return metadata;
     }
 
     public void close() {

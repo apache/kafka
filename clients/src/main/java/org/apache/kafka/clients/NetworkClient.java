@@ -25,9 +25,10 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.BootstrapResolutionException;
 import org.apache.kafka.common.network.ChannelState;
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -44,6 +45,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -127,6 +129,7 @@ public class NetworkClient implements KafkaClient {
     private final Sensor throttleTimeSensor;
 
     private final AtomicReference<State> state;
+    private final BootstrapState bootstrapState;
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -139,6 +142,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfig,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -154,6 +158,7 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
+             bootstrapConfig,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -172,6 +177,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfig,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -189,6 +195,7 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
+             bootstrapConfig,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -208,6 +215,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfig,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -224,6 +232,7 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
+             bootstrapConfig,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -244,6 +253,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfig,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -279,6 +289,7 @@ public class NetworkClient implements KafkaClient {
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
+        this.bootstrapState = new BootstrapState(bootstrapConfig);
     }
 
     /**
@@ -547,15 +558,16 @@ public class NetworkClient implements KafkaClient {
     /**
      * Do actual reads and writes to sockets.
      *
-     * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
+     * @param timeoutMs The maximum amount of time to wait (in ms) for responses if there are none immediately,
      *                must be non-negative. The actual timeout will be the minimum of timeout, request timeout and
      *                metadata timeout
-     * @param now The current time in milliseconds
+     * @param nowMs The current time in milliseconds
      * @return The list of responses received
      */
     @Override
-    public List<ClientResponse> poll(long timeout, long now) {
+    public List<ClientResponse> poll(long timeoutMs, long nowMs) {
         ensureActive();
+        ensureBootstrapped(nowMs);
 
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
@@ -566,9 +578,9 @@ public class NetworkClient implements KafkaClient {
             return responses;
         }
 
-        long metadataTimeout = metadataUpdater.maybeUpdate(now);
+        long metadataTimeout = metadataUpdater.maybeUpdate(nowMs);
         try {
-            this.selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
+            this.selector.poll(Utils.min(timeoutMs, metadataTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
@@ -652,6 +664,22 @@ public class NetworkClient implements KafkaClient {
     private void ensureActive() {
         if (!active())
             throw new DisconnectException("NetworkClient is no longer active, state is " + state);
+    }
+
+    private void ensureBootstrapped(final long nowMs) {
+        if (this.bootstrapState.isDisabled || this.metadataUpdater.isBootstrapped()) {
+            return;
+        }
+
+        List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses(nowMs);
+        if (!servers.isEmpty()) {
+            this.metadataUpdater.bootstrap(servers);
+            return;
+        }
+        if (this.bootstrapState.timer.isExpired()) {
+            throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
+                    this.bootstrapState.dnsResolutionTimeoutMs + "ms.");
+        }
     }
 
     /**
@@ -1045,7 +1073,7 @@ public class NetworkClient implements KafkaClient {
     class DefaultMetadataUpdater implements MetadataUpdater {
 
         /* the current cluster metadata */
-        private final Metadata metadata;
+        public final Metadata metadata;
 
         // Defined if there is a request in progress, null otherwise
         private InProgressData inProgress;
@@ -1154,6 +1182,14 @@ public class NetworkClient implements KafkaClient {
             }
 
             inProgress = null;
+        }
+
+        public boolean isBootstrapped() {
+            return this.metadata.fetch().isBootstrapConfigured();
+        }
+
+        public void bootstrap(List<InetSocketAddress> addresses) {
+            this.metadata.bootstrap(addresses);
         }
 
         @Override
@@ -1344,4 +1380,54 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
+    public static class BootstrapConfiguration {
+        public final List<String> bootstrapServers;
+        public final ClientDnsLookup clientDnsLookup;
+        public final long bootstrapResolveTimeoutMs;
+        private boolean bootstrapDisabled;
+
+        public BootstrapConfiguration(final List<String> bootstrapServers,
+                                      final ClientDnsLookup clientDnsLookup,
+                                      final long bootstrapResolveTimeoutMs) {
+            this.bootstrapServers = bootstrapServers;
+            this.clientDnsLookup = clientDnsLookup;
+            this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
+            this.bootstrapDisabled = false;
+        }
+
+        public void disableBootstrap() {
+            this.bootstrapDisabled = true;
+        }
+    }
+
+    private class BootstrapState {
+        private final Timer timer;
+        private final List<String> bootstrapServers;
+        private final ClientDnsLookup clientDnsLookup;
+        private final long dnsResolutionTimeoutMs;
+        private final boolean isDisabled;
+
+        BootstrapState(BootstrapConfiguration bootstrapConfiguration) {
+            this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
+            this.timer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+            this.bootstrapServers = bootstrapConfiguration.bootstrapServers;
+            this.clientDnsLookup = bootstrapConfiguration.clientDnsLookup;
+            this.isDisabled = bootstrapConfiguration.bootstrapDisabled;
+        }
+
+        List<InetSocketAddress> tryResolveAddresses(final long currentTimeMs) {
+            timer.update(currentTimeMs);
+            List<InetSocketAddress> addresses = ClientUtils.validateAddresses(bootstrapServers, clientDnsLookup);
+            if (!addresses.isEmpty()) {
+                timer.reset(dnsResolutionTimeoutMs);
+                return addresses;
+            }
+
+            if (timer.isExpired()) {
+                throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap " +
+                        "servers. ");
+            }
+            return ClientUtils.validateAddresses(bootstrapServers, clientDnsLookup);
+        }
+    }
 }

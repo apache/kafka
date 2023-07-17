@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.junit.jupiter.api.Test;
+
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.jupiter.api.Test;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,12 +64,6 @@ public class ClientUtilsTest {
         List<String> expectedHostNames = asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
         assertTrue(expectedHostNames.containsAll(validatedHostNames), "Unexpected addresses " + validatedHostNames);
         validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
-    }
-
-    @Test
-    public void testInvalidConfig() {
-        assertThrows(IllegalArgumentException.class,
-            () -> ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value"));
     }
 
     @Test
@@ -122,5 +116,4 @@ public class ClientUtilsTest {
     private List<InetSocketAddress> checkWithLookup(List<String> url) {
         return ClientUtils.parseAndValidateAddresses(url, ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY);
     }
-
 }
