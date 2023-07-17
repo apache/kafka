@@ -13,17 +13,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,9 +28,25 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
-@BenchmarkMode({Mode.AverageTime, Mode.SampleTime})
+@BenchmarkMode({Mode.SampleTime})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class SensorBenchmark {
+
+    @State(Scope.Thread)
+    public static class ValueProvider {
+        Random random = new Random();
+
+        double value;
+
+        @Setup(Level.Invocation)
+        public void init() {
+             value = random.nextDouble() * 100.0;
+        }
+
+        public double value() {
+            return value;
+        }
+    }
 
     @State(Scope.Benchmark)
     public static class SensorWithNoStats {
@@ -48,10 +54,10 @@ public class SensorBenchmark {
         Metrics metrics = new Metrics();
 
         List<Sensor> sensors = new ArrayList<>();
-        Random random = new Random();
+
         // Estimated number of sensors included in different transactions
         // (e.g. Connector Sink Task iteration has ~5 at the moment)
-        @Param({"1", "5", "20"})
+        @Param({"1", "5", "10", "20"})
         int numSensors;
 
         @Setup
@@ -70,10 +76,6 @@ public class SensorBenchmark {
                 s.record(value);
             }
             return value;
-        }
-
-        public double value() {
-            return random.nextDouble() * 100.0;
         }
 
         public void addStats(Sensor sensor, String prefix) {
@@ -194,75 +196,63 @@ public class SensorBenchmark {
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordBenchmark(SensorWithNoStats state) {
-        return state.record(state.value());
+    public double recordBenchmark(SensorWithNoStats state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithValueBenchmark(SensorWithValue state) {
-        return state.record(state.value());
+    public double recordWithValueBenchmark(SensorWithValue state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithMaxBenchmark(SensorWithMax state) {
-        return state.record(state.value());
+    public double recordWithMaxBenchmark(SensorWithMax state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithAvgBenchmark(SensorWithAvg state) {
-        return state.record(state.value());
+    public double recordWithAvgBenchmark(SensorWithAvg state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithWindowedSumBenchmark(SensorWithWindowedSum state) {
-        return state.record(state.value());
+    public double recordWithWindowedSumBenchmark(SensorWithWindowedSum state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithPercentileBenchmark(SensorWithPercentiles state) {
-        return state.record(state.value());
+    public double recordWithPercentileBenchmark(SensorWithPercentiles state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithRateBenchmark(SensorWithRate state) {
-        return state.record(state.value());
+    public double recordWithRateBenchmark(SensorWithRate state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithSimpleRateBenchmark(SensorWithSimpleRate state) {
-        return state.record(state.value());
+    public double recordWithSimpleRateBenchmark(SensorWithSimpleRate state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithMeterBenchmark(SensorWithMeter state) {
-        return state.record(state.value());
+    public double recordWithMeterBenchmark(SensorWithMeter state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithMinMaxBenchmark(SensorWithMinMax state) {
-        return state.record(state.value());
+    public double recordWithMinMaxBenchmark(SensorWithMinMax state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithMaxAvgBenchmark(SensorWithMaxAvg state) {
-        return state.record(state.value());
+    public double recordWithMaxAvgBenchmark(SensorWithMaxAvg state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 
     @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public double recordWithMinMaxAvgBenchmark(SensorWithMinMaxAvg state) {
-        return state.record(state.value());
+    public double recordWithMinMaxAvgBenchmark(SensorWithMinMaxAvg state, ValueProvider valueProvider) {
+        return state.record(valueProvider.value());
     }
 }
