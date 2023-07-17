@@ -75,10 +75,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 
-import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
-import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
-import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
-
 /**
  * The group coordinator service.
  */
