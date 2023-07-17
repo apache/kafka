@@ -70,6 +70,11 @@ ext {
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 
+  useRocksDbRuntime =  project.hasProperty('useRocksDbRuntime') ? useRocksDbRuntime : ''
+  rocksDbRuntimeValues = ["<empty>", "linux32", "linux64", "osx", "win64"]
+  if (!rocksDbRuntimeValues.contains(useRocksDbRuntime))
+    throw new GradleException("Unexpected value for useRocksDbRuntime property. Expected one of $rocksDbRuntimeValues), but received: $useRocksDbRuntime")
+	
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)
