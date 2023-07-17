@@ -116,6 +116,8 @@ public class ConsumerManager implements Closeable {
      * @throws TimeoutException if this method execution did not complete with in the given {@code timeoutMs}.
      */
     public void waitTillConsumptionCatchesUp(int partition, long offset, long timeoutMs) throws TimeoutException {
+        log.info("Waiting until consumer is caught up with the target partition [{}]", partition);
+
         final long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
 
         // If the current assignment does not have the subscription for this partition then return immediately.
