@@ -211,6 +211,7 @@ public class KStreamKTableJoinTest {
             Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
 
         streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMinutes(6))).to("out-one");
+
         final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> builder.build(props));
         assertThat(exception.getMessage(), is("History retention must be at least grace period."));
     }

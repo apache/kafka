@@ -47,7 +47,6 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
         this.processorParameters = processorParameters;
         this.otherJoinSideNodeName = otherJoinSideNodeName;
         this.gracePeriod = gracePeriod;
-
     }
 
     @Override

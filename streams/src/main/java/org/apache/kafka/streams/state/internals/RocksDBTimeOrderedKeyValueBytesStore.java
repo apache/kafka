@@ -17,16 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
-import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 
 /**
@@ -46,29 +42,7 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
 
     @Override
     Map<KeyValueSegment, WriteBatch> getWriteBatches(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
-
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long timestamp = WindowKeySchema.extractStoreTimestamp(record.key());
-            observedStreamTime = Math.max(observedStreamTime, timestamp);
-            final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
-            if (segment != null) {
-                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                    record,
-                    consistencyEnabled,
-                    position
-                );
-                try {
-                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
-                    final byte[] baseKey = TimeFirstWindowKeySchema.fromNonPrefixWindowKey(record.key());
-                    segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
-                } catch (final RocksDBException e) {
-                    throw new ProcessorStateException("Error restoring batch to store " + name(), e);
-                }
-            }
-        }
-        return writeBatchMap;
+        throw new UnsupportedOperationException("Do not use for TimeOrderedKeyValueStore");
     }
 
     @Override
