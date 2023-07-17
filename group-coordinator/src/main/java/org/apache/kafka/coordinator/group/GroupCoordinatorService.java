@@ -301,10 +301,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
-            log.error("Request {} hit an unexpected exception: {}",
-                request, exception.getMessage());
-
             if (!responseFuture.isDone()) {
+                log.error("Request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+
                 responseFuture.complete(new JoinGroupResponseData()
                     .setErrorCode(Errors.forException(exception).code()));
             }
