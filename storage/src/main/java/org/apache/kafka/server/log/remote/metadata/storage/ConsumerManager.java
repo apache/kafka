@@ -90,13 +90,15 @@ public class ConsumerManager implements Closeable {
      * Waits if necessary for the consumption to reach the offset of the given {@code recordMetadata}.
      *
      * @param recordMetadata record metadata to be checked for consumption.
-     * @param timeoutMs      wait timeout in milli seconds
+     * @param timeoutMs      wait timeout in milliseconds
      * @throws TimeoutException if this method execution did not complete with in the given {@code timeoutMs}.
      */
     public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
                                              long timeoutMs) throws TimeoutException {
         final int partition = recordMetadata.partition();
         final long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
+
+        log.info("Waiting until consumer is caught up with the target partition: [{}]", partition);
 
         // If the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.isPartitionAssigned(partition)) {
@@ -126,7 +128,7 @@ public class ConsumerManager implements Closeable {
 
     @Override
     public void close() throws IOException {
-        // Consumer task will close the task and it internally closes all the resources including the consumer.
+        // Consumer task will close the task, and it internally closes all the resources including the consumer.
         Utils.closeQuietly(consumerTask, "ConsumerTask");
 
         // Wait until the consumer thread finishes.
