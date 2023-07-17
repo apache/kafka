@@ -103,6 +103,13 @@ class RemoteLogLeaderEpochState {
         // If there are duplicate segments uploaded due to leader-election, then mark them as unreferenced.
         // Duplicate segments can be uploaded when the previous leader had tier-lags and the next leader uploads the
         // segment for the same leader-epoch which is a super-set of previously uploaded segments.
+        // (eg)
+        // case-1: Duplicate segment
+        //      L0 uploaded segment S0 with offsets 0-100 and L1 uploaded segment S1 with offsets 0-200.
+        //      We will mark the segment S0 as duplicate and add it to unreferencedSegmentIds.
+        // case-2: Overlapping segments
+        //      L0 uploaded segment S0 with offsets 10-90 and L1 uploaded segment S1 with offsets 5-100, S2-101-200,
+        //      and so on. When the consumer request for segment with offset 95, it should get the segment S1 and not S0.
         Map.Entry<Long, RemoteLogSegmentId> lastEntry = offsetToId.lastEntry();
         while (lastEntry != null && lastEntry.getKey() >= startOffset && highestLogOffset <= leaderEpochEndOffset) {
             offsetToId.remove(lastEntry.getKey());
