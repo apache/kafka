@@ -55,27 +55,26 @@ public class ServiceLoaderScanner extends PluginScanner {
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
-        ClassLoader loader = source.loader();
         return new PluginScanResult(
-                getServiceLoaderPluginDesc(SinkConnector.class, loader),
-                getServiceLoaderPluginDesc(SourceConnector.class, loader),
-                getServiceLoaderPluginDesc(Converter.class, loader),
-                getServiceLoaderPluginDesc(HeaderConverter.class, loader),
-                getTransformationPluginDesc(loader),
-                getPredicatePluginDesc(loader),
-                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
-                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
-                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
+                getServiceLoaderPluginDesc(SinkConnector.class, source),
+                getServiceLoaderPluginDesc(SourceConnector.class, source),
+                getServiceLoaderPluginDesc(Converter.class, source),
+                getServiceLoaderPluginDesc(HeaderConverter.class, source),
+                getTransformationPluginDesc(source),
+                getPredicatePluginDesc(source),
+                getServiceLoaderPluginDesc(ConfigProvider.class, source),
+                getServiceLoaderPluginDesc(ConnectRestExtension.class, source),
+                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, source)
         );
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader) {
-        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Predicate.class, loader);
+    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(PluginSource source) {
+        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Predicate.class, source);
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader) {
-        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Transformation.class, loader);
+    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source) {
+        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Transformation.class, source);
     }
 }
