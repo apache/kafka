@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
@@ -301,10 +302,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
-            if (!responseFuture.isDone()) {
+            if (!(exception instanceof KafkaException)) {
                 log.error("Request {} hit an unexpected exception: {}",
                     request, exception.getMessage());
-
+            }
+            
+            if (!responseFuture.isDone()) {
                 responseFuture.complete(new JoinGroupResponseData()
                     .setErrorCode(Errors.forException(exception).code()));
             }
