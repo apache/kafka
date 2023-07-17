@@ -88,6 +88,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
+import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.GENERIC;
@@ -1396,6 +1399,17 @@ public class GroupMetadataManager {
                 case GENERIC:
                     GenericGroup genericGroup = (GenericGroup) group;
                     log.info("Loaded generic group {} with {} members.", groupId, genericGroup.allMembers().size());
+                    genericGroup.allMembers().forEach(member -> {
+                        log.debug("Loaded member {} in generic group {}.", member.memberId(), groupId);
+                        rescheduleGenericGroupMemberHeartbeat(genericGroup, member);
+                    });
+
+                    if (genericGroup.size() > genericGroupMaxSize) {
+                        // In case the max size config has changed.
+                        prepareRebalance(genericGroup, "Freshly-loaded group " + groupId +
+                            " (size " + genericGroup.size() + ") is over capacity " + genericGroupMaxSize +
+                            ". Rebalancing in order to give a chance for consumers to commit offsets");
+                    }
                     break;
             }
         });
@@ -1547,6 +1561,9 @@ public class GroupMetadataManager {
                         // We failed to write the empty group metadata. This will revert the snapshot, removing
                         // the newly created group.
                         log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+
+                        responseFuture.complete(new JoinGroupResponseData()
+                            .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
                     }
                 });
 
@@ -2466,7 +2483,7 @@ public class GroupMetadataManager {
                     "transitioned to {} state.", group.groupId(), group.stateAsString());
             } else if (group.isInState(COMPLETING_REBALANCE) || group.isInState(STABLE)) {
                 if (!group.hasReceivedSyncFromAllMembers()) {
-                    Set<String> pendingSyncMembers = group.allPendingSyncMembers();
+                    Set<String> pendingSyncMembers = new HashSet<>(group.allPendingSyncMembers());
                     pendingSyncMembers.forEach(memberId -> {
                         group.remove(memberId);
                         timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
@@ -2588,8 +2605,8 @@ public class GroupMetadataManager {
                                 .setProtocolType(group.protocolType().orElse(null))
                                 .setLeader(currentLeader)
                                 .setSkipAssignment(false)
-                                .setErrorCode(Errors.forException(t).code())
-                        );
+                                .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+
                     } else if (JoinGroupRequest.supportsSkippingAssignment(context.apiVersion())) {
                         boolean isLeader = group.isLeader(newMemberId);
 
@@ -2644,6 +2661,26 @@ public class GroupMetadataManager {
 
         }
         return EMPTY_RESULT;
+    }
+
+    private static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
+        switch (appendError) {
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case NOT_ENOUGH_REPLICAS:
+                return COORDINATOR_NOT_AVAILABLE;
+
+            case NOT_LEADER_OR_FOLLOWER:
+            case KAFKA_STORAGE_ERROR:
+                return NOT_COORDINATOR;
+
+            case MESSAGE_TOO_LARGE:
+            case RECORD_LIST_TOO_LARGE:
+            case INVALID_FETCH_SIZE:
+                return UNKNOWN_SERVER_ERROR;
+
+            default:
+                return appendError;
+        }
     }
 
     /**

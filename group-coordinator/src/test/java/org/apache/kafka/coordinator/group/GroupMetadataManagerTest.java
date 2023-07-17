@@ -3359,6 +3359,91 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testOnLoadedExceedGroupMaxSizeTriggersRebalance() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withGenericGroupMaxSize(1)
+            .build();
+
+        byte[] subscription = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+            Collections.singletonList("foo"))).array();
+        List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>();
+
+        IntStream.range(0, 2).forEach(i -> {
+            members.add(new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member-" + i)
+                .setGroupInstanceId("group-instance-id-" + i)
+                .setSubscription(subscription)
+                .setAssignment(new byte[]{2})
+                .setClientId("client-" + i)
+                .setClientHost("host-" + i)
+                .setSessionTimeout(4000)
+                .setRebalanceTimeout(9000)
+            );
+        });
+
+        Record groupMetadataRecord = newGroupMetadataRecord("group-id",
+            new GroupMetadataValue()
+                .setMembers(members)
+                .setGeneration(1)
+                .setLeader("member-0")
+                .setProtocolType("consumer")
+                .setProtocol("range")
+                .setCurrentStateTimestamp(context.time.milliseconds()),
+            MetadataVersion.latest());
+
+        context.replay(groupMetadataRecord);
+        context.groupMetadataManager.onLoaded();
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
+
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+        assertEquals(2, group.size());
+    }
+
+    @Test
+    public void testOnLoadedSchedulesGenericGroupMemberHeartbeats() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        byte[] subscription = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+            Collections.singletonList("foo"))).array();
+        List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>();
+
+        IntStream.range(0, 2).forEach(i -> {
+            members.add(new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member-" + i)
+                .setGroupInstanceId("group-instance-id-" + i)
+                .setSubscription(subscription)
+                .setAssignment(new byte[]{2})
+                .setClientId("client-" + i)
+                .setClientHost("host-" + i)
+                .setSessionTimeout(4000)
+                .setRebalanceTimeout(9000)
+            );
+        });
+
+        Record groupMetadataRecord = newGroupMetadataRecord("group-id",
+            new GroupMetadataValue()
+                .setMembers(members)
+                .setGeneration(1)
+                .setLeader("member-0")
+                .setProtocolType("consumer")
+                .setProtocol("range")
+                .setCurrentStateTimestamp(context.time.milliseconds()),
+            MetadataVersion.latest());
+
+        context.replay(groupMetadataRecord);
+        context.groupMetadataManager.onLoaded();
+
+        IntStream.range(0, 2).forEach(i -> {
+            ScheduledTimeout<Void, Record> timeout = context.timer.timeout(
+                genericGroupHeartbeatKey("group-id", "member-1"));
+
+            assertNotNull(timeout);
+            assertEquals(context.time.milliseconds() + 4000, timeout.deadlineMs);
+        });
+    }
+
+    @Test
     public void testJoinGroupShouldReceiveErrorIfGroupOverMaxSize() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withGenericGroupMaxSize(10)
@@ -3443,11 +3528,11 @@ public class GroupMetadataManagerTest {
 
         // Advance clock by group initial rebalance delay to complete first inital delayed join.
         // This will extend the initial rebalance as new members have joined.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
         // Advance clock by group initial rebalance delay to complete second inital delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // the join group phase will complete.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
 
         verifyGenericGroupJoinResponses(secondRoundFutures, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.size());
@@ -3502,11 +3587,11 @@ public class GroupMetadataManagerTest {
 
         // Advance clock by group initial rebalance delay to complete first inital delayed join.
         // This will extend the initial rebalance as new members have joined.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
         // Advance clock by group initial rebalance delay to complete second inital delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
 
         List<String> memberIds = verifyGenericGroupJoinResponses(firstRoundFutures, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
 
@@ -3565,11 +3650,11 @@ public class GroupMetadataManagerTest {
 
         // Advance clock by group initial rebalance delay to complete first inital delayed join.
         // This will extend the initial rebalance as new members have joined.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
         // Advance clock by group initial rebalance delay to complete second inital delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
 
         List<String> memberIds = verifyGenericGroupJoinResponses(firstRoundFutures, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
 
@@ -3661,11 +3746,11 @@ public class GroupMetadataManagerTest {
 
         // Advance clock by group initial rebalance delay to complete first inital delayed join.
         // This will extend the initial rebalance as new members have joined.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
         // Advance clock by group initial rebalance delay to complete second inital delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
-        assertEmptyResult(context.sleep(50));
+        assertNoOrEmptyResult(context.sleep(50));
 
         verifyGenericGroupJoinResponses(thirdRoundFutures, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.size());
@@ -3731,7 +3816,7 @@ public class GroupMetadataManagerTest {
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
         // Advance clock by rebalance timeout to complete join phase.
-        assertEmptyResult(context.sleep(10000));
+        assertNoOrEmptyResult(context.sleep(10000));
 
         verifyGenericGroupJoinResponses(responseFutures, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
 
@@ -3944,7 +4029,7 @@ public class GroupMetadataManagerTest {
         assertNotEquals(firstMemberId, newMember.memberId());
 
         // Advance clock by new member join timeout to expire the second member.
-        assertEmptyResult(context.sleep(context.genericGroupNewMemberJoinTimeoutMs));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupNewMemberJoinTimeoutMs));
 
         assertTrue(secondResponseFuture.isDone());
         JoinGroupResponseData secondResponse = secondResponseFuture.get();
@@ -3981,7 +4066,7 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().isEmpty());
         assertTrue(otherResponseFuture.isDone());
 
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
         assertTrue(responseFuture.isDone());
         assertEquals(Errors.NONE.code(), responseFuture.get().errorCode());
         assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL.code(), otherResponseFuture.get().errorCode());
@@ -4033,7 +4118,7 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().isEmpty());
         assertFalse(responseFuture.isDone());
 
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
 
         assertTrue(responseFuture.isDone());
         assertEquals(Errors.NONE.code(), responseFuture.get().errorCode());
@@ -4178,7 +4263,7 @@ public class GroupMetadataManagerTest {
         assertFalse(memberResponseFuture.isDone());
 
         // Complete join group phase
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
         assertTrue(leaderResponseFuture.isDone());
         assertTrue(memberResponseFuture.isDone());
 
@@ -4206,10 +4291,10 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().isEmpty());
         assertFalse(responseFuture.isDone());
 
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2));
         assertFalse(responseFuture.isDone());
 
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2 + 1));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2 + 1));
         assertTrue(responseFuture.isDone());
         assertEquals(Errors.NONE.code(), responseFuture.get(5, TimeUnit.SECONDS).errorCode());
     }
@@ -4233,21 +4318,21 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().isEmpty());
         assertFalse(firstMemberResponseFuture.isDone());
 
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs - 1));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs - 1));
         CompletableFuture<JoinGroupResponseData> secondMemberResponseFuture = new CompletableFuture<>();
         result = context.sendGenericGroupJoin(request, secondMemberResponseFuture);
 
         assertTrue(result.records().isEmpty());
         assertFalse(secondMemberResponseFuture.isDone());
-        assertEmptyResult(context.sleep(2);
+        assertNoOrEmptyResult(context.sleep(2));
 
         // Advance clock past initial rebalance delay and verify futures are not completed.
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2 + 1));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2 + 1));
         assertFalse(firstMemberResponseFuture.isDone());
         assertFalse(secondMemberResponseFuture.isDone());
 
         // Advance clock beyond recomputed delay and make sure the futures have completed.
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs / 2));
         assertTrue(firstMemberResponseFuture.isDone());
         assertTrue(secondMemberResponseFuture.isDone());
         assertEquals(Errors.NONE.code(), firstMemberResponseFuture.get().errorCode());
@@ -4279,7 +4364,7 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().isEmpty());
         assertFalse(secondMemberResponseFuture.isDone());
 
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs + 1);
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs + 1));
 
         CompletableFuture<JoinGroupResponseData> thirdMemberResponseFuture = new CompletableFuture<>();
         result = context.sendGenericGroupJoin(request, thirdMemberResponseFuture);
@@ -4288,13 +4373,13 @@ public class GroupMetadataManagerTest {
         assertFalse(thirdMemberResponseFuture.isDone());
 
         // Advance clock right before rebalance timeout.
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs - 1));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs - 1));
         assertFalse(firstMemberResponseFuture.isDone());
         assertFalse(secondMemberResponseFuture.isDone());
         assertFalse(thirdMemberResponseFuture.isDone());
 
         // Advance clock beyond rebalance timeout.
-        assertEmptyResult(context.sleep(1));
+        assertNoOrEmptyResult(context.sleep(1));
         assertTrue(firstMemberResponseFuture.isDone());
         assertTrue(secondMemberResponseFuture.isDone());
         assertTrue(thirdMemberResponseFuture.isDone());
@@ -4339,7 +4424,7 @@ public class GroupMetadataManagerTest {
         assertEquals(1, group.size());
 
         // Complete join for new member.
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
         assertTrue(newMemberResponseFuture.isDone());
         assertEquals(Errors.NONE.code(), newMemberResponseFuture.get(5, TimeUnit.SECONDS).errorCode());
         assertEquals(0, group.numAwaitingJoinResponse());
@@ -4369,7 +4454,7 @@ public class GroupMetadataManagerTest {
         assertEquals(1, group.numPendingJoinMembers());
 
         // Advance clock by session timeout. Pending member should be removed from group as heartbeat expires.
-        assertEmptyResult(context.sleep(1000));
+        assertNoOrEmptyResult(context.sleep(1000));
         assertEquals(0, group.numPendingJoinMembers());
     }
 
@@ -4756,7 +4841,7 @@ public class GroupMetadataManagerTest {
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
         // Advance clock by rebalance timeout. This will expire the leader as it has not rejoined.
-        assertEmptyResult(context.sleep(1000));
+        assertNoOrEmptyResult(context.sleep(1000));
 
         assertTrue(memberResponseFuture.isDone());
         assertEquals(Errors.NONE.code(), memberResponseFuture.get(5, TimeUnit.SECONDS).errorCode());
@@ -4790,7 +4875,7 @@ public class GroupMetadataManagerTest {
         group.transitionTo(DEAD);
 
         // Advance clock by initial rebalance delay to complete join phase.
-        assertEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
+        assertNoOrEmptyResult(context.sleep(context.genericGroupInitialRebalanceDelayMs));
         assertEquals(0, group.generationId());
     }
 
@@ -4847,9 +4932,9 @@ public class GroupMetadataManagerTest {
 
         // Advance clock by rebalance timeout to complete join phase. As long as both members have not
         // rejoined, we extend the join phase.
-        assertEmptyResult(context.sleep(10000));
+        assertNoOrEmptyResult(context.sleep(10000));
         assertEquals(10000, context.timer.timeout("join-group-id").deadlineMs - context.time.milliseconds());
-        assertEmptyResult(context.sleep(10000));
+        assertNoOrEmptyResult(context.sleep(10000));
         assertEquals(10000, context.timer.timeout("join-group-id").deadlineMs - context.time.milliseconds());
 
         assertTrue(group.isInState(PREPARING_REBALANCE));
@@ -5329,7 +5414,7 @@ public class GroupMetadataManagerTest {
         return memberIds;
     }
 
-    private void assertEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {
+    private void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {
         assertTrue(timeouts.size() <= 1);
         timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result));
     }

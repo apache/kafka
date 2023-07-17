@@ -309,9 +309,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 request, exception.getMessage());
 
             if (!responseFuture.isDone()) {
-                Errors clientError = appendGroupMetadataErrorToResponseError(Errors.forException(exception));
                 responseFuture.complete(new JoinGroupResponseData()
-                    .setErrorCode(clientError.code()));
+                    .setErrorCode(Errors.forException(exception).code()));
             }
             return null;
         });
@@ -630,25 +629,5 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     private static boolean isGroupIdNotEmpty(String groupId) {
         return groupId != null && !groupId.isEmpty();
-    }
-
-    private static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
-        switch (appendError) {
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-                return COORDINATOR_NOT_AVAILABLE;
-
-            case NOT_LEADER_OR_FOLLOWER:
-            case KAFKA_STORAGE_ERROR:
-                return NOT_COORDINATOR;
-
-            case MESSAGE_TOO_LARGE:
-            case RECORD_LIST_TOO_LARGE:
-            case INVALID_FETCH_SIZE:
-                return UNKNOWN_SERVER_ERROR;
-
-            default:
-                return appendError;
-        }
     }
 }

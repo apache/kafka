@@ -625,7 +625,7 @@ public class GenericGroup implements Group {
      * @return members that have yet to sync.
      */
     public Set<String> allPendingSyncMembers() {
-        return new HashSet<>(pendingSyncMembers);
+        return pendingSyncMembers;
     }
 
     /**
