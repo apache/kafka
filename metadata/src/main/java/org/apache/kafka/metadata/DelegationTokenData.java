@@ -33,7 +33,6 @@ import java.util.Objects;
  */
 public final class DelegationTokenData {
 
-    // XXX SHould this be the information in a record (as Strings) or a tokenInformation
     private TokenInformation tokenInformation;
 
     public static DelegationTokenData fromRecord(DelegationTokenRecord record) {
