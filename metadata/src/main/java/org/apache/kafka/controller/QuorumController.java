@@ -346,7 +346,7 @@ public final class QuorumController implements Controller {
                 logContext = new LogContext(String.format("[QuorumController id=%d] ", nodeId));
             }
             if (controllerMetrics == null) {
-                controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time);
+                controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time, zkMigrationEnabled);
             }
 
             KafkaEventQueue queue = null;
