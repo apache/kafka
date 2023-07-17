@@ -34,6 +34,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 /**
  * Superclass for plugin discovery implementations.
@@ -126,13 +127,13 @@ public abstract class PluginScanner {
     @SuppressWarnings("unchecked")
     protected <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
-        Iterator<T> iterator = serviceLoader.iterator();
-        while (serviceLoaderHasNext(klass, iterator)) {
+        ServiceLoader<T> serviceLoader = handleLinkageError(klass, () -> ServiceLoader.load(klass, loader));
+        Iterator<T> iterator = handleLinkageError(klass, serviceLoader::iterator);
+        while (handleLinkageError(klass, iterator::hasNext)) {
             try (LoaderSwap loaderSwap = withClassLoader(loader)) {
                 T pluginImpl;
                 try {
-                    pluginImpl = iterator.next();
+                    pluginImpl = handleLinkageError(klass, iterator::next);
                 } catch (ServiceConfigurationError | LinkageError t) {
                     log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t instanceof LinkageError ? t : t.getCause()), t);
                     continue;
@@ -150,14 +151,16 @@ public abstract class PluginScanner {
     }
 
     /**
-     * Helper to evaluate {@link Iterator#hasNext()} while handling {@link LinkageError}s.
-     * @param klass The class which was passed to {@link ServiceLoader#load(Class, ClassLoader)}
-     * @param serviceLoaderIterator An {@link Iterator} which was returned by {@link ServiceLoader#iterator()}
-     * @return true if the iterator returns true. false if the iterator has returned false.
-     * @throws LinkageError if the iterator throws LinkageError repeatedly and cannot discover further implementations.
-     * @param <T> Type being iterated over by the ServiceLoader.
+     * Helper to evaluate a {@link ServiceLoader} operation while handling {@link LinkageError}s.
+     *
+     * @param klass The plugin superclass which is being loaded
+     * @param function A function on a {@link ServiceLoader} which may throw {@link LinkageError}
+     * @return the return value of function
+     * @throws Error errors thrown by the passed-in function
+     * @param <T> Type being iterated over by the ServiceLoader
+     * @param <U> Return value of the passed-in function
      */
-    private <T> boolean serviceLoaderHasNext(Class<T> klass, Iterator<T> serviceLoaderIterator) {
+    private <T, U> U handleLinkageError(Class<T> klass, Supplier<U> function) {
         // It's difficult to know for sure if the iterator was able to advance past the first broken
         // plugin class, or if it will continue to fail on that broken class for any subsequent calls
         // to Iterator::hasNext or Iterator::next
@@ -170,7 +173,7 @@ public abstract class PluginScanner {
         // of plugins in a single plugin location, and to limit the amount of log-spam on startup.
         for (int i = 0; i < 100; i++) {
             try {
-                return serviceLoaderIterator.hasNext();
+                return function.get();
             } catch (LinkageError t) {
                 // As an optimization, hide subsequent error logs if two consecutive errors look similar.
                 // This reduces log-spam for iterators which cannot advance and rethrow the same exception.
