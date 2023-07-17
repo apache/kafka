@@ -110,7 +110,7 @@ public class RackAwareTaskAssignorTest {
         );
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
-        assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertFalse(assignor.canEnableRackAwareAssignor());
         assertFalse(assignor.populateTopicsToDiscribe(new HashSet<>()));
         assertTrue(assignor.validateClientRack());
     }
@@ -129,7 +129,7 @@ public class RackAwareTaskAssignorTest {
         assertTrue(assignor.validateClientRack());
         assertFalse(assignor.populateTopicsToDiscribe(new HashSet<>()));
         // False since nodeMissingRack has one node which doesn't have rack
-        assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertFalse(assignor.canEnableRackAwareAssignor());
     }
 
     @Test
@@ -145,7 +145,7 @@ public class RackAwareTaskAssignorTest {
 
         // False since process1 doesn't have rackId
         assertFalse(assignor.validateClientRack());
-        assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertFalse(assignor.canEnableRackAwareAssignor());
     }
 
     @Test
@@ -167,7 +167,7 @@ public class RackAwareTaskAssignorTest {
         );
 
         assertFalse(assignor.validateClientRack());
-        assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertFalse(assignor.canEnableRackAwareAssignor());
     }
 
     @Test
@@ -182,7 +182,7 @@ public class RackAwareTaskAssignorTest {
         );
 
         // partitionWithoutInfo00 has rackInfo in cluster metadata
-        assertTrue(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertTrue(assignor.canEnableRackAwareAssignor());
     }
 
     @Test
@@ -206,7 +206,7 @@ public class RackAwareTaskAssignorTest {
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
-        assertTrue(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertTrue(assignor.canEnableRackAwareAssignor());
     }
 
     @Test
@@ -223,7 +223,7 @@ public class RackAwareTaskAssignorTest {
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
-        assertFalse(assignor.canEnableRackAwareAssignorForActiveTasks());
+        assertFalse(assignor.canEnableRackAwareAssignor());
         assertTrue(assignor.populateTopicsToDiscribe(new HashSet<>()));
     }
 

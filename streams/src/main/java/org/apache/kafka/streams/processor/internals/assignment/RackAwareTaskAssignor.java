@@ -16,12 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.UUID;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -38,6 +43,8 @@ import org.slf4j.LoggerFactory;
 
 public class RackAwareTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(RackAwareTaskAssignor.class);
+    private static final int DEFAULT_TRAFFIC_COST = 10;
+    private static final int DEFAULT_NON_OVERLAP_COST = 1;
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
@@ -60,7 +67,7 @@ public class RackAwareTaskAssignor {
         this.racksForPartition = new HashMap<>();
     }
 
-    public synchronized boolean canEnableRackAwareAssignorForActiveTasks() {
+    public synchronized boolean canEnableRackAwareAssignor() {
         /*
         TODO: enable this after we add the config
         if (StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
@@ -74,11 +81,7 @@ public class RackAwareTaskAssignor {
         }
 
         return validateTopicPartitionRack();
-    }
-
-    public boolean canEnableRackAwareAssignorForStandbyTasks() {
-        // TODO
-        return false;
+        // TODO: add changelog topic, standby task validation
     }
 
     // Visible for testing. This method also checks if all TopicPartitions exist in cluster
@@ -184,5 +187,170 @@ public class RackAwareTaskAssignor {
             }
         }
         return true;
+    }
+
+    private int getCost(final TaskId taskId, final UUID clientId, final boolean inCurrentAssignment) {
+        final Map<String, Optional<String>> clientRacks = processRacks.get(clientId);
+        if (clientRacks == null) {
+            throw new IllegalStateException("Client " + clientId + " doesn't exist in processRacks");
+        }
+        final Optional<Optional<String>> clientRackOpt = clientRacks.values().stream().filter(Optional::isPresent).findFirst();
+        if (!clientRackOpt.isPresent() || !clientRackOpt.get().isPresent()) {
+            throw new IllegalStateException("Client " + clientId + " doesn't have rack configured");
+        }
+
+        final String clientRack = clientRackOpt.get().get();
+        final Set<TopicPartition> topicPartitions = partitionsForTask.get(taskId);
+        if (topicPartitions == null) {
+            throw new IllegalStateException("Task " + taskId + " has no TopicPartitions");
+        }
+
+        final int trafficCost = assignmentConfigs.trafficCost == null ? DEFAULT_TRAFFIC_COST : assignmentConfigs.trafficCost;
+        final int nonOverlapCost = assignmentConfigs.nonOverlapCost == null ? DEFAULT_NON_OVERLAP_COST : assignmentConfigs.nonOverlapCost;
+
+        int cost = 0;
+        for (final TopicPartition tp : topicPartitions) {
+            final Set<String> tpRacks = racksForPartition.get(tp);
+            if (tpRacks == null || tpRacks.isEmpty()) {
+                throw new IllegalStateException("TopicPartition " + tp + " has no rack information");
+            }
+            if (!tpRacks.contains(clientRack)) {
+                cost += trafficCost;
+            }
+        }
+
+        if (!inCurrentAssignment) {
+            cost += nonOverlapCost;
+        }
+
+        return cost;
+    }
+
+    /**
+     * Assign active stateful tasks. canEnableRackAwareAssignor must be called first
+     * @param clientStates
+     * @param statefulTasks
+     */
+    public void assignActiveStateful(final SortedMap<UUID, ClientState> clientStates, final
+        SortedSet<TaskId> statefulTasks) {
+        final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
+        final List<TaskId> taskIdList = new ArrayList<>(statefulTasks);
+        final Map<TaskId, UUID> taskClientMap = new HashMap<>();
+        final Map<UUID, Integer> clientCapacity = new HashMap<>();
+        final Graph<Integer> graph = new Graph<>();
+
+        constructStatefulActiveTaskGraph(graph, statefulTasks, clientList, taskIdList,
+            clientStates, taskClientMap, clientCapacity);
+
+        final int sourceId = taskIdList.size() + clientList.size();
+        final int sinkId = sourceId + 1;
+        for (int i = 0; i < taskIdList.size(); i++) {
+            graph.addEdge(sourceId, i, 1, 0, 1);
+        }
+        for (int i = 0; i < clientList.size(); i++) {
+            final int capacity = clientCapacity.getOrDefault(clientList.get(i), 0);
+            graph.addEdge(taskIdList.size() + i, sinkId, capacity, 0, 1);
+        }
+        graph.setSourceNode(sourceId);
+        graph.setSinkNode(sinkId);
+
+        graph.solveMinCostFlow();
+        assignStatefulActiveTaskFromMinCostFlow(graph, statefulTasks, clientList,
+            taskIdList, clientStates, clientCapacity, taskClientMap);
+    }
+
+    private void constructStatefulActiveTaskGraph(final Graph<Integer> graph,
+                                                  final SortedSet<TaskId> statefulTasks,
+                                                  final List<UUID> clientList,
+                                                  final List<TaskId> taskIdList,
+                                                  final Map<UUID, ClientState> clientStates,
+                                                  final Map<TaskId, UUID> taskClientMap,
+                                                  final Map<UUID, Integer> clientCapacity) {
+        for (final TaskId taskId : statefulTasks) {
+            for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
+                if (clientState.getValue().hasAssignedTask(taskId)) {
+                    clientCapacity.merge(clientState.getKey(), 1, Integer::sum);
+                }
+            }
+        }
+
+        for (int i = 0; i < taskIdList.size(); i++) {
+            final TaskId taskId = taskIdList.get(i);
+            for (int j = 0; j < clientList.size(); j++) {
+                final int clientNodeId = taskIdList.size() + j;
+                final UUID clientId = clientList.get(j);
+
+                final int flow = clientStates.get(clientId).hasAssignedTask(taskId) ? 1 : 0;
+                final int cost = getCost(taskId, clientId, flow == 1);
+                if (flow == 1) {
+                    taskClientMap.put(taskId, clientId);
+                }
+
+                graph.addEdge(i, clientNodeId, 1, cost, flow);
+            }
+        }
+    }
+
+    private void assignStatefulActiveTaskFromMinCostFlow(final Graph<Integer> graph,
+                                                final SortedSet<TaskId> statefulTasks,
+                                                final List<UUID> clientList,
+                                                final List<TaskId> taskIdList,
+                                                final Map<UUID, ClientState> clientStates,
+                                                final Map<UUID, Integer> originalClientCapacity,
+                                                final Map<TaskId, UUID> taskClientMap) {
+        int taskAssigned = 0;
+        for (int i = 0; i < taskIdList.size(); i++) {
+            final TaskId taskId = taskIdList.get(i);
+            final Map<Integer, Graph<Integer>.Edge> edges = graph.edges(i);
+            for (final Graph<Integer>.Edge edge : edges.values()) {
+                if (edge.flow > 0) {
+                    taskAssigned++;
+                    final int clientIndex = edge.destination - taskIdList.size();
+                    final UUID clientId = clientList.get(clientIndex);
+                    final UUID originalClientId = taskClientMap.get(taskId);
+
+                    // Don't need to assign this task to other client
+                    if (clientId.equals(originalClientId)) {
+                        break;
+                    }
+
+                    final ClientState clientState = clientStates.get(clientId);
+                    final ClientState originalClientState = clientStates.get(originalClientId);
+                    originalClientState.unassignActive(taskId);
+                    clientState.assignActive(taskId);
+                }
+            }
+        }
+
+        // Validate task assigned
+        if (taskAssigned != statefulTasks.size()) {
+            throw new IllegalStateException("Computed active stateful task assignment number "
+                + taskAssigned + " is different statefulTasks size " + statefulTasks.size());
+        }
+
+        // Validate capacity constraint
+        final Map<UUID, Integer> clientCapacity = new HashMap<>();
+        for (final TaskId taskId : statefulTasks) {
+            for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
+                if (clientState.getValue().hasAssignedTask(taskId)) {
+                    clientCapacity.merge(clientState.getKey(), 1, Integer::sum);
+                }
+            }
+        }
+
+        if (originalClientCapacity.size() != clientCapacity.size()) {
+            throw new IllegalStateException("There are " + originalClientCapacity.size() + " clients have "
+                + " active stateful tasks before assignment, but " + clientCapacity.size() + " clients have"
+                + " active stateful tasks after assignment");
+        }
+
+        for (final Entry<UUID, Integer> originalCapacity : originalClientCapacity.entrySet()) {
+            final int capacity = clientCapacity.getOrDefault(originalCapacity.getKey(), 0);
+            if (!Objects.equals(originalCapacity.getValue(), capacity)) {
+                throw new IllegalStateException("There are " + originalCapacity.getValue() + " tasks assigned to"
+                    + " client " + originalCapacity.getKey() + " before assignment, but " + capacity + " tasks "
+                    + " are assigned to it after assignment");
+            }
+        }
     }
 }

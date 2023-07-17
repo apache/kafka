@@ -267,6 +267,8 @@ public final class AssignorConfiguration {
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
         public final List<String> rackAwareAssignmentTags;
+        public Integer trafficCost;
+        public Integer nonOverlapCost;
 
         private AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
