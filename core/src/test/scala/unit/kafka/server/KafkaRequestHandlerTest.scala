@@ -29,10 +29,6 @@ import org.mockito.Mockito.{mock, mockConstruction, verify, verifyNoMoreInteract
 
 import scala.jdk.CollectionConverters._
 
-/**
- * @Author: deqi.hu@shopee.com
- * @Date: 2023/7/14 17:51
- */
 class KafkaRequestHandlerTest {
 
   @Test
