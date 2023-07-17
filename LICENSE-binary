@@ -251,6 +251,7 @@ netty-transport-classes-epoll-4.1.94.Final
 netty-transport-native-epoll-4.1.94.Final
 netty-transport-native-unix-common-4.1.94.Final
 plexus-utils-3.3.0
+reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.1.2
 scala-collection-compat_2.13-2.10.0
@@ -329,4 +330,4 @@ paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 Do What The F*ck You Want To Public License
 see: licenses/DWTFYWTPL
 
-reflections-0.9.12
+reflections-0.10.2
