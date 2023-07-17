@@ -80,21 +80,23 @@ class ControllerMetricsChanges {
     void handleBrokerChange(BrokerRegistration prev, BrokerRegistration next) {
         boolean wasFenced = false;
         boolean wasActive = false;
+        boolean wasZk = false;
         if (prev != null) {
             wasFenced = prev.fenced();
             wasActive = !prev.fenced();
+            wasZk = prev.isMigratingZkBroker();
         }
         boolean isFenced = false;
         boolean isActive = false;
+        boolean isZk = false;
         if (next != null) {
             isFenced = next.fenced();
             isActive = !next.fenced();
-        }
-        if (prev == null && next != null && next.isMigratingZkBroker()) {
-            migratingZkBrokersChange += 1;
+            isZk = next.isMigratingZkBroker();
         }
         fencedBrokersChange += delta(wasFenced, isFenced);
         activeBrokersChange += delta(wasActive, isActive);
+        migratingZkBrokersChange += delta(wasZk, isZk);
     }
 
     void handleDeletedTopic(TopicImage deletedTopic) {
