@@ -27,7 +27,9 @@ import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicati
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -208,6 +210,15 @@ public class DefaultBackgroundThreadTest {
         assertEquals(10, backgroundThread.handlePollResult(failure));
     }
 
+    @Test
+    void testRequestManagersArePolledOnce() {
+        backgroundThread.runOnce();
+        testBuilder.requestManagers.entries().forEach(requestManager ->
+            verify(requestManager.get(), times(1)).poll(anyLong()));
+        verify(networkClient, times(1)).poll(anyLong(), anyLong());
+        backgroundThread.close();
+    }
+
     private NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest() {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
@@ -228,6 +239,19 @@ public class DefaultBackgroundThreadTest {
     private NetworkClientDelegate.PollResult mockPollCommitResult() {
         return new NetworkClientDelegate.PollResult(
                 ConsumerTestBuilder.RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest()));
+                Collections.singletonList(offsetCommitUnsentRequest()));
+    }
+
+    private NetworkClientDelegate.UnsentRequest offsetCommitUnsentRequest() {
+        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
+            new OffsetCommitRequest.Builder(
+                new OffsetCommitRequestData()
+                    .setGroupId("groupId")
+                    .setGenerationId(1)
+                    .setMemberId("m1")
+                    .setGroupInstanceId("i1")
+                    .setTopics(new ArrayList<>())), Optional.empty());
+        req.setTimer(time, ConsumerTestBuilder.REQUEST_TIMEOUT_MS);
+        return req;
     }
 }
