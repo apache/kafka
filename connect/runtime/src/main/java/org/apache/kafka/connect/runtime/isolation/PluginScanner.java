@@ -120,31 +120,32 @@ public abstract class PluginScanner {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    protected <T> PluginDesc<T> pluginDesc(Class<? extends T> plugin, String version, ClassLoader loader) {
-        return new PluginDesc(plugin, version, loader);
+    protected <T> PluginDesc<T> pluginDesc(Class<? extends T> plugin, String version, PluginSource source) {
+        return new PluginDesc(plugin, version, source.loader());
     }
 
     @SuppressWarnings("unchecked")
-    protected <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
+    protected <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, PluginSource source) {
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        ServiceLoader<T> serviceLoader = handleLinkageError(klass, () -> ServiceLoader.load(klass, loader));
-        Iterator<T> iterator = handleLinkageError(klass, serviceLoader::iterator);
-        while (handleLinkageError(klass, iterator::hasNext)) {
-            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
+        ServiceLoader<T> serviceLoader = handleLinkageError(klass, source, () -> ServiceLoader.load(klass, source.loader()));
+        Iterator<T> iterator = handleLinkageError(klass, source, serviceLoader::iterator);
+        while (handleLinkageError(klass, source, iterator::hasNext)) {
+            try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
                 T pluginImpl;
                 try {
-                    pluginImpl = handleLinkageError(klass, iterator::next);
+                    pluginImpl = handleLinkageError(klass, source, iterator::next);
                 } catch (ServiceConfigurationError t) {
-                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
+                    log.error("Failed to discover {} in {}{}",
+                            klass.getSimpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
                     continue;
                 }
                 Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
-                if (pluginKlass.getClassLoader() != loader) {
+                if (pluginKlass.getClassLoader() != source.loader()) {
                     log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                            pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
+                            pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), source.location());
                     continue;
                 }
-                result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), loader));
+                result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), source));
             }
         }
         return result;
@@ -160,7 +161,7 @@ public abstract class PluginScanner {
      * @param <T> Type being iterated over by the ServiceLoader
      * @param <U> Return value of the passed-in function
      */
-    private <T, U> U handleLinkageError(Class<T> klass, Supplier<U> function) {
+    private <T, U> U handleLinkageError(Class<T> klass, PluginSource source, Supplier<U> function) {
         // It's difficult to know for sure if the iterator was able to advance past the first broken
         // plugin class, or if it will continue to fail on that broken class for any subsequent calls
         // to Iterator::hasNext or Iterator::next
@@ -180,15 +181,16 @@ public abstract class PluginScanner {
                 if (lastError == null
                         || !Objects.equals(lastError.getClass(), t.getClass())
                         || !Objects.equals(lastError.getMessage(), t.getMessage())) {
-                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t), t);
+                    log.error("Failed to discover {} in {}{}",
+                            klass.getSimpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
                 }
                 lastError = t;
             }
         }
         log.error("Received excessive ServiceLoader errors: assuming the runtime ServiceLoader implementation cannot " +
-                        "skip faulty implementations. Use a different JRE, resolve error within {} plugin, or " +
+                        "skip faulty implementations. Use a different JRE, resolve errors for all {} in {}, or " +
                         "disable service loader scanning.",
-                klass.getSimpleName(), lastError);
+                klass.getSimpleName(), source.location(), lastError);
         throw lastError;
     }
 
