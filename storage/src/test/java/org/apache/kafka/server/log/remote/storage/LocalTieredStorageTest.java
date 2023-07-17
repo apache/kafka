@@ -402,8 +402,8 @@ public final class LocalTieredStorageTest {
         private List<Path> expectedPaths(final RemoteLogSegmentId id) {
             final String rootPath = getStorageRootDirectory();
             TopicPartition tp = topicIdPartition.topicPartition();
-            final String topicPartitionSubpath = format("%s-%d-%s", topicIdPartition.topicId(),
-                   tp.partition(), tp.topic());
+            final String topicPartitionSubpath = format("%s-%d-%s", tp.topic(), tp.partition(),
+                    topicIdPartition.topicId());
             final String uuid = id.id().toString();
 
             return Arrays.asList(

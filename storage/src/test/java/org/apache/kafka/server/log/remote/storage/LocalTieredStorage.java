@@ -86,18 +86,18 @@ import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDir
  * Given the root directory of the storage, segments and associated files are organized as represented below.
  * </p>
  * <code>
- * / storage-directory  / LWgrMmVrT0a__7a4SasuPA-0-topic / bCqX9U--S-6U8XUM9II25Q.log
+ * / storage-directory  / topic-0-LWgrMmVrT0a__7a4SasuPA / bCqX9U--S-6U8XUM9II25Q.log
  * .                                                     . bCqX9U--S-6U8XUM9II25Q.index
  * .                                                     . bCqX9U--S-6U8XUM9II25Q.timeindex
  * .                                                     . h956soEzTzi9a-NOQ-DvKA.log
  * .                                                     . h956soEzTzi9a-NOQ-DvKA.index
  * .                                                     . h956soEzTzi9a-NOQ-DvKA.timeindex
  * .
- * / LWgrMmVrT0a__7a4SasuPA-1-topic / o8CQPT86QQmbFmi3xRmiHA.log
+ * / topic-1-LWgrMmVrT0a__7a4SasuPA / o8CQPT86QQmbFmi3xRmiHA.log
  * .                                . o8CQPT86QQmbFmi3xRmiHA.index
  * .                                . o8CQPT86QQmbFmi3xRmiHA.timeindex
  * .
- * / DRagLm_PS9Wl8fz1X43zVg-3-btopic / jvj3vhliTGeU90sIosmp_g.log
+ * / btopic-3-DRagLm_PS9Wl8fz1X43zVg / jvj3vhliTGeU90sIosmp_g.log
  * .                                 . jvj3vhliTGeU90sIosmp_g.index
  * .                                 . jvj3vhliTGeU90sIosmp_g.timeindex
  * </code>

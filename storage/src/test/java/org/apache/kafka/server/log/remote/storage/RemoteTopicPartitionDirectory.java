@@ -46,11 +46,11 @@ import static org.slf4j.LoggerFactory.getLogger;
  *
  *
  * <code>
- * / storage-directory / uuidBase64-0-topic / tvHCaSDsQZWsjr5rbtCjxA.log
+ * / storage-directory / topic-0-uuidBase64 / tvHCaSDsQZWsjr5rbtCjxA.log
  *                     .                   .  tvHCaSDsQZWsjr5rbtCjxA.index
  *                     .                   .  tvHCaSDsQZWsjr5rbtCjxA.timeindex
  *                     .
- *                     / 5fEBmixCR5-dMntYSLIr1g-3-topic / BFyXlC8ySMm-Uzxw5lZSMg.log
+ *                     / topic-3-5fEBmixCR5-dMntYSLIr1g / BFyXlC8ySMm-Uzxw5lZSMg.log
  *                                                      . BFyXlC8ySMm-Uzxw5lZSMg.index
  *                                                      . BFyXlC8ySMm-Uzxw5lZSMg.timeindex
  * </code>
@@ -60,12 +60,12 @@ public final class RemoteTopicPartitionDirectory {
     private static final String UUID_LEGAL_CHARS = "[a-zA-Z0-9_-]{22}";
 
     /**
-     * The format of a Kafka topic-partition directory. Follows the structure Uuid-partition-Topic.
+     * The format of a Kafka topic-partition directory. Follows the structure Topic-Partition-Uuid.
      */
-    private static final Pattern FILENAME_FORMAT = compile("(" + UUID_LEGAL_CHARS + ")-(\\d+)-(" + Topic.LEGAL_CHARS + "+)");
-    private static final int GROUP_UUID = 1;
-    private static final int GROUP_PARTITION = 2;
-    private static final int GROUP_TOPIC = 3;
+    private static final Pattern FILENAME_FORMAT = compile("(" + Topic.LEGAL_CHARS + "+)-(\\d+)-(" + UUID_LEGAL_CHARS + ")");
+    static final int GROUP_TOPIC = 1;
+    static final int GROUP_PARTITION = 2;
+    static final int GROUP_UUID = 3;
 
     private final File directory;
     private final boolean existed;
@@ -156,10 +156,10 @@ public final class RemoteTopicPartitionDirectory {
     private static String toString(TopicIdPartition topicIdPartition) {
         Uuid uuid = topicIdPartition.topicId();
         TopicPartition tp = topicIdPartition.topicPartition();
-        return uuid.toString() + "-" + tp.partition() + "-" + tp.topic();
+        return tp.topic() + "-" + tp.partition() + "-" + uuid.toString();
     }
 
-    private static String substr(final String filename, final int group) {
+    static String substr(final String filename, final int group) {
         final Matcher m = FILENAME_FORMAT.matcher(filename);
         if (!m.matches()) {
             throw new IllegalArgumentException(format("Not a topic partition directory file: %s", filename));
