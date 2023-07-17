@@ -59,7 +59,7 @@ import static org.slf4j.LoggerFactory.getLogger;
  * the local tiered storage:
  *
  * <code>
- * / storage-directory / uuidBase64-partition-topic / oAtiIQ95REujbuzNd_lkLQ.log
+ * / storage-directory / topic-partition-uuidBase64 / oAtiIQ95REujbuzNd_lkLQ.log
  *                                                  . oAtiIQ95REujbuzNd_lkLQ.index
  *                                                  . oAtiIQ95REujbuzNd_lkLQ.timeindex
  * </code>
