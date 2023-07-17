@@ -92,7 +92,7 @@ public class CommitRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        maybeAutoCommit();
+        maybeAutoCommit(this.subscriptionState.allConsumed());
         if (!pendingRequests.hasUnsentRequests()) {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
         }
@@ -101,7 +101,7 @@ public class CommitRequestManager implements RequestManager {
                 Collections.unmodifiableList(pendingRequests.drain(currentTimeMs)));
     }
 
-    private void maybeAutoCommit() {
+    public void maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (!autoCommitState.isPresent()) {
             return;
         }
@@ -111,17 +111,9 @@ public class CommitRequestManager implements RequestManager {
             return;
         }
 
-        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptionState.allConsumed();
-        sendAutoCommit(allConsumedOffsets);
+        sendAutoCommit(offsets);
         autocommit.resetTimer();
         autocommit.setInflightCommitStatus(true);
-    }
-
-    public void maybeTriggerAutoCommit() {
-        if (!autoCommitState.isPresent()) {
-            return;
-        }
-        autoCommitState.get().expireTimer();
     }
 
     /**
@@ -494,10 +486,6 @@ public class CommitRequestManager implements RequestManager {
 
         public void resetTimer() {
             this.timer.reset(autoCommitInterval);
-        }
-
-        public void expireTimer() {
-            this.timer.reset(0);
         }
 
         public void ack(final long currentTimeMs) {

@@ -16,9 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class AssignmentChangeApplicationEvent extends ApplicationEvent {
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
-    public AssignmentChangeApplicationEvent() {
+import java.util.Map;
+
+public class AssignmentChangeApplicationEvent extends ApplicationEvent {
+    final Map<TopicPartition, OffsetAndMetadata> offsets;
+
+    public AssignmentChangeApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         super(Type.ASSIGNMENT_CHANGE);
+        this.offsets = offsets;
     }
 }

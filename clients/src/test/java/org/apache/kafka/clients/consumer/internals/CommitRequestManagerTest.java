@@ -190,21 +190,6 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testAutocommit_TimerExpiryShouldTriggersAutoCommit() {
-        CommitRequestManager commitRequestManger = create(true, 100);
-        time.sleep(50);
-        commitRequestManger.maybeTriggerAutoCommit();
-        List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
-        futures.get(0).complete(null);
-
-        time.sleep(100);
-        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        // auto commit should be triggerred 100ms after the first autocommit request is sent.
-        assertPoll(1, commitRequestManger);
-        assertEmptyPendingRequests(commitRequestManger);
-    }
-
-    @Test
     public void testOffsetFetchRequest_EnsureDuplicatedRequestSucceed() {
         CommitRequestManager commitRequestManger = create(true, 100);
         Set<TopicPartition> partitions = new HashSet<>();
