@@ -355,56 +355,6 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testJoinGroupAppendErrorConversion() throws Exception {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorService(
-            new LogContext(),
-            createConfig(),
-            runtime
-        );
-
-        service.startup(() -> 1);
-
-        when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-join"),
-            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new KafkaStorageException()));
-
-        JoinGroupRequestData request = new JoinGroupRequestData()
-            .setGroupId("group-id")
-            .setMemberId(UNKNOWN_MEMBER_ID);
-
-        RequestContext context = new RequestContext(
-            new RequestHeader(
-                ApiKeys.JOIN_GROUP,
-                ApiKeys.JOIN_GROUP.latestVersion(),
-                "client",
-                0
-            ),
-            "1",
-            InetAddress.getLoopbackAddress(),
-            KafkaPrincipal.ANONYMOUS,
-            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-            SecurityProtocol.PLAINTEXT,
-            ClientInformation.EMPTY,
-            false
-        );
-
-        CompletableFuture<JoinGroupResponseData> response = service.joinGroup(
-            context,
-            request,
-            BufferSupplier.NO_CACHING
-        );
-
-        assertTrue(response.isDone());
-        JoinGroupResponseData expectedResponse = new JoinGroupResponseData()
-            .setErrorCode(Errors.NOT_COORDINATOR.code());
-
-        assertEquals(expectedResponse, response.get());
-    }
-
-    @Test
     public void testJoinGroupInvalidGroupId() throws Exception {
         CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(

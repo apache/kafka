@@ -2663,7 +2663,8 @@ public class GroupMetadataManager {
         return EMPTY_RESULT;
     }
 
-    private static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
+    // Visible for testing
+    static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
         switch (appendError) {
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
