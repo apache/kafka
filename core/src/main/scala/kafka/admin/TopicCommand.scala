@@ -35,6 +35,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.server.util.TopicFilter.IncludeList
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -419,7 +420,7 @@ object TopicCommand extends Logging {
 
   private def doGetTopics(allTopics: Seq[String], topicIncludeList: Option[String], excludeInternalTopics: Boolean): Seq[String] = {
     if (topicIncludeList.isDefined) {
-      val topicsFilter = IncludeList(topicIncludeList.get)
+      val topicsFilter = new IncludeList(topicIncludeList.get)
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
     allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
