@@ -534,7 +534,7 @@ class BrokerServer(
         config.offsetsTopicSegmentBytes,
         config.groupMaxSize,
         config.groupInitialRebalanceDelay,
-        5 * 60 * 1000,
+        GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
         config.groupMinSessionTimeoutMs,
         config.groupMaxSessionTimeoutMs
       )

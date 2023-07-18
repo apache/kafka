@@ -1996,7 +1996,7 @@ public class GroupMetadataManager {
                         .setErrorCode(Errors.NONE.code());
 
                     group.completeJoinFuture(member, response);
-                    timer.cancel(genericGroupHeartbeatKey(groupId, member.memberId()));
+                    rescheduleGenericGroupMemberHeartbeat(group, member);
                     member.setIsNew(false);
 
                     group.addPendingSyncMember(member.memberId());

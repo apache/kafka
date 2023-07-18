@@ -24,6 +24,11 @@ import java.util.List;
  * The group coordinator configurations.
  */
 public class GroupCoordinatorConfig {
+    
+    /**
+     * The timeout used to wait for a new member in milliseconds.
+     */
+    public static final int GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
 
     /**
      * The number of threads or event loops running.

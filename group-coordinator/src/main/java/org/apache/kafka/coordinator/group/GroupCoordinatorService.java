@@ -303,7 +303,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
-                log.error("Request {} hit an unexpected exception: {}",
+                log.error("JoinGroup request {} hit an unexpected exception: {}",
                     request, exception.getMessage());
             }
             
