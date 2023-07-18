@@ -351,7 +351,7 @@ public class PluginUtils {
             }
         }
         URL[] classpathUrls = ClasspathHelper.forJavaClassPath().toArray(new URL[0]);
-        pluginSources.add(new PluginSource(null, classLoader.getParent(), classpathUrls));
+        pluginSources.add(new PluginSource(PluginSource.CLASSPATH, classLoader.getParent(), classpathUrls));
         return pluginSources;
     }
 
