@@ -86,14 +86,14 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * <p>
      * This method was added in Apache Kafka 3.6. Sink connectors that use this method but want to maintain backward
      * compatibility in order to be able to be deployed on older Connect runtimes should guard the call to this method
-     * with a try-catch block, since calling this method will result in a {@link NoSuchMethodException} or
-     * {@link NoClassDefFoundError} when the sink connector is deployed to Connect runtimes older than Kafka 3.6.
+     * with a try-catch block, since calling this method will result in a {@link NoSuchMethodError} when the sink
+     * connector is deployed to Connect runtimes older than Kafka 3.6.
      * For example:
      * <pre>{@code
      * String originalTopic;
      * try {
      *     originalTopic = record.originalTopic();
-     * } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     * } catch (NoSuchMethodError e) {
      *     log.warn("This connector is not compatible with SMTs that mutate topic names, topic partitions or offset values on this version of Kafka Connect");
      *     originalTopic = record.topic();
      * }
@@ -119,14 +119,14 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * <p>
      * This method was added in Apache Kafka 3.6. Sink connectors that use this method but want to maintain backward
      * compatibility in order to be able to be deployed on older Connect runtimes should guard the call to this method
-     * with a try-catch block, since calling this method will result in a {@link NoSuchMethodException} or
-     * {@link NoClassDefFoundError} when the sink connector is deployed to Connect runtimes older than Kafka 3.6.
+     * with a try-catch block, since calling this method will result in a {@link NoSuchMethodError} when the sink
+     * connector is deployed to Connect runtimes older than Kafka 3.6.
      * For example:
      * <pre>{@code
      * String originalKafkaPartition;
      * try {
      *     originalKafkaPartition = record.originalKafkaPartition();
-     * } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     * } catch (NoSuchMethodError e) {
      *     log.warn("This connector is not compatible with SMTs that mutate topic names, topic partitions or offset values on this version of Kafka Connect");
      *     originalKafkaPartition = record.kafkaPartition();
      * }
@@ -152,14 +152,14 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * <p>
      * This method was added in Apache Kafka 3.6. Sink connectors that use this method but want to maintain backward
      * compatibility in order to be able to be deployed on older Connect runtimes should guard the call to this method
-     * with a try-catch block, since calling this method will result in a {@link NoSuchMethodException} or
-     * {@link NoClassDefFoundError} when the sink connector is deployed to Connect runtimes older than Kafka 3.6.
+     * with a try-catch block, since calling this method will result in a {@link NoSuchMethodError} when the sink
+     * connector is deployed to Connect runtimes older than Kafka 3.6.
      * For example:
      * <pre>{@code
      * String originalKafkaOffset;
      * try {
      *     originalKafkaOffset = record.originalKafkaOffset();
-     * } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     * } catch (NoSuchMethodError e) {
      *     log.warn("This connector is not compatible with SMTs that mutate topic names, topic partitions or offset values on this version of Kafka Connect");
      *     originalKafkaOffset = record.kafkaOffset();
      * }
