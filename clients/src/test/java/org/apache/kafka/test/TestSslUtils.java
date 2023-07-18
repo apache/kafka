@@ -106,7 +106,7 @@ public class TestSslUtils {
      *
      * @param dn the X.509 Distinguished Name, eg "CN=Test, L=London, C=GB"
      * @param pair the KeyPair
-     * @param days how many days from now the Certificate is valid for
+     * @param days how many days from now the Certificate is valid for, or - for negative values - how many days before now
      * @param algorithm the signing algorithm, eg "SHA1withRSA"
      * @return the self-signed certificate
      * @throws CertificateException thrown if a security error or an IO error occurred.
@@ -415,8 +415,10 @@ public class TestSslUtils {
                 else
                     throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
-                Date from = new Date();
-                Date to = new Date(from.getTime() + days * 86400000L);
+                // Negative numbers for "days" can be used to generate expired certificates
+                Date now = new Date();
+                Date from = (days>=0) ? now : new Date(now.getTime() + days * 86400000L);
+                Date to = (days>=0) ? new Date(now.getTime() + days * 86400000L) : now;
                 BigInteger sn = new BigInteger(64, new SecureRandom());
                 X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(dn, sn, from, to, dn, subPubKeyInfo);
 
