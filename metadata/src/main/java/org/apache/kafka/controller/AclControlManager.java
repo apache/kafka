@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
@@ -39,6 +40,7 @@ import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -68,12 +70,44 @@ import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_
  * completed, which is another reason the prepare / complete callbacks are needed.
  */
 public class AclControlManager {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+        private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder setClusterMetadataAuthorizer(Optional<ClusterMetadataAuthorizer> authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
+        AclControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            return new AclControlManager(logContext, snapshotRegistry, authorizer);
+        }
+    }
+
+    private final Logger log;
     private final TimelineHashMap<Uuid, StandardAcl> idToAcl;
     private final TimelineHashSet<StandardAcl> existingAcls;
     private final Optional<ClusterMetadataAuthorizer> authorizer;
 
-    AclControlManager(SnapshotRegistry snapshotRegistry,
-                      Optional<ClusterMetadataAuthorizer> authorizer) {
+    AclControlManager(
+        LogContext logContext,
+        SnapshotRegistry snapshotRegistry,
+        Optional<ClusterMetadataAuthorizer> authorizer
+    ) {
+        this.log = logContext.logger(AclControlManager.class);
         this.idToAcl = new TimelineHashMap<>(snapshotRegistry, 0);
         this.existingAcls = new TimelineHashSet<>(snapshotRegistry, 0);
         this.authorizer = authorizer;
@@ -193,8 +227,10 @@ public class AclControlManager {
         }
     }
 
-    public void replay(AccessControlEntryRecord record,
-                       Optional<OffsetAndEpoch> snapshotId) {
+    public void replay(
+        AccessControlEntryRecord record,
+        Optional<OffsetAndEpoch> snapshotId
+    ) {
         StandardAclWithId aclWithId = StandardAclWithId.fromRecord(record);
         idToAcl.put(aclWithId.id(), aclWithId.acl());
         existingAcls.add(aclWithId.acl());
@@ -203,10 +239,14 @@ public class AclControlManager {
                 a.addAcl(aclWithId.id(), aclWithId.acl());
             });
         }
+        log.info("Replayed AccessControlEntryRecord for {}, setting {}", record.id(),
+                aclWithId.acl());
     }
 
-    public void replay(RemoveAccessControlEntryRecord record,
-                       Optional<OffsetAndEpoch> snapshotId) {
+    public void replay(
+        RemoveAccessControlEntryRecord record,
+        Optional<OffsetAndEpoch> snapshotId
+    ) {
         StandardAcl acl = idToAcl.remove(record.id());
         if (acl == null) {
             throw new RuntimeException("Unable to replay " + record + ": no acl with " +
@@ -221,6 +261,7 @@ public class AclControlManager {
                 a.removeAcl(record.id());
             });
         }
+        log.info("Replayed RemoveAccessControlEntryRecord for {}, removing {}", record.id(), acl);
     }
 
     Map<Uuid, StandardAcl> idToAcl() {
