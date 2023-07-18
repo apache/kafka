@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.StickyAssignor;
@@ -742,11 +743,11 @@ public abstract class AbstractStickyAssignorTest {
         }
         for (int i = 0; i < consumerCount; i++) {
             if (i % 4 == 0) {
-                subscriptions.put(getConsumerName(i, consumerCount), subscription(topics.subList(0, topicCount / 2),
-                        i));
+                subscriptions.put(getConsumerName(i, consumerCount),
+                        subscription(topics.subList(0, topicCount / 2), i));
             } else {
-                subscriptions.put(getConsumerName(i, consumerCount), subscription(topics.subList(topicCount / 2,
-                        topicCount), i));
+                subscriptions.put(getConsumerName(i, consumerCount),
+                        subscription(topics.subList(topicCount / 2, topicCount), i));
             }
         }
 
@@ -755,11 +756,16 @@ public abstract class AbstractStickyAssignorTest {
         for (int i = 1; i < consumerCount; i++) {
             String consumer = getConsumerName(i, consumerCount);
             if (i % 4 == 0) {
-                subscriptions.put(consumer, buildSubscriptionV2Above(topics.subList(0, topicCount / 2),
-                        assignment.get(consumer), generationId, i));
+                subscriptions.put(
+                        consumer,
+                        buildSubscriptionV2Above(topics.subList(0, topicCount / 2),
+                        assignment.get(consumer), generationId, i)
+                );
             } else {
-                subscriptions.put(consumer, buildSubscriptionV2Above(topics.subList(topicCount / 2, topicCount),
-                        assignment.get(consumer), generationId, i));
+                subscriptions.put(consumer,
+                        buildSubscriptionV2Above(topics.subList(topicCount / 2, topicCount),
+                        assignment.get(consumer), generationId, i)
+                );
             }
         }
 
@@ -773,15 +779,30 @@ public abstract class AbstractStickyAssignorTest {
         partitionsPerTopic.put(topic1, partitionInfos(topic1, 1));
         int[][] sequence = new int[][]{{1, 2, 3}, {1, 3, 2}, {2, 1, 3}, {2, 3, 1}, {3, 1, 2}, {3, 2, 1}};
         for (int[] ints : sequence) {
-            subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0),
-                    tp(topic, 2)), ints[0], 0));
-            subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 1), tp(topic,
-                    2), tp(topic, 3)), ints[1], 1));
-            subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 2), tp(topic,
-                    4), tp(topic, 5)), ints[2], 2));
-            subscriptions.put(consumer4, buildSubscriptionV2Above(topics(topic1), partitions(tp(topic1, 0)), 2, 3));
+            subscriptions.put(
+                    consumer1,
+                    buildSubscriptionV2Above(topics(topic),
+                    partitions(tp(topic, 0), tp(topic, 2)), ints[0], 0)
+            );
+            subscriptions.put(
+                    consumer2,
+                    buildSubscriptionV2Above(topics(topic),
+                    partitions(tp(topic, 1), tp(topic, 2), tp(topic, 3)), ints[1], 1)
+            );
+            subscriptions.put(
+                    consumer3,
+                    buildSubscriptionV2Above(topics(topic),
+                    partitions(tp(topic, 2), tp(topic, 4), tp(topic, 5)), ints[2], 2)
+            );
+            subscriptions.put(
+                    consumer4,
+                    buildSubscriptionV2Above(topics(topic1),
+                    partitions(tp(topic1, 0)), 2, 3)
+            );
 
             Map<String, List<TopicPartition>> assign = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+            assertEquals(assign.values().stream().mapToInt(List::size).sum(),
+                    assign.values().stream().flatMap(List::stream).collect(Collectors.toSet()).size());
             for (List<TopicPartition> list: assign.values()) {
                 assertTrue(list.size() >= 1 && list.size() <= 2);
             }
