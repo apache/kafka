@@ -1569,6 +1569,7 @@ project(':server-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.joptSimple
+    implementation libs.jacksonDatabind
     implementation libs.pcollections
 
     testImplementation project(':clients')
