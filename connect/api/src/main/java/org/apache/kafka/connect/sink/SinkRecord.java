@@ -27,8 +27,8 @@ import java.util.Objects;
 
 /**
  * SinkRecord is a {@link ConnectRecord} that has been read from Kafka and includes the original Kafka record's
- * topic, partition and offset (before any {@link Transformation transformations}
- * have been applied) in addition to the standard fields. This information should be used by the {@link SinkTask} to coordinate
+ * topic, partition and offset (before any {@link Transformation transformations} have been applied)
+ * in addition to the standard fields. This information should be used by the {@link SinkTask} to coordinate
  * offset commits.
  * <p>
  * It also includes the {@link TimestampType}, which may be {@link TimestampType#NO_TIMESTAMP_TYPE}, and the relevant
@@ -75,11 +75,10 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     }
 
     /**
-     * Get the original topic for this sink record, before any
-     * {@link Transformation transformations} were applied.
+     * Get the original topic for this sink record, before any {@link Transformation transformations} were applied.
      * In order to be compatible with transformations that mutate topic names, this method should be used
-     * by sink tasks instead of {@link #topic()} for any internal offset tracking purposes (for instance, reporting offsets to the Connect runtime via
-     * {@link SinkTask#preCommit(Map)}).
+     * by sink tasks instead of {@link #topic()} for any internal offset tracking purposes (for instance, reporting
+     * offsets to the Connect runtime via {@link SinkTask#preCommit(Map)}).
      * <p>
      * This method was added in Apache Kafka 3.6. Sink connectors that use this method but want to maintain backward
      * compatibility in order to be able to be deployed on older Connect runtimes should guard the call to this method
@@ -108,11 +107,10 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     }
 
     /**
-     * Get the original topic partition for this sink record, corresponding to the topic partition of the Kafka record
-     * before any {@link org.apache.kafka.connect.transforms.Transformation Transformation}s were applied. This should
-     * be used by sink tasks for any internal offset tracking purposes (that are reported to the framework via
-     * {@link SinkTask#preCommit(Map)} for instance) rather than {@link #kafkaPartition()}, in order to be compatible
-     * with transformations that mutate the topic partition value.
+     * Get the original topic partition for this sink record, before any {@link Transformation transformations} were applied.
+     * In order to be compatible with transformations that mutate topic partitions, this method should be used
+     * by sink tasks instead of {@link #kafkaPartition()} for any internal offset tracking purposes (for instance, reporting
+     * offsets to the Connect runtime via {@link SinkTask#preCommit(Map)}).
      * <p>
      * This method was added in Apache Kafka 3.6. Sink connectors that use this method but want to maintain backward
      * compatibility in order to be able to be deployed on older Connect runtimes should guard the call to this method
@@ -129,10 +127,10 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * }
      * </pre>
      * <p>
-     * Note that sink connectors that do their own offset tracking will be incompatible with SMTs that mutate the topic
-     * partition when deployed to older Connect runtimes.
+     * Note that sink connectors that do their own offset tracking will be incompatible with SMTs that mutate topic
+     * partitions when deployed to older Connect runtimes that do not support this method.
      *
-     * @return the topic partition corresponding to the Kafka record before any transformations were applied
+     * @return the topic partition for this record before any transformations were applied
      *
      * @since 3.6
      */
@@ -141,11 +139,10 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     }
 
     /**
-     * Get the original offset for this sink record, corresponding to the offset of the Kafka record before any
-     * {@link org.apache.kafka.connect.transforms.Transformation Transformation}s were applied. This should be used by
-     * sink tasks for any internal offset tracking purposes (that are reported to the framework via
-     * {@link SinkTask#preCommit(Map)} for instance) rather than {@link #kafkaOffset()}, in order to be
-     * compatible with transformations that mutate the offset value.
+     * Get the original offset for this sink record, before any {@link Transformation transformations} were applied.
+     * In order to be compatible with transformations that mutate offset values, this method should be used
+     * by sink tasks instead of {@link #kafkaOffset()} for any internal offset tracking purposes (for instance, reporting
+     * offsets to the Connect runtime via {@link SinkTask#preCommit(Map)}).
      * <p>
      * This method was added in Apache Kafka 3.6. Sink connectors that use this method but want to maintain backward
      * compatibility in order to be able to be deployed on older Connect runtimes should guard the call to this method
@@ -157,15 +154,15 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * try {
      *     originalKafkaOffset = record.originalKafkaOffset();
      * } catch (NoSuchMethodError | NoClassDefFoundError e) {
-     *     originalTopic = record.kafkaOffset();
+     *     originalKafkaOffset = record.kafkaOffset();
      * }
      * }
      * </pre>
      * <p>
-     * Note that sink connectors that do their own offset tracking will be incompatible with SMTs that mutate the offset
-     * value when deployed to older Connect runtimes.
+     * Note that sink connectors that do their own offset tracking will be incompatible with SMTs that mutate offset
+     * values when deployed to older Connect runtimes that do not support this method.
      *
-     * @return the offset corresponding to the Kafka record before any transformations were applied
+     * @return the offset for this record before any transformations were applied
      *
      * @since 3.6
      */

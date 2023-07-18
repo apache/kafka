@@ -109,9 +109,10 @@ public abstract class SinkTask implements Task {
      * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}, provided for
      *                       convenience but could also be determined by tracking all offsets included in the
      *                       {@link SinkRecord}s passed to {@link #put}. Note that the topic, partition and offset
-     *                       here correspond to the original Kafka topic partition and offset, before any {@link Transformation}s
-     *                       have been applied. These can be tracked by the task through the {@link SinkRecord#originalTopic()},
-     *                       {@link SinkRecord#originalKafkaPartition()} and {@link SinkRecord#originalKafkaOffset()} methods.
+     *                       here correspond to the original Kafka topic partition and offset, before any
+     *                       {@link Transformation transformations} have been applied. These can be tracked by the task
+     *                       through the {@link SinkRecord#originalTopic()}, {@link SinkRecord#originalKafkaPartition()}
+     *                       and {@link SinkRecord#originalKafkaOffset()} methods.
      */
     public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
     }
@@ -125,9 +126,10 @@ public abstract class SinkTask implements Task {
      * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}, provided for
      *                       convenience but could also be determined by tracking all offsets included in the
      *                       {@link SinkRecord}s passed to {@link #put}. Note that the topic, partition and offset
-     *                       here correspond to the original Kafka topic partition and offset, before any {@link Transformation}s
-     *                       have been applied. These can be tracked by the task through the {@link SinkRecord#originalTopic()},
-     *                       {@link SinkRecord#originalKafkaPartition()} and {@link SinkRecord#originalKafkaOffset()} methods.
+     *                       here correspond to the original Kafka topic partition and offset, before any
+     *                       {@link Transformation transformations} have been applied. These can be tracked by the task
+     *                       through the {@link SinkRecord#originalTopic()}, {@link SinkRecord#originalKafkaPartition()}
+     *                       and {@link SinkRecord#originalKafkaOffset()} methods.
      *
      * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are
      *         safe to commit. Note that the returned topic-partition to offsets map should use the original Kafka
@@ -144,7 +146,7 @@ public abstract class SinkTask implements Task {
      * fetching data. Any errors raised from this method will cause the task to stop.
      * <p>
      * Note that the topic partitions here correspond to the original Kafka topic partitions, before any
-     * {@link Transformation}s have been applied.
+     * {@link Transformation transformations} have been applied.
      *
      * @param partitions The list of partitions that are now assigned to the task (may include
      *                   partitions previously assigned to the task)
@@ -168,7 +170,7 @@ public abstract class SinkTask implements Task {
      * from this method will cause the task to stop.
      * <p>
      * Note that the topic partitions here correspond to the original Kafka topic partitions, before any
-     * {@link Transformation}s have been applied.
+     * {@link Transformation transformations} have been applied.
      *
      * @param partitions The list of partitions that should be closed
      */
