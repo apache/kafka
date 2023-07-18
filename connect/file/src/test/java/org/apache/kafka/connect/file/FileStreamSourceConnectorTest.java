@@ -20,19 +20,25 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
-
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+
+import static org.apache.kafka.connect.file.FileStreamSourceTask.FILENAME_FIELD;
+import static org.apache.kafka.connect.file.FileStreamSourceTask.POSITION_FIELD;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class FileStreamSourceConnectorTest {
 
@@ -146,5 +152,79 @@ public class FileStreamSourceConnectorTest {
     public void testInvalidBatchSize() {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
         assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
+    }
+
+    @Test
+    public void testAlterOffsetsStdin() {
+        sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 0L)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectPartitionKey() {
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap("other_partition_key", FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 0L)
+        )));
+
+        // null partitions are invalid
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                null,
+                Collections.singletonMap(POSITION_FIELD, 0L)
+        )));
+    }
+
+    @Test
+    public void testAlterOffsetsMultiplePartitions() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
+        offsets.put(Collections.singletonMap(FILENAME_FIELD, FILENAME), Collections.singletonMap(POSITION_FIELD, 0L));
+        offsets.put(Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"), null);
+        assertTrue(connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectOffsetKey() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap("other_offset_key", 0L)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsOffsetPositionValues() {
+        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, offset)
+        ));
+
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(null));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(new Object()));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(3.14));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(-420));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("-420"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(10));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("10"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(-10L));
+        assertTrue(() -> alterOffsets.apply(10L));
+    }
+
+    @Test
+    public void testSuccessfulAlterOffsets() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 0L)
+        );
+
+        // Expect no exception to be thrown when a valid offsets map is passed. An empty offsets map is treated as valid
+        // since it could indicate that the offsets were reset previously or that no offsets have been committed yet
+        // (for a reset operation)
+        assertTrue(connector.alterOffsets(sourceProperties, offsets));
+        assertTrue(connector.alterOffsets(sourceProperties, new HashMap<>()));
     }
 }
