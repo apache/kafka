@@ -373,8 +373,8 @@ public class StreamsResetter {
 
     // visible for testing
     public void resetToDatetime(final Consumer<byte[], byte[]> client,
-                                Set<TopicPartition> inputTopicPartitions,
-                                Long timestamp) {
+                                final Set<TopicPartition> inputTopicPartitions,
+                                final Long timestamp) {
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             topicPartitionsAndTimes.put(topicPartition, timestamp);
