@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.server.util;
 
+import joptsimple.OptionParser;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class ToolsUtils {
-
     /**
      * print out the metrics in alphabetical order
      * @param metrics   the metrics to be printed out
@@ -99,5 +101,26 @@ public class ToolsUtils {
 
         printRow(columnLengths, headers, out);
         rows.forEach(row -> printRow(columnLengths, row, out));
+    }
+
+    public static void validateBootstrapServer(OptionParser parser, String bootstrapServer) {
+        if (parser == null || bootstrapServer == null) {
+            throw new RuntimeException("No option parser or bootstrap server found");
+        }
+        if (bootstrapServer.isEmpty()) {
+            CommandLineUtils.printUsageAndExit(parser, "Empty bootstrap server option");
+        }
+
+        String[] hostPorts;
+        if (bootstrapServer.contains(",")) hostPorts = bootstrapServer.split(",");
+        else hostPorts = new String[]{bootstrapServer};
+
+        String[] validHostPort = Arrays.stream(hostPorts)
+            .filter(hostPortData -> Utils.getPort(hostPortData) != null)
+            .toArray(String[]::new);
+
+        if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
+            CommandLineUtils.printUsageAndExit(parser, "Invalid bootstrap server option");
+        }
     }
 }
