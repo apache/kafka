@@ -16,9 +16,10 @@
 # under the License.
 
 import os
+import io
 from bs4 import BeautifulSoup
 from github import Github
-import yaml
+from ruamel.yaml import YAML
 from datetime import datetime, timedelta
 
 ### GET THE NAMES OF THE KAFKA COMMITTERS FROM THE apache/kafka-site REPO ###
@@ -35,7 +36,10 @@ n = 10
 contributors_login_to_commit_volume = {}
 end_date = datetime.now()
 start_date = end_date - timedelta(days=365)
+repo = g.get_repo("apache/kafka")
 for commit in repo.get_commits(since=start_date, until=end_date):
+    if commit.author is None and commit.author.login is None:
+        continue
     login = commit.author.login
     contributors_login_to_commit_volume[login] = contributors_login_to_commit_volume.get(login, 0) + 1
 contributors_login_to_commit_volume = dict(sorted(contributors_login_to_commit_volume.items(), key=lambda x: x[1], reverse=True))
@@ -48,7 +52,8 @@ refreshed_collaborators = collaborators[:n]
 ### UPDATE asf.yaml ###
 file_path = ".asf.yaml"
 file = repo.get_contents(file_path)
-yaml_content = yaml.safe_load(file.decoded_content)
+yml = YAML()
+yaml_content = yml.load(file.decoded_content)
 
 # Update 'github_whitelist' list
 github_whitelist = refreshed_collaborators  # New users to be added
@@ -59,9 +64,20 @@ collaborators = refreshed_collaborators  # New collaborators to be added
 yaml_content["github"]["collaborators"] = collaborators
 
 # Convert the updated content back to YAML
-updated_yaml = yaml.safe_dump(yaml_content)
+updated_yaml = io.StringIO()
+yml.dump(yaml_content, updated_yaml)
+updated_yaml_str = updated_yaml.getvalue()
 
-# Commit and push the changes
+# Create a new branch for the changes
+new_branch_name = "update-asf.yaml-github-whitelist-and-collaborators"
+repo.create_git_ref(f"refs/heads/{new_branch_name}", repo.default_branch)
+
+# Commit the changes to the new branch
 commit_message = "MINOR: Update .asf.yaml file with refreshed github_whitelist, and collaborators"
-repo.update_file(file_path, commit_message, updated_yaml, file.sha)
+repo.update_file(file_path, commit_message, updated_yaml_str, file.sha, branch=new_branch_name)
+
+# Open a pull request with the updated .asf.yaml file:
+pr_title = "MINOR: Update .asf.yaml file with refreshed github_whitelist, and collaborators"
+pr_body = "This pull request updates the github_whitelist and collaborators lists in .asf.yaml."
+repo.create_pull(title=pr_title, body=pr_body, base=repo.default_branch, head=new_branch_name)
 
