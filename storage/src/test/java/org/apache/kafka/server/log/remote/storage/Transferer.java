@@ -14,30 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.runtime;
+package org.apache.kafka.server.log.remote.storage;
 
-import java.util.concurrent.TimeUnit;
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
- * An interface to schedule and cancel operations.
+ * The implementation of the transfer of the data of the canonical segment and index files to
+ * this storage. The only reason the "transferer" abstraction exists is to be able to simulate
+ * file copy errors and exercise the associated failure modes.
  */
-public interface Timer {
+public interface Transferer {
 
-    /**
-     * Add an operation to the timer. If an operation with the same key
-     * already exists, replace it with the new operation.
-     *
-     * @param key         The key to identify this operation.
-     * @param delay       The delay to wait before expiring.
-     * @param unit        The delay unit.
-     * @param operation   The operation to perform upon expiration.
-     */
-    void schedule(String key, long delay, TimeUnit unit, Runnable operation);
+    void transfer(File from, File to) throws IOException;
 
-    /**
-     * Remove an operation corresponding to a given key.
-     *
-     * @param key The key.
-     */
-    void cancel(String key);
+    void transfer(ByteBuffer from, File to) throws IOException;
 }

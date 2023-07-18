@@ -119,8 +119,8 @@ object StorageTool extends Logging {
     formatParser.addArgument("--add-scram", "-S").
       action(append()).
       help("""A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
-              |'SCRAM-SHA-256=[user=alice,password=alice-secret]'
-              |'SCRAM-SHA-512=[user=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
+              |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
+              |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
     formatParser.addArgument("--ignore-formatted", "-g").
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").

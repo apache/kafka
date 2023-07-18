@@ -757,7 +757,7 @@ public class GenericGroupTest {
         assertTrue(group.hasMemberId(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
 
-        // We aren ot permitted to add the member again if it is already present
+        // We are not permitted to add the member again if it is already present
         assertThrows(IllegalStateException.class, () -> group.add(member));
     }
 

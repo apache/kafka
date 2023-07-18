@@ -241,7 +241,7 @@ public class ConfigEntry {
          *
          * @param name Configuration name (this may be different from the name of the associated {@link ConfigEntry}
          * @param value Configuration value
-         * @param source {@link ConfigSource} of this configuraton
+         * @param source {@link ConfigSource} of this configuration
          */
         ConfigSynonym(String name, String value, ConfigSource source) {
             this.name = name;

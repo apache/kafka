@@ -51,4 +51,8 @@ public class MetadataShellPublisher implements MetadataPublisher {
         log.trace("onMetadataUpdate newImage={}", newImage);
         state.setRoot(new RootShellNode(newImage));
     }
+
+    public MetadataShellState state() {
+        return state;
+    }
 }

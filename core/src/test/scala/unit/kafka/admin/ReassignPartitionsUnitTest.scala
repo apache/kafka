@@ -224,9 +224,9 @@ class ReassignPartitionsUnitTest {
   @Test
   def testGetBrokerRackInformation(): Unit = {
     val adminClient = new MockAdminClient.Builder().
-      brokers(Arrays.asList(new Node(0, "locahost", 9092, "rack0"),
-        new Node(1, "locahost", 9093, "rack1"),
-        new Node(2, "locahost", 9094, null))).
+      brokers(Arrays.asList(new Node(0, "localhost", 9092, "rack0"),
+        new Node(1, "localhost", 9093, "rack1"),
+        new Node(2, "localhost", 9094, null))).
       build()
     try {
       assertEquals(Seq(
@@ -304,12 +304,12 @@ class ReassignPartitionsUnitTest {
   def testGenerateAssignmentWithInconsistentRacks(): Unit = {
     val adminClient = new MockAdminClient.Builder().
       brokers(Arrays.asList(
-        new Node(0, "locahost", 9092, "rack0"),
-        new Node(1, "locahost", 9093, "rack0"),
-        new Node(2, "locahost", 9094, null),
-        new Node(3, "locahost", 9095, "rack1"),
-        new Node(4, "locahost", 9096, "rack1"),
-        new Node(5, "locahost", 9097, "rack2"))).
+        new Node(0, "localhost", 9092, "rack0"),
+        new Node(1, "localhost", 9093, "rack0"),
+        new Node(2, "localhost", 9094, null),
+        new Node(3, "localhost", 9095, "rack1"),
+        new Node(4, "localhost", 9096, "rack1"),
+        new Node(5, "localhost", 9097, "rack2"))).
       build()
     try {
       addTopics(adminClient)

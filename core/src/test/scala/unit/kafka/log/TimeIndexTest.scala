@@ -34,7 +34,7 @@ class TimeIndexTest {
 
   @BeforeEach
   def setup(): Unit = {
-    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset, maxEntries * 12)
+    this.idx = new TimeIndex(nonExistentTempFile(), baseOffset, maxEntries * 12)
   }
 
   @AfterEach
@@ -97,7 +97,7 @@ class TimeIndexTest {
       idx.maybeAppend(i * 10, i * 10 + baseOffset)
   }
 
-  def nonExistantTempFile(): File = {
+  def nonExistentTempFile(): File = {
     val file = TestUtils.tempFile()
     file.delete()
     file

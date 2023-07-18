@@ -54,7 +54,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 while (isRunning.get()) {
                     runOnce(time.milliseconds());
                 }
-                // TODO: add exception handling
+            } catch (final StreamsException e) {
+                handleException(e);
+            } catch (final Exception e) {
+                handleException(new StreamsException(e));
             } finally {
                 if (currentTask != null) {
                     unassignCurrentTask();
@@ -62,6 +65,15 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
                 shutdownGate.countDown();
                 log.info("Task executor thread shutdown");
+            }
+        }
+
+        private void handleException(final StreamsException e) {
+            if (currentTask != null) {
+                taskManager.setUncaughtException(e, currentTask.id());
+            } else {
+                // If we do not currently have a task assigned and still get an error, this is fatal for the executor thread
+                throw e;
             }
         }
 

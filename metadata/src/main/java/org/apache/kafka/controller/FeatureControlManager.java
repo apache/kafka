@@ -327,24 +327,31 @@ public class FeatureControlManager {
         }
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
-            log.info("Setting metadata version to {}", mv);
             metadataVersion.set(mv);
+            log.info("Replayed a FeatureLevelRecord setting metadata version to {}", mv);
         } else {
             if (record.featureLevel() == 0) {
-                log.info("Removing feature {}", record.name());
                 finalizedVersions.remove(record.name());
+                log.info("Replayed a FeatureLevelRecord removing feature {}", record.name());
             } else {
-                log.info("Setting feature {} to {}", record.name(), record.featureLevel());
                 finalizedVersions.put(record.name(), record.featureLevel());
+                log.info("Replayed a FeatureLevelRecord setting feature {} to {}",
+                        record.name(), record.featureLevel());
             }
         }
     }
 
     public void replay(ZkMigrationStateRecord record) {
-        ZkMigrationState recordState = ZkMigrationState.of(record.zkMigrationState());
-        ZkMigrationState currentState = migrationControlState.get();
-        log.info("Transitioning ZK migration state from {} to {}", currentState, recordState);
-        migrationControlState.set(recordState);
+        ZkMigrationState newState = ZkMigrationState.of(record.zkMigrationState());
+        ZkMigrationState previousState = migrationControlState.get();
+        if (previousState.equals(newState)) {
+            log.debug("Replayed a ZkMigrationStateRecord which did not alter the state from {}.",
+                    previousState);
+        } else {
+            migrationControlState.set(newState);
+            log.info("Replayed a ZkMigrationStateRecord changing the migration state from {} to {}.",
+                    previousState, newState);
+        }
     }
 
     boolean isControllerId(int nodeId) {
