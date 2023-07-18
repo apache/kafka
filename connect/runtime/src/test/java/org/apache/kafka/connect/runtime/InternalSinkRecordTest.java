@@ -29,16 +29,33 @@ import static org.mockito.Mockito.mock;
 
 public class InternalSinkRecordTest {
 
+    private static final String TOPIC = "test-topic";
+
     @Test
     public void testNewRecordHeaders() {
-        SinkRecord sinkRecord = new SinkRecord("test-topic", 0, null, null, null, null, 10);
+        SinkRecord sinkRecord = new SinkRecord(TOPIC, 0, null, null, null, null, 10);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("test-topic", 0, 10, null, null);
         InternalSinkRecord internalSinkRecord = new InternalSinkRecord(consumerRecord, sinkRecord);
         assertTrue(internalSinkRecord.headers().isEmpty());
         assertTrue(sinkRecord.headers().isEmpty());
 
-        SinkRecord newRecord = internalSinkRecord.newRecord("test-topic", 0, null, null, null,
+        SinkRecord newRecord = internalSinkRecord.newRecord(TOPIC, 0, null, null, null,
                 null, null, Collections.singletonList(mock(Header.class)));
         assertEquals(1, newRecord.headers().size());
+    }
+
+    @Test
+    public void shouldRetainOriginalTopicPartition() {
+        String transformedTopic = "transformed-test-topic";
+        SinkRecord sinkRecord = new SinkRecord(transformedTopic, 0, null, null, null, null, 10);
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, 0, 10, null, null);
+        InternalSinkRecord internalSinkRecord = new InternalSinkRecord(consumerRecord, sinkRecord);
+
+        assertEquals(TOPIC, internalSinkRecord.originalTopic());
+        assertEquals(0, internalSinkRecord.originalKafkaPartition().intValue());
+
+        SinkRecord transformedSinkRecord = internalSinkRecord.newRecord(transformedTopic, 1, null, null, null, null, null);
+        assertEquals(TOPIC, transformedSinkRecord.originalTopic());
+        assertEquals(0, transformedSinkRecord.originalKafkaPartition().intValue());
     }
 }

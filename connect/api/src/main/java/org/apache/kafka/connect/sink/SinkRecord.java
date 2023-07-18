@@ -186,7 +186,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
                                 Long timestamp, Iterable<Header> headers) {
         return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers,
-                originalTopic(), originalKafkaPartition(), originalKafkaOffset());
+                originalTopic, originalKafkaPartition, originalKafkaOffset);
     }
 
     @Override
