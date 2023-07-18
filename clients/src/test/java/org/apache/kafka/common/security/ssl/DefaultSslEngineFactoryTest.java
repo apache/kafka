@@ -1,47 +1,59 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+ * agreements. See the NOTICE file distributed with this work for additional information regarding
+ * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License. You may obtain a
+ * copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 package org.apache.kafka.common.security.ssl;
 
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.security.KeyPair;
 import java.security.KeyStore;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.NeverExpiringX509Certificate;
+import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestUtils;
+import org.bouncycastle.cert.X509v1CertificateBuilder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class DefaultSslEngineFactoryTest {
 
     /*
-     * Key and certificates were extracted using openssl from a key store file created with 100 years validity using:
+     * Key and certificates were extracted using openssl from a key store file created with 100
+     * years validity using:
      *
-     * openssl pkcs12 -in server.keystore.p12 -nodes -nocerts -out test.key.pem -passin pass:key-password
-     * openssl pkcs12 -in server.keystore.p12 -nodes -nokeys -out test.certchain.pem  -passin pass:key-password
-     * openssl pkcs12 -in server.keystore.p12 -nodes  -out test.keystore.pem -passin pass:key-password
-     * openssl pkcs8 -topk8 -v1 pbeWithSHA1And3-KeyTripleDES-CBC -in test.key.pem -out test.key.encrypted.pem -passout pass:key-password
+     * openssl pkcs12 -in server.keystore.p12 -nodes -nocerts -out test.key.pem -passin
+     * pass:key-password openssl pkcs12 -in server.keystore.p12 -nodes -nokeys -out
+     * test.certchain.pem -passin pass:key-password openssl pkcs12 -in server.keystore.p12 -nodes
+     * -out test.keystore.pem -passin pass:key-password openssl pkcs8 -topk8 -v1
+     * pbeWithSHA1And3-KeyTripleDES-CBC -in test.key.pem -out test.key.encrypted.pem -passout
+     * pass:key-password
      */
 
     private static final String CA1 = "-----BEGIN CERTIFICATE-----\n"
@@ -60,8 +72,7 @@ public class DefaultSslEngineFactoryTest {
             + "JtrfR0r8aGTgsXvCe4SgwDBKv7bckctOwD3S7D/b6y3w7X0s7JCU5+8ZjgoYfcLE\n"
             + "gNqQEaOwdT2LHCvxHmGn/2VGs/yatPQIYYuufe5i8yX7pp4Xbd2eD6LULYkHFs3x\n"
             + "uJzMRI7BukmIIWuBbAkYI0atxLQIysnVFXdL9pBgvgso2nA3FgP/XeORhkyHVvtL\n"
-            + "REH2YTlftQ==\n"
-            + "-----END CERTIFICATE-----";
+            + "REH2YTlftQ==\n" + "-----END CERTIFICATE-----";
 
     private static final String CA2 = "-----BEGIN CERTIFICATE-----\n"
             + "MIIC0zCCAbugAwIBAgIEfk9e9DANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDEwdU\n"
@@ -79,15 +90,11 @@ public class DefaultSslEngineFactoryTest {
             + "1eRq9IPoYcRexQ7s9mincM4T4lLm8GGcd7ZPHy8kw0Bp3E/enRHWaF5b8KbXezXD\n"
             + "I3SEYUyRL2K3px4FImT4X9XQm2EX6EONlu4GRcJpD6RPc0zC7c9dwEnSo+0NnewR\n"
             + "gjgO34CLzShB/kASLS9VQXcUC6bsggAVK2rWQMmy35SOEUufSuvg8kUFoyuTzfhn\n"
-            + "hL+PVwIu7g==\n"
-            + "-----END CERTIFICATE-----";
+            + "hL+PVwIu7g==\n" + "-----END CERTIFICATE-----";
 
-    private static final String CERTCHAIN = "Bag Attributes\n"
-            + "    friendlyName: server\n"
+    private static final String CERTCHAIN = "Bag Attributes\n" + "    friendlyName: server\n"
             + "    localKeyID: 54 69 6D 65 20 31 36 30 31 32 38 33 37 36 35 34 32 33 \n"
-            + "subject=/CN=TestBroker\n"
-            + "issuer=/CN=TestCA1\n"
-            + "-----BEGIN CERTIFICATE-----\n"
+            + "subject=/CN=TestBroker\n" + "issuer=/CN=TestCA1\n" + "-----BEGIN CERTIFICATE-----\n"
             + "MIIC/zCCAeegAwIBAgIEatBnEzANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDEwdU\n"
             + "ZXN0Q0ExMCAXDTIwMDkyODA5MDI0NFoYDzIxMjAwOTA0MDkwMjQ0WjAVMRMwEQYD\n"
             + "VQQDEwpUZXN0QnJva2VyMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA\n"
@@ -103,14 +110,9 @@ public class DefaultSslEngineFactoryTest {
             + "W6+0zGK/UtWV4t+ODTDzyAWgls5w+0R5ki6447qGqu5tXlW5DCHkkxWiozMnhNU2\n"
             + "G3P/Drh7DhmADDBjtVLsu5M1sagF/xwTP/qCLMdChlJNdeqyLnAUa9SYG1eNZS/i\n"
             + "wrCC8m9RUQb4+OlQuFtr0KhaaCkBXfmhigQAmh44zSyO+oa3qQDEavVFo/Mcui9o\n"
-            + "WBYetcgVbXPNoti+hQEMqmJYBHlLbhxMnkooGn2fa70f453Bdu/Xh6Yphi5NeCHn\n"
-            + "1I+y\n"
-            + "-----END CERTIFICATE-----\n"
-            + "Bag Attributes\n"
-            + "    friendlyName: CN=TestCA1\n"
-            + "subject=/CN=TestCA1\n"
-            + "issuer=/CN=TestCA1\n"
-            + "-----BEGIN CERTIFICATE-----\n"
+            + "WBYetcgVbXPNoti+hQEMqmJYBHlLbhxMnkooGn2fa70f453Bdu/Xh6Yphi5NeCHn\n" + "1I+y\n"
+            + "-----END CERTIFICATE-----\n" + "Bag Attributes\n" + "    friendlyName: CN=TestCA1\n"
+            + "subject=/CN=TestCA1\n" + "issuer=/CN=TestCA1\n" + "-----BEGIN CERTIFICATE-----\n"
             + "MIIC0zCCAbugAwIBAgIEStdXHTANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDEwdU\n"
             + "ZXN0Q0ExMCAXDTIwMDkyODA5MDI0MFoYDzIxMjAwOTA0MDkwMjQwWjASMRAwDgYD\n"
             + "VQQDEwdUZXN0Q0ExMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAo3Gr\n"
@@ -126,14 +128,11 @@ public class DefaultSslEngineFactoryTest {
             + "JtrfR0r8aGTgsXvCe4SgwDBKv7bckctOwD3S7D/b6y3w7X0s7JCU5+8ZjgoYfcLE\n"
             + "gNqQEaOwdT2LHCvxHmGn/2VGs/yatPQIYYuufe5i8yX7pp4Xbd2eD6LULYkHFs3x\n"
             + "uJzMRI7BukmIIWuBbAkYI0atxLQIysnVFXdL9pBgvgso2nA3FgP/XeORhkyHVvtL\n"
-            + "REH2YTlftQ==\n"
-            + "-----END CERTIFICATE-----";
+            + "REH2YTlftQ==\n" + "-----END CERTIFICATE-----";
 
-    private static final String KEY =  "Bag Attributes\n"
-            + "    friendlyName: server\n"
+    private static final String KEY = "Bag Attributes\n" + "    friendlyName: server\n"
             + "    localKeyID: 54 69 6D 65 20 31 36 30 31 32 38 33 37 36 35 34 32 33\n"
-            + "Key Attributes: <No Attributes>\n"
-            + "-----BEGIN PRIVATE KEY-----\n"
+            + "Key Attributes: <No Attributes>\n" + "-----BEGIN PRIVATE KEY-----\n"
             + "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCmTDUBLvV6P+I4\n"
             + "y/NWBUvV2RA5jMjzjY1w+bHTIUWy57a6YvxZV3fTzk2BZFvdJLXhfrvq3vPGM8bN\n"
             + "iLuPCYDyy0KsO3Q0A9Z38qjoSuwKzzsJSzi7UKKd/5vej00Xm7RQ9gFAsXgivxPW\n"
@@ -159,10 +158,9 @@ public class DefaultSslEngineFactoryTest {
             + "TSoaPDAr0tSxU4vjHa23UoEV/z0F3Nr3W2xwC1ECgYBHKjv6ekLhx7HbP797+Ai+\n"
             + "wkHvS2L/MqEBxuHzcQ9G6Mj3ANAeyDB8YSC8qGtDQoEyukv2dO73lpodNgbR8P+Q\n"
             + "PDBb6eyntAo2sSeo0jZkiXvDOfRaGuGVrxjuTfaqcVB33jC6BYfi61/3Sr5oG9Nd\n"
-            + "tDGh1HlOIRm1jD9KQNVZ/Q==\n"
-            + "-----END PRIVATE KEY-----";
+            + "tDGh1HlOIRm1jD9KQNVZ/Q==\n" + "-----END PRIVATE KEY-----";
 
-    private static final String ENCRYPTED_KEY =  "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
+    private static final String ENCRYPTED_KEY = "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
             + "MIIE6jAcBgoqhkiG9w0BDAEDMA4ECGyAEWAXlaXzAgIIAASCBMgt7QD1Bbz7MAHI\n"
             + "Ni0eTrwNiuAPluHirLXzsV57d1O9i4EXVp5nzRy6753cjXbGXARbBeaJD+/+jbZp\n"
             + "CBZTHMG8rTCfbsg5kMqxT6XuuqWlKLKc4gaq+QNgHHleKqnpwZQmOQ+awKWEK/Ow\n"
@@ -189,8 +187,7 @@ public class DefaultSslEngineFactoryTest {
             + "LTjNy4YLIBdVELFXaFJF2GfzLpnwrW5tyNPVVrGmUoiyOzgx8gMyCLGavGtduyoY\n"
             + "tBiUTmd05Ugscn4Rz9X30S4NbnjL/h+bWl1m6/M+9FHEe85FPxmt/GRmJPbFPMR5\n"
             + "q5EgQGkt4ifiaP6qvyFulwvVwx+m0bf1q6Vb/k3clIyLMcVZWFE1TqNH2Ife46AE\n"
-            + "2I39ZnGTt0mbWskpHBA=\n"
-            + "-----END ENCRYPTED PRIVATE KEY-----";
+            + "2I39ZnGTt0mbWskpHBA=\n" + "-----END ENCRYPTED PRIVATE KEY-----";
 
     private static final Password KEY_PASSWORD = new Password("key-password");
 
@@ -256,7 +253,8 @@ public class DefaultSslEngineFactoryTest {
         verifyPemKeyStoreConfig(ENCRYPTED_KEY.replaceAll("\n", "\r\n"), KEY_PASSWORD);
     }
 
-    private void verifyPemKeyStoreConfig(String keyFileName, Password keyPassword) throws Exception {
+    private void verifyPemKeyStoreConfig(String keyFileName, Password keyPassword)
+            throws Exception {
         configs.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, pemAsConfigValue(keyFileName));
         configs.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, pemAsConfigValue(CERTCHAIN));
         configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
@@ -267,8 +265,10 @@ public class DefaultSslEngineFactoryTest {
         List<String> aliases = Collections.list(keyStore.aliases());
         assertEquals(Collections.singletonList("kafka"), aliases);
         assertNotNull(keyStore.getCertificate("kafka"), "Certificate not loaded");
-        assertNotNull(keyStore.getKey("kafka", keyPassword == null ? null : keyPassword.value().toCharArray()),
-            "Private key not loaded");
+        assertNotNull(
+                keyStore.getKey("kafka",
+                        keyPassword == null ? null : keyPassword.value().toCharArray()),
+                "Private key not loaded");
     }
 
     @Test
@@ -311,7 +311,90 @@ public class DefaultSslEngineFactoryTest {
         List<String> aliases = Collections.list(keyStore.aliases());
         assertEquals(Collections.singletonList("kafka"), aliases);
         assertNotNull(keyStore.getCertificate("kafka"), "Certificate not found");
-        assertNotNull(keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()), "Private key not found");
+        assertNotNull(keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()),
+                "Private key not found");
+    }
+
+    @Test
+    void testNeverExpiringX509CertificateUnchangedBehaviorWithValidCertificate() throws Exception {
+        final KeyPair keyPair = TestSslUtils.generateKeyPair("RSA");
+        final String dn="CN=Test, L=London, C=GB";
+        X509Certificate[] testCerts = new X509Certificate[2];
+        final int days = 1;
+        // Generate valid certificate
+        testCerts[0] = TestSslUtils.generateCertificate(dn, keyPair, days, "SHA512withRSA");
+        // Generate expired, but valid certificate
+        testCerts[1] = TestSslUtils.generateCertificate(dn, keyPair, -days, "SHA512withRSA");
+        boolean[] expectExpired = {false, true};
+        for (int i = 0; i < testCerts.length; i++) {
+            X509Certificate cert = testCerts[i];
+            final NeverExpiringX509Certificate wrappedCert = new DefaultSslEngineFactory.NeverExpiringX509Certificate(cert);
+            assertEquals(cert.getCriticalExtensionOIDs(), wrappedCert.getCriticalExtensionOIDs());
+            final String testOid = "2.5.29.14"; // Should not be in test certificate
+            assertEquals(cert.getExtensionValue(testOid), wrappedCert.getExtensionValue(testOid));
+            assertEquals(cert.getNonCriticalExtensionOIDs(), wrappedCert.getNonCriticalExtensionOIDs());
+            assertEquals(cert.hasUnsupportedCriticalExtension(), wrappedCert.hasUnsupportedCriticalExtension());
+            // We have just generated a valid test certificate, it should still be valid now
+            if (expectExpired[i]) {
+                assertThrows(CertificateException.class, () -> cert.checkValidity());
+            } else {
+                assertDoesNotThrow(() -> cert.checkValidity());
+            }
+            // The wrappedCert must never throw due to being expired
+            assertDoesNotThrow(() -> wrappedCert.checkValidity());
+            // Test with "now"
+            Date dateNow = new Date();
+            if (expectExpired[i]) {
+                assertThrows(CertificateException.class, () -> cert.checkValidity(dateNow));
+            } else {
+                assertDoesNotThrow(() -> cert.checkValidity(dateNow));
+            }
+            assertDoesNotThrow(() -> wrappedCert.checkValidity(dateNow));
+            // Test with (days/2) before now.
+            Date dateRecentPast = new Date(System.currentTimeMillis()-(days)*12*60*60*1000);
+            // If certificate is expired now, it must have been valid at dataRecentPast, already
+            if (expectExpired[i]) {
+                assertDoesNotThrow(() -> cert.checkValidity(dateRecentPast));
+                assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
+            } else {
+                // Cert was not valid yet. Both the original and the wrapped class throw
+                assertThrows(CertificateException.class,() -> cert.checkValidity(dateRecentPast));
+                assertThrows(CertificateException.class,() -> wrappedCert.checkValidity(dateRecentPast));
+            }
+            // Test with (days+1) before now
+            Date datePast = new Date(System.currentTimeMillis()-(days+1)*24*60*60*1000);
+            assertThrows(CertificateException.class, () -> cert.checkValidity(datePast));
+            assertThrows(CertificateException.class, () -> wrappedCert.checkValidity(datePast));
+            // Test with "days+2" after now. 
+            // Cert is not valid anymore. The original class must throw
+            Date dateFuture = new Date(System.currentTimeMillis()+(days+2)*24*60*60*1000);
+            assertThrows(CertificateException.class, () -> cert.checkValidity(dateFuture));
+            // This checks the only deviation in behavior of the NeverExpiringX509Certificate compared to the standard Certificate:
+            // The NeverExpiringX509Certificate will report any expired certificate as still valid
+            assertDoesNotThrow(() -> wrappedCert.checkValidity(dateFuture));
+            assertEquals(cert.getBasicConstraints(), wrappedCert.getBasicConstraints());
+            assertEquals(cert.getIssuerDN(), wrappedCert.getIssuerDN());
+            assertEquals(cert.getIssuerUniqueID(), wrappedCert.getIssuerUniqueID());
+            assertEquals(cert.getKeyUsage(), wrappedCert.getKeyUsage());
+            assertEquals(cert.getNotAfter(), wrappedCert.getNotAfter());
+            assertEquals(cert.getNotBefore(), wrappedCert.getNotBefore());
+            assertEquals(cert.getSerialNumber(), wrappedCert.getSerialNumber());
+            assertEquals(cert.getSigAlgName(), wrappedCert.getSigAlgName());
+            assertEquals(cert.getSigAlgOID(), wrappedCert.getSigAlgOID());
+            assertArrayEquals(cert.getSigAlgParams(), wrappedCert.getSigAlgParams());
+            assertArrayEquals(cert.getSignature(), wrappedCert.getSignature());
+            assertEquals(cert.getSubjectDN(), wrappedCert.getSubjectDN());
+            assertEquals(cert.getSubjectUniqueID(), wrappedCert.getSubjectUniqueID());
+            assertArrayEquals(cert.getTBSCertificate(), wrappedCert.getTBSCertificate());
+            assertEquals(cert.getVersion(), wrappedCert.getVersion());
+            assertArrayEquals(cert.getEncoded(), wrappedCert.getEncoded());
+            assertEquals(cert.getPublicKey(), wrappedCert.getPublicKey());
+            assertEquals(cert.toString(), wrappedCert.toString());
+            // Here, we use a self-signed certificate, thus it is supposed to be signed by itself
+            assertDoesNotThrow(() -> cert.verify(keyPair.getPublic()));
+            assertDoesNotThrow(() -> wrappedCert.verify(keyPair.getPublic()));
+        }
+
     }
 
     private String pemFilePath(String pem) throws Exception {
