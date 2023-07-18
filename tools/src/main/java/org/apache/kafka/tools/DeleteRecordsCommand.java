@@ -19,7 +19,6 @@ package org.apache.kafka.tools;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import joptsimple.OptionSpec;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -32,6 +31,7 @@ import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.CoreUtils;
+import org.apache.kafka.server.util.Json;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -56,9 +56,7 @@ public class DeleteRecordsCommand {
 
     static Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-
-            JsonNode js = mapper.readTree(jsonData);
+            JsonNode js = Json.tryParseFull(jsonData).node();
 
             int version = EARLIEST_VERSION;
 
