@@ -16,6 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NO_RACK_NODE;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.REPLICA_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_NAME;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
@@ -46,29 +58,8 @@ import org.apache.kafka.test.MockInternalTopicManager;
 import org.junit.Test;
 
 public class RackAwareTaskAssignorTest {
-    private final static String TOPIC0 = "topic0";
-    private final static String TOPIC1 = "topic1";
     private static final String USER_END_POINT = "localhost:8080";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
-
-    private final Node node0 = new Node(0, "node0", 1, "rack1");
-    private final Node node1 = new Node(1, "node1", 1, "rack2");
-    private final Node node2 = new Node(2, "node2", 1, "rack3");
-    private final Node noRackNode = new Node(3, "node3", 1);
-    private final Node[] replicas1 = new Node[] {node0, node1};
-    private final Node[] replicas2 = new Node[] {node1, node2};
-
-    private final PartitionInfo partitionInfo00 = new PartitionInfo(TOPIC0, 0, node0, replicas1, replicas1);
-    private final PartitionInfo partitionInfo01 = new PartitionInfo(TOPIC0, 1, node0, replicas2, replicas2);
-
-    private final TopicPartition partitionWithoutInfo00 = new TopicPartition(TOPIC0, 0);
-    private final TopicPartition partitionWithoutInfo01 = new TopicPartition(TOPIC0, 1);
-    private final TopicPartition partitionWithoutInfo10 = new TopicPartition(TOPIC1, 0);
-
-    private final UUID process0UUID  = UUID.randomUUID();
-    private final UUID process1UUID = UUID.randomUUID();
-
-    private final Subtopology subtopology1 = new Subtopology(1, "topology1");
 
     private final MockTime time = new MockTime();
     private final StreamsConfig streamsConfig = new StreamsConfig(configProps());
@@ -154,8 +145,8 @@ public class RackAwareTaskAssignorTest {
 
         // Different consumers in same process have different rack ID. This shouldn't happen.
         // If happens, there's a bug somewhere
-        processRacks.computeIfAbsent(process0UUID, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
-        processRacks.computeIfAbsent(process0UUID, k -> new HashMap<>()).put("consumer2", Optional.of("rack2"));
+        processRacks.computeIfAbsent(UUID_1, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
+        processRacks.computeIfAbsent(UUID_1, k -> new HashMap<>()).put("consumer2", Optional.of("rack2"));
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
@@ -190,12 +181,12 @@ public class RackAwareTaskAssignorTest {
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doReturn(
             Collections.singletonMap(
-                TOPIC0,
+                TP_0_NAME,
                 Collections.singletonList(
-                    new TopicPartitionInfo(0, node0, Arrays.asList(replicas1), Collections.emptyList())
+                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
                 )
             )
-        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TOPIC0));
+        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TP_0_NAME));
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterWithNoNode(),
@@ -212,7 +203,8 @@ public class RackAwareTaskAssignorTest {
     @Test
     public void disableRackAwareAssignorForActiveWithDescribingTopicsFailure() {
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
-        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TOPIC0));
+        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(
+            TP_0_NAME));
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterWithNoNode(),
@@ -230,31 +222,31 @@ public class RackAwareTaskAssignorTest {
     private Cluster getClusterForTopic0() {
         return new Cluster(
             "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2)),
-            new HashSet<>(Arrays.asList(partitionInfo00, partitionInfo01)),
+            new HashSet<>(Arrays.asList(NODE_0, NODE_1, NODE_2)),
+            new HashSet<>(Arrays.asList(PI_0_0, PI_0_1)),
             Collections.emptySet(),
             Collections.emptySet()
         );
     }
 
     private Cluster getClusterWithPartitionMissingRack() {
-        final Node[] nodeMissingRack = new Node[]{node0, noRackNode};
-        final PartitionInfo partitionInfoMissingNode = new PartitionInfo(TOPIC0, 0, node0, nodeMissingRack, nodeMissingRack);
+        final Node[] nodeMissingRack = new Node[]{NODE_0, NO_RACK_NODE};
+        final PartitionInfo partitionInfoMissingNode = new PartitionInfo(TP_0_NAME, 0, NODE_0, nodeMissingRack, nodeMissingRack);
         return new Cluster(
             "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2)),
-            new HashSet<>(Arrays.asList(partitionInfoMissingNode, partitionInfo01)),
+            new HashSet<>(Arrays.asList(NODE_0, NODE_1, NODE_2)),
+            new HashSet<>(Arrays.asList(partitionInfoMissingNode, PI_0_1)),
             Collections.emptySet(),
             Collections.emptySet()
         );
     }
 
     private Cluster getClusterWithNoNode() {
-        final PartitionInfo noNodeInfo = new PartitionInfo(TOPIC0, 0, null, new Node[0], new Node[0]);
+        final PartitionInfo noNodeInfo = new PartitionInfo(TP_0_NAME, 0, null, new Node[0], new Node[0]);
 
         return new Cluster(
             "cluster",
-            new HashSet<>(Arrays.asList(node0, node1, node2, Node.noNode())), // mockClientSupplier.setCluster requires noNode
+            new HashSet<>(Arrays.asList(NODE_0, NODE_1, NODE_2, Node.noNode())), // mockClientSupplier.setCluster requires noNode
             Collections.singleton(noNodeInfo),
             Collections.emptySet(),
             Collections.emptySet()
@@ -268,7 +260,7 @@ public class RackAwareTaskAssignorTest {
     private Map<UUID, Map<String, Optional<String>>> getProcessRacksForProcess0(final boolean missingRack) {
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
         final Optional<String> rack = missingRack ? Optional.empty() : Optional.of("rack1");
-        processRacks.put(process0UUID, Collections.singletonMap("consumer1", rack));
+        processRacks.put(UUID_1, Collections.singletonMap("consumer1", rack));
         return processRacks;
     }
 
@@ -278,14 +270,14 @@ public class RackAwareTaskAssignorTest {
 
     private Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForTask1(final boolean extraTopic) {
         final Set<TopicPartition> topicPartitions = new HashSet<>();
-        topicPartitions.add(partitionWithoutInfo00);
+        topicPartitions.add(TP_0_0);
         if (extraTopic) {
-            topicPartitions.add(partitionWithoutInfo10);
+            topicPartitions.add(TP_1_0);
         }
         return Collections.singletonMap(new TaskId(1, 1), topicPartitions);
     }
 
     private Map<Subtopology, Set<TaskId>> getTopologyGroupTaskMap() {
-        return Collections.singletonMap(subtopology1, Collections.singleton(new TaskId(1, 1)));
+        return Collections.singletonMap(SUBTOPOLOGY_0, Collections.singleton(new TaskId(1, 1)));
     }
 }
