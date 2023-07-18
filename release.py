@@ -315,7 +315,7 @@ def sanitize_input(input_msg: str) -> str:
        Use this function instead of input where user input is needed.
     """
     input_from_user = input(input_msg)
-    return input_from_user.replace(' ', '')
+    return input_from_user.strip()
      
 
 def command_release_announcement_email():
