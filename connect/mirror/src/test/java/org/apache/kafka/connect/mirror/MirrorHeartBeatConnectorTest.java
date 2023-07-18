@@ -160,7 +160,28 @@ public class MirrorHeartBeatConnectorTest {
         assertTrue(connector.alterOffsets(null, Collections.emptyMap()));
     }
 
-    private static Map<String, ?> sourcePartition(String sourceClusterAlias, String targetClusterAlias) {
+    @Test
+    public void testAlterOffsetsTombstones() {
+        MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector();
+
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(
+                null,
+                Collections.singletonMap(partition, null)
+        );
+
+        Map<String, Object> partition = sourcePartition("src", "bak");
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.put(SOURCE_CLUSTER_ALIAS_KEY, 618);
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.remove(SOURCE_CLUSTER_ALIAS_KEY);
+        assertTrue(() -> alterOffsets.apply(partition));
+
+        assertTrue(() -> alterOffsets.apply(null));
+        assertTrue(() -> alterOffsets.apply(Collections.emptyMap()));
+        assertTrue(() -> alterOffsets.apply(Collections.singletonMap("unused_partition_key", "unused_partition_value")));
+    }
+
+    private static Map<String, Object> sourcePartition(String sourceClusterAlias, String targetClusterAlias) {
         Map<String, Object> result = new HashMap<>();
         result.put(SOURCE_CLUSTER_ALIAS_KEY, sourceClusterAlias);
         result.put(TARGET_CLUSTER_ALIAS_KEY, targetClusterAlias);

@@ -227,11 +227,10 @@ public class MirrorCheckpointConnectorTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void testAlterOffsetsInvalidPartitionPartition() {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
-        Map<String, ?> partition = sourcePartition("consumer-app-2", "t", 3);
-        ((Map) partition).put(PARTITION_KEY, "a string");
+        Map<String, Object> partition = sourcePartition("consumer-app-2", "t", 3);
+        partition.put(PARTITION_KEY, "a string");
         assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
                 partition,
                 SOURCE_OFFSET
@@ -300,7 +299,28 @@ public class MirrorCheckpointConnectorTest {
         assertTrue(connector.alterOffsets(null, Collections.emptyMap()));
     }
 
-    private static Map<String, ?> sourcePartition(String consumerGroupId, String topic, int partition) {
+    @Test
+    public void testAlterOffsetsTombstones() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(
+                null,
+                Collections.singletonMap(partition, null)
+        );
+
+        Map<String, Object> partition = sourcePartition("consumer-app-2", "t", 3);
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.put(PARTITION_KEY, "a string");
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.remove(PARTITION_KEY);
+        assertTrue(() -> alterOffsets.apply(partition));
+
+        assertTrue(() -> alterOffsets.apply(null));
+        assertTrue(() -> alterOffsets.apply(Collections.emptyMap()));
+        assertTrue(() -> alterOffsets.apply(Collections.singletonMap("unused_partition_key", "unused_partition_value")));
+    }
+
+    private static Map<String, Object> sourcePartition(String consumerGroupId, String topic, int partition) {
         Map<String, Object> result = new HashMap<>();
         result.put(CONSUMER_GROUP_ID_KEY, consumerGroupId);
         result.put(TOPIC_KEY, topic);

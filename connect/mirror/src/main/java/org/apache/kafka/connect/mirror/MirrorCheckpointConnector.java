@@ -139,6 +139,13 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
         for (Map.Entry<Map<String, ?>, Map<String, ?>> offsetEntry : offsets.entrySet()) {
+            Map<String, ?> sourceOffset = offsetEntry.getValue();
+            if (sourceOffset == null) {
+                // We allow tombstones for anything; if there's garbage in the offsets for the connector, we don't
+                // want to prevent users from being able to clean it up using the REST API
+                continue;
+            }
+
             Map<String, ?> sourcePartition = offsetEntry.getKey();
             if (sourcePartition == null) {
                 throw new ConnectException("Source partitions may not be null");
@@ -148,7 +155,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
             MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
             MirrorUtils.validateSourcePartitionPartition(sourcePartition);
 
-            Map<String, ?> sourceOffset = offsetEntry.getValue();
             MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, false);
         }
 

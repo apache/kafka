@@ -725,11 +725,10 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void testAlterOffsetsInvalidPartitionPartition() {
         MirrorSourceConnector connector = new MirrorSourceConnector();
-        Map<String, ?> partition = sourcePartition("t", 3, "us-west-2");
-        ((Map) partition).put(PARTITION_KEY, "a string");
+        Map<String, Object> partition = sourcePartition("t", 3, "us-west-2");
+        partition.put(PARTITION_KEY, "a string");
         assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
                 partition,
                 MirrorUtils.wrapOffset(49)
@@ -798,7 +797,28 @@ public class MirrorSourceConnectorTest {
         assertTrue(connector.alterOffsets(null, Collections.emptyMap()));
     }
 
-    private static Map<String, ?> sourcePartition(String topic, int partition, String sourceClusterAlias) {
+    @Test
+    public void testAlterOffsetsTombstones() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(
+                null,
+                Collections.singletonMap(partition, null)
+        );
+
+        Map<String, Object> partition = sourcePartition("kips", 875, "apache.kafka");
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.put(PARTITION_KEY, "a string");
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.remove(PARTITION_KEY);
+        assertTrue(() -> alterOffsets.apply(partition));
+
+        assertTrue(() -> alterOffsets.apply(null));
+        assertTrue(() -> alterOffsets.apply(Collections.emptyMap()));
+        assertTrue(() -> alterOffsets.apply(Collections.singletonMap("unused_partition_key", "unused_partition_value")));
+    }
+
+    private static Map<String, Object> sourcePartition(String topic, int partition, String sourceClusterAlias) {
         return MirrorUtils.wrapPartition(
                 new TopicPartition(topic, partition),
                 sourceClusterAlias
