@@ -14,10 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.examples;
+package org.apache.kafka.server.log.remote.storage;
 
-public class KafkaProperties {
-    public static final String BOOTSTRAP_SERVERS = "localhost:9092";
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
-    private KafkaProperties() {}
+/**
+ * The implementation of the transfer of the data of the canonical segment and index files to
+ * this storage. The only reason the "transferer" abstraction exists is to be able to simulate
+ * file copy errors and exercise the associated failure modes.
+ */
+public interface Transferer {
+
+    void transfer(File from, File to) throws IOException;
+
+    void transfer(ByteBuffer from, File to) throws IOException;
 }
