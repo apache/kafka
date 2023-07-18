@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.Optional;
 
 public abstract class AbstractRecords implements Records {
 
@@ -42,6 +43,17 @@ public abstract class AbstractRecords implements Records {
             return null;
 
         return iterator.next();
+    }
+
+    @Override
+    public Optional<RecordBatch> lastBatch() {
+        Iterator<? extends RecordBatch> iterator = batches().iterator();
+
+        RecordBatch batch = null;
+        while (iterator.hasNext())
+            batch = iterator.next();
+
+        return Optional.ofNullable(batch);
     }
 
     /**
