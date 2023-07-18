@@ -127,8 +127,8 @@ public abstract class PluginScanner {
     @SuppressWarnings("unchecked")
     protected <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, PluginSource source) {
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        ServiceLoader<T> serviceLoader = handleLinkageError(klass, source, () -> ServiceLoader.load(klass, source.loader()));
-        Iterator<T> iterator = handleLinkageError(klass, source, serviceLoader::iterator);
+        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, source.loader());
+        Iterator<T> iterator = serviceLoader.iterator();
         while (handleLinkageError(klass, source, iterator::hasNext)) {
             try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
                 T pluginImpl;
@@ -155,7 +155,7 @@ public abstract class PluginScanner {
      * Helper to evaluate a {@link ServiceLoader} operation while handling {@link LinkageError}s.
      *
      * @param klass The plugin superclass which is being loaded
-     * @param function A function on a {@link ServiceLoader} which may throw {@link LinkageError}
+     * @param function A function on a {@link ServiceLoader}'s {@link Iterator} which may throw {@link LinkageError}
      * @return the return value of function
      * @throws Error errors thrown by the passed-in function
      * @param <T> Type being iterated over by the ServiceLoader
