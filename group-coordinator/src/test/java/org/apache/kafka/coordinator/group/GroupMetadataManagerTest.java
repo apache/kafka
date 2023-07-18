@@ -5186,7 +5186,7 @@ public class GroupMetadataManagerTest {
         );
         assertFalse(responseFuture.isDone());
 
-        // Write fails.
+        // Simulate failed write to log.
         result.appendFuture().completeExceptionally(new UnknownTopicOrPartitionException());
         assertTrue(responseFuture.isDone());
 
@@ -5198,7 +5198,7 @@ public class GroupMetadataManagerTest {
             .setProtocolType("consumer")
             .setProtocolName("range")
             .setSkipAssignment(false)
-            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code());
+            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
 
         assertEquals(expectedResponse, responseFuture.get());
 

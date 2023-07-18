@@ -24,7 +24,7 @@ import java.util.List;
  * The group coordinator configurations.
  */
 public class GroupCoordinatorConfig {
-    
+
     /**
      * The timeout used to wait for a new member in milliseconds.
      */
