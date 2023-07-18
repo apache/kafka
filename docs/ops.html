@@ -3464,8 +3464,24 @@ for built-in state stores, currently we have:
 
   <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
   The current stable branch is 3.5. Kafka is regularly updated to include the latest release in the 3.5 series.
+  
+  <h4 class="anchor-heading"><a href="#zk_depr" class="anchor-link">ZooKeeper Deprecation</a></h4>
 
-  <h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
+  	<p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0), which is scheduled to happen no sooner than April 2024. During the deprecation phase, ZooKeeper is still supported for metadata management of Kafka clusters, but it is not recommended for new deployments. There is a small subset of features that remain to be implemented in KRaft, see <a href="#kraft_missing" class="anchor-link">current missing features</a> for more information.</p>
+  
+  	<h5 class="anchor-heading"><a href="#zk_depr_migration" class="anchor-link">Migration</a></h5>
+  
+	<p>Migration of an existing ZooKeeper based Kafka cluster to KRaft is currently Preview and we expect it to be ready for production usage in version 3.6. Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
+	
+	<h5 class="anchor-heading"><a href="#zk_depr_3xsupport" class="anchor-link">3.x and ZooKeeper Support</a></h5>
+	
+	<p>The final 3.x minor release, that supports ZooKeeper mode, will receive critical bug fixes and security fixes for 12 months after its release.</p>
+	
+	<h5 class="anchor-heading"><a href="#zk_depr_timeline" class="anchor-link">ZooKeeper and KRaft timeline</a></h5>
+	
+	<p>For details and updates on tentative timelines for ZooKeeper removal and planned KRaft feature releases, refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready">KIP-833</a>.</p>
+
+<h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
   Operationally, we do the following for a healthy ZooKeeper installation:
   <ul>
     <li>Redundancy in the physical/hardware/network layout: try not to put them all in the same rack, decent (but don't go nuts) hardware, try to keep redundant power and network paths, etc. A typical ZooKeeper ensemble has 5 or 7 servers, which tolerates 2 and 3 servers down, respectively. If you have a small deployment, then using 3 servers is acceptable, but keep in mind that you'll only be able to tolerate 1 server down in this case. </li>
