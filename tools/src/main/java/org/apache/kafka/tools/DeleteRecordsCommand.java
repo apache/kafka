@@ -18,7 +18,6 @@ package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import joptsimple.OptionSpec;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -30,16 +29,21 @@ import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.server.util.CoreUtils;
 import org.apache.kafka.server.util.Json;
+import org.apache.kafka.server.util.json.DecodeJson;
+import org.apache.kafka.server.util.json.JsonObject;
+import org.apache.kafka.server.util.json.JsonValue;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -50,38 +54,40 @@ import java.util.stream.Collectors;
 public class DeleteRecordsCommand {
     private static final int EARLIEST_VERSION = 1;
 
+    private static final DecodeJson.DecodeInteger INT = new DecodeJson.DecodeInteger();
+
+    private static final DecodeJson.DecodeLong LONG = new DecodeJson.DecodeLong();
+
+    private static final DecodeJson.DecodeString STRING = new DecodeJson.DecodeString();
+
     public static void main(String[] args) throws Exception {
         execute(args, System.out);
     }
 
-    static Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) {
-        try {
-            JsonNode js = Json.tryParseFull(jsonData).node();
+    static Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) throws JsonProcessingException {
+        JsonValue js = Json.parseFull(jsonData)
+            .orElseThrow(() -> new AdminOperationException("The input string is not a valid JSON"));
 
-            int version = EARLIEST_VERSION;
+        Optional<JsonValue> version = js.asJsonObject().get("version");
 
-            if (js.has("version"))
-                version = js.get("version").asInt();
-
-            return parseJsonData(version, js);
-        } catch (JsonProcessingException e) {
-            throw new AdminOperationException("The input string is not a valid JSON");
-        }
+        return parseJsonData(version.isPresent() ? version.get().to(INT) : EARLIEST_VERSION, js);
     }
 
-    private static Collection<Tuple<TopicPartition, Long>> parseJsonData(int version, JsonNode js) throws JsonMappingException {
+    private static Collection<Tuple<TopicPartition, Long>> parseJsonData(int version, JsonValue js) throws JsonMappingException {
         if (version == 1) {
-            JsonNode partitions = js.get("partitions");
-
-            if (partitions == null || !partitions.isArray())
-                throw new AdminOperationException("Missing partitions field");
+            JsonValue partitions = js.asJsonObject().get("partitions")
+                .orElseThrow(() -> new AdminOperationException("Missing partitions field"));
 
             Collection<Tuple<TopicPartition, Long>> res = new ArrayList<>();
 
-            for (JsonNode partitionJs : partitions) {
-                String topic = getOrThrow(partitionJs, "topic").asText();
-                int partition = getOrThrow(partitionJs, "partition").asInt();
-                long offset = getOrThrow(partitionJs, "offset").asLong();
+            Iterator<JsonValue> iterator = partitions.asJsonArray().iterator();
+
+            while (iterator.hasNext()) {
+                JsonObject partitionJs = iterator.next().asJsonObject();
+
+                String topic = partitionJs.apply("topic").to(STRING);
+                int partition = partitionJs.apply("partition").to(INT);
+                long offset = partitionJs.apply("offset").to(LONG);
 
                 res.add(new Tuple<>(new TopicPartition(topic, partition), offset));
             }
@@ -96,17 +102,17 @@ public class DeleteRecordsCommand {
         DeleteRecordsCommandOptions opts = new DeleteRecordsCommandOptions(args);
 
         try (Admin adminClient = createAdminClient(opts)) {
-            execute0(adminClient, Utils.readFileAsString(opts.options.valueOf(opts.offsetJsonFileOpt)), out);
+            execute(adminClient, Utils.readFileAsString(opts.options.valueOf(opts.offsetJsonFileOpt)), out);
         }
     }
 
-    static void execute0(Admin adminClient, String offsetJsonString, PrintStream out) {
+    static void execute(Admin adminClient, String offsetJsonString, PrintStream out) throws JsonProcessingException {
         Collection<Tuple<TopicPartition, Long>> offsetSeq = parseOffsetJsonStringWithoutDedup(offsetJsonString);
 
-        Iterable<TopicPartition> duplicatePartitions =
+        Set<TopicPartition> duplicatePartitions =
             CoreUtils.duplicates(offsetSeq.stream().map(Tuple::v1).collect(Collectors.toList()));
 
-        if (duplicatePartitions.iterator().hasNext()) {
+        if (!duplicatePartitions.isEmpty()) {
             StringJoiner duplicates = new StringJoiner(",");
             duplicatePartitions.forEach(tp -> duplicates.add(tp.toString()));
             throw new AdminCommandFailedException(
@@ -207,14 +213,5 @@ public class DeleteRecordsCommand {
         public String toString() {
             return "Tuple{v1=" + v1 + ", v2=" + v2 + '}';
         }
-    }
-
-    private static JsonNode getOrThrow(JsonNode node, String name) throws JsonMappingException {
-        JsonNode child = node.get(name);
-
-        if (child == null)
-            throw new JsonMappingException(null, "No such field exists: `" + name + "`");
-
-        return child;
     }
 }

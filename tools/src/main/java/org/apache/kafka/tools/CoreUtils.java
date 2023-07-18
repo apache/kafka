@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.util;
+package org.apache.kafka.tools;
 
-import java.util.Map;
-import java.util.function.Function;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -36,13 +36,11 @@ public class CoreUtils {
     /**
      * Returns a list of duplicated items
      */
-    public static <T> Iterable<T> duplicates(Iterable<T> s) {
+    public static <T> Set<T> duplicates(Iterable<T> s) {
+        Set<T> elements = new HashSet<>();
+
         return StreamSupport.stream(s.spliterator(), false)
-            .collect(Collectors.groupingBy(Function.identity()))
-            .entrySet()
-            .stream()
-            .filter(e -> e.getValue().size() > 1)
-            .map(Map.Entry::getKey)
+            .filter(n -> !elements.add(n))
             .collect(Collectors.toSet());
     }
 }

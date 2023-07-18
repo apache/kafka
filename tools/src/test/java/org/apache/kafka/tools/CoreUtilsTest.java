@@ -14,41 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.util;
+package org.apache.kafka.tools;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 public class CoreUtilsTest {
     @Test
     public void testDuplicates() {
         assertIterableEquals(
-            CoreUtils.duplicates(Arrays.asList("1", "2", "1", "3", "3")),
-            Arrays.asList("1", "3")
+            Arrays.asList("1", "3"),
+            CoreUtils.duplicates(Arrays.asList("1", "2", "1", "3", "3"))
         );
 
         assertIterableEquals(
-            CoreUtils.duplicates(Arrays.asList("1", "2", "3")),
-            Collections.emptyList()
+            Collections.emptyList(), CoreUtils.duplicates(Arrays.asList("1", "2", "3"))
         );
-    }
-
-    public <T> void assertIterableEquals(Iterable<T> exp, Collection<T> res) {
-        Set<T> expSet = StreamSupport.stream(exp.spliterator(), false).collect(Collectors.toSet());
-
-        assertEquals(expSet.size(), res.size(), "Size must be equal");
-
-        for (T item : expSet) {
-            if (!res.contains(item))
-                throw new RuntimeException("Item not in result collection " + item);
-        }
     }
 }

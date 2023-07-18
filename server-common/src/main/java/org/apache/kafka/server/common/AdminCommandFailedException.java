@@ -25,8 +25,4 @@ public class AdminCommandFailedException extends RuntimeException {
     public AdminCommandFailedException(String message, Throwable cause) {
         super(message, cause);
     }
-
-    public AdminCommandFailedException() {
-        super();
-    }
 }

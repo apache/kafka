@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
@@ -57,7 +58,7 @@ public class DeleteRecordsCommandTest {
     }
 
     @ClusterTest
-    public void testCommandZk() throws Exception {
+    public void testCommand() throws Exception {
         Properties adminProps = new Properties();
 
         adminProps.put(AdminClientConfig.RETRIES_CONFIG, 1);
@@ -65,7 +66,7 @@ public class DeleteRecordsCommandTest {
         try (Admin admin = cluster.createAdminClient(adminProps)) {
             assertThrows(
                 AdminCommandFailedException.class,
-                () -> DeleteRecordsCommand.execute0(admin, "{\"partitions\":[" +
+                () -> DeleteRecordsCommand.execute(admin, "{\"partitions\":[" +
                     "{\"topic\":\"t\", \"partition\":0, \"offset\":1}," +
                     "{\"topic\":\"t\", \"partition\":0, \"offset\":1}]" +
                     "}", System.out),
@@ -101,8 +102,13 @@ public class DeleteRecordsCommandTest {
     }
 
     private static void executeAndAssertOutput(String json, String expOut, Admin admin) {
-        String output =
-            ToolsTestUtils.captureStandardOut(() -> DeleteRecordsCommand.execute0(admin, json, System.out));
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                DeleteRecordsCommand.execute(admin, json, System.out);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        });
         assertTrue(output.contains(expOut));
     }
 }
@@ -130,24 +136,24 @@ class DeleteRecordsCommandUnitTest {
 
     @Test
     public void testWrongVersion() {
-        assertThrowsAdminOperationException("{\"version\":\"string\"}");
-        assertThrowsAdminOperationException("{\"version\":2}");
+        assertCommandThrows(JsonProcessingException.class, "{\"version\":\"string\"}");
+        assertCommandThrows(AdminOperationException.class, "{\"version\":2}");
     }
 
     @Test
     public void testWrongPartitions() {
-        assertThrowsAdminOperationException("{\"version\":1}");
-        assertThrowsAdminOperationException("{\"partitions\":2}");
-        assertThrowsAdminOperationException("{\"partitions\":{}}");
-        assertThrowsAdminOperationException("{\"partitions\":[{}]}");
-        assertThrowsAdminOperationException("{\"partitions\":[{\"topic\":\"t\"}]}");
-        assertThrowsAdminOperationException("{\"partitions\":[{\"topic\":\"t\", \"partition\": \"\"}]}");
-        assertThrowsAdminOperationException("{\"partitions\":[{\"topic\":\"t\", \"partition\": 0}]}");
-        assertThrowsAdminOperationException("{\"partitions\":[{\"topic\":\"t\", \"offset\":0}]}");
+        assertCommandThrows(AdminOperationException.class, "{\"version\":1}");
+        assertCommandThrows(JsonProcessingException.class, "{\"partitions\":2}");
+        assertCommandThrows(JsonProcessingException.class, "{\"partitions\":{}}");
+        assertCommandThrows(JsonProcessingException.class, "{\"partitions\":[{}]}");
+        assertCommandThrows(JsonProcessingException.class, "{\"partitions\":[{\"topic\":\"t\"}]}");
+        assertCommandThrows(JsonProcessingException.class, "{\"partitions\":[{\"topic\":\"t\", \"partition\": \"\"}]}");
+        assertCommandThrows(JsonProcessingException.class, "{\"partitions\":[{\"topic\":\"t\", \"partition\": 0}]}");
+        assertCommandThrows(JsonProcessingException.class, "{\"partitions\":[{\"topic\":\"t\", \"offset\":0}]}");
     }
 
     @Test
-    public void testParse() {
+    public void testParse() throws Exception {
         Collection<DeleteRecordsCommand.Tuple<TopicPartition, Long>> res = DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(
             "{\"partitions\":[" +
                 "{\"topic\":\"t\", \"partition\":0, \"offset\":0}," +
@@ -182,9 +188,9 @@ class DeleteRecordsCommandUnitTest {
      * Asserts that {@link DeleteRecordsCommand#parseOffsetJsonStringWithoutDedup(String)} throws {@link AdminOperationException}.
      * @param jsonData Data to check.
      */
-    private static void assertThrowsAdminOperationException(String jsonData) {
+    private static void assertCommandThrows(Class<? extends Exception> expectedException, String jsonData) {
         assertThrows(
-            AdminOperationException.class,
+            expectedException,
             () -> DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(jsonData)
         );
     }
