@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedEndOffsetException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -62,7 +62,7 @@ public class EventHandlerExceptionInfoTest {
 
     private static final EventHandlerExceptionInfo UNEXPECTED_END_OFFSET =
         EventHandlerExceptionInfo.fromInternal(
-            new UnexpectedEndOffsetException("Wanted end offset 3, but next available was 4"),
+            new UnexpectedBaseOffsetException("Wanted base offset 3, but the next offset was 4"),
             () -> OptionalInt.of(1));
 
     @Test
@@ -156,16 +156,16 @@ public class EventHandlerExceptionInfoTest {
     }
 
     @Test
-    public void testUnexpectedEndOffsetExceptionInfo() {
+    public void testUnexpectedBaseOffsetExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, true,
-            new UnexpectedEndOffsetException("Wanted end offset 3, but next available was 4"),
+            new UnexpectedBaseOffsetException("Wanted base offset 3, but the next offset was 4"),
             new NotControllerException("Unexpected end offset. Controller will resign.")),
                 UNEXPECTED_END_OFFSET);
     }
 
     @Test
-    public void testUnepxectedEndOffsetFailureMessage() {
-        assertEquals("event failed with UnexpectedEndOffsetException (treated as " +
+    public void testUnexpectedBaseOffsetFailureMessage() {
+        assertEquals("event failed with UnexpectedBaseOffsetException (treated as " +
             "NotControllerException) at epoch 123 in 90 microseconds. Renouncing leadership " +
             "and reverting to the last committed offset 456.",
                 UNEXPECTED_END_OFFSET.failureMessage(123, OptionalLong.of(90L), true, 456L));

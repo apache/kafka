@@ -18,7 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedEndOffsetException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
@@ -176,7 +176,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * uncommitted entries after observing an epoch change.
      *
      * @param epoch the current leader epoch
-     * @param requiredEndOffset if this is set, it is the offset we must use as the end offset (inclusive).
+     * @param requiredBaseOffset if this is set, it is the offset we must use as the base offset.
      * @param records the list of records to append
      * @return the expected offset of the last record if append succeed
      * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
@@ -184,9 +184,9 @@ public interface RaftClient<T> extends AutoCloseable {
      *         committed
      * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
      * @throws BufferAllocationException we failed to allocate memory for the records
-     * @throws UnexpectedEndOffsetException the requested end offset could not be obtained.
+     * @throws UnexpectedBaseOffsetException the requested end offset could not be obtained.
      */
-    long scheduleAtomicAppend(int epoch, OptionalLong requiredEndOffset, List<T> records);
+    long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records);
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively

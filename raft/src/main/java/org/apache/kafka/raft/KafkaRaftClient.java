@@ -2291,18 +2291,18 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public long scheduleAtomicAppend(int epoch, OptionalLong requiredEndOffset, List<T> records) {
-        return append(epoch, records, requiredEndOffset, true);
+    public long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records) {
+        return append(epoch, records, requiredBaseOffset, true);
     }
 
-    private long append(int epoch, List<T> records, OptionalLong requiredEndOffset, boolean isAtomic) {
+    private long append(int epoch, List<T> records, OptionalLong requiredBaseOffset, boolean isAtomic) {
         LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
             () -> new NotLeaderException("Append failed because the replication is not the current leader")
         );
 
         BatchAccumulator<T> accumulator = leaderState.accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
-        final long offset = accumulator.append(epoch, records, requiredEndOffset, isAtomic);
+        final long offset = accumulator.append(epoch, records, requiredBaseOffset, isAtomic);
 
         // Wakeup the network channel if either this is the first append
         // or the accumulator is ready to drain now. Checking for the first

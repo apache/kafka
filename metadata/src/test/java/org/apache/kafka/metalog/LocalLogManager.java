@@ -32,7 +32,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedEndOffsetException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
@@ -225,21 +225,21 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         synchronized long tryAppend(
             int nodeId,
             int epoch,
-            OptionalLong requiredEndOffset,
+            OptionalLong requiredBaseOffset,
             List<ApiMessageAndVersion> batch
         ) {
             // No easy access to the concept of time. Use the base offset as the append timestamp
             long appendTimestamp = (prevOffset + 1) * 10;
             return tryAppend(nodeId,
                     epoch,
-                    requiredEndOffset,
+                    requiredBaseOffset,
                     new LocalRecordBatch(epoch, appendTimestamp, batch));
         }
 
         synchronized long tryAppend(
             int nodeId,
             int epoch,
-            OptionalLong requiredEndOffset,
+            OptionalLong requiredBaseOffset,
             LocalBatch batch
         ) {
             if (!leader.isLeader(nodeId)) {
@@ -257,20 +257,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
 
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);
-            long offset = append(requiredEndOffset, batch);
+            long offset = append(requiredBaseOffset, batch);
             electLeaderIfNeeded();
             return offset;
         }
 
         public synchronized long append(
-            OptionalLong requiredEndOffset,
+            OptionalLong requiredBaseOffset,
             LocalBatch batch
         ) {
             long nextEndOffset = prevOffset + batch.size();
-            requiredEndOffset.ifPresent(r -> {
-                if (r != nextEndOffset) {
-                    throw new UnexpectedEndOffsetException("Wanted end offset " + r +
-                            ", but next available was " + nextEndOffset);
+            requiredBaseOffset.ifPresent(r -> {
+                if (r != prevOffset + 1) {
+                    throw new UnexpectedBaseOffsetException("Wanted base offset " + r +
+                            ", but the next offset was " + nextEndOffset);
                 }
             });
             log.debug("append(batch={}, nextEndOffset={})", batch, nextEndOffset);

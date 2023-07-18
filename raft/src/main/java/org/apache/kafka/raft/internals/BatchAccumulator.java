@@ -24,7 +24,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedEndOffsetException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -91,10 +91,27 @@ public class BatchAccumulator<T> implements Closeable {
         this.appendLock = new ReentrantLock();
     }
 
+    /**
+     * Append to the accumulator.
+     *
+     * @param epoch                             The leader epoch to append at.
+     * @param records                           The records to append.
+     * @param requiredBaseOffset                If this is non-empty, the base offset which we must use.
+     * @param isAtomic                          True if we should append the records as a single batch.
+     * @return                                  The end offset.
+     *
+     * @throws NotLeaderException               Indicates that an append operation cannot be completed
+     *                                          because the provided leader epoch was too old.
+     * @throws IllegalArgumentException         Indicates that an append operation cannot be completed
+     *                                          because the provided leader epoch was too new.
+     * @throws UnexpectedBaseOffsetException    Indicates that an append operation cannot
+     *                                          be completed because it would have resulted
+     *                                          in an unexpected base offset.
+     */
     public long append(
         int epoch,
         List<T> records,
-        OptionalLong requiredEndOffset,
+        OptionalLong requiredBaseOffset,
         boolean isAtomic
     ) {
         if (epoch < this.epoch) {
@@ -110,10 +127,10 @@ public class BatchAccumulator<T> implements Closeable {
         appendLock.lock();
         try {
             long endOffset = nextOffset + records.size() - 1;
-            requiredEndOffset.ifPresent(r -> {
-                if (r != endOffset) {
-                    throw new UnexpectedEndOffsetException("Wanted end offset " + r +
-                            ", but next available was " + endOffset);
+            requiredBaseOffset.ifPresent(r -> {
+                if (r != nextOffset) {
+                    throw new UnexpectedBaseOffsetException("Wanted base offset " + r +
+                            ", but the next offset was " + nextOffset);
                 }
             });
             maybeCompleteDrain();

@@ -18,12 +18,12 @@ package org.apache.kafka.raft.errors;
 
 /**
  * Indicates that an append operation cannot be completed because it would have resulted in an
- * unexpected end offset.
+ * unexpected base offset.
  */
-public class UnexpectedEndOffsetException extends RaftException {
+public class UnexpectedBaseOffsetException extends RaftException {
     private final static long serialVersionUID = 1L;
 
-    public UnexpectedEndOffsetException(String s) {
+    public UnexpectedBaseOffsetException(String s) {
         super(s);
     }
 }
