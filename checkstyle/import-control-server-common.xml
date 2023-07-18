@@ -90,6 +90,7 @@
             <allow class="org.apache.kafka.clients.KafkaClient" />
             <allow class="org.apache.kafka.clients.RequestCompletionHandler" />
 
+            <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
             <subpackage name="timer">
                 <allow class="org.apache.kafka.server.util.MockTime" />
                 <allow class="org.apache.kafka.server.util.ShutdownableThread" />
