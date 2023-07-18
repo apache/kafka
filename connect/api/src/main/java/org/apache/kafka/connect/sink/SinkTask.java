@@ -130,7 +130,7 @@ public abstract class SinkTask implements Task {
      *                       {@link SinkRecord#originalKafkaPartition()} and {@link SinkRecord#originalKafkaOffset()} methods.
      *
      * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are
-     *         safe to commit. Note that the returned topic-partition to offsets map should also use the original Kafka
+     *         safe to commit. Note that the returned topic-partition to offsets map should use the original Kafka
      *         topic partitions and offsets instead of the transformed values.
      */
     public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
