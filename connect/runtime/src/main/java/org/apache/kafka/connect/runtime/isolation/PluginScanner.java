@@ -188,9 +188,8 @@ public abstract class PluginScanner {
             }
         }
         log.error("Received excessive ServiceLoader errors: assuming the runtime ServiceLoader implementation cannot " +
-                        "skip faulty implementations. Use a different JRE, resolve errors for all {} in {}, or " +
-                        "disable service loader scanning.",
-                klass.getSimpleName(), source.location(), lastError);
+                        "skip faulty implementations. Use a different JRE, or resolve LinkageErrors for plugins in {}",
+                source.location(), lastError);
         throw lastError;
     }
 

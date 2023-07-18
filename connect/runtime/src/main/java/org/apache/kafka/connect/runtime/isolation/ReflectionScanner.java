@@ -129,7 +129,7 @@ public class ReflectionScanner extends PluginScanner {
                 continue;
             }
             if (pluginKlass.getClassLoader() != source.loader()) {
-                log.debug("{} from other classloader {} is visible from {} excluding to prevent isolated loading",
+                log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
                         pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), source.location());
                 continue;
             }
