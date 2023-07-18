@@ -126,7 +126,7 @@ public class Graph<V extends Comparable<V>> {
         sinkNode = node;
     }
 
-    public int totalCost() {
+    public long totalCost() {
         int totalCost = 0;
         for (final Map.Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final SortedMap<V, Edge> edges = nodeEdges.getValue();
