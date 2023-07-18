@@ -85,6 +85,7 @@ object KafkaController extends Logging {
 
   // package private for testing
   private[controller] val MetricNames = Set(
+    MetadataTypeMetric.METRIC_NAME,
     ActiveControllerCountMetricName,
     OfflinePartitionsCountMetricName,
     PreferredReplicaImbalanceCountMetricName,

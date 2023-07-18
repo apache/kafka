@@ -42,6 +42,7 @@ public class QuorumControllerMetricsTest {
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
                         "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
+                        "kafka.controller:type=KafkaController,name=MetadataType",
                         "kafka.controller:type=KafkaController,name=ActiveControllerCount",
                         "kafka.controller:type=KafkaController,name=LastCommittedRecordOffset",
                         "kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs",
@@ -67,6 +68,7 @@ public class QuorumControllerMetricsTest {
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
                         "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
+                        "kafka.controller:type=KafkaController,name=MetadataType",
                         "kafka.controller:type=KafkaController,name=ActiveControllerCount",
                         "kafka.controller:type=KafkaController,name=LastCommittedRecordOffset",
                         "kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs",

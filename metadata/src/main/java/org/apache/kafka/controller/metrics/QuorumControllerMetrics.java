@@ -219,6 +219,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
+            METADATA_TYPE,
             ACTIVE_CONTROLLER_COUNT,
             EVENT_QUEUE_TIME_MS,
             EVENT_QUEUE_PROCESSING_TIME_MS,
