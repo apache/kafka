@@ -1705,6 +1705,7 @@ project(':storage') {
     implementation libs.caffeine
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
+    implementation libs.metrics
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output

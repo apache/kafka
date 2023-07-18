@@ -16,14 +16,16 @@
  */
 package kafka.log.remote;
 
+import kafka.server.BrokerTopicStats;
+import kafka.utils.TestUtils;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -40,18 +42,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class RemoteLogReaderTest {
+    public static final String TOPIC = "test";
     RemoteLogManager mockRLM = mock(RemoteLogManager.class);
+    BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
     Records records = mock(Records.class);
+
+    @BeforeEach
+    public void setUp() {
+        TestUtils.clearYammerMetrics();
+    }
 
     @Test
     public void testRemoteLogReaderWithoutError() throws RemoteStorageException, IOException {
         FetchDataInfo fetchDataInfo = new FetchDataInfo(logOffsetMetadata, records);
+        when(records.sizeInBytes()).thenReturn(100);
         when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenReturn(fetchDataInfo);
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition("test", 0), null, null, false);
-        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition(TOPIC, 0), null, null, false);
+        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats);
         remoteLogReader.call();
 
         // verify the callback did get invoked with the expected remoteLogReadResult
@@ -61,15 +71,24 @@ public class RemoteLogReaderTest {
         assertFalse(actualRemoteLogReadResult.error.isPresent());
         assertTrue(actualRemoteLogReadResult.fetchDataInfo.isPresent());
         assertEquals(fetchDataInfo, actualRemoteLogReadResult.fetchDataInfo.get());
+
+        // Verify metrics for remote reads are updated correctly
+        assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteReadRequestRate().count());
+        assertEquals(100, brokerTopicStats.topicStats(TOPIC).remoteBytesInRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(TOPIC).failedRemoteReadRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteReadRequestRate().count());
+        assertEquals(100, brokerTopicStats.allTopicsStats().remoteBytesInRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteReadRequestRate().count());
     }
 
     @Test
     public void testRemoteLogReaderWithError() throws RemoteStorageException, IOException {
-        when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenThrow(new OffsetOutOfRangeException("error"));
+        when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenThrow(new RuntimeException("error"));
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition("test", 0), null, null, false);
-        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition(TOPIC, 0), null, null, false);
+        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats);
         remoteLogReader.call();
 
         // verify the callback did get invoked with the expected remoteLogReadResult
@@ -78,5 +97,14 @@ public class RemoteLogReaderTest {
         RemoteLogReadResult actualRemoteLogReadResult = remoteLogReadResultArg.getValue();
         assertTrue(actualRemoteLogReadResult.error.isPresent());
         assertFalse(actualRemoteLogReadResult.fetchDataInfo.isPresent());
+
+        // Verify metrics for remote reads are updated correctly
+        assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteReadRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(TOPIC).remoteBytesInRate().count());
+        assertEquals(1, brokerTopicStats.topicStats(TOPIC).failedRemoteReadRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteReadRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteBytesInRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteReadRequestRate().count());
     }
 }
