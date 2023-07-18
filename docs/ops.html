@@ -805,26 +805,8 @@ us-west->us-east.emit.heartbeats = false
 </code></pre>
 
   <p>
-    Additional configuration settings are supported, some of which are listed below. In most cases, you can leave these settings at their default values. See <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a> and <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a> for further details.
+    Additional configuration settings are supported which can be left with their default values in most cases. See <a href="/documentation/#mirrormakerconfigs">MirrorMaker Configs</a>.
   </p>
-
-  <ul>
-    <li><code>refresh.topics.enabled</code>: whether to check for new topics in the source cluster periodically (default: true)
-    <li><code>refresh.topics.interval.seconds</code>: frequency of checking for new topics in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
-    <li><code>refresh.groups.enabled</code>: whether to check for new consumer groups in the source cluster periodically (default: true)
-    <li><code>refresh.groups.interval.seconds</code>: frequency of checking for new consumer groups in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
-    <li><code>sync.topic.configs.enabled</code>: whether to replicate topic configurations from the source cluster (default: true)
-    <li><code>sync.topic.acls.enabled</code>: whether to sync ACLs from the source cluster (default: true)
-    <li><code>emit.heartbeats.enabled</code>: whether to emit heartbeats periodically (default: true)
-    <li><code>emit.heartbeats.interval.seconds</code>: frequency at which heartbeats are emitted (default: 1, every one seconds)
-    <li><code>heartbeats.topic.replication.factor</code>: replication factor of MirrorMaker's internal heartbeat topics (default: 3)
-    <li><code>emit.checkpoints.enabled</code>: whether to emit MirrorMaker's consumer offsets periodically (default: true)
-    <li><code>emit.checkpoints.interval.seconds</code>: frequency at which checkpoints are emitted (default: 60, every minute)
-    <li><code>checkpoints.topic.replication.factor</code>: replication factor of MirrorMaker's internal checkpoints topics (default: 3)
-    <li><code>sync.group.offsets.enabled</code>: whether to periodically write the translated offsets of replicated consumer groups (in the source cluster) to <code>__consumer_offsets</code> topic in target cluster, as long as no active consumers in that group are connected to the target cluster (default: false)
-    <li><code>sync.group.offsets.interval.seconds</code>: frequency at which consumer group offsets are synced (default: 60, every minute)
-    <li><code>offset-syncs.topic.replication.factor</code>: replication factor of MirrorMaker's internal offset-sync topics (default: 3)
-  </ul>
 
   <h5 class="anchor-heading"><a id="georeplication-flow-secure" class="anchor-link"></a><a href="#georeplication-flow-secure">Securing Replication Flows</a></h5>
 
