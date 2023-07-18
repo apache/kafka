@@ -153,8 +153,8 @@ public class Uuid implements Comparable<Uuid> {
 
     @Override
     public int compareTo(Uuid other) {
-        final int result = Long.compare(mostSignificantBits, other.mostSignificantBits);
-        return (result != 0) ? result : Long.compare(leastSignificantBits, other.leastSignificantBits);
+        final int result = Long.compareUnsigned(mostSignificantBits, other.mostSignificantBits);
+        return (result != 0) ? result : Long.compareUnsigned(leastSignificantBits, other.leastSignificantBits);
     }
 
     /**
