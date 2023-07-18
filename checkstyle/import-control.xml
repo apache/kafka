@@ -415,8 +415,8 @@
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow pkg="org.apache.kafka.metadata.bootstrap" />
-    <allow pkg="org.apache.kafka.server.common" />
-    <allow pkg="kafka.server" />
+    <allow pkg="org.apache.kafka.metadata.broker" />
+    <allow pkg="org.apache.kafka.storage.internals.log" />
     <allow pkg="kafka.tools" />
     <allow pkg="kafka.utils" />
     <allow pkg="org.apache.kafka.test" />

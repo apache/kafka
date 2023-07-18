@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 import org.ajoberstar.grgit.Grgit
-import org.gradle.api.JavaVersion
 
 import java.nio.charset.StandardCharsets
 
@@ -1773,7 +1773,7 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':server-common')
     implementation project(':log4j-appender')
-    implementation project(':core')
+    implementation project(':storage')
     implementation project(':metadata')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind

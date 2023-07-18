@@ -16,30 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
-import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
-import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
-import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
-import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
-import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
-import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Type.INT;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
@@ -58,6 +34,35 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionValidator;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 import org.apache.kafka.server.record.BrokerCompressionType;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
+
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
+import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
+import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 
 public class LogConfig extends AbstractConfig {
 
@@ -230,6 +235,11 @@ public class LogConfig extends AbstractConfig {
         FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
 
+    static String LogDirDoc = "The directory in which the log data is kept (supplemental for " + "log.dir" + " property)";
+    static String MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
+        "If it is not set, the metadata log is placed in the first log directory from log.dirs.";
+    static String LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + "log.dirs" + " is used.";
+
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
         "the leader side. The list should describe a set of replicas in the form " +
         "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
@@ -301,6 +311,9 @@ public class LogConfig extends AbstractConfig {
                 MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
             .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
+            .define("log.dirs", STRING, null, HIGH, LogDirsDoc)
+            .define("log.dir", STRING, null, HIGH, LogDirDoc)
+            .define("metadata.log.dir", STRING, null, HIGH, MetadataLogDirDoc)
             .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
     }
@@ -342,6 +355,11 @@ public class LogConfig extends AbstractConfig {
     public final List<String> followerReplicationThrottledReplicas;
     public final boolean messageDownConversionEnable;
     public final RemoteLogConfig remoteLogConfig;
+    private static final String LogConfigPrefix = "log.";
+
+    private static final String LogDirProp = LogConfigPrefix + "dir";
+
+    private static final String LogDirsProp = LogConfigPrefix + "dirs";
 
     private final int maxMessageSize;
     private final Map<?, ?> props;
@@ -496,6 +514,97 @@ public class LogConfig extends AbstractConfig {
         validateNames(props);
         Map<?, ?> valueMaps = CONFIG.parse(props);
         validateValues(valueMaps);
+    }
+
+
+
+    private static final String MetadataLogDirProp = "metadata.log.dir";
+    private static final String ProcessRolesProp = "process.roles";
+    private static final String NodeIdProp = "node.id";
+    private static final String InterBrokerProtocolVersionProp = "inter.broker.protocol.version";
+    private static final String QUORUM_PREFIX = "controller.quorum.";
+    private static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
+    private static final String ControllerListenerNamesProp = "controller.listener.names";
+
+    String logDirsProp = getString(LogDirsProp);
+    String logDirProp = getString(LogDirProp);
+    String metadataLogDir = getString(MetadataLogDirProp);
+
+    public String getInterBrokerProtocolVersionString(){
+        return getString(InterBrokerProtocolVersionProp);
+    }
+    public int getNodeId(){
+        return getInt(NodeIdProp);
+    }
+
+    public static String getLogDirsProp(){
+        return LogDirsProp;
+    }
+
+    public static String getProcessRolesProp(){
+        return ProcessRolesProp;
+    }
+
+    public static String getNodeIdProp(){
+        return NodeIdProp;
+    }
+
+    public static String getQuorumVotersProp(){
+        return QUORUM_VOTERS_CONFIG;
+    }
+
+    public static String getControllerListenerNamesProp(){
+        return ControllerListenerNamesProp;
+    }
+
+    public static String getMetadataLogDirProp(){
+        return MetadataLogDirProp;
+    }
+
+    public Set<String> parseProcessRoles() {
+        List<String> roles = getList(ProcessRolesProp);
+
+        Set<String> distinctRoles = new HashSet<>();
+        for (String role : roles) {
+            switch (role) {
+                case "broker":
+                    distinctRoles.add("BrokerRole");
+                    break;
+                case "controller":
+                    distinctRoles.add("ControllerRole");
+                    break;
+                default:
+                    throw new ConfigException("Unknown process role '" + role + "'" +
+                        " (only 'broker' and 'controller' are allowed roles)");
+            }
+        }
+
+        if (distinctRoles.size() != roles.size()) {
+            throw new ConfigException("Duplicate role names found in '" + ProcessRolesProp + "': " + roles);
+        }
+
+        return distinctRoles;
+    }
+
+
+    public String getMetadataLogDir(){
+        if (metadataLogDir != null) {
+            return metadataLogDir;
+        } else {
+            return getLogDirs().get(0);
+        }
+    }
+
+    public List<String> getLogDirs(){
+        return parseCsvList(logDirsProp != null ? logDirsProp : logDirProp);
+    }
+    public static List<String> parseCsvList(String csvList) {
+        if (csvList == null || csvList.isEmpty())
+            return new ArrayList<>();
+        else
+            return Arrays.stream(csvList.split("\\s*,\\s*"))
+                .filter(v -> !v.equals(""))
+                .collect(Collectors.toList());
     }
 
     public static void main(String[] args) {

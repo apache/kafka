@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.server.BrokerMetadataCheckpoint;
-import kafka.server.KafkaConfig;
-import kafka.server.MetaProperties;
-import kafka.server.RawMetaProperties;
-import kafka.tools.TerseFailure;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -31,9 +26,11 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.broker.BrokerMetadataCheckpoint;
+import org.apache.kafka.metadata.broker.MetaProperties;
+import org.apache.kafka.metadata.broker.RawMetaProperties;
 import org.apache.kafka.server.common.MetadataVersion;
-import scala.collection.Seq;
-import scala.collection.JavaConverters;
+import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -57,9 +54,9 @@ public class StorageTool {
         try {
             Namespace namespace = parseArguments(args);
             String command = namespace.getString("command");
-            Optional<KafkaConfig> config = Optional.ofNullable(namespace.getString("config")).map(p -> {
+            Optional<LogConfig> config = Optional.ofNullable(namespace.getString("config")).map(p -> {
                 try {
-                    return new KafkaConfig(Utils.loadProps(p));
+                    return new LogConfig(Utils.loadProps(p));
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -72,7 +69,7 @@ public class StorageTool {
         }
     }
 
-    private static void executeCommand(Namespace namespace, String command, Optional<KafkaConfig> config) throws Exception {
+    private static void executeCommand(Namespace namespace, String command, Optional<LogConfig> config) throws Exception {
         switch (command) {
             case "info": {
                 if (config.isPresent()) {
@@ -86,14 +83,14 @@ public class StorageTool {
                 if (config.isPresent()) {
                     List<String> directories = configToLogDirectories(config.get());
                     String clusterId = namespace.getString("cluster_id");
-                    MetadataVersion metadataVersion = getMetadataVersion(namespace, Optional.of(config.get().interBrokerProtocolVersionString()));
+                    MetadataVersion metadataVersion = getMetadataVersion(namespace, Optional.of(config.get().getInterBrokerProtocolVersionString()));
                     if (!metadataVersion.isKRaftSupported()) {
-                        throw new TerseFailure("Must specify a valid KRaft metadata version of at least 3.0.");
+                        throw new TerseException("Must specify a valid KRaft metadata version of at least 3.0.");
                     }
                     MetaProperties metaProperties = buildMetadataProperties(clusterId, config.get());
                     Boolean ignoreFormatted = namespace.getBoolean("ignore_formatted");
                     if (!configToSelfManagedMode(config.get())) {
-                        throw new TerseFailure("The kafka configuration file appears to be for " + "a legacy cluster. Formatting is only supported for clusters in KRaft mode.");
+                        throw new TerseException("The kafka configuration file appears to be for " + "a legacy cluster. Formatting is only supported for clusters in KRaft mode.");
                     }
                     Exit.exit(formatCommand(System.out, directories, metaProperties, metadataVersion, ignoreFormatted));
                 }
@@ -131,13 +128,13 @@ public class StorageTool {
                     RawMetaProperties rawMetaProperties = new RawMetaProperties(properties);
                     Optional<RawMetaProperties> curMetadata;
 
-                    switch (rawMetaProperties.version()) {
+                    switch (rawMetaProperties.getVersion()) {
                         case 0:
                         case 1:
                             curMetadata = Optional.of(rawMetaProperties);
                             break;
                         default:
-                            problems.add("Unsupported version for " + metaPath + ": " + rawMetaProperties.version());
+                            problems.add("Unsupported version for " + metaPath + ": " + rawMetaProperties.getVersion());
                             curMetadata = Optional.empty();
                             break;
                     }
@@ -155,10 +152,10 @@ public class StorageTool {
 
         if (prevMetadata.isPresent()) {
             if (selfManagedMode) {
-                if (prevMetadata.get().version() == 0) {
+                if (prevMetadata.get().getVersion() == 0) {
                     problems.add("The kafka configuration file appears to be for a cluster in KRaft mode, but " + "the directories are formatted for legacy mode.");
                 }
-            } else if (prevMetadata.get().version() == 1) {
+            } else if (prevMetadata.get().getVersion() == 1) {
                 problems.add("The kafka configuration file appears to be for a legacy cluster, but " + "the directories are formatted for a cluster in KRaft mode.");
             }
         }
@@ -221,18 +218,18 @@ public class StorageTool {
         return parser.parseArgsOrFail(args);
     }
 
-    static List<String> configToLogDirectories(KafkaConfig kafkaConfig) {
-        Seq<String> logDirs = kafkaConfig.logDirs();
-        SortedSet<String> directories = new TreeSet<>(JavaConverters.asJavaCollection(logDirs));
-        String metadataLogDir = kafkaConfig.metadataLogDir();
+    static List<String> configToLogDirectories(LogConfig logConfig) {
+        List<String> logDirs = logConfig.getLogDirs();
+        SortedSet<String> directories = new TreeSet<>(logDirs);
+        String metadataLogDir = logConfig.getMetadataLogDir();
         if (metadataLogDir != null) {
             directories.add(metadataLogDir);
         }
         return new ArrayList<>(directories);
     }
 
-    static boolean configToSelfManagedMode(KafkaConfig kafkaConfig) {
-        return !kafkaConfig.processRoles().isEmpty();
+    static boolean configToSelfManagedMode(LogConfig logConfig) {
+        return !logConfig.parseProcessRoles().isEmpty();
     }
 
 
@@ -251,30 +248,35 @@ public class StorageTool {
         }
     }
 
-    static MetaProperties buildMetadataProperties(String clusterIdStr, KafkaConfig config) {
+    static MetaProperties buildMetadataProperties(String clusterIdStr, LogConfig config) throws TerseException {
         Uuid effectiveClusterId;
         try {
             effectiveClusterId = Uuid.fromString(clusterIdStr);
         } catch (Throwable e) {
-            throw new TerseFailure("Cluster ID string " + clusterIdStr + " does not appear to be a valid UUID: " + e.getMessage());
+            throw new TerseException("Cluster ID string " + clusterIdStr + " does not appear to be a valid UUID: " + e.getMessage());
         }
 
-        if (config.nodeId() < 0) {
-            throw new TerseFailure("The node.id must be set to a non-negative integer. We saw " + config.nodeId());
+        if (config.getNodeId() < 0) {
+            throw new TerseException("The node.id must be set to a non-negative integer. We saw " + config.getNodeId());
         }
 
-        return new MetaProperties(effectiveClusterId.toString(), config.nodeId());
+        return new MetaProperties(effectiveClusterId.toString(), config.getNodeId());
     }
 
-    static int formatCommand(PrintStream stream, List<String> directories, MetaProperties metaProperties, MetadataVersion metadataVersion, boolean ignoreFormatted) {
+    static int formatCommand(PrintStream stream, List<String> directories, MetaProperties metaProperties, MetadataVersion metadataVersion, boolean ignoreFormatted) throws TerseException {
         if (directories.isEmpty()) {
-            throw new TerseFailure("No log directories found in the configuration.");
+            throw new TerseException("No log directories found in the configuration.");
         }
         List<String> unformattedDirectories = directories.stream().filter(directory -> {
             if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
                 return true;
             } else if (!ignoreFormatted) {
-                throw new TerseFailure("Log directory " + directory + " is already formatted. " + "Use --ignore-formatted to ignore this directory and format the others.");
+                try {
+                    throw new TerseException("Log directory " + directory
+                        + " is already formatted. " + "Use --ignore-formatted to ignore this directory and format the others.");
+                } catch (TerseException e) {
+                    throw new RuntimeException(e.getMessage());
+                }
             } else {
                 return false;
             }
@@ -287,12 +289,20 @@ public class StorageTool {
             try {
                 Files.createDirectories(Paths.get(directory));
             } catch (Exception e) {
-                throw new TerseFailure("Unable to create storage directory " + directory + ": " + e.getMessage());
+                try {
+                    throw new TerseException("Unable to create storage directory " + directory + ": " + e.getMessage());
+                } catch (TerseException ex) {
+                    throw new RuntimeException(ex);
+                }
             }
 
             Path metaPropertiesPath = Paths.get(directory, "meta.properties");
             BrokerMetadataCheckpoint checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile());
-            checkpoint.write(metaProperties.toProperties());
+            try {
+                checkpoint.write(metaProperties.toProperties());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
 
             BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "format command");
             BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty());

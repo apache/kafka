@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.server.KafkaConfig;
-import kafka.server.MetaProperties;
-import kafka.tools.TerseFailure;
 import kafka.utils.TestUtils;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.broker.MetaProperties;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,25 +50,25 @@ public class StorageToolTest {
 
     private Properties newSelfManagedProperties() {
         Properties properties = new Properties();
-        properties.setProperty(KafkaConfig.LogDirsProp(), "/tmp/foo,/tmp/bar");
-        properties.setProperty(KafkaConfig.ProcessRolesProp(), "controller");
-        properties.setProperty(KafkaConfig.NodeIdProp(), "2");
-        properties.setProperty(KafkaConfig.QuorumVotersProp(), "2@localhost:9092");
-        properties.setProperty(KafkaConfig.ControllerListenerNamesProp(), "PLAINTEXT");
+        properties.setProperty(LogConfig.getLogDirsProp(), "/tmp/foo,/tmp/bar");
+        properties.setProperty(LogConfig.getProcessRolesProp(), "controller");
+        properties.setProperty(LogConfig.getNodeIdProp(), "2");
+        properties.setProperty(LogConfig.getQuorumVotersProp(), "2@localhost:9092");
+        properties.setProperty(LogConfig.getControllerListenerNamesProp(), "PLAINTEXT");
         return properties;
     }
 
     @Test
     public void testConfigToLogDirectories() {
-        KafkaConfig config = new KafkaConfig(newSelfManagedProperties());
+        LogConfig config = new LogConfig(newSelfManagedProperties());
         assertEquals(new ArrayList<>(Arrays.asList("/tmp/bar", "/tmp/foo")), StorageTool.configToLogDirectories(config));
     }
 
     @Test
     public void testConfigToLogDirectoriesWithMetaLogDir() {
         Properties properties = newSelfManagedProperties();
-        properties.setProperty(KafkaConfig.MetadataLogDirProp(), "/tmp/baz");
-        KafkaConfig config = new KafkaConfig(properties);
+        properties.setProperty(LogConfig.getMetadataLogDirProp(), "/tmp/baz");
+        LogConfig config = new LogConfig(properties);
         assertEquals(new ArrayList<>(Arrays.asList("/tmp/bar", "/tmp/baz", "/tmp/foo")), StorageTool.configToLogDirectories(config));
     }
 
@@ -137,7 +136,7 @@ public class StorageToolTest {
     }
 
     @Test
-    public void testFormatEmptyDirectory() throws IOException {
+    public void testFormatEmptyDirectory() throws IOException, TerseException {
         File tempDir = TestUtils.tempDir();
         try {
             MetaProperties metaProperties = new MetaProperties("XcZZOzUqS4yHOjhMQB6JLQ", 2);
@@ -147,7 +146,7 @@ public class StorageToolTest {
 
             try {
                 assertEquals(1, StorageTool.formatCommand(new PrintStream(new ByteArrayOutputStream()), new ArrayList<>(Collections.singletonList(tempDir.toString())), metaProperties, MetadataVersion.latest(), false));
-            } catch (TerseFailure e) {
+            } catch (Exception e) {
                 assertEquals("Log directory " + tempDir + " is already " + "formatted. Use --ignore-formatted to ignore this directory and format the " + "others.", e.getMessage());
             }
 
@@ -161,8 +160,8 @@ public class StorageToolTest {
 
     @Test
     public void testFormatWithInvalidClusterId() {
-        KafkaConfig config = new KafkaConfig(newSelfManagedProperties());
-        assertThrows(TerseFailure.class, () -> {
+        LogConfig config = new LogConfig(newSelfManagedProperties());
+        assertThrows(TerseException.class, () -> {
             StorageTool.buildMetadataProperties("invalid", config);
         }).getMessage().equals("Cluster ID string invalid does not appear to be a valid UUID: " + "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " + "16 bytes of a base64-encoded UUID");
 
