@@ -2847,7 +2847,7 @@ class ReplicaManagerTest {
   private def getVerificationGuard(replicaManager: ReplicaManager,
                                    tp: TopicPartition,
                                    producerId: Long): Object = {
-    replicaManager.getPartitionOrException(tp).log.get.getOrMaybeCreateVerificationGuard(producerId)
+    replicaManager.getPartitionOrException(tp).log.get.verificationGuard(producerId)
   }
 
   private def setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager: AddPartitionsToTxnManager,

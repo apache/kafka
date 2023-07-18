@@ -187,16 +187,22 @@ public class ProducerStateManager {
     }
 
     /**
-     * Maybe create the VerificationStateEntry for a given producer ID. Return it if it exists, otherwise return null.
+     * Maybe create the VerificationStateEntry for a given producer ID and return it.
+     * This method also updates the sequence and epoch accordingly.
      */
-    public VerificationStateEntry verificationStateEntry(long producerId, boolean createIfAbsent) {
-        return verificationStates.computeIfAbsent(producerId, pid -> {
-            if (createIfAbsent)
-                return new VerificationStateEntry(time.milliseconds());
-            else {
-                return null;
-            }
-        });
+    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch) {
+        VerificationStateEntry entry = verificationStates.computeIfAbsent(producerId, pid ->
+            new VerificationStateEntry(time.milliseconds(), sequence, epoch)
+        );
+        entry.maybeUpdateLowestSequenceAndEpoch(sequence, epoch);
+        return entry;
+    }
+
+    /**
+     * Return the VerificationStateEntry for the producer ID if it exists, otherwise return null.
+     */
+    public VerificationStateEntry verificationStateEntry(long producerId) {
+        return verificationStates.get(producerId);
     }
 
     /**
@@ -408,7 +414,7 @@ public class ProducerStateManager {
 
     public ProducerAppendInfo prepareUpdate(long producerId, AppendOrigin origin) {
         ProducerStateEntry currentEntry = lastEntry(producerId).orElse(ProducerStateEntry.empty(producerId));
-        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin);
+        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin, verificationStateEntry(producerId));
     }
 
     /**

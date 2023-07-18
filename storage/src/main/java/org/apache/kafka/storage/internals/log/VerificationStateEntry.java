@@ -22,16 +22,23 @@ package org.apache.kafka.storage.internals.log;
  * After verifying, we retain this object until we append to the log. This prevents any race conditions where the transaction
  * may end via a control marker before we write to the log. This mechanism is used to prevent hanging transactions.
  * We remove the verification guard object whenever we write data to the transaction or write an end marker for the transaction.
+ *
+ * We also store the lowest seen sequence to block a higher sequence from being written in the case of the lower sequence needing retries.
+ *
  * Any lingering entries that are never verified are removed via the producer state entry cleanup mechanism.
  */
 public class VerificationStateEntry {
 
     final private long timestamp;
     final private Object verificationGuard;
+    private int lowestSequence;
+    private short epoch;
 
-    public VerificationStateEntry(long timestamp) {
+    public VerificationStateEntry(long timestamp, int sequence, short epoch) {
         this.timestamp = timestamp;
         this.verificationGuard = new Object();
+        this.lowestSequence = sequence;
+        this.epoch = epoch;
     }
 
     public long timestamp() {
@@ -40,5 +47,22 @@ public class VerificationStateEntry {
 
     public Object verificationGuard() {
         return verificationGuard;
+    }
+
+    public int lowestSequence() {
+        return lowestSequence;
+    }
+
+    public short epoch() {
+        return epoch;
+    }
+
+    public void maybeUpdateLowestSequenceAndEpoch(int incomingSequence, short incomingEpoch) {
+        if (incomingEpoch == epoch && incomingSequence < this.lowestSequence)
+            this.lowestSequence = incomingSequence;
+        if (incomingEpoch > this.epoch) {
+            this.epoch = incomingEpoch;
+            this.lowestSequence = incomingSequence;
+        }
     }
 }

@@ -3677,7 +3677,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertNull(log.getOrMaybeCreateVerificationGuard(producerId))
+    assertNull(log.verificationGuard(producerId))
 
     val idempotentRecords = MemoryRecords.withIdempotentRecords(
       CompressionType.NONE,
@@ -3688,14 +3688,14 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     assertNotNull(verificationGuard)
 
     log.appendAsLeader(idempotentRecords, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
 
     // Since we wrote idempotent records, we keep verification guard.
-    assertEquals(verificationGuard, log.getOrMaybeCreateVerificationGuard(producerId))
+    assertEquals(verificationGuard, log.verificationGuard(producerId))
 
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
@@ -3709,10 +3709,10 @@ class UnifiedLogTest {
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
     // Verification guard should be cleared now.
-    assertNull(log.getOrMaybeCreateVerificationGuard(producerId))
+    assertNull(log.verificationGuard(producerId))
 
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
-    assertNull(log.maybeStartTransactionVerification(producerId))
+    assertNull(log.maybeStartTransactionVerification(producerId, sequence + 2, producerEpoch))
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3722,10 +3722,10 @@ class UnifiedLogTest {
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertNull(log.getOrMaybeCreateVerificationGuard(producerId))
+    assertNull(log.verificationGuard(producerId))
 
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
-    val newVerificationGuard = log.maybeStartTransactionVerification(producerId)
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence + 3, producerEpoch)
     assertNotNull(newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
   }
@@ -3739,7 +3739,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
     assertNotNull(verificationGuard)
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
@@ -3750,7 +3750,7 @@ class UnifiedLogTest {
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertNull(log.getOrMaybeCreateVerificationGuard(producerId))
+    assertNull(log.verificationGuard(producerId))
   }
 
   @Test
@@ -3763,7 +3763,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertNull(log.getOrMaybeCreateVerificationGuard(producerId))
+    assertNull(log.verificationGuard(producerId))
 
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
@@ -3774,7 +3774,7 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     // Append should not throw error.
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
   }
