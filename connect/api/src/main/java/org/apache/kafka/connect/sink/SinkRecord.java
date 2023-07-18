@@ -55,6 +55,10 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
         this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers, topic, partition, kafkaOffset);
     }
 
+    /**
+     * This constructor is intended for use by the Connect runtime only and plugins (sink connectors or transformations)
+     * should not use this directly outside testing code.
+     */
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
                       Long timestamp, TimestampType timestampType, Iterable<Header> headers, String originalTopic,
                       Integer originalKafkaPartition, long originalKafkaOffset) {
@@ -90,6 +94,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * try {
      *     originalTopic = record.originalTopic();
      * } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     *     log.warn("This connector is not compatible with SMTs that mutate topic names, topic partitions or offset values on this version of Kafka Connect");
      *     originalTopic = record.topic();
      * }
      * }
@@ -122,6 +127,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * try {
      *     originalKafkaPartition = record.originalKafkaPartition();
      * } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     *     log.warn("This connector is not compatible with SMTs that mutate topic names, topic partitions or offset values on this version of Kafka Connect");
      *     originalKafkaPartition = record.kafkaPartition();
      * }
      * }
@@ -154,6 +160,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * try {
      *     originalKafkaOffset = record.originalKafkaOffset();
      * } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     *     log.warn("This connector is not compatible with SMTs that mutate topic names, topic partitions or offset values on this version of Kafka Connect");
      *     originalKafkaOffset = record.kafkaOffset();
      * }
      * }
