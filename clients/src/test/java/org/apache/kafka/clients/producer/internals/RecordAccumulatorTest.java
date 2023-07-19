@@ -1279,25 +1279,36 @@ public class RecordAccumulatorTest {
 
         // Setup record accumulator
         int batchSize = 10;
+        RecordAccumulator accum = createTestRecordAccumulator(batchSize, 20L * batchSize, CompressionType.NONE, 10);
 
-        RecordAccumulator accum = createTestRecordAccumulator(batchSize, 10L * batchSize, CompressionType.NONE, 10);
+        // Now both parition1&2 will have batches.
         accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+        accum.append(topic, partition2, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
 
         now += 100;
-
         // Validate that since now is progressed by 100ms, the waitedTimeMs() is 100.
         Deque<ProducerBatch> partitionBatches = accum.getDeque(tp1);
         assertEquals(1, partitionBatches.size());
-
         ProducerBatch batch = partitionBatches.peekFirst();
-        assertEquals(batch.waitedTimeMs(now), 100);
+        assertEquals(100, batch.waitedTimeMs(now));
+
+        partitionBatches = accum.getDeque(tp2);
+        assertEquals(1, partitionBatches.size());
+        batch = partitionBatches.peekFirst();
+        assertEquals(100, batch.waitedTimeMs(now));
 
         // Validate once onLeaderEpochBump() is called, batch doesn't have to backoff.
         // Validate this by making sure waitedTimeMs() is a large value(i.e. now). As
         // "batch.waitedTimeMs >= retryBackoffMs", the batch doesn't backoff.
         accum.onLeaderEpochBump(tp1);
+        partitionBatches = accum.getDeque(tp1);
         batch = partitionBatches.peekFirst();
-        assertEquals(batch.waitedTimeMs(now), now);
+        assertEquals(now, batch.waitedTimeMs(now));
+
+        // Since onLeaderEpochBump() wasn't called on partition2, its should continue to backoff.
+        partitionBatches = accum.getDeque(tp2);
+        batch = partitionBatches.peekFirst();
+        assertEquals(100, batch.waitedTimeMs(now));
     }
 
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
