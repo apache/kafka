@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.image.loader.metrics;
+package org.apache.kafka.image.publisher.metrics;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
@@ -25,7 +25,6 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -49,13 +48,12 @@ public final class SnapshotEmitterMetrics implements AutoCloseable {
      */
     public SnapshotEmitterMetrics(
         Optional<MetricsRegistry> registry,
-        Time time,
-        long initialLatestSnapshotGeneratedBytes
+        Time time
     ) {
         this.registry = registry;
         this.time = time;
-        this.latestSnapshotGeneratedBytes = new AtomicLong(initialLatestSnapshotGeneratedBytes);
-        this.latestSnapshotGeneratedTimeMs = new AtomicLong(monoTimeInMs());
+        this.latestSnapshotGeneratedBytes = new AtomicLong(0L);
+        this.latestSnapshotGeneratedTimeMs = new AtomicLong(time.milliseconds());
         registry.ifPresent(r -> r.newGauge(LATEST_SNAPSHOT_GENERATED_BYTES, new Gauge<Long>() {
             @Override
             public Long value() {
@@ -68,10 +66,6 @@ public final class SnapshotEmitterMetrics implements AutoCloseable {
                 return latestSnapshotGeneratedAgeMs();
             }
         }));
-    }
-
-    long monoTimeInMs() {
-        return TimeUnit.NANOSECONDS.toMillis(time.nanoseconds());
     }
 
     public void setLatestSnapshotGeneratedBytes(long value) {

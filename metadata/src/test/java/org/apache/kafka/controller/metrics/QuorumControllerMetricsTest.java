@@ -99,10 +99,23 @@ public class QuorumControllerMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
         time.sleep(1000);
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, false)) {
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
             metrics.setLastAppliedRecordOffset(100);
             metrics.setLastAppliedRecordTimestamp(500);
             metrics.setLastCommittedRecordOffset(50);
+            metrics.updateDualWriteOffset(40L);
+            for (int i = 0; i < 2; i++) {
+                metrics.incrementTimedOutHeartbeats();
+            }
+            for (int i = 0; i < 3; i++) {
+                metrics.incrementOperationsStarted();
+            }
+            for (int i = 0; i < 4; i++) {
+                metrics.incrementOperationsTimedOut();
+            }
+            for (int i = 0; i < 5; i++) {
+                metrics.incrementNewActiveControllers();
+            }
 
             @SuppressWarnings("unchecked")
             Gauge<Long> lastAppliedRecordOffset = (Gauge<Long>) registry
@@ -127,6 +140,36 @@ public class QuorumControllerMetricsTest {
                 .allMetrics()
                 .get(metricName("KafkaController", "LastCommittedRecordOffset"));
             assertEquals(50, lastCommittedRecordOffset.value());
+
+            @SuppressWarnings("unchecked")
+            Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "ZKWriteBehindLag"));
+            assertEquals(10L, zkWriteBehindLag.value());
+
+            @SuppressWarnings("unchecked")
+            Gauge<Long> timedOutBrokerHeartbeats = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "TimedOutBrokerHeartbeatCount"));
+            assertEquals(2L, timedOutBrokerHeartbeats.value());
+
+            @SuppressWarnings("unchecked")
+            Gauge<Long> operationsStarted = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "EventQueueOperationsStartedCount"));
+            assertEquals(3L, operationsStarted.value());
+
+            @SuppressWarnings("unchecked")
+            Gauge<Long> operationsTimedOut = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "EventQueueOperationsTimedOutCount"));
+            assertEquals(4L, operationsTimedOut.value());
+
+            @SuppressWarnings("unchecked")
+            Gauge<Long> newActiveControllers = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "NewActiveControllersCount"));
+            assertEquals(5L, newActiveControllers.value());
         } finally {
             registry.shutdown();
         }

@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Utility functions for use in QuorumController integration tests.
  */
-class QuorumControllerIntegrationTestUtils {
+public class QuorumControllerIntegrationTestUtils {
     private final static Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
 
     BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
@@ -185,7 +185,7 @@ class QuorumControllerIntegrationTestUtils {
      * @param controller    The controller.
      * @return              The latch that can be used to unpause the controller.
      */
-    static CountDownLatch pause(QuorumController controller) {
+    public static CountDownLatch pause(QuorumController controller) {
         final CountDownLatch latch = new CountDownLatch(1);
         controller.appendControlEvent("pause", () -> {
             try {

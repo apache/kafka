@@ -107,8 +107,9 @@ public class MetadataLoaderMetricsTest {
     public void testUpdateLastAppliedImageProvenance() {
         MetricsRegistry registry = new MetricsRegistry();
         try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
-            fakeMetrics.metrics.updateLastAppliedImageProvenance(new MetadataProvenance(1L, 2, 3L));
-            assertEquals(new MetadataProvenance(1L, 2, 3L), fakeMetrics.provenance.get());
+            MetadataProvenance provenance = new MetadataProvenance(1L, 2, 3L);
+            fakeMetrics.metrics.updateLastAppliedImageProvenance(provenance);
+            assertEquals(provenance, fakeMetrics.provenance.get());
         }
     }
 

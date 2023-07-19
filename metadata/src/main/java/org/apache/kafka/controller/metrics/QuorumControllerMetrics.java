@@ -45,7 +45,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
     private final static MetricName ZK_WRITE_BEHIND_LAG = getMetricName(
-            "KafkaController", "ZKWriteBehindLag");
+        "KafkaController", "ZKWriteBehindLag");
     private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
@@ -59,7 +59,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final static MetricName EVENT_QUEUE_OPERATIONS_STARTED_COUNT = getMetricName(
         "KafkaController", "EventQueueOperationsStartedCount");
     private final static MetricName EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT = getMetricName(
-            "KafkaController", "EventQueueOperationsTimedOutCount");
+        "KafkaController", "EventQueueOperationsTimedOutCount");
     private final static MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
         "KafkaController", "NewActiveControllersCount");
 
@@ -133,13 +133,13 @@ public class QuorumControllerMetrics implements AutoCloseable {
         registry.ifPresent(r -> r.newGauge(EVENT_QUEUE_OPERATIONS_STARTED_COUNT, new Gauge<Long>() {
             @Override
             public Long value() {
-                return timedOutHeartbeats();
+                return operationsStarted();
             }
         }));
         registry.ifPresent(r -> r.newGauge(EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT, new Gauge<Long>() {
             @Override
             public Long value() {
-                return timedOutHeartbeats();
+                return operationsTimedOut();
             }
         }));
         registry.ifPresent(r -> r.newGauge(NEW_ACTIVE_CONTROLLERS_COUNT, new Gauge<Long>() {
@@ -213,20 +213,12 @@ public class QuorumControllerMetrics implements AutoCloseable {
         timedOutHeartbeats.incrementAndGet();
     }
 
-    public void setTimedOutHeartbeats(long value) {
-        timedOutHeartbeats.set(value);
-    }
-
     public long timedOutHeartbeats() {
         return timedOutHeartbeats.get();
     }
 
     public void incrementOperationsStarted() {
         operationsStarted.incrementAndGet();
-    }
-
-    public void setOperationsStarted(long value) {
-        operationsStarted.set(value);
     }
 
     public long operationsStarted() {
@@ -237,20 +229,12 @@ public class QuorumControllerMetrics implements AutoCloseable {
         operationsTimedOut.incrementAndGet();
     }
 
-    public void setOperationsTimedOut(long value) {
-        operationsTimedOut.set(value);
-    }
-
     public long operationsTimedOut() {
         return operationsTimedOut.get();
     }
 
     public void incrementNewActiveControllers() {
         newActiveControllers.incrementAndGet();
-    }
-
-    public void setNewActiveControllers(long value) {
-        newActiveControllers.set(value);
     }
 
     public long newActiveControllers() {

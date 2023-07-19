@@ -2321,19 +2321,6 @@ public final class QuorumController implements Controller {
     }
 
     // VisibleForTesting
-    public CountDownLatch pause() {
-        final CountDownLatch latch = new CountDownLatch(1);
-        appendControlEvent("pause", () -> {
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                log.info("Interrupted while waiting for unpause.", e);
-            }
-        });
-        return latch;
-    }
-
-    // VisibleForTesting
     Time time() {
         return time;
     }
