@@ -793,19 +793,18 @@ public class Sender implements Runnable {
         Function<Integer, RuntimeException> recordExceptions,
         boolean adjustSequenceNumbers
     ) {
-        if (transactionManager != null) {
-            try {
-                // This call can throw an exception in the rare case that there's an invalid state transition
-                // attempted. Catch these so as not to interfere with the rest of the logic.
-                transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
-            } catch (Exception e) {
-                log.debug("Encountered error when handling a failed batch", e);
-            }
-        }
-
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
         if (batch.completeExceptionally(topLevelException, recordExceptions)) {
+            if (transactionManager != null) {
+                try {
+                    // This call can throw an exception in the rare case that there's an invalid state transition
+                    // attempted. Catch these so as not to interfere with the rest of the logic.
+                    transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
+                } catch (Exception e) {
+                    log.debug("Encountered error when transaction manager was handling a failed batch", e);
+                }
+            }
             maybeRemoveAndDeallocateBatch(batch);
         }
     }

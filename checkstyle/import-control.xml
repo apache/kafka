@@ -266,6 +266,7 @@
   </subpackage>
 
   <subpackage name="storage.internals">
+    <allow pkg="com.yammer.metrics.core" />
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage.internals"/>
     <allow pkg="org.apache.kafka.common" />
