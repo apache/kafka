@@ -20,19 +20,18 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 
-import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class CoreUtilsTest {
+public class ToolsUtilsTest {
     @Test
     public void testDuplicates() {
-        assertIterableEquals(
-            Arrays.asList("1", "3"),
-            CoreUtils.duplicates(Arrays.asList("1", "2", "1", "3", "3"))
+        assertEquals(
+            new HashSet<>(Arrays.asList("1", "3")),
+            ToolsUtils.duplicates(Arrays.asList("1", "2", "1", "3", "3"))
         );
 
-        assertIterableEquals(
-            Collections.emptyList(), CoreUtils.duplicates(Arrays.asList("1", "2", "3"))
-        );
+        assertEquals(Collections.emptySet(), ToolsUtils.duplicates(Arrays.asList("1", "2", "3")));
     }
 }

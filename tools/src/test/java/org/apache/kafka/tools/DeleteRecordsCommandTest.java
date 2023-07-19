@@ -157,7 +157,7 @@ class DeleteRecordsCommandUnitTest {
         Collection<DeleteRecordsCommand.Tuple<TopicPartition, Long>> res = DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(
             "{\"partitions\":[" +
                 "{\"topic\":\"t\", \"partition\":0, \"offset\":0}," +
-                "{\"topic\":\"t\", \"partition\":1, \"offset\":1}," +
+                "{\"topic\":\"t\", \"partition\":1, \"offset\":1, \"ignored\":\"field\"}," +
                 "{\"topic\":\"t\", \"partition\":0, \"offset\":2}," +
                 "{\"topic\":\"t\", \"partition\":0, \"offset\":0}" +
             "]}"

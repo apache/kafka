@@ -110,7 +110,7 @@ public class DeleteRecordsCommand {
         Collection<Tuple<TopicPartition, Long>> offsetSeq = parseOffsetJsonStringWithoutDedup(offsetJsonString);
 
         Set<TopicPartition> duplicatePartitions =
-            CoreUtils.duplicates(offsetSeq.stream().map(Tuple::v1).collect(Collectors.toList()));
+            ToolsUtils.duplicates(offsetSeq.stream().map(Tuple::v1).collect(Collectors.toList()));
 
         if (!duplicatePartitions.isEmpty()) {
             StringJoiner duplicates = new StringJoiner(",");

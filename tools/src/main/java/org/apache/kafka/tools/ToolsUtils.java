@@ -32,7 +32,7 @@ import java.util.stream.StreamSupport;
  * 2. It is the most general possible utility, not just the thing you needed in one particular place
  * 3. You have tests for it if it is nontrivial in any way
  */
-public class CoreUtils {
+public class ToolsUtils {
     /**
      * Returns a list of duplicated items
      */
