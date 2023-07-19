@@ -30,8 +30,8 @@ import org.apache.kafka.connect.header.Header;
  * timestamp, which may be {@code null}.
  */
 public class SinkRecord extends ConnectRecord<SinkRecord> {
-    private final long kafkaOffset;
-    private final TimestampType timestampType;
+    protected final long kafkaOffset;
+    protected final TimestampType timestampType;
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset) {
         this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, null, TimestampType.NO_TIMESTAMP_TYPE);
@@ -59,13 +59,13 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
 
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
-        return newRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, headers().duplicate());
+        return newRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, headers.duplicate());
     }
 
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
                                 Long timestamp, Iterable<Header> headers) {
-        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType, headers);
+        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers);
     }
 
     @Override

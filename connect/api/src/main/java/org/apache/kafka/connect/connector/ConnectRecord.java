@@ -32,14 +32,14 @@ import java.util.Objects;
  * </p>
  */
 public abstract class ConnectRecord<R extends ConnectRecord<R>> {
-    private final String topic;
-    private final Integer kafkaPartition;
-    private final Schema keySchema;
-    private final Object key;
-    private final Schema valueSchema;
-    private final Object value;
-    private final Long timestamp;
-    private final Headers headers;
+    protected final String topic;
+    protected final Integer kafkaPartition;
+    protected final Schema keySchema;
+    protected final Object key;
+    protected final Schema valueSchema;
+    protected final Object value;
+    protected final Long timestamp;
+    protected final Headers headers;
 
     public ConnectRecord(String topic, Integer kafkaPartition,
                          Schema keySchema, Object key,
