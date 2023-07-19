@@ -338,7 +338,7 @@ public class RackAwareTaskAssignor {
 
         // Special case: if we have more clients than tasks. Each client can have 1 task assigned potentially
         // So in this case, all clients should have capacity 1
-        final boolean allUnitCapacity = (maxCapacity == 1 && minCapacity == 0);
+        final boolean allUnitCapacity = maxCapacity == 1 && minCapacity == 0;
         if (minCapacity == 0 && maxCapacity > 1) {
             log.warn("Unbalanced assignment to compute. Some clients have 0 tasks while other "
                 + "clients have more than 1 tasks assigned");
