@@ -59,11 +59,8 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions()
 
-  def configureTokenAclsBeforeServersStart(): Unit = { }
-
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
-    configureTokenAclsBeforeServersStart()
 
     if (!TestInfoUtils.isKRaft(testInfo)) {
       zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)

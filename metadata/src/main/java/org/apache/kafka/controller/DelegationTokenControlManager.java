@@ -198,15 +198,20 @@ public class DelegationTokenControlManager {
         long expiryTimestamp = Math.min(maxTimestamp, now + tokenDefaultRenewLifetime);
 
         String tokenId = Uuid.randomUuid().toString();
-        KafkaPrincipal owner = context.principal();
-        List<KafkaPrincipal> renewers = new ArrayList<KafkaPrincipal>();
 
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        KafkaPrincipal owner = context.principal();
+        if ((requestData.ownerPrincipalName() != null) && 
+            (!requestData.ownerPrincipalName().isEmpty())) {
+
+            owner = new KafkaPrincipal(requestData.ownerPrincipalType(), requestData.ownerPrincipalName());
+        }
         CreateDelegationTokenResponseData responseData = new CreateDelegationTokenResponseData()
                 .setPrincipalName(owner.getName())
                 .setPrincipalType(owner.getPrincipalType())
-                .setTokenRequesterPrincipalName(owner.getName())
-                .setTokenRequesterPrincipalType(owner.getPrincipalType());
+                .setTokenRequesterPrincipalName(context.principal().getName())
+                .setTokenRequesterPrincipalType(context.principal().getPrincipalType());
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
 
         if (secretKeyString == null) {
             // DelegationTokens are not enabled
@@ -218,6 +223,7 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(UNSUPPORTED_VERSION.code()));
         }
 
+        List<KafkaPrincipal> renewers = new ArrayList<KafkaPrincipal>();
         for (CreatableRenewers renewer : requestData.renewers()) {
             if (renewer.principalType().equals(KafkaPrincipal.USER_TYPE)) {
                 renewers.add(new KafkaPrincipal(renewer.principalType(), renewer.principalName()));
@@ -226,8 +232,8 @@ public class DelegationTokenControlManager {
             }
         }
 
-        TokenInformation newTokenInformation = new TokenInformation(tokenId, owner, owner, renewers,
-            now, maxTimestamp, expiryTimestamp);
+        TokenInformation newTokenInformation = new TokenInformation(tokenId, owner,
+            context.principal(), renewers, now, maxTimestamp, expiryTimestamp);
 
         DelegationTokenData newDelegationTokenData = new DelegationTokenData(newTokenInformation);
 
@@ -238,8 +244,6 @@ public class DelegationTokenControlManager {
                 .setMaxTimestampMs(maxTimestamp)
                 .setTokenId(tokenId)
                 .setHmac(createHmac(tokenId));
-
-        System.out.println("context owner is :" + context.principal().toString());
 
         records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
         return ControllerResult.atomicOf(records, responseData);
@@ -278,8 +282,6 @@ public class DelegationTokenControlManager {
         long renewTimeStamp = now + renewLifeTime;
         long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(), renewTimeStamp);
 
-        
-        System.out.println("Setting expiryTimestamp to " + expiryTimestamp);
         myTokenInformation.setExpiryTimestamp(expiryTimestamp);
 
         DelegationTokenData newDelegationTokenData = new DelegationTokenData(myTokenInformation);

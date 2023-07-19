@@ -17,18 +17,10 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.common.requests.RequestContext;
-// XXX import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
-import org.apache.kafka.common.message.DescribeDelegationTokenRequestData;
-import org.apache.kafka.common.message.DescribeDelegationTokenRequestData.DescribeDelegationTokenOwner;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.image.node.DelegationTokenImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
-// import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.metadata.DelegationTokenData;
-
 
 import java.util.Collections;
 import java.util.List;
@@ -70,40 +62,40 @@ public final class DelegationTokenImage {
         }
     }
 
-    private boolean filterOwners(RequestContext requestContext,
-                                 List<KafkaPrincipal> owners,
-                                 TokenInformation token) {
-        for (KafkaPrincipal owner: owners) {
-            if (token.ownerOrRenewer(owner)) {
-                return true;
-            }
-        }
-        return false;
-    }
+//    private boolean filterOwners(RequestContext requestContext,
+//                                 List<KafkaPrincipal> owners,
+//                                 TokenInformation token) {
+//        for (KafkaPrincipal owner: owners) {
+//            if (token.ownerOrRenewer(owner)) {
+//                return true;
+//            }
+//        }
+//        return false;
+//    }
 
     /*
      * Return a list of TokenInformation for the requested owners or renewers.
-     * or all if the list s null. Caller will authenticate for each TokenInformation
+     * Return all if the list is null. Caller will authenticate for each TokenInformation
      */
-    public List<TokenInformation> describe(RequestContext requestContext, 
-        DescribeDelegationTokenRequestData describeDelegationTokenRequestData) {
-
-        List<TokenInformation> infos = new ArrayList<TokenInformation>();
-        List<KafkaPrincipal> owners = new ArrayList<KafkaPrincipal>();
-        if (describeDelegationTokenRequestData.owners() != null) {
-            for (DescribeDelegationTokenOwner owner: describeDelegationTokenRequestData.owners()) {
-                owners.add(new KafkaPrincipal(owner.principalType(), owner.principalName()));
-            }
-        }
-
-        for (DelegationTokenData tokenData : tokens.values()) {
-            if ((describeDelegationTokenRequestData.owners() == null) ||
-                filterOwners(requestContext, owners, tokenData.tokenInformation())) {
-                infos.add(tokenData.tokenInformation());
-            }
-        }
-        return infos;
-    }
+//    public List<TokenInformation> describe(RequestContext requestContext, 
+//        DescribeDelegationTokenRequestData describeDelegationTokenRequestData) {
+//
+//        List<TokenInformation> infos = new ArrayList<TokenInformation>();
+//        List<KafkaPrincipal> owners = new ArrayList<KafkaPrincipal>();
+//        if (describeDelegationTokenRequestData.owners() != null) {
+//            for (DescribeDelegationTokenOwner owner: describeDelegationTokenRequestData.owners()) {
+//                owners.add(new KafkaPrincipal(owner.principalType(), owner.principalName()));
+//            }
+//        }
+//
+//        for (DelegationTokenData tokenData : tokens.values()) {
+//            if ((describeDelegationTokenRequestData.owners() == null) ||
+//                filterOwners(requestContext, owners, tokenData.tokenInformation())) {
+//                infos.add(tokenData.tokenInformation());
+//            }
+//        }
+//        return infos;
+//    }
 
     public Map<String, DelegationTokenData> tokens() {
         return tokens;

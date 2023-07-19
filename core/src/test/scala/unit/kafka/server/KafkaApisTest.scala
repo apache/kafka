@@ -5290,8 +5290,10 @@ class KafkaApisTest {
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
-    val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, fromPrivilegedListener,
+    // DelegationTokens require the context authenticated to be a
+    // non SecurityProtocol.PLAINTEXT and a non KafkaPrincipal.ANONYMOUS
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
+      listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, fromPrivilegedListener,
       Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
       requestMetrics, envelope = None)
@@ -5921,6 +5923,30 @@ class KafkaApisTest {
     assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
   }
 
+  // XXX
+//  private def createAuthenticatedMockRequest(): RequestChannel.Request = {
+//    val requestHeader: RequestHeader = mock(classOf[RequestHeader])
+//    when(requestHeader.apiKey()).thenReturn(ApiKeys.values().head)
+//
+//    val context = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+//      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
+//      ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+//      SecurityProtocol.SSL, ClientInformation.EMPTY, false, Optional.of(kafkaPrincipalSerde))
+//
+//    val request = new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0,
+//      MemoryPool.NONE, mock(classOf[ByteBuffer]), requestChannelMetrics, envelope = None)
+//    request
+//  }
+//
+//  private def verifyShouldForwardIfAuthenticatedErrorMessage(handler: RequestChannel.Request => Unit): Unit = {
+//    // DelegationTokens require the context authenticated to be a
+//    // non SecurityProtocol.PLAINTEXT and a non KafkaPrincipal.ANONYMOUS
+//    val request = createAuthenticatedMockRequest()
+//
+//    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
+//    assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
+//  }
+
   @Test
   def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
@@ -6069,19 +6095,19 @@ class KafkaApisTest {
   @Test
   def testRaftShouldAlwaysForwardCreateTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleCreateTokenRequest)
+    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleCreateTokenRequestZk)
   }
 
   @Test
   def testRaftShouldAlwaysForwardRenewTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleRenewTokenRequest)
+    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleRenewTokenRequestZk)
   }
 
   @Test
   def testRaftShouldAlwaysForwardExpireTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleExpireTokenRequest)
+    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleExpireTokenRequestZk)
   }
 
   @Test
