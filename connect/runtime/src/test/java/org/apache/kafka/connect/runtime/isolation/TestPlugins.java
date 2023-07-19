@@ -136,7 +136,7 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR("bad-packaging", "test.plugins.VersionMethodThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR("bad-packaging", "test.plugins.VersionMethodThrowsConnector", true, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from default constructor.
          */

@@ -43,6 +43,7 @@ import java.util.TreeSet;
  * <p>This implements the legacy discovery strategy, which uses a combination of reflection and service loading in
  * order to discover plugins. Specifically, a plugin appears in the scan result if all the following conditions are true:
  * <ul>
+ *     <li>The class and direct dependencies can be loaded</li>
  *     <li>The class is concrete</li>
  *     <li>The class is public</li>
  *     <li>The class has a no-args constructor</li>
@@ -60,7 +61,9 @@ import java.util.TreeSet;
  *     </li>
  * </ul>
  * <p>Note: This scanner has a runtime proportional to the number of overall classes in the passed-in
- * {@link PluginSource} objects, which may be significant for plugins with large dependencies.
+ * {@link PluginSource} objects, which may be significant for plugins with large dependencies. For a more performant
+ * implementation, consider using {@link ServiceLoaderScanner} and follow migration instructions for
+ * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-898%3A+Modernize+Connect+plugin+discovery">KIP-898</a>.
  */
 public class ReflectionScanner extends PluginScanner {
 
@@ -73,66 +76,67 @@ public class ReflectionScanner extends PluginScanner {
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
-        ClassLoader loader = source.loader();
         ConfigurationBuilder builder = new ConfigurationBuilder();
-        builder.setClassLoaders(new ClassLoader[]{loader});
+        builder.setClassLoaders(new ClassLoader[]{source.loader()});
         builder.addUrls(source.urls());
         builder.setScanners(Scanners.SubTypes);
         builder.setParallel(true);
         Reflections reflections = new Reflections(builder);
 
         return new PluginScanResult(
-                getPluginDesc(reflections, SinkConnector.class, loader),
-                getPluginDesc(reflections, SourceConnector.class, loader),
-                getPluginDesc(reflections, Converter.class, loader),
-                getPluginDesc(reflections, HeaderConverter.class, loader),
-                getTransformationPluginDesc(loader, reflections),
-                getPredicatePluginDesc(loader, reflections),
-                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
-                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
-                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
+                getPluginDesc(reflections, SinkConnector.class, source),
+                getPluginDesc(reflections, SourceConnector.class, source),
+                getPluginDesc(reflections, Converter.class, source),
+                getPluginDesc(reflections, HeaderConverter.class, source),
+                getTransformationPluginDesc(source, reflections),
+                getPredicatePluginDesc(source, reflections),
+                getServiceLoaderPluginDesc(ConfigProvider.class, source),
+                getServiceLoaderPluginDesc(ConnectRestExtension.class, source),
+                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, source)
         );
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) {
-        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getPluginDesc(reflections, Predicate.class, loader);
+    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(PluginSource source, Reflections reflections) {
+        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getPluginDesc(reflections, Predicate.class, source);
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) {
-        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(reflections, Transformation.class, loader);
+    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source, Reflections reflections) {
+        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(reflections, Transformation.class, source);
     }
 
     private <T> SortedSet<PluginDesc<T>> getPluginDesc(
             Reflections reflections,
             Class<T> klass,
-            ClassLoader loader
+            PluginSource source
     ) {
         Set<Class<? extends T>> plugins;
         try {
             plugins = reflections.getSubTypesOf(klass);
         } catch (ReflectionsException e) {
-            log.debug("Reflections scanner could not find any classes for URLs: " +
-                    reflections.getConfiguration().getUrls(), e);
+            log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
+                    klass, source.location(), source.urls(), e);
             return Collections.emptySortedSet();
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
         for (Class<? extends T> pluginKlass : plugins) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
-                log.debug("Skipping {} as it is not concrete implementation", pluginKlass);
+                log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source.location());
                 continue;
             }
-            if (pluginKlass.getClassLoader() != loader) {
+            if (pluginKlass.getClassLoader() != source.loader()) {
                 log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                        pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
+                        pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), source.location());
                 continue;
             }
-            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
-                result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), loader));
+            try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
+                result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), source));
             } catch (ReflectiveOperationException | LinkageError e) {
-                log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), pluginKlass.getSimpleName(), reflectiveErrorDescription(e), e);
+                log.error("Failed to discover {} in {}: Unable to instantiate {}{}",
+                        klass.getSimpleName(), source.location(), pluginKlass.getSimpleName(),
+                        reflectiveErrorDescription(e), e);
             }
         }
         return result;
