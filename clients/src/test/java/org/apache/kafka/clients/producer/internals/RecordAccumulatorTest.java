@@ -1273,6 +1273,33 @@ public class RecordAccumulatorTest {
         }
     }
 
+    @Test
+    public void testOnLeaderEpochBumpRetryBackOffReset() throws InterruptedException {
+        long now = time.milliseconds();
+
+        // Setup record accumulator
+        int batchSize = 10;
+
+        RecordAccumulator accum = createTestRecordAccumulator(batchSize, 10L * batchSize, CompressionType.NONE, 10);
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+
+        now += 100;
+
+        // Validate that since now is progressed by 100ms, the waitedTimeMs() is 100.
+        Deque<ProducerBatch> partitionBatches = accum.getDeque(tp1);
+        assertEquals(1, partitionBatches.size());
+
+        ProducerBatch batch = partitionBatches.peekFirst();
+        assertEquals(batch.waitedTimeMs(now), 100);
+
+        // Validate once onLeaderEpochBump() is called, batch doesn't have to backoff.
+        // Validate this by making sure waitedTimeMs() is a large value(i.e. now). As
+        // "batch.waitedTimeMs >= retryBackoffMs", the batch doesn't backoff.
+        accum.onLeaderEpochBump(tp1);
+        batch = partitionBatches.peekFirst();
+        assertEquals(batch.waitedTimeMs(now), now);
+    }
+
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
         throws InterruptedException {
         Random random = new Random();
