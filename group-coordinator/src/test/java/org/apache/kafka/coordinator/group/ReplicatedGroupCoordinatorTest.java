@@ -32,6 +32,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -325,5 +327,40 @@ public class ReplicatedGroupCoordinatorTest {
         );
 
         verify(groupMetadataManager, times(1)).onLoaded();
+    }
+
+    @Test
+    public void testReplayGroupMetadata() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+            groupMetadataManager
+        );
+
+        GroupMetadataKey key = new GroupMetadataKey();
+        GroupMetadataValue value = new GroupMetadataValue();
+
+        coordinator.replay(new Record(
+            new ApiMessageAndVersion(key, (short) 2),
+            new ApiMessageAndVersion(value, (short) 4)
+        ));
+
+        verify(groupMetadataManager, times(1)).replay(key, value);
+    }
+
+    @Test
+    public void testReplayGroupMetadataWithNullValue() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+            groupMetadataManager
+        );
+
+        GroupMetadataKey key = new GroupMetadataKey();
+
+        coordinator.replay(new Record(
+            new ApiMessageAndVersion(key, (short) 2),
+            null
+        ));
+
+        verify(groupMetadataManager, times(1)).replay(key, null);
     }
 }
