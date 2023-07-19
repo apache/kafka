@@ -99,7 +99,7 @@ class GetOffsetShellTest(Test):
         offsets = self.kafka.get_offset_shell(**kwargs).split("\n")
         sum = 0
         for offset in offsets:
-            if len(offset) == 0:
+            if not offset:
                 continue
             sum += int(offset.split(":")[-1])
         return sum

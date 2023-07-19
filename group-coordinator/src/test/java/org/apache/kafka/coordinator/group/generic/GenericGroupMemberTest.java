@@ -17,18 +17,17 @@
 
 package org.apache.kafka.coordinator.group.generic;
 
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.coordinator.group.generic.GenericGroupMember.EMPTY_ASSIGNMENT;
-import static org.apache.kafka.coordinator.group.generic.Protocol.EMPTY_METADATA;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,6 +38,11 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testMatchesSupportedProtocols() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[]{0}));
+
         GenericGroupMember member = new GenericGroupMember(
             "member",
             Optional.of("group-instance-id"),
@@ -47,33 +51,54 @@ public class GenericGroupMemberTest {
             10,
             4500,
             "generic",
-            Collections.singletonList(
-                new Protocol("range", new byte[] {0})
-            ),
-            EMPTY_METADATA
+            protocols,
+            new byte[0]
         );
 
-        assertTrue(member.matches(Collections.singletonList(
-            new Protocol("range", new byte[] {0})
-        )));
-        assertFalse(member.matches(Collections.singletonList(
-            new Protocol("range", new byte[] {1})
-        )));
-        assertFalse(member.matches(Collections.singletonList(
-            new Protocol("roundrobin", EMPTY_METADATA)
-        )));
+        JoinGroupRequestProtocolCollection collection = new JoinGroupRequestProtocolCollection();
+        collection.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[] {0}));
 
-        List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", EMPTY_METADATA));
-        protocols.add(new Protocol("roundrobin", EMPTY_METADATA));
-        assertFalse(member.matches(protocols));
+        assertTrue(member.matches(collection));
+
+        collection = new JoinGroupRequestProtocolCollection();
+        collection.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[] {1}));
+
+        assertFalse(member.matches(collection));
+
+        collection = new JoinGroupRequestProtocolCollection();
+        collection.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        assertFalse(member.matches(collection));
+
+        collection = new JoinGroupRequestProtocolCollection();
+        collection.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        collection.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
+        assertFalse(member.matches(collection));
+        assertTrue(member.matches(protocols));
     }
 
     @Test
     public void testVoteForPreferredProtocol() {
-        List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", EMPTY_METADATA));
-        protocols.add(new Protocol("roundrobin", EMPTY_METADATA));
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
 
         GenericGroupMember member = new GenericGroupMember(
             "member",
@@ -101,9 +126,13 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testMetadata() {
-        List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", new byte[]{0}));
-        protocols.add(new Protocol("roundrobin", new byte[]{1}));
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[]{0}));
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[]{1}));
 
         GenericGroupMember member = new GenericGroupMember(
             "member",
@@ -123,10 +152,6 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testMetadataRaisesOnUnsupportedProtocol() {
-        List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", new byte[]{0}));
-        protocols.add(new Protocol("roundrobin", new byte[]{1}));
-
         GenericGroupMember member = new GenericGroupMember(
             "member",
             Optional.of("group-instance-id"),
@@ -135,7 +160,7 @@ public class GenericGroupMemberTest {
             10,
             4500,
             "generic",
-            protocols,
+            new JoinGroupRequestProtocolCollection(),
             EMPTY_ASSIGNMENT
         );
 
@@ -146,9 +171,13 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testVoteRaisesOnNoSupportedProtocols() {
-        List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", new byte[]{0}));
-        protocols.add(new Protocol("roundrobin", new byte[]{1}));
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[]{0}));
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[]{1}));
 
         GenericGroupMember member = new GenericGroupMember(
             "member",
@@ -169,10 +198,6 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testHasValidGroupInstanceId() {
-        List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", new byte[]{0}));
-        protocols.add(new Protocol("roundrobin", new byte[]{1}));
-
         GenericGroupMember member = new GenericGroupMember(
             "member",
             Optional.of("group-instance-id"),
@@ -181,7 +206,7 @@ public class GenericGroupMemberTest {
             10,
             4500,
             "generic",
-            protocols,
+            new JoinGroupRequestProtocolCollection(),
             EMPTY_ASSIGNMENT
         );
 
@@ -191,15 +216,19 @@ public class GenericGroupMemberTest {
     
     @Test
     public void testPlainProtocolSet() {
-        List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", new byte[]{0}));
-        protocols.add(new Protocol("roundrobin", new byte[]{1}));
+        JoinGroupRequestProtocolCollection protocolCollection =
+            new JoinGroupRequestProtocolCollection();
+
+        protocolCollection.add(new JoinGroupRequestProtocol()
+            .setName("range").setMetadata(new byte[]{0}));
+        protocolCollection.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin").setMetadata(new byte[]{1}));
 
         Set<String> expectedProtocolNames = new HashSet<>();
         expectedProtocolNames.add("range");
         expectedProtocolNames.add("roundrobin");
-        
-        assertEquals(expectedProtocolNames, GenericGroupMember.plainProtocolSet(protocols));
+
+        assertEquals(expectedProtocolNames, GenericGroupMember.plainProtocolSet(protocolCollection));
     }
 
     @Test
@@ -212,19 +241,13 @@ public class GenericGroupMemberTest {
             10,
             4500,
             "generic",
-            Collections.singletonList(
-                new Protocol("range", EMPTY_METADATA)
-            ),
+            new JoinGroupRequestProtocolCollection(),
             EMPTY_ASSIGNMENT
         );
 
         assertFalse(member.hasSatisfiedHeartbeat());
 
-        member.setHeartBeatSatisfied(true);
-        assertTrue(member.hasSatisfiedHeartbeat());
-
         member.setIsNew(true);
-        member.setHeartBeatSatisfied(false);
         assertFalse(member.hasSatisfiedHeartbeat());
 
         member.setIsNew(false);

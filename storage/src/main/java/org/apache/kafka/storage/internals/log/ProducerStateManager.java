@@ -113,6 +113,8 @@ public class ProducerStateManager {
 
     private final Map<Long, ProducerStateEntry> producers = new HashMap<>();
 
+    private final Map<Long, VerificationStateEntry> verificationStates = new HashMap<>();
+
     // ongoing transactions sorted by the first offset of the transaction
     private final TreeMap<Long, TxnMetadata> ongoingTxns = new TreeMap<>();
 
@@ -182,6 +184,26 @@ public class ProducerStateManager {
     private void clearProducerIds() {
         producers.clear();
         producerIdCount = 0;
+    }
+
+    /**
+     * Maybe create the VerificationStateEntry for a given producer ID. Return it if it exists, otherwise return null.
+     */
+    public VerificationStateEntry verificationStateEntry(long producerId, boolean createIfAbsent) {
+        return verificationStates.computeIfAbsent(producerId, pid -> {
+            if (createIfAbsent)
+                return new VerificationStateEntry(time.milliseconds());
+            else {
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Clear the verificationStateEntry for the given producer ID.
+     */
+    public void clearVerificationStateEntry(long producerId) {
+        verificationStates.remove(producerId);
     }
 
     /**
@@ -338,6 +360,7 @@ public class ProducerStateManager {
 
     /**
      * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
+     * Also expire any verification state entries that are lingering as unverified.
      */
     public void removeExpiredProducers(long currentTimeMs) {
         List<Long> keys = producers.entrySet().stream()
@@ -345,6 +368,12 @@ public class ProducerStateManager {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
         removeProducerIds(keys);
+
+        List<Long> verificationKeys = verificationStates.entrySet().stream()
+                .filter(entry -> currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        verificationKeys.forEach(verificationStates::remove);
     }
 
     /**

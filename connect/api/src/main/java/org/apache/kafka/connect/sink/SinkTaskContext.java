@@ -105,7 +105,7 @@ public interface SinkTaskContext {
      * This method was added in Apache Kafka 2.6. Sink tasks that use this method but want to
      * maintain backward compatibility so they can also be deployed to older Connect runtimes
      * should guard the call to this method with a try-catch block, since calling this method will result in a
-     * {@link NoSuchMethodException} or {@link NoClassDefFoundError} when the sink connector is deployed to
+     * {@link NoSuchMethodError} or {@link NoClassDefFoundError} when the sink connector is deployed to
      * Connect runtimes older than Kafka 2.6. For example:
      * <pre>
      *     ErrantRecordReporter reporter;

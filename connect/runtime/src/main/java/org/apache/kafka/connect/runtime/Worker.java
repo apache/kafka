@@ -83,8 +83,10 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.OffsetUtils;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -1547,9 +1549,11 @@ public class Worker {
                     offsetsToWrite = offsets;
                 }
 
+                Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = normalizeSourceConnectorOffsets(offsetsToWrite);
+
                 boolean alterOffsetsResult;
                 try {
-                    alterOffsetsResult = ((SourceConnector) connector).alterOffsets(connectorConfig, offsetsToWrite);
+                    alterOffsetsResult = ((SourceConnector) connector).alterOffsets(connectorConfig, normalizedOffsets);
                 } catch (UnsupportedOperationException e) {
                     log.error("Failed to modify offsets for connector {} because it doesn't support external modification of offsets",
                             connName, e);
@@ -1561,7 +1565,7 @@ public class Worker {
                 // This should only occur for an offsets reset request when there are no source partitions found for the source connector in the
                 // offset store - either because there was a prior attempt to reset offsets or if there are no offsets committed by this source
                 // connector so far
-                if (offsetsToWrite.isEmpty()) {
+                if (normalizedOffsets.isEmpty()) {
                     log.info("No offsets found for source connector {} - this can occur due to a prior attempt to reset offsets or if the " +
                             "source connector hasn't committed any offsets yet", connName);
                     completeModifyOffsetsCallback(alterOffsetsResult, isReset, cb);
@@ -1570,7 +1574,7 @@ public class Worker {
 
                 // The modifySourceConnectorOffsets method should only be called after all the connector's tasks have been stopped, and it's
                 // safe to write offsets via an offset writer
-                offsetsToWrite.forEach(offsetWriter::offset);
+                normalizedOffsets.forEach(offsetWriter::offset);
 
                 // We can call begin flush without a timeout because this newly created single-purpose offset writer can't do concurrent
                 // offset writes. We can also ignore the return value since it returns false if and only if there is no data to be flushed,
@@ -1581,7 +1585,7 @@ public class Worker {
                     producer.initTransactions();
                     producer.beginTransaction();
                 }
-                log.debug("Committing the following offsets for source connector {}: {}", connName, offsetsToWrite);
+                log.debug("Committing the following offsets for source connector {}: {}", connName, normalizedOffsets);
                 FutureCallback<Void> offsetWriterCallback = new FutureCallback<>();
                 offsetWriter.doFlush(offsetWriterCallback);
                 if (config.exactlyOnceSourceEnabled()) {
@@ -1606,6 +1610,32 @@ public class Worker {
                 Utils.closeQuietly(offsetStore::stop, "Offset store for offset modification request for connector " + connName);
             }
         }));
+    }
+
+    /**
+     * "Normalize" source connector offsets by serializing and deserializing them using the internal {@link JsonConverter}.
+     * This is done in order to prevent type mismatches between the offsets passed to {@link SourceConnector#alterOffsets(Map, Map)}
+     * and the offsets that connectors and tasks retrieve via an instance of {@link OffsetStorageReader}.
+     * <p>
+     * Visible for testing.
+     *
+     * @param originalOffsets the offsets that are to be normalized
+     * @return the normalized offsets
+     */
+    @SuppressWarnings("unchecked")
+    Map<Map<String, ?>, Map<String, ?>> normalizeSourceConnectorOffsets(Map<Map<String, ?>, Map<String, ?>> originalOffsets) {
+        Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = new HashMap<>();
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> entry : originalOffsets.entrySet()) {
+            OffsetUtils.validateFormat(entry.getKey());
+            OffsetUtils.validateFormat(entry.getValue());
+            byte[] serializedKey = internalKeyConverter.fromConnectData("", null, entry.getKey());
+            byte[] serializedValue = internalValueConverter.fromConnectData("", null, entry.getValue());
+            Object deserializedKey = internalKeyConverter.toConnectData("", serializedKey).value();
+            Object deserializedValue = internalValueConverter.toConnectData("", serializedValue).value();
+            normalizedOffsets.put((Map<String, ?>) deserializedKey, (Map<String, ?>) deserializedValue);
+        }
+
+        return normalizedOffsets;
     }
 
     /**

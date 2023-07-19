@@ -416,9 +416,11 @@ public class ConfigurationControlManager {
             configData.remove(configResource);
         }
         if (configSchema.isSensitive(record)) {
-            log.info("{}: set configuration {} to {}", configResource, record.name(), Password.HIDDEN);
+            log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
+                    configResource, record.name(), Password.HIDDEN);
         } else {
-            log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
+            log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
+                    configResource, record.name(), record.value());
         }
     }
 

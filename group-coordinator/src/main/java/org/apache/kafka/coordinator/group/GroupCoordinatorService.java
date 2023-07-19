@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
@@ -53,6 +54,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
@@ -64,6 +66,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -83,6 +86,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private final GroupCoordinatorConfig config;
         private PartitionWriter<Record> writer;
         private CoordinatorLoader<Record> loader;
+        private Time time;
+        private Timer timer;
 
         public Builder(
             int nodeId,
@@ -102,6 +107,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public Builder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -109,9 +124,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Writer must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
+            if (time == null)
+                throw new IllegalArgumentException("Time must be set.");
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
 
-            String logPrefix = String.format("GroupCoordinator id=%d ", nodeId);
-            LogContext logContext = new LogContext(String.format("[%s ]", logPrefix));
+            String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
+            LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
             CoordinatorBuilderSupplier<ReplicatedGroupCoordinator, Record> supplier = () ->
                 new ReplicatedGroupCoordinator.Builder(config);
@@ -124,12 +143,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime =
                 new CoordinatorRuntime.Builder<ReplicatedGroupCoordinator, Record>()
+                    .withTime(time)
+                    .withTimer(timer)
                     .withLogPrefix(logPrefix)
                     .withLogContext(logContext)
                     .withEventProcessor(processor)
                     .withPartitionWriter(writer)
                     .withLoader(loader)
                     .withCoordinatorBuilderSupplier(supplier)
+                    .withTime(time)
                     .build();
 
             return new GroupCoordinatorService(
@@ -266,9 +288,33 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
+
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+
+            return responseFuture;
+        }
+
+        runtime.scheduleWriteOperation("generic-group-join",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
+        ).exceptionally(exception -> {
+            if (!(exception instanceof KafkaException)) {
+                log.error("JoinGroup request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+            }
+            
+            if (!responseFuture.isDone()) {
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setErrorCode(Errors.forException(exception).code()));
+            }
+            return null;
+        });
+
+        return responseFuture;
     }
 
     /**
@@ -578,5 +624,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
         log.info("Shutdown complete.");
+    }
+
+    private static boolean isGroupIdNotEmpty(String groupId) {
+        return groupId != null && !groupId.isEmpty();
     }
 }
