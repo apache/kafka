@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.image.MetadataImage
 
 import java.util
@@ -36,9 +35,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.ThreadLocalRandom
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
-import org.apache.kafka.common.message.DescribeDelegationTokenRequestData
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
-import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
@@ -405,8 +402,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   }
 
   // Return a list of tokens TokenInformation for a list of KafkaPricipals
-  def getDelegationTokens(requestContext: RequestContext, describeTokenRequest: DescribeDelegationTokenRequestData): List[TokenInformation] = {
-    _currentImage.delegationTokens().describe(requestContext, describeTokenRequest).asScala.toList
-  }
+//  def getDelegationTokens(requestContext: RequestContext, describeTokenRequest: DescribeDelegationTokenRequestData): List[TokenInformation] = {
+//    _currentImage.delegationTokens().describe(requestContext, describeTokenRequest).asScala.toList
+//  }
 }
 

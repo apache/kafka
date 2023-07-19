@@ -3166,7 +3166,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         def eligible(token: TokenInformation) = DelegationTokenManager
           .filterToken(requestPrincipal, owners, token, authorizeToken, authorizeRequester)
         val tokens =  tokenManager.getTokens(eligible)
-        println(s"Got response ${tokens}")
         sendResponseCallback(Errors.NONE, tokens)
       }
     }
