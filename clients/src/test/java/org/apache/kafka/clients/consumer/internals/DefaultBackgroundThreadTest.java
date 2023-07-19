@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
@@ -29,7 +30,9 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -52,6 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -70,6 +74,7 @@ public class DefaultBackgroundThreadTest {
     private TopicMetadataRequestManager topicMetadataRequestManager;
     private OffsetsRequestManager offsetsRequestManager;
     private DefaultBackgroundThread<String, String> backgroundThread;
+    private MockClient client;
 
     @BeforeEach
     public void setup() {
@@ -77,6 +82,7 @@ public class DefaultBackgroundThreadTest {
         this.time = testBuilder.time;
         this.metadata = testBuilder.metadata;
         this.networkClient = testBuilder.networkClientDelegate;
+        this.client = testBuilder.client;
         this.applicationEventsQueue = testBuilder.applicationEventQueue;
         this.applicationEventProcessor = testBuilder.applicationEventProcessor;
         this.coordinatorManager = testBuilder.coordinatorRequestManager;
@@ -216,6 +222,16 @@ public class DefaultBackgroundThreadTest {
         testBuilder.requestManagers.entries().forEach(requestManager ->
             verify(requestManager.get(), times(1)).poll(anyLong()));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
+        backgroundThread.close();
+    }
+
+    @Test
+    void testEnsureMetadataUpdateOnPoll() {
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        client.prepareMetadataUpdate(metadataResponse);
+        metadata.requestUpdate();
+        backgroundThread.runOnce();
+        verify(this.metadata, times(1)).updateWithCurrentRequestVersion(eq(metadataResponse), eq(false), anyLong());
         backgroundThread.close();
     }
 

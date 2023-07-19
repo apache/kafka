@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
@@ -27,9 +26,10 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.Time;
 
 import java.io.Closeable;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -73,6 +74,17 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchRequestManager<String, String> fetchRequestManager;
     final RequestManagers<String, String> requestManagers;
     final ApplicationEventProcessor<String, String> applicationEventProcessor;
+    final MockClient client;
+
+    private final String topic1 = "test1";
+    private final String topic2 = "test2";
+
+    private MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+        {
+            put(topic1, 1);
+            put(topic2, 1);
+        }
+    });
 
     public ConsumerTestBuilder() {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
@@ -106,7 +118,9 @@ public class ConsumerTestBuilder implements Closeable {
         this.fetchConfig = createFetchConfig(config);
         this.metricsManager = createFetchMetricsManager(metrics);
 
-        KafkaClient client = new MockClient(time, Collections.singletonList(new Node(0, "localhost", 99)));
+        this.client = new MockClient(time, metadata);
+        this.client.updateMetadata(metadataResponse);
+
         this.networkClientDelegate = spy(new NetworkClientDelegate(time,
                 config,
                 logContext,
