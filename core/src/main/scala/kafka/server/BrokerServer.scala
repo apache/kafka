@@ -531,7 +531,12 @@ class BrokerServer(
         config.consumerGroupHeartbeatIntervalMs,
         config.consumerGroupMaxSize,
         config.consumerGroupAssignors,
-        config.offsetsTopicSegmentBytes
+        config.offsetsTopicSegmentBytes,
+        config.groupMaxSize,
+        config.groupInitialRebalanceDelay,
+        GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
+        config.groupMinSessionTimeoutMs,
+        config.groupMaxSessionTimeoutMs
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",

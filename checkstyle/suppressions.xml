@@ -322,14 +322,16 @@
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
               files="(ConsumerGroupMember|GroupMetadataManager).java"/>
-    <suppress checks="MethodLength"
+    <suppress checks="(NPathComplexity|MethodLength)"
               files="(GroupMetadataManager|ConsumerGroupTest|GroupMetadataManagerTest).java"/>
-    <suppress checks="NPathComplexity"
-              files="(GroupMetadataManager).java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
     <suppress checks="ParameterNumber"
-              files="(ConsumerGroupMember).java"/>
+              files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="ClassDataAbstractionCouplingCheck"
-              files="(RecordHelpersTest).java"/>
+              files="(RecordHelpersTest|GroupMetadataManagerTest).java"/>
+    <suppress checks="JavaNCSS"
+              files="GroupMetadataManagerTest.java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"

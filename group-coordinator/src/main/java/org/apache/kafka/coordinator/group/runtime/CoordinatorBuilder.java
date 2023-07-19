@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 
 /**
  * A builder to build a {@link Coordinator} replicated state machine.
@@ -52,6 +54,16 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
     );
 
     /**
+     * Sets the topic partition.
+     * @param topicPartition The topic partition.
+     *
+     * @return The builder.
+     */
+    CoordinatorBuilder<S, U> withTopicPartition(
+        TopicPartition topicPartition
+    );
+
+    /**
      * Sets the time.
      *
      * @param time The system time.
@@ -70,7 +82,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      * @return The builder.
      */
     CoordinatorBuilder<S, U> withTimer(
-        CoordinatorTimer<U> timer
+        CoordinatorTimer<Void, U> timer
     );
 
     /**

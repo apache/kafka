@@ -17,14 +17,15 @@
 
 package org.apache.kafka.coordinator.group.generic;
 
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 
-import java.util.List;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * This class encapsulates a generic group member's metadata.
@@ -93,7 +94,7 @@ public class GenericGroupMember {
     /**
      * The list of supported protocols.
      */
-    private List<Protocol> supportedProtocols;
+    private JoinGroupRequestProtocolCollection supportedProtocols;
 
     /**
      * The assignment stored by the client assignor.
@@ -115,16 +116,6 @@ public class GenericGroupMember {
      */
     private boolean isNew = false;
 
-    /**
-     * This variable is used to track heartbeat completion through the delayed
-     * heartbeat purgatory. When scheduling a new heartbeat expiration, we set
-     * this value to `false`. Upon receiving the heartbeat (or any other event
-     * indicating the liveness of the client), we set it to `true` so that the
-     * delayed heartbeat can be completed.
-     */
-    private boolean heartbeatSatisfied = false;
-
-
     public GenericGroupMember(
         String memberId,
         Optional<String> groupInstanceId,
@@ -133,7 +124,7 @@ public class GenericGroupMember {
         int rebalanceTimeoutMs,
         int sessionTimeoutMs,
         String protocolType,
-        List<Protocol> supportedProtocols
+        JoinGroupRequestProtocolCollection supportedProtocols
     ) {
         this(
             memberId,
@@ -156,7 +147,7 @@ public class GenericGroupMember {
         int rebalanceTimeoutMs,
         int sessionTimeoutMs,
         String protocolType,
-        List<Protocol> supportedProtocols,
+        JoinGroupRequestProtocolCollection supportedProtocols,
         byte[] assignment
     ) {
         this.memberId = memberId;
@@ -195,16 +186,14 @@ public class GenericGroupMember {
      * Get the metadata corresponding to the provided protocol.
      */
     public byte[] metadata(String protocolName) {
-        Optional<Protocol> match = supportedProtocols.stream()
-            .filter(protocol -> protocol.name().equals(protocolName))
-            .findFirst();
-
-        if (match.isPresent()) {
-            return match.get().metadata();
-        } else {
-            throw new IllegalArgumentException("Member does not support protocol " +
-                protocolName);
+        for (JoinGroupRequestProtocol protocol : supportedProtocols) {
+            if (protocol.name().equals(protocolName)) {
+                return protocol.metadata();
+            }
         }
+
+        throw new IllegalArgumentException("Member does not support protocol " +
+            protocolName);
     }
 
     /**
@@ -215,52 +204,63 @@ public class GenericGroupMember {
      */
     public boolean hasSatisfiedHeartbeat() {
         if (isNew) {
-            // New members can be expired while awaiting join, so we have to check this first
-            return heartbeatSatisfied;
-        } else if (isAwaitingJoin() || isAwaitingSync()) {
-            // Members that are awaiting a rebalance automatically satisfy expected heartbeats
-            return true;
+            // New members can be expired even while awaiting join, so we check this first
+            return false;
         } else {
-            // Otherwise, we require the next heartbeat
-            return heartbeatSatisfied;
+            // Members that are awaiting a rebalance automatically satisfy expected heartbeats
+            return isAwaitingJoin() || isAwaitingSync();
         }
     }
 
     /**
      * Compare the given list of protocols with the member's supported protocols.
+     *
      * @param protocols list of protocols to match.
      * @return true if the given list matches the member's list of supported protocols,
      *         false otherwise.
      */
-    public boolean matches(List<Protocol> protocols) {
+    public boolean matches(JoinGroupRequestProtocolCollection protocols) {
         return protocols.equals(this.supportedProtocols);
     }
 
     /**
      * Vote for one of the potential group protocols. This takes into account the protocol preference as
      * indicated by the order of supported protocols and returns the first one also contained in the set
-     * @param candidates the protocol names that this member can vote for
+     *
+     * @param candidates The protocol names that this member can vote for
      * @return the first supported protocol that matches one of the candidates
      */
     public String vote(Set<String> candidates) {
-        Optional<Protocol> match = supportedProtocols.stream()
-            .filter(protocol -> candidates.contains(protocol.name()))
-            .findFirst();
-        
-        if (match.isPresent()) {
-            return match.get().name();
-        } else {
-            throw new IllegalArgumentException("Member does not support any of the candidate protocols");
+        for (JoinGroupRequestProtocol protocol : supportedProtocols) {
+            if (candidates.contains(protocol.name())) {
+                return protocol.name();
+            }
         }
+
+        throw new IllegalArgumentException("Member does not support any of the candidate protocols");
     }
 
     /**
      * Transform protocols into their respective names.
+     *
      * @param supportedProtocols list of supported protocols.
      * @return a set of protocol names from the given list of supported protocols.
      */
-    public static Set<String> plainProtocolSet(List<Protocol> supportedProtocols) {
-        return supportedProtocols.stream().map(Protocol::name).collect(Collectors.toSet());
+    public static Set<String> plainProtocolSet(
+        JoinGroupRequestProtocolCollection supportedProtocols
+    ) {
+        Set<String> protocolNames = new HashSet<>();
+        for (JoinGroupRequestProtocol protocol : supportedProtocols) {
+            protocolNames.add(protocol.name());
+        }
+        return protocolNames;
+    }
+
+    /**
+     * @return whether the member has an assignment set.
+     */
+    public boolean hasAssignment() {
+        return assignment != null && assignment.length > 0;
     }
 
     /**
@@ -315,7 +315,7 @@ public class GenericGroupMember {
     /**
      * @return the list of supported protocols.
      */
-    public List<Protocol> supportedProtocols() {
+    public JoinGroupRequestProtocolCollection supportedProtocols() {
         return supportedProtocols;
     }
 
@@ -348,13 +348,6 @@ public class GenericGroupMember {
     }
 
     /**
-     * @return true if the existing heartbeat was satisfied, false otherwise.
-     */
-    public boolean heartBeatSatisfied() {
-        return heartbeatSatisfied;
-    }
-
-    /**
      * @param value the new rebalance timeout in milliseconds.
      */
     public void setRebalanceTimeoutMs(int value) {
@@ -371,7 +364,7 @@ public class GenericGroupMember {
     /**
      * @param value the new list of supported protocols.
      */
-    public void setSupportedProtocols(List<Protocol> value) {
+    public void setSupportedProtocols(JoinGroupRequestProtocolCollection value) {
         this.supportedProtocols = value;
     }
 
@@ -401,13 +394,6 @@ public class GenericGroupMember {
      */
     public void setIsNew(boolean value) {
         this.isNew = value;
-    }
-
-    /**
-     * @param value whether the heartbeat was satisfied.
-     */
-    public void setHeartBeatSatisfied(boolean value) {
-        this.heartbeatSatisfied = value;
     }
 
     @Override
