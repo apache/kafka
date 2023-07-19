@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -41,7 +43,6 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
-import org.apache.kafka.coordinator.group.generic.Protocol;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
@@ -467,6 +468,11 @@ public class RecordHelpersTest {
         );
 
         expectedMembers.forEach(member -> {
+            JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+            protocols.add(new JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(member.subscription()));
+
             group.add(new GenericGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
@@ -475,10 +481,7 @@ public class RecordHelpersTest {
                 member.rebalanceTimeout(),
                 member.sessionTimeout(),
                 "consumer",
-                Collections.singletonList(new Protocol(
-                    "range",
-                    member.subscription()
-                )),
+                protocols,
                 member.assignment()
             ));
         });
@@ -530,6 +533,11 @@ public class RecordHelpersTest {
         );
 
         expectedMembers.forEach(member -> {
+            JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+            protocols.add(new JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(null));
+
             group.add(new GenericGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
@@ -538,10 +546,7 @@ public class RecordHelpersTest {
                 member.rebalanceTimeout(),
                 member.sessionTimeout(),
                 "consumer",
-                Collections.singletonList(new Protocol(
-                    "range",
-                    null
-                )),
+                protocols,
                 member.assignment()
             ));
         });
@@ -577,7 +582,12 @@ public class RecordHelpersTest {
             time
         );
 
-        expectedMembers.forEach(member ->
+        expectedMembers.forEach(member -> {
+            JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+            protocols.add(new JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(member.subscription()));
+
             group.add(new GenericGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
@@ -586,18 +596,56 @@ public class RecordHelpersTest {
                 member.rebalanceTimeout(),
                 member.sessionTimeout(),
                 "consumer",
-                Collections.singletonList(new Protocol(
-                    "range",
-                    member.subscription()
-                )),
+                protocols,
                 member.assignment()
-            ))
-        );
+            ));
+        });
 
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
                 MetadataVersion.IBP_3_5_IV2
             ));
+    }
+
+    @ParameterizedTest
+    @MethodSource("metadataToExpectedGroupMetadataValue")
+    public void testEmptyGroupMetadataRecord(
+        MetadataVersion metadataVersion,
+        short expectedGroupMetadataValueVersion
+    ) {
+        Time time = new MockTime();
+
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
+
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup("group-id"),
+                (short) 2),
+            new ApiMessageAndVersion(
+                new GroupMetadataValue()
+                    .setProtocol(null)
+                    .setProtocolType("")
+                    .setLeader(null)
+                    .setGeneration(0)
+                    .setCurrentStateTimestamp(time.milliseconds())
+                    .setMembers(expectedMembers),
+                expectedGroupMetadataValueVersion));
+
+        GenericGroup group = new GenericGroup(
+            new LogContext(),
+            "group-id",
+            GenericGroupState.PREPARING_REBALANCE,
+            time
+        );
+
+        group.initNextGeneration();
+        Record groupMetadataRecord = RecordHelpers.newEmptyGroupMetadataRecord(
+            group,
+            metadataVersion
+        );
+
+        assertEquals(expectedRecord, groupMetadataRecord);
     }
 }

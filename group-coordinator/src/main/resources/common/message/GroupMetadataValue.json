@@ -38,7 +38,7 @@
         { "name": "groupInstanceId", "versions": "3+", "type": "string", "default": "null", "nullableVersions": "3+", "ignorable": true},
         { "name": "clientId", "versions": "0+", "type": "string" },
         { "name": "clientHost", "versions": "0+", "type": "string" },
-        { "name": "rebalanceTimeout", "versions": "1+", "type": "int32", "ignorable": true},
+        { "name": "rebalanceTimeout", "versions": "1+", "type": "int32", "default": -1, "ignorable": true},
         { "name": "sessionTimeout", "versions": "0+", "type": "int32" },
         { "name": "subscription", "versions": "0+", "type": "bytes" },
         { "name": "assignment", "versions": "0+", "type": "bytes" }
