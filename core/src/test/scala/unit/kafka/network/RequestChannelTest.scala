@@ -34,13 +34,16 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
-import org.apache.kafka.common.utils.{SecurityUtils, Utils}
+import org.apache.kafka.common.utils.{SecurityUtils, Time, Utils}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
-import org.mockito.Mockito.mock
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{mock, mockConstruction, verify, verifyNoMoreInteractions}
 
 import java.io.IOException
 import java.net.InetAddress
@@ -55,6 +58,38 @@ class RequestChannelTest {
   private val principalSerde = new KafkaPrincipalSerde() {
     override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)
     override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+  }
+
+  @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val requestChannel = new RequestChannel(50, "", Time.SYSTEM, mock(classOf[RequestChannel.Metrics]))
+      val gaugeMetricNameWithTagsToVerify = new java.util.HashMap[String, java.util.Set[java.util.Map[String, String]]]()
+      requestChannel.gaugeMetricNameWithTags.asScala.foreach { metricNameAndTags =>
+        gaugeMetricNameWithTagsToVerify.put(metricNameAndTags._1, metricNameAndTags._2)
+      }
+      // shutdown `requestChannel` so that metrics are removed
+      requestChannel.shutdown()
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      requestChannel.gaugeMetricNameWithNoTag.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      gaugeMetricNameWithTagsToVerify.asScala.foreach { metricNameAndTags=>
+        metricNameAndTags._2.asScala.foreach { tag =>
+          verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameAndTags._1), any(), ArgumentMatchers.eq(tag))
+        }
+      }
+      requestChannel.gaugeMetricNameWithNoTag.foreach(verify(mockMetricsGroup).removeMetric(_))
+      gaugeMetricNameWithTagsToVerify.asScala.foreach { metricNameAndTags=>
+        metricNameAndTags._2.asScala.foreach { tag =>
+          verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameAndTags._1), ArgumentMatchers.eq(tag))
+        }
+      }
+
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
   }
 
   @Test

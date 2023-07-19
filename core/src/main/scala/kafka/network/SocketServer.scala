@@ -117,7 +117,7 @@ class SocketServer(val config: KafkaConfig,
   private var stopped = false
 
   // Socket server metrics
-  metricsGroup.newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+  metricsGroup.newGauge(DataPlaneNetworkProcessorAvgIdlePercentMetricName, () => SocketServer.this.synchronized {
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val ioWaitRatioMetricNames = dataPlaneProcessors.map { p =>
       metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
@@ -131,7 +131,7 @@ class SocketServer(val config: KafkaConfig,
     }
   })
   if (config.requiresZookeeper) {
-    metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+    metricsGroup.newGauge(ControlPlaneNetworkProcessorAvgIdlePercentMetricName, () => SocketServer.this.synchronized {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
       val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
         metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
@@ -141,9 +141,9 @@ class SocketServer(val config: KafkaConfig,
       }.getOrElse(Double.NaN)
     })
   }
-  metricsGroup.newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
-  metricsGroup.newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
-  metricsGroup.newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+  metricsGroup.newGauge(MemoryPoolAvailableMetricName, () => memoryPool.availableMemory)
+  metricsGroup.newGauge(MemoryPoolUsedMetricName, () => memoryPool.size() - memoryPool.availableMemory)
+  metricsGroup.newGauge(DataPlaneExpiredConnectionsKilledCountMetricName, () => SocketServer.this.synchronized {
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.map { p =>
       metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
@@ -153,7 +153,7 @@ class SocketServer(val config: KafkaConfig,
     }.sum
   })
   if (config.requiresZookeeper) {
-    metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+    metricsGroup.newGauge(ControlPlaneExpiredConnectionsKilledCountMetricName, () => SocketServer.this.synchronized {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
       val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
         metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
@@ -297,15 +297,23 @@ class SocketServer(val config: KafkaConfig,
    */
   def shutdown(): Unit = {
     info("Shutting down socket server")
-    allAuthorizerFuturesComplete.completeExceptionally(new TimeoutException("The socket " +
-      "server was shut down before the Authorizer could be completely initialized."))
-    this.synchronized {
-      stopProcessingRequests()
-      dataPlaneRequestChannel.shutdown()
-      controlPlaneRequestChannelOpt.foreach(_.shutdown())
-      connectionQuotas.close()
+    try {
+      allAuthorizerFuturesComplete.completeExceptionally(new TimeoutException("The socket " +
+        "server was shut down before the Authorizer could be completely initialized."))
+      this.synchronized {
+        stopProcessingRequests()
+        dataPlaneRequestChannel.shutdown()
+        controlPlaneRequestChannelOpt.foreach(_.shutdown())
+        connectionQuotas.close()
+      }
+    } finally {
+      removeMetrics()
     }
     info("Shutdown completed")
+  }
+
+  private def removeMetrics(): Unit = {
+    MetricNames.foreach(metricsGroup.removeMetric(_))
   }
 
   def boundPort(listenerName: ListenerName): Int = {
@@ -402,6 +410,23 @@ class SocketServer(val config: KafkaConfig,
 
 object SocketServer {
   val MetricsGroup = "socket-server-metrics"
+
+  private val DataPlaneNetworkProcessorAvgIdlePercentMetricName = s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent"
+  private val ControlPlaneNetworkProcessorAvgIdlePercentMetricName = s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent"
+  private val MemoryPoolAvailableMetricName = "MemoryPoolAvailable"
+  private val MemoryPoolUsedMetricName = "MemoryPoolUsed"
+  private val DataPlaneExpiredConnectionsKilledCountMetricName = s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount"
+  private val ControlPlaneExpiredConnectionsKilledCountMetricName = s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount"
+
+  // Visible for testing
+  private[kafka] val MetricNames = Set(
+    DataPlaneNetworkProcessorAvgIdlePercentMetricName,
+    ControlPlaneNetworkProcessorAvgIdlePercentMetricName,
+    MemoryPoolAvailableMetricName,
+    MemoryPoolUsedMetricName,
+    DataPlaneExpiredConnectionsKilledCountMetricName,
+    ControlPlaneExpiredConnectionsKilledCountMetricName
+  )
 
   val ReconfigurableConfigs = Set(
     KafkaConfig.MaxConnectionsPerIpProp,
@@ -618,7 +643,11 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     "Acceptor",
     s"${metricPrefix()}AcceptorBlockedPercent",
     Map(ListenerMetricTag -> endPoint.listenerName.value).asJava)
+
+  // Visible for testing
+  val meterMetricNamesWithTag = new java.util.HashMap[com.yammer.metrics.core.MetricName, java.util.Map[String, String]]()
   private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
+  meterMetricNamesWithTag.put(blockedPercentMeterMetricName, Map(ListenerMetricTag -> endPoint.listenerName.value).asJava)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
   private var started = false
@@ -682,6 +711,10 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     synchronized {
       processors.foreach(_.close())
     }
+    meterMetricNamesWithTag.asScala.foreach { metricNameAndTags =>
+      metricsGroup.removeMetric(metricNameAndTags._1.getName, metricNameAndTags._2)
+    }
+    meterMetricNamesWithTag.clear()
   }
 
   /**

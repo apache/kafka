@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.network
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
@@ -364,6 +364,15 @@ class RequestChannel(val queueSize: Int,
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
   private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
+  // Visible for testing
+  private[kafka] val gaugeMetricNameWithNoTag = Set(
+    requestQueueSizeMetricName,
+    responseQueueSizeMetricName
+  )
+  type MetricNameWithTagData = java.util.HashMap[String, java.util.Set[java.util.Map[String, String]]]
+  // Visible for testing
+  private[kafka] val gaugeMetricNameWithTags = new MetricNameWithTagData
+
   metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
 
   metricsGroup.newGauge(responseQueueSizeMetricName, () => {
@@ -376,8 +385,13 @@ class RequestChannel(val queueSize: Int,
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    metricsGroup.newGauge(responseQueueSizeMetricName, () => processor.responseQueueSize,
+    newGaugeWithTag(responseQueueSizeMetricName, () => processor.responseQueueSize,
       Map(ProcessorMetricTag -> processor.id.toString).asJava)
+  }
+
+  private def newGaugeWithTag[T](metricName: String, metric: Gauge[T], tag: java.util.Map[String, String]): Unit = {
+    metricsGroup.newGauge(metricName, metric, tag)
+    gaugeMetricNameWithTags.computeIfAbsent(metricName, k => new java.util.HashSet[java.util.Map[String, String]]()).add(tag)
   }
 
   def removeProcessor(processorId: Int): Unit = {
@@ -502,6 +516,17 @@ class RequestChannel(val queueSize: Int,
   def shutdown(): Unit = {
     clear()
     metrics.close()
+    removeMetrics()
+  }
+
+  private def removeMetrics(): Unit = {
+    gaugeMetricNameWithNoTag.foreach(metricsGroup.removeMetric(_))
+    gaugeMetricNameWithTags.asScala.foreach { metricNameAndTags =>
+      metricNameAndTags._2.asScala.foreach { tag =>
+        metricsGroup.removeMetric(metricNameAndTags._1, tag)
+      }
+    }
+    gaugeMetricNameWithTags.clear()
   }
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)

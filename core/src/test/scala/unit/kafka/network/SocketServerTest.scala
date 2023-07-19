@@ -53,7 +53,10 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
 import java.util.concurrent.atomic.AtomicInteger
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{mockConstruction, verify, verifyNoMoreInteractions}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -242,6 +245,24 @@ class SocketServerTest {
     val request = new ApiVersionsRequest.Builder().build(version)
     val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
     Utils.toArray(request.serializeWithHeader(header))
+  }
+
+  @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val overrideSocket = new SocketServer(config, new Metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
+
+      // shutdown `overrideSocket` so that metrics are removed
+      shutdownServerAndMetrics(overrideSocket)
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      SocketServer.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      SocketServer.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
   }
 
   @Test
