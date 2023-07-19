@@ -117,6 +117,21 @@ public class TestSslUtils {
         return new CertificateBuilder(days, algorithm).generate(dn, pair);
     }
 
+    /**
+     * Generate a signed certificate. Self-signed, if no issuer and parentKeyPair are supplied
+     * @param dn The distinguished name of this certificate
+     * @param keyPair A key pair
+     * @param issuer The issuer who signs the certificate. Leave null while generating root CA.
+     * @param parentKeyPair The key pair of the issuer. Leave null while generating root CA.
+     * @param days how many days from now the Certificate is valid for, or - for negative values - how many days before now
+     * @param algorithm the signing algorithm, eg "SHA1withRSA"
+     * @return the signed certificate
+     * @throws CertificateException
+     */
+    public static X509Certificate generateSignedCertificate(String dn, KeyPair keyPair, String issuer, KeyPair parentKeyPair, int days, String algorithm) throws CertificateException {
+            return new CertificateBuilder(days, algorithm).generateSignedCertificate(dn, keyPair, issuer, parentKeyPair);
+        }
+
     public static KeyPair generateKeyPair(String algorithm) throws NoSuchAlgorithmException {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance(algorithm);
         keyGen.initialize(algorithm.equals("EC") ? 256 : 2048);
@@ -432,8 +447,68 @@ public class TestSslUtils {
                 throw new CertificateException(e);
             }
         }
-    }
 
+        /**
+         * @param dn The distinguished name to use
+         * @param keyPair A key pair to use
+         * @param issuer The issuer name. if null, "dn" is used
+         * @param parentCertificate The parent certificate used to sign this certificate. If null, create self-signed certificate authority (CA)
+         * @param parentKeyPair The parent key pair used to sign this certificate. If null, create self-signed certificate authority (CA)
+         * @return A (self-) signed certificate
+         * @throws CertificateException
+         */
+        public X509Certificate generateSignedCertificate(String dn, KeyPair keyPair, String issuer, KeyPair parentKeyPair) throws CertificateException {
+            X500Name issuerOrDn = (issuer!=null) ? new X500Name(issuer) : new X500Name(dn);
+            return generateSignedCertificate(new X500Name(dn), keyPair, issuerOrDn, parentKeyPair);
+        }
+        /**
+         * 
+         * @param dn The distinguished name to use
+         * @param keyPair A key pair to use
+         * @param issuer The issuer name. if null, "dn" is used
+         * @param parentKeyPair The parent key pair used to sign this certificate. If null, create self-signed certificate authority (CA)
+         * @return A (self-) signed certificate
+         * @throws CertificateException
+         */
+        public X509Certificate generateSignedCertificate(X500Name dn, KeyPair keyPair, X500Name issuer, KeyPair parentKeyPair) throws CertificateException {
+            try {
+                Security.addProvider(new BouncyCastleProvider());
+                AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
+                AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
+                // Create self-signed certificate if no parentKeyPair has been specified, otherwise sign with private key of parentKeyPair
+                KeyPair signingKeyPair = (parentKeyPair != null) ? parentKeyPair : keyPair;
+                AsymmetricKeyParameter privateKeyAsymKeyParam = PrivateKeyFactory.createKey(signingKeyPair.getPrivate().getEncoded());
+                SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
+                BcContentSignerBuilder signerBuilder;
+                String keyAlgorithm = keyPair.getPublic().getAlgorithm();
+                if (keyAlgorithm.equals("RSA"))
+                    signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
+                else if (keyAlgorithm.equals("DSA"))
+                    signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
+                else if (keyAlgorithm.equals("EC"))
+                    signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
+                else
+                    throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
+                // Negative numbers for "days" can be used to generate expired certificates
+                Date now = new Date();
+                Date from = (days>=0) ? now : new Date(now.getTime() + days * 86400000L);
+                Date to = (days>=0) ? new Date(now.getTime() + days * 86400000L) : now;
+                BigInteger sn = new BigInteger(64, new SecureRandom());
+                X500Name issuerOrDn = (issuer != null) ? issuer : dn;
+                X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(issuerOrDn, sn, from, to, dn, subPubKeyInfo);
+
+                if (subjectAltName != null)
+                    v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);
+                X509CertificateHolder certificateHolder = v3CertGen.build(sigGen);
+                return new JcaX509CertificateConverter().setProvider("BC").getCertificate(certificateHolder);
+            } catch (CertificateException ce) {
+                throw ce;
+            } catch (Exception e) {
+                throw new CertificateException(e);
+            }
+        }
+    }
     public static class SslConfigsBuilder {
         final Mode mode;
         String tlsProtocol;
