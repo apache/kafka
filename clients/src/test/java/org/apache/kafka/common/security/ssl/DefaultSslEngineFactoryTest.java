@@ -23,6 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.security.KeyPair;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -319,14 +321,33 @@ public class DefaultSslEngineFactoryTest {
     void testNeverExpiringX509CertificateUnchangedBehaviorWithValidCertificate() throws Exception {
         final KeyPair keyPair = TestSslUtils.generateKeyPair("RSA");
         final String dn="CN=Test, L=London, C=GB";
-        X509Certificate[] testCerts = new X509Certificate[2];
+        // Create and initialize data structures
+        int nrOfCerts = 3;
+        X509Certificate[] testCerts = new X509Certificate[nrOfCerts];
+        PublicKey[] signedWith = new PublicKey[nrOfCerts];
+        boolean[] expectExpired = new boolean[nrOfCerts];
         final int days = 1;
         // Generate valid certificate
         testCerts[0] = TestSslUtils.generateCertificate(dn, keyPair, days, "SHA512withRSA");
+        // Self-signed
+        signedWith[0] = testCerts[0].getPublicKey();
+        // Expect this to be valid
+        expectExpired[0] = false;
         // Generate expired, but valid certificate
         testCerts[1] = TestSslUtils.generateCertificate(dn, keyPair, -days, "SHA512withRSA");
-        boolean[] expectExpired = {false, true};
-        for (int i = 0; i < testCerts.length; i++) {
+        // Self-signed
+        signedWith[1] = testCerts[1].getPublicKey();
+        // Expect this to be expired
+        expectExpired[1] = true;
+        // Create real certificate chain
+        X509Certificate[] certChain = generateKeyChainIncludingCA();
+        testCerts[2] = certChain[0];
+        // The end certificate must be signed by the intermediate CA public key
+        signedWith[2] = certChain[1].getPublicKey();
+        // Certificate is not expired
+        expectExpired[2] = false;
+        
+        for (int i = 0; i < nrOfCerts; i++) {
             X509Certificate cert = testCerts[i];
             final NeverExpiringX509Certificate wrappedCert = new DefaultSslEngineFactory.NeverExpiringX509Certificate(cert);
             assertEquals(cert.getCriticalExtensionOIDs(), wrappedCert.getCriticalExtensionOIDs());
@@ -391,10 +412,30 @@ public class DefaultSslEngineFactoryTest {
             assertEquals(cert.getPublicKey(), wrappedCert.getPublicKey());
             assertEquals(cert.toString(), wrappedCert.toString());
             // Here, we use a self-signed certificate, thus it is supposed to be signed by itself
-            assertDoesNotThrow(() -> cert.verify(keyPair.getPublic()));
-            assertDoesNotThrow(() -> wrappedCert.verify(keyPair.getPublic()));
+            final PublicKey signingKey = signedWith[i];
+            assertDoesNotThrow(() -> cert.verify(signingKey));
+            assertDoesNotThrow(() -> wrappedCert.verify(signingKey));
         }
 
+    }
+
+    /**
+     * This helper method generates a valid key chain with one end entity (client/server cert), one intermediate certificate authority and one root certificate authority (self-signed)
+     * @return
+     * @throws CertificateException
+     * @throws NoSuchAlgorithmException
+     */
+    private X509Certificate[] generateKeyChainIncludingCA() throws CertificateException, NoSuchAlgorithmException {
+        KeyPair[] keyPairs = new KeyPair[3];
+        for (int i = 0; i < 3; i++) {
+            keyPairs[i] = TestSslUtils.generateKeyPair("RSA");
+        }
+        X509Certificate[] certs = new X509Certificate[3];
+        // Generate root CA
+        certs[2] = TestSslUtils.generateSignedCertificate("CN=CA, L=London, C=GB", keyPairs[2], null, null, 365, "SHA512withRSA");
+        certs[1] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA, L=London, C=GB", keyPairs[1], certs[2].getIssuerX500Principal().getName(), keyPairs[2], 365, "SHA512withRSA");
+        certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0], certs[1].getIssuerX500Principal().getName(), keyPairs[1], 1, "SHA512withRSA");
+        return certs;
     }
 
     private String pemFilePath(String pem) throws Exception {
