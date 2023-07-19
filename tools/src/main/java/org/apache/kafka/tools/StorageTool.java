@@ -70,30 +70,33 @@ public class StorageTool {
     }
 
     private static void executeCommand(Namespace namespace, String command, Optional<LogConfig> config) throws Exception {
+        final String info = "info";
+        final String format = "format";
+        if ((command.equals(info) || command.equals(format)) && !config.isPresent()) {
+            return; // Do nothing if config is not present
+        }
+
         switch (command) {
-            case "info": {
-                if (config.isPresent()) {
-                    List<String> directories = configToLogDirectories(config.get());
-                    boolean selfManagedMode = configToSelfManagedMode(config.get());
-                    Exit.exit(infoCommand(System.out, selfManagedMode, directories));
-                }
+            case info: {
+                List<String> directories = configToLogDirectories(config.get());
+                boolean selfManagedMode = configToSelfManagedMode(config.get());
+                Exit.exit(infoCommand(System.out, selfManagedMode, directories));
                 break;
             }
-            case "format": {
-                if (config.isPresent()) {
-                    List<String> directories = configToLogDirectories(config.get());
-                    String clusterId = namespace.getString("cluster_id");
-                    MetadataVersion metadataVersion = getMetadataVersion(namespace, Optional.of(config.get().getInterBrokerProtocolVersionString()));
-                    if (!metadataVersion.isKRaftSupported()) {
-                        throw new TerseException("Must specify a valid KRaft metadata version of at least 3.0.");
-                    }
-                    MetaProperties metaProperties = buildMetadataProperties(clusterId, config.get());
-                    Boolean ignoreFormatted = namespace.getBoolean("ignore_formatted");
-                    if (!configToSelfManagedMode(config.get())) {
-                        throw new TerseException("The kafka configuration file appears to be for " + "a legacy cluster. Formatting is only supported for clusters in KRaft mode.");
-                    }
-                    Exit.exit(formatCommand(System.out, directories, metaProperties, metadataVersion, ignoreFormatted));
+            case format: {
+                List<String> directories = configToLogDirectories(config.get());
+                String clusterId = namespace.getString("cluster_id");
+                MetadataVersion metadataVersion = getMetadataVersion(namespace, Optional.of(config.get().getInterBrokerProtocolVersionString()));
+                if (!metadataVersion.isKRaftSupported()) {
+                    throw new TerseException("Must specify a valid KRaft metadata version of at least 3.0.");
                 }
+                MetaProperties metaProperties = buildMetadataProperties(clusterId, config.get());
+                Boolean ignoreFormatted = namespace.getBoolean("ignore_formatted");
+                if (!configToSelfManagedMode(config.get())) {
+                    throw new TerseException("The kafka configuration file appears to be for " +
+                        "a legacy cluster. Formatting is only supported for clusters in KRaft mode.");
+                }
+                Exit.exit(formatCommand(System.out, directories, metaProperties, metadataVersion, ignoreFormatted));
                 break;
             }
             case "random-uuid": {
@@ -200,7 +203,7 @@ public class StorageTool {
     }
 
 
-    static Namespace parseArguments(String... args) throws Exception {
+    static Namespace parseArguments(String... args) {
         ArgumentParser parser = ArgumentParsers.newArgumentParser("kafka-storage").defaultHelp(true).description("The Kafka storage tool.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
         Subparser infoParser = subparsers.addParser("info").help("Get information about the Kafka log directories on this node.");
@@ -272,8 +275,8 @@ public class StorageTool {
                 return true;
             } else if (!ignoreFormatted) {
                 try {
-                    throw new TerseException("Log directory " + directory
-                        + " is already formatted. " + "Use --ignore-formatted to ignore this directory and format the others.");
+                    throw new TerseException("Log directory " + directory + " is already formatted. " +
+                        "Use --ignore-formatted to ignore this directory and format the others.");
                 } catch (TerseException e) {
                     throw new RuntimeException(e.getMessage());
                 }

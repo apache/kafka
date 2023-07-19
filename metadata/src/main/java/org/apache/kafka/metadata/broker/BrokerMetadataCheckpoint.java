@@ -37,7 +37,6 @@ import java.util.Properties;
 import java.util.Set;
 
 public class BrokerMetadataCheckpoint {
-//    private final Logger log;
     static LogContext logContext = new LogContext("[BrokerMetadataCheckpoint] ");
     static Logger log = logContext.logger(BrokerMetadataCheckpoint.class);
     private final File file;
@@ -45,7 +44,6 @@ public class BrokerMetadataCheckpoint {
 
     public BrokerMetadataCheckpoint(File file) {
         this.file = file;
-
     }
 
     public void write(Properties properties) throws IOException {

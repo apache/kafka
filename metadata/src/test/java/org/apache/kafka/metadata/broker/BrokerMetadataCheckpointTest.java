@@ -21,8 +21,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -291,38 +289,5 @@ public class BrokerMetadataCheckpointTest {
         Assertions.assertEquals(expectedOfflineDirPaths, offlineDirs);
         Assertions.assertEquals(new Properties(), metaProperties.getProps());
     }
-    public enum Level {
-        ERROR,
-        WARN,
-        INFO,
-        DEBUG,
-        TRACE
-    }
-
-    public static void swallow(Runnable action, Logger logging, Level logLevel) {
-        try {
-            action.run();
-        } catch (Throwable e) {
-            Logger logger = LoggerFactory.getLogger(logging.getClass());
-            switch (logLevel) {
-                case ERROR:
-                    logger.error(e.getMessage(), e);
-                    break;
-                case WARN:
-                    logger.warn(e.getMessage(), e);
-                    break;
-                case INFO:
-                    logger.info(e.getMessage(), e);
-                    break;
-                case DEBUG:
-                    logger.debug(e.getMessage(), e);
-                    break;
-                case TRACE:
-                    logger.trace(e.getMessage(), e);
-                    break;
-            }
-        }
-    }
-
 }
 

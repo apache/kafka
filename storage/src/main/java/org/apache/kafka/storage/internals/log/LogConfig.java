@@ -241,10 +241,10 @@ public class LogConfig extends AbstractConfig {
     private static final String LogDirsProp = LogConfigPrefix + "dirs";
 
     private static final String MetadataLogDir = "metadata.log.dir";
-    static String LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirProp + " property)";
-    static String MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
+    private static final String LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirProp + " property)";
+    private static final String MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
         "If it is not set, the metadata log is placed in the first log directory from log.dirs.";
-    static String LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LogDirsProp + " is used.";
+    private static final String LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LogDirsProp + " is used.";
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
         "the leader side. The list should describe a set of replicas in the form " +
