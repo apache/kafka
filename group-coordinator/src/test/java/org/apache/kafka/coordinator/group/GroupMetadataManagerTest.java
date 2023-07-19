@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.network.ClientInformation;
@@ -40,12 +41,12 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.assignor.AbstractPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.common.RackAwareTopicIdPartition;
+import org.apache.kafka.coordinator.group.assignor.AssignmentTopicDescriber;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -82,7 +83,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -100,7 +100,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
-    static class MockPartitionAssignor extends AbstractPartitionAssignor {
+    static class MockPartitionAssignor implements PartitionAssignor {
         private final String name;
         private GroupAssignment prepareGroupAssignment = null;
 
@@ -118,7 +118,7 @@ public class GroupMetadataManagerTest {
         }
 
         @Override
-        public GroupAssignment assign(Optional<List<RackAwareTopicIdPartition>> partitionRackInfo, AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+        public GroupAssignment assign(AssignmentTopicDescriber assignmentTopicDescriber, AssignmentSpec assignmentSpec) throws PartitionAssignorException {
             return prepareGroupAssignment;
         }
     }
@@ -137,6 +137,14 @@ public class GroupMetadataManagerTest {
                     .setTopicId(topicId)
                     .setPartitionId(i));
             }
+            return this;
+        }
+
+        public MetadataImageBuilder addRack(
+            int brokerId,
+            String rack
+        ) {
+            delta.replay(new RegisterBrokerRecord().setBrokerId(brokerId).setRack(rack));
             return this;
         }
 
@@ -197,8 +205,8 @@ public class GroupMetadataManagerTest {
                             subscriptionMetadata.put(topicName, new TopicMetadata(
                                 topicImage.id(),
                                 topicImage.name(),
-                                topicImage.partitions().size()
-                            ));
+                                topicImage.partitions().size(),
+                                Collections.emptyMap()));
                         }
                     });
                 });
@@ -234,7 +242,7 @@ public class GroupMetadataManagerTest {
             final private LogContext logContext = new LogContext();
             final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
             private MetadataImage metadataImage;
-            private List<AbstractPartitionAssignor> assignors;
+            private List<PartitionAssignor> assignors;
             private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
             private int consumerGroupMaxSize = Integer.MAX_VALUE;
             private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -244,7 +252,7 @@ public class GroupMetadataManagerTest {
                 return this;
             }
 
-            public Builder withAssignors(List<AbstractPartitionAssignor> assignors) {
+            public Builder withAssignors(List<PartitionAssignor> assignors) {
                 this.assignors = assignors;
                 return this;
             }
@@ -766,8 +774,8 @@ public class GroupMetadataManagerTest {
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {{
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, Collections.emptyMap()));
                 }}),
             RecordHelpers.newGroupEpochRecord(groupId, 1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
@@ -806,7 +814,7 @@ public class GroupMetadataManagerTest {
                     .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(Arrays.asList("foo"))
+                    .setSubscribedTopicNames(Collections.singletonList("foo"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
@@ -864,8 +872,8 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, Collections.emptyMap()));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
@@ -978,7 +986,7 @@ public class GroupMetadataManagerTest {
                             .setPartitions(Arrays.asList(4, 5)),
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                             .setTopicId(barTopicId)
-                            .setPartitions(Arrays.asList(2))
+                            .setPartitions(Collections.singletonList(2))
                     ))),
             result.response()
         );
@@ -1104,8 +1112,8 @@ public class GroupMetadataManagerTest {
             // Subscription metadata is recomputed because zar is no longer there.
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, Collections.emptyMap()));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11)
@@ -1937,9 +1945,9 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        AbstractPartitionAssignor assignor = mock(AbstractPartitionAssignor.class);
+        PartitionAssignor assignor = mock(PartitionAssignor.class);
         when(assignor.name()).thenReturn("range");
-        when(assignor.assign(Optional.empty(), any())).thenThrow(new PartitionAssignorException("Assignment failed."));
+        when(assignor.assign(any(), any())).thenThrow(new PartitionAssignorException("Assignment failed."));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
@@ -2000,7 +2008,7 @@ public class GroupMetadataManagerTest {
                     {
                         // foo only has 3 partitions stored in the metadata but foo has
                         // 6 partitions the metadata image.
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, Collections.emptyMap()));
                     }
                 }))
             .build();
@@ -2054,7 +2062,7 @@ public class GroupMetadataManagerTest {
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
@@ -2110,7 +2118,7 @@ public class GroupMetadataManagerTest {
                     {
                         // foo only has 3 partitions stored in the metadata but foo has
                         // 6 partitions the metadata image.
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, Collections.emptyMap()));
                     }
                 }))
             .build();
@@ -2182,7 +2190,7 @@ public class GroupMetadataManagerTest {
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),

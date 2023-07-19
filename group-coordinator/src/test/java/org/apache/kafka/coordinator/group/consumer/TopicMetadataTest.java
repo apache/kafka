@@ -20,6 +20,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -28,24 +30,25 @@ public class TopicMetadataTest {
     @Test
     public void testAttributes() {
         Uuid topicId = Uuid.randomUuid();
-        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15);
+        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, Collections.emptyMap());
         assertEquals(topicId, topicMetadata.id());
         assertEquals("foo", topicMetadata.name());
         assertEquals(15, topicMetadata.numPartitions());
+        assertEquals(Collections.emptyMap(), topicMetadata.partitionRackInfo());
     }
 
     @Test
     public void testTopicIdAndNameCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicMetadata(Uuid.randomUuid(), null, 15));
-        assertThrows(NullPointerException.class, () -> new TopicMetadata(null, "foo", 15));
+        assertThrows(NullPointerException.class, () -> new TopicMetadata(Uuid.randomUuid(), null, 15, Collections.emptyMap()));
+        assertThrows(NullPointerException.class, () -> new TopicMetadata(null, "foo", 15, Collections.emptyMap()));
     }
 
     @Test
     public void testEquals() {
         Uuid topicId = Uuid.randomUuid();
-        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15);
-        assertEquals(new TopicMetadata(topicId, "foo", 15), topicMetadata);
-        assertNotEquals(new TopicMetadata(topicId, "foo", 5), topicMetadata);
+        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, Collections.emptyMap());
+        assertEquals(new TopicMetadata(topicId, "foo", 15, Collections.emptyMap()), topicMetadata);
+        assertNotEquals(new TopicMetadata(topicId, "foo", 5, Collections.emptyMap()), topicMetadata);
     }
 
     @Test
@@ -59,7 +62,7 @@ public class TopicMetadataTest {
             .setNumPartitions(15);
 
         assertEquals(
-            new TopicMetadata(topicId, topicName, 15),
+            new TopicMetadata(topicId, topicName, 15, Collections.emptyMap()),
             TopicMetadata.fromRecord(record)
         );
     }

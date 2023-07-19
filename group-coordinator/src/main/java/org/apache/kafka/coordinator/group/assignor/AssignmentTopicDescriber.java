@@ -17,29 +17,26 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
-public class AssignmentTopicMetadata implements AssignmentTopicDescriber {
-
-    Map<Uuid, PartitionMetadata> TopicPartitionMetadata;
-
-    public AssignmentTopicMetadata(Map<Uuid, PartitionMetadata> TopicPartitionMetadata) {
-        this.TopicPartitionMetadata = TopicPartitionMetadata;
-    }
+/**
+ * The assignment topic describer is used by the {@link PartitionAssignor}
+ * to obtain topic and partition metadata of subscribed topics.
+ *
+ * The interface is kept in an internal module until KIP-848 is fully
+ * implemented and ready to be released.
+ */
+@InterfaceStability.Unstable
+public interface AssignmentTopicDescriber {
 
     /**
      * Returns a set of subscribed topicIds.
      *
      * @return Set of topicIds corresponding to the subscribed topics.
      */
-    @Override
-    public Set<Uuid> subscribedTopicIds() {
-        return TopicPartitionMetadata.keySet();
-    }
+    Set<Uuid> subscribedTopicIds();
 
     /**
      * Number of partitions for the given topicId.
@@ -48,15 +45,7 @@ public class AssignmentTopicMetadata implements AssignmentTopicDescriber {
      * @return The number of partitions corresponding to the given topicId.
      *         If the topicId doesn't exist return 0;
      */
-    @Override
-    public int numPartitions(Uuid topicId) {
-        PartitionMetadata partitionMetadata = TopicPartitionMetadata.get(topicId);
-        if (partitionMetadata == null) {
-            return 0;
-        }
-
-        return partitionMetadata.numPartitions();
-    }
+    int numPartitions(Uuid topicId);
 
     /**
      * Returns all the racks associated with the replicas for the given partition.
@@ -66,33 +55,5 @@ public class AssignmentTopicMetadata implements AssignmentTopicDescriber {
      * @return The set of racks corresponding to the replicas of the topics partition.
      *         If the topicId doesn't exist return an empty set;
      */
-    @Override
-    public Set<String> racksForPartition(Uuid topicId, int partition) {
-        PartitionMetadata partitionMetadata = TopicPartitionMetadata.get(topicId);
-        if (partitionMetadata == null) {
-            return Collections.emptySet();
-        }
-
-        return partitionMetadata.racks(partition);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof AssignmentTopicMetadata)) return false;
-        AssignmentTopicMetadata that = (AssignmentTopicMetadata) o;
-        return TopicPartitionMetadata.equals(that.TopicPartitionMetadata);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(TopicPartitionMetadata);
-    }
-
-    @Override
-    public String toString() {
-        return "AssignmentTopicMetadata{" +
-            "TopicPartitionMetadata=" + TopicPartitionMetadata +
-            '}';
-    }
+    Set<String> racksForPartition(Uuid topicId, int partition);
 }

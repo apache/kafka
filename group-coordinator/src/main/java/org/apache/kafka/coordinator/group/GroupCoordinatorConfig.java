@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.coordinator.group.assignor.AbstractPartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 
 import java.util.List;
 
@@ -48,7 +48,7 @@ public class GroupCoordinatorConfig {
     /**
      * The consumer group assignors.
      */
-    public final List<AbstractPartitionAssignor> consumerGroupAssignors;
+    public final List<PartitionAssignor> consumerGroupAssignors;
 
     /**
      * The offsets topic segment bytes should be kept relatively small to facilitate faster
@@ -61,7 +61,7 @@ public class GroupCoordinatorConfig {
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMaxSize,
-        List<AbstractPartitionAssignor> consumerGroupAssignors,
+        List<PartitionAssignor> consumerGroupAssignors,
         int offsetsTopicSegmentBytes
     ) {
         this.numThreads = numThreads;

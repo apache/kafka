@@ -54,6 +54,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -154,16 +155,17 @@ public class RecordHelpersTest {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
+        Map<Integer, Set<String>> partitionRackInfo = new HashMap<>();
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
-            10
-        ));
+            10,
+            partitionRackInfo));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
-            20
-        ));
+            20,
+            partitionRackInfo));
 
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(

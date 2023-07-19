@@ -18,14 +18,14 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
-import org.apache.kafka.coordinator.group.assignor.AbstractPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentTopicMetadata;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.common.TopicAndClusterMetadata;
+import org.apache.kafka.coordinator.group.assignor.PartitionMetadata;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -106,17 +106,12 @@ public class TargetAssignmentBuilder {
     /**
      * The partition assignor used to compute the assignment.
      */
-    private final AbstractPartitionAssignor assignor;
+    private final PartitionAssignor assignor;
 
     /**
      * The members in the group.
      */
     private Map<String, ConsumerGroupMember> members = Collections.emptyMap();
-
-    /**
-     * Topic and Cluster Metadata Images.
-     */
-    private TopicAndClusterMetadata topicAndClusterMetadataImages;
 
     /**
      * The subscription metadata.
@@ -144,7 +139,7 @@ public class TargetAssignmentBuilder {
     public TargetAssignmentBuilder(
         String groupId,
         int groupEpoch,
-        AbstractPartitionAssignor assignor
+        PartitionAssignor assignor
     ) {
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
@@ -187,19 +182,6 @@ public class TargetAssignmentBuilder {
         Map<String, Assignment> targetAssignment
     ) {
         this.targetAssignment = targetAssignment;
-        return this;
-    }
-
-    /**
-     * Adds the existing metadata images.
-     *
-     * @param topicAndClusterMetadataImages   Topic and Cluster metadata images.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withTopicAndClusterMetadataImages(
-        TopicAndClusterMetadata topicAndClusterMetadataImages
-    ) {
-        this.topicAndClusterMetadataImages = topicAndClusterMetadataImages;
         return this;
     }
 
@@ -263,17 +245,16 @@ public class TargetAssignmentBuilder {
         });
 
         // Prepare the topic metadata.
-        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        Map<Uuid, PartitionMetadata> topicMetadataMap = new HashMap<>();
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topics.put(topicMetadata.id(), new AssignmentTopicMetadata(topicMetadata.numPartitions()))
+            topicMetadataMap.put(topicMetadata.id(), new PartitionMetadata(topicMetadata.partitionRackInfo()))
         );
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            topicAndClusterMetadataImages,
+            new AssignmentTopicMetadata(topicMetadataMap),
             new AssignmentSpec(
-                Collections.unmodifiableMap(memberSpecs),
-                Collections.unmodifiableMap(topics)
+                Collections.unmodifiableMap(memberSpecs)
             )
         );
 

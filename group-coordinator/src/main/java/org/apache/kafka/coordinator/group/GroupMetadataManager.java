@@ -30,10 +30,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.assignor.AbstractPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.common.TopicAndClusterMetadata;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -96,7 +94,7 @@ public class GroupMetadataManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
-        private List<AbstractPartitionAssignor> assignors = null;
+        private List<PartitionAssignor> assignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -117,7 +115,7 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withAssignors(List<AbstractPartitionAssignor> assignors) {
+        Builder withAssignors(List<PartitionAssignor> assignors) {
             this.assignors = assignors;
             return this;
         }
@@ -183,12 +181,12 @@ public class GroupMetadataManager {
     /**
      * The supported partition assignors keyed by their name.
      */
-    private final Map<String, AbstractPartitionAssignor> assignors;
+    private final Map<String, PartitionAssignor> assignors;
 
     /**
      * The default assignor used.
      */
-    private final AbstractPartitionAssignor defaultAssignor;
+    private final PartitionAssignor defaultAssignor;
 
     /**
      * The generic and consumer groups keyed by their name.
@@ -224,7 +222,7 @@ public class GroupMetadataManager {
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
-        List<AbstractPartitionAssignor> assignors,
+        List<PartitionAssignor> assignors,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
         int consumerGroupHeartbeatIntervalMs,
@@ -580,7 +578,8 @@ public class GroupMetadataManager {
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
-                metadataImage.topics()
+                metadataImage.topics(),
+                metadataImage.cluster()
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -611,15 +610,9 @@ public class GroupMetadataManager {
 
             try {
                 TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
-                    new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
+                    new TargetAssignmentBuilder(groupId, groupEpoch,assignors.get(preferredServerAssignor))
                         .withMembers(group.members())
                         .withSubscriptionMetadata(subscriptionMetadata)
-                        .withTopicAndClusterMetadataImages(
-                            new TopicAndClusterMetadata(
-                                metadataImage.topics(),
-                                metadataImage.cluster()
-                            )
-                        )
                         .withTargetAssignment(group.targetAssignment())
                         .addOrUpdateMember(memberId, updatedMember)
                         .build();
@@ -708,7 +701,8 @@ public class GroupMetadataManager {
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
             member,
             null,
-            metadataImage.topics()
+            metadataImage.topics(),
+            metadataImage.cluster()
         );
 
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {

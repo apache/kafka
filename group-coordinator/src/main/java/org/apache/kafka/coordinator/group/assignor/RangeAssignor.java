@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.common.RackAwareTopicIdPartition;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static java.lang.Math.min;
@@ -49,7 +47,7 @@ import static java.lang.Math.min;
  *           movements during reassignment. (Sticky) </li>
  * </ol>
  */
-public class RangeAssignor extends AbstractPartitionAssignor {
+public class RangeAssignor implements PartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override
@@ -80,7 +78,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     /**
      * @return Map of topic ids to a list of members subscribed to them.
      */
-    private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec) {
+    private Map<Uuid, List<String>> membersPerTopic(AssignmentTopicDescriber assignmentTopicDescriber, final AssignmentSpec assignmentSpec) {
         Map<Uuid, List<String>> membersPerTopic = new HashMap<>();
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
@@ -89,7 +87,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             for (Uuid topicId : topics) {
                 // Only topics that are present in both the subscribed topics list and the topic metadata should be
                 // considered for assignment.
-                if (assignmentSpec.topics().containsKey(topicId)) {
+                if (assignmentTopicDescriber.subscribedTopicIds().contains(topicId)) {
                     membersPerTopic
                         .computeIfAbsent(topicId, k -> new ArrayList<>())
                         .add(memberId);
@@ -120,14 +118,14 @@ public class RangeAssignor extends AbstractPartitionAssignor {
      * </ol>
      */
     @Override
-    public GroupAssignment assign(Optional<List<RackAwareTopicIdPartition>> partitionRackInfo, final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+    public GroupAssignment assign(AssignmentTopicDescriber assignmentTopicDescriber, final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
         Map<String, MemberAssignment> newAssignment = new HashMap<>();
 
         // Step 1
-        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentSpec);
+        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentTopicDescriber, assignmentSpec);
 
         membersPerTopic.forEach((topicId, membersForTopic) -> {
-            int numPartitionsForTopic = assignmentSpec.topics().get(topicId).numPartitions();
+            int numPartitionsForTopic = assignmentTopicDescriber.numPartitions(topicId);
             int minRequiredQuota = numPartitionsForTopic / membersForTopic.size();
             // Each member can get only ONE extra partition per topic after receiving the minimum quota.
             int numMembersWithExtraPartition = numPartitionsForTopic % membersForTopic.size();

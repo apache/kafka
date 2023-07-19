@@ -19,7 +19,11 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Immutable topic metadata.
@@ -40,23 +44,31 @@ public class TopicMetadata {
      */
     private final int numPartitions;
 
+    /**
+     * Map of every partition to a set of its rackIds.
+     * If the rack information is unavailable, pass an empty set.
+     */
+    private final Map<Integer, Set<String>> partitionRackInfo;
+
     public TopicMetadata(
         Uuid id,
         String name,
-        int numPartitions
+        int numPartitions,
+        Map<Integer, Set<String>> partitionRackInfo
     ) {
-        this.id = Objects.requireNonNull(id);
-        if (Uuid.ZERO_UUID.equals(id)) {
-            throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
-        }
-        this.name = Objects.requireNonNull(name);
-        if (name.isEmpty()) {
-            throw new IllegalArgumentException("Topic name cannot be empty.");
-        }
-        this.numPartitions = numPartitions;
-        if (numPartitions < 0) {
-            throw new IllegalArgumentException("Number of partitions cannot be negative.");
-        }
+            this.id = Objects.requireNonNull(id);
+            this.partitionRackInfo = Objects.requireNonNull(partitionRackInfo);
+            if (Uuid.ZERO_UUID.equals(id)) {
+                throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
+            }
+            this.name = Objects.requireNonNull(name);
+            if (name.isEmpty()) {
+                throw new IllegalArgumentException("Topic name cannot be empty.");
+            }
+            this.numPartitions = numPartitions;
+            if (numPartitions < 0) {
+                throw new IllegalArgumentException("Number of partitions cannot be negative.");
+            }
     }
 
     /**
@@ -80,6 +92,13 @@ public class TopicMetadata {
         return this.numPartitions;
     }
 
+    /**
+     * @return The map of evrey partition to the set of corresponding rackIds of its replicas.
+     */
+    public Map<Integer, Set<String>> partitionRackInfo() {
+        return this.partitionRackInfo;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -89,7 +108,8 @@ public class TopicMetadata {
 
         if (!id.equals(that.id)) return false;
         if (!name.equals(that.name)) return false;
-        return numPartitions == that.numPartitions;
+        if (numPartitions != that.numPartitions) return false;
+        return partitionRackInfo.equals(that.partitionRackInfo);
     }
 
     @Override
@@ -97,6 +117,7 @@ public class TopicMetadata {
         int result = id.hashCode();
         result = 31 * result + name.hashCode();
         result = 31 * result + numPartitions;
+        result = 31 * result + partitionRackInfo.hashCode();
         return result;
     }
 
@@ -106,16 +127,23 @@ public class TopicMetadata {
             "id=" + id +
             ", name=" + name +
             ", numPartitions=" + numPartitions +
+            ", partitionRackInfo=" + partitionRackInfo +
             ')';
     }
 
     public static TopicMetadata fromRecord(
         ConsumerGroupPartitionMetadataValue.TopicMetadata record
     ) {
+        // Converting the data type from a list stored in the record to a map.
+        Map<Integer, Set<String>> partitionRackInfo = new HashMap<>(record.partitionRackInfo().size());
+        for (ConsumerGroupPartitionMetadataValue.PartitionRackInfo info : record.partitionRackInfo()) {
+            partitionRackInfo.put(info.partition(), new HashSet<>(info.racks()));
+        }
+
         return new TopicMetadata(
             record.topicId(),
             record.topicName(),
-            record.numPartitions()
-        );
+            record.numPartitions(),
+            partitionRackInfo);
     }
 }
