@@ -407,7 +407,7 @@ private[group] class GroupCoordinatorAdapter(
       request.groupId,
       request.memberId,
       Option(request.groupInstanceId),
-      request.generationId,
+      request.generationIdOrMemberEpoch,
       partitions.toMap,
       callback,
       RequestLocal(bufferSupplier)
