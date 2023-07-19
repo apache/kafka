@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +42,8 @@ import java.util.Collections;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -304,5 +307,23 @@ public class ReplicatedGroupCoordinatorTest {
             new ApiMessageAndVersion(key, (short) 255),
             new ApiMessageAndVersion(value, (short) 0)
         )));
+    }
+
+    @Test
+    public void testOnLoaded() {
+        MetadataImage image = MetadataImage.EMPTY;
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+            groupMetadataManager
+        );
+
+        coordinator.onLoaded(image);
+
+        verify(groupMetadataManager, times(1)).onNewMetadataImage(
+            eq(image),
+            any()
+        );
+
+        verify(groupMetadataManager, times(1)).onLoaded();
     }
 }

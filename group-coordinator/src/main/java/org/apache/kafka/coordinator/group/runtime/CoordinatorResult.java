@@ -52,6 +52,17 @@ public class CoordinatorResult<T, U> {
     }
 
     /**
+     * Constructs a Result with records and a response.
+     *
+     * @param records   A non-null list of records.
+     */
+    public CoordinatorResult(
+        List<U> records
+    ) {
+        this(records, null);
+    }
+
+    /**
      * @return The list of records.
      */
     public List<U> records() {

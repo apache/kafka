@@ -41,6 +41,18 @@ public abstract class AbstractControlRequest extends AbstractRequest {
             this.brokerEpoch = brokerEpoch;
             this.kraftController = kraftController;
         }
+
+        public int controllerId() {
+            return controllerId;
+        }
+
+        public int controllerEpoch() {
+            return controllerEpoch;
+        }
+
+        public long brokerEpoch() {
+            return brokerEpoch;
+        }
     }
 
     protected AbstractControlRequest(ApiKeys api, short version) {

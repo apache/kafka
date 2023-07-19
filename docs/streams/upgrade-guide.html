@@ -64,6 +64,8 @@
         for more details.
     </p>
 
+    <p>For a table that shows Streams API compatibility with Kafka broker versions, see <a href="#streams_api_broker_compat">Broker Compatibility</a>.</p>
+
     <h3 class="anchor-heading"><a id="streams_notable_changes" class="anchor-link"></a><a href="#streams_notable_changes">Notable compatibility changes in past releases</a></h3>
     <p>
         Downgrading from 3.5.x or newer version to 3.4.x or older version needs special attention:
@@ -1291,6 +1293,57 @@
         <li> Windows are not named anymore: TimeWindows.of("name", 1000) changes to TimeWindows.of(1000) (cf. DSL: new parameter to specify state store names) </li>
         <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
     </ul>
+
+    <h3 class="anchor-heading"><a id="streams_api_broker_compat" class="anchor-link"></a><a href="#streams_api_broker_compat">Streams API broker compatibility</a></h3>
+
+    <p>The following table shows which versions of the Kafka Streams API are compatible with various Kafka broker versions.</p>
+
+    <table border="1" class="non-scrolling-table docutils">
+        <thead>
+          <tr>
+            <th></th>
+            <th colspan="3">Kafka Broker (columns)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Kafka Streams API (rows)</td>
+            <td>0.10.0.x</td>
+            <td>0.10.1.x and 0.10.2.x</td>
+            <td>0.11.0.x and<br>1.0.x and<br>1.1.x and<br>2.0.x and<br>2.1.x and<br>2.2.x and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x</td>
+          </tr>
+          <tr>
+            <td>0.10.0.x</td>
+            <td>compatible</td>
+            <td>compatible</td>
+            <td>compatible</td>
+          </tr>
+          <tr>
+            <td>0.10.1.x and 0.10.2.x</td>
+            <td></td>
+            <td>compatible</td>
+            <td>compatible</td>
+          </tr>
+          <tr>
+            <td>0.11.0.x</td>
+            <td></td>
+            <td>compatible with exactly-once turned off<br>(requires broker version 0.11.0.x or higher)</td>
+            <td>compatible</td>
+          </tr>
+          <tr>
+            <td>1.0.x and<br>1.1.x and<br>2.0.x and<br>2.1.x and<br>2.2.0 and<br>2.2.0</td>
+            <td></td>
+            <td>compatible with exactly-once turned off<br>(requires broker version 0.11.0.x or higher);<br>requires message format 0.10 or higher;<br>message headers are not supported<br>(requires broker version 0.11.0.x or higher<br>with message format 0.11 or higher)</td>
+            <td>compatible; requires message format 0.10 or higher;<br>if message headers are used, message format 0.11<br>or higher required</td>
+          </tr>
+          <tr>
+            <td>2.2.1 and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x</td>
+            <td></td>
+            <td></td>
+            <td>compatible; requires message format 0.11 or higher;<br>enabling exactly-once v2 requires 2.4.x or higher</td>
+          </tr>
+        </tbody>
+        </table>
 
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool" class="pagination__btn pagination__btn__prev">Previous</a>

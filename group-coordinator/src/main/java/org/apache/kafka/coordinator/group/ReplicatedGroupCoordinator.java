@@ -167,6 +167,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
     @Override
     public void onLoaded(MetadataImage newImage) {
         groupMetadataManager.onNewMetadataImage(newImage, new MetadataDelta(newImage));
+        groupMetadataManager.onLoaded();
     }
 
     /**
