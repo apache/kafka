@@ -2549,7 +2549,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                                 topicExists: Boolean = true,
                                                 topicNames: Map[Uuid, String] = getTopicNames()): AbstractResponse = {
     val apiKey = request.apiKey
-    println(s"Request = $request")
     val response = connectAndReceive[AbstractResponse](request)
     val error = requestKeyToError(topicNames, request.version())(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 
