@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -277,10 +278,19 @@ public class Graph<V extends Comparable<V>> {
             for (final V node : nodes) {
                 final Map<V, V> parentNodes = new HashMap<>();
                 final Map<V, Edge> parentEdges = new HashMap<>();
-                final V nodeInCycle = detectNegativeCycles(node, parentNodes, parentEdges);
-                if (nodeInCycle == null) {
+                final V possibleNodeInCycle = detectNegativeCycles(node, parentNodes, parentEdges);
+
+                if (possibleNodeInCycle == null) {
                     continue;
                 }
+
+                final Set<V> visited = new HashSet<>();
+                V nodeInCycle = possibleNodeInCycle;
+                while (!visited.contains(nodeInCycle)) {
+                    visited.add(nodeInCycle);
+                    nodeInCycle = parentNodes.get(nodeInCycle);
+                }
+
                 cyclePossible = true;
                 cancelNegativeCycle(nodeInCycle, parentNodes, parentEdges);
             }
@@ -330,7 +340,7 @@ public class Graph<V extends Comparable<V>> {
      * @param parentNodes Parent nodes to store negative cycle nodes
      * @param parentEdges Parent edges to store negative cycle edges
      *
-     * @return One node in negative cycle if exists or null if there's no negative cycle
+     * @return One node which can lead to negative cycle if exists or null if there's no negative cycle
      */
     V detectNegativeCycles(final V source, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
         // Use long to account for any overflow

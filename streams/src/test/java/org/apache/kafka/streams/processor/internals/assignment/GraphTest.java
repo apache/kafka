@@ -64,26 +64,26 @@ public class GraphTest {
 
         Map<Integer, Graph<Integer>.Edge> edges = graph.edges(0);
         assertEquals(2, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(1, 1, 3, 0, 1), edges.get(1));
-        assertEquals(new Graph<Integer>().new Edge(3, 1, 1, 1, 0), edges.get(3));
+        assertEquals(getEdge(1, 1, 3, 0, 1), edges.get(1));
+        assertEquals(getEdge(3, 1, 1, 1, 0), edges.get(3));
 
         edges = graph.edges(2);
         assertEquals(2, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(1, 1, 1, 1, 0), edges.get(1));
-        assertEquals(new Graph<Integer>().new Edge(3, 1, 2, 0, 1), edges.get(3));
+        assertEquals(getEdge(1, 1, 1, 1, 0), edges.get(1));
+        assertEquals(getEdge(3, 1, 2, 0, 1), edges.get(3));
 
         edges = graph.edges(1);
         assertEquals(1, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
 
         edges = graph.edges(3);
         assertEquals(1, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
 
         edges = graph.edges(4);
         assertEquals(2, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(0, 1, 0, 0, 1), edges.get(0));
-        assertEquals(new Graph<Integer>().new Edge(2, 1, 0, 0, 1), edges.get(2));
+        assertEquals(getEdge(0, 1, 0, 0, 1), edges.get(0));
+        assertEquals(getEdge(2, 1, 0, 0, 1), edges.get(2));
 
         edges = graph.edges(5);
         assertNull(edges);
@@ -103,27 +103,27 @@ public class GraphTest {
 
         Map<Integer, Graph<Integer>.Edge> edges = residualGraph.edges(0);
         assertEquals(3, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(1, 1, 3, 0, 1), edges.get(1));
-        assertEquals(new Graph<Integer>().new Edge(3, 1, 1, 1, 0), edges.get(3));
-        assertEquals(new Graph<Integer>().new Edge(4, 1, 0, 1, 0, false), edges.get(4));
+        assertEquals(getEdge(1, 1, 3, 0, 1), edges.get(1));
+        assertEquals(getEdge(3, 1, 1, 1, 0), edges.get(3));
+        assertEquals(getEdge(4, 1, 0, 1, 0, false), edges.get(4));
 
         edges = residualGraph.edges(2);
         assertEquals(3, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(1, 1, 1, 1, 0), edges.get(1));
-        assertEquals(new Graph<Integer>().new Edge(3, 1, 2, 0, 1), edges.get(3));
-        assertEquals(new Graph<Integer>().new Edge(4, 1, 0, 1, 0, false), edges.get(4));
+        assertEquals(getEdge(1, 1, 1, 1, 0), edges.get(1));
+        assertEquals(getEdge(3, 1, 2, 0, 1), edges.get(3));
+        assertEquals(getEdge(4, 1, 0, 1, 0, false), edges.get(4));
 
         edges = residualGraph.edges(1);
         assertEquals(3, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(0, 1, -3, 1, 0, false), edges.get(0));
-        assertEquals(new Graph<Integer>().new Edge(2, 1, -1, 0, 0, false), edges.get(2));
-        assertEquals(new Graph<Integer>().new Edge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(0, 1, -3, 1, 0, false), edges.get(0));
+        assertEquals(getEdge(2, 1, -1, 0, 0, false), edges.get(2));
+        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
 
         edges = residualGraph.edges(3);
         assertEquals(3, edges.size());
-        assertEquals(new Graph<Integer>().new Edge(0, 1, -1, 0, 0, false), edges.get(0));
-        assertEquals(new Graph<Integer>().new Edge(2, 1, -2, 1, 0, false), edges.get(2));
-        assertEquals(new Graph<Integer>().new Edge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(0, 1, -1, 0, 0, false), edges.get(0));
+        assertEquals(getEdge(2, 1, -2, 1, 0, false), edges.get(2));
+        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
 
         assertTrue(residualGraph.isResidualGraph());
     }
@@ -285,6 +285,59 @@ public class GraphTest {
     }
 
     @Test
+    public void testMinCostDetectNodeNotInNegativeCycle() {
+        final Graph<Integer> graph1 = new Graph<>();
+
+        graph1.addEdge(5, 0, 1, 0, 1);
+        graph1.addEdge(5, 1, 1, 0, 1);
+
+        graph1.addEdge(0, 2, 1, 1, 0);
+        graph1.addEdge(0, 3, 1, 1, 0);
+        graph1.addEdge(0, 4, 1, 10, 1);
+
+        graph1.addEdge(1, 2, 1, 1, 0);
+        graph1.addEdge(1, 3, 1, 10, 1);
+        graph1.addEdge(1, 4, 1, 1, 0);
+
+        graph1.addEdge(2, 6, 0, 0, 0);
+        graph1.addEdge(3, 6, 1, 0, 1);
+        graph1.addEdge(4, 6, 1, 0, 1);
+
+        graph1.setSourceNode(5);
+        graph1.setSinkNode(6);
+
+        assertEquals(20, graph1.totalCost());
+
+        // In this graph, the node we found for negative cycle is 2. However 2 isn't in the negative
+        // cycle itself. Negative cycle is 1 -> 4 -> 0 -> 3 -> 1
+        graph1.solveMinCostFlow();
+        assertEquals(2, graph1.totalCost());
+
+        Map<Integer, Graph<Integer>.Edge> edges = graph1.edges(5);
+        assertEquals(getEdge(0, 1, 0, 0, 1), edges.get(0));
+        assertEquals(getEdge(1, 1, 0, 0, 1), edges.get(1));
+
+        edges = graph1.edges(0);
+        assertEquals(getEdge(2, 1, 1, 1, 0), edges.get(2));
+        assertEquals(getEdge(3, 1, 1, 0, 1), edges.get(3));
+        assertEquals(getEdge(4, 1, 10, 1, 0), edges.get(4));
+
+        edges = graph1.edges(1);
+        assertEquals(getEdge(2, 1, 1, 1, 0), edges.get(2));
+        assertEquals(getEdge(3, 1, 10, 1, 0), edges.get(3));
+        assertEquals(getEdge(4, 1, 1, 0, 1), edges.get(4));
+
+        edges = graph1.edges(2);
+        assertEquals(getEdge(6, 0, 0, 0, 0), edges.get(6));
+
+        edges = graph1.edges(3);
+        assertEquals(getEdge(6, 1, 0, 0, 1), edges.get(6));
+
+        edges = graph1.edges(4);
+        assertEquals(getEdge(6, 1, 0, 0, 1), edges.get(6));
+    }
+
+    @Test
     public void testDeterministic() {
         final List<TestEdge> edgeList = new ArrayList<>();
         edgeList.add(new TestEdge(0, 1, 1, 2, 1));
@@ -312,27 +365,35 @@ public class GraphTest {
 
             Map<Integer, Graph<Integer>.Edge> edges = graph1.edges(0);
             assertEquals(4, edges.size());
-            assertEquals(new Graph<Integer>().new Edge(1, 1, 2, 1, 0), edges.get(1));
-            assertEquals(new Graph<Integer>().new Edge(2, 1, 1, 0, 1), edges.get(2));
-            assertEquals(new Graph<Integer>().new Edge(3, 1, 1, 1, 0), edges.get(3));
-            assertEquals(new Graph<Integer>().new Edge(4, 1, 1, 1, 0), edges.get(4));
+            assertEquals(getEdge(1, 1, 2, 1, 0), edges.get(1));
+            assertEquals(getEdge(2, 1, 1, 0, 1), edges.get(2));
+            assertEquals(getEdge(3, 1, 1, 1, 0), edges.get(3));
+            assertEquals(getEdge(4, 1, 1, 1, 0), edges.get(4));
 
             edges = graph1.edges(1);
             assertEquals(1, edges.size());
-            assertEquals(new Graph<Integer>().new Edge(5, 1, 1, 1, 0), edges.get(5));
+            assertEquals(getEdge(5, 1, 1, 1, 0), edges.get(5));
 
             edges = graph1.edges(2);
             assertEquals(1, edges.size());
-            assertEquals(new Graph<Integer>().new Edge(5, 1, 1, 0, 1), edges.get(5));
+            assertEquals(getEdge(5, 1, 1, 0, 1), edges.get(5));
 
             edges = graph1.edges(3);
             assertEquals(1, edges.size());
-            assertEquals(new Graph<Integer>().new Edge(5, 1, 1, 1, 0), edges.get(5));
+            assertEquals(getEdge(5, 1, 1, 1, 0), edges.get(5));
 
             edges = graph1.edges(4);
             assertEquals(1, edges.size());
-            assertEquals(new Graph<Integer>().new Edge(5, 1, 1, 1, 0), edges.get(5));
+            assertEquals(getEdge(5, 1, 1, 1, 0), edges.get(5));
         }
+    }
+
+    private static Graph<Integer>.Edge getEdge(final int destination, final int capacity, final int cost, final int residualFlow, final int flow) {
+        return getEdge(destination, capacity, cost, residualFlow, flow, true);
+    }
+
+    private static Graph<Integer>.Edge getEdge(final int destination, final int capacity, final int cost, final int residualFlow, final int flow, final boolean forwardEdge) {
+        return new Graph<Integer>().new Edge(destination, capacity, cost, residualFlow, flow, forwardEdge);
     }
 
     private static class TestEdge {
