@@ -409,6 +409,31 @@ public class GroupMetadataManager {
     }
 
     /**
+     *
+     * @param groupId
+     * @param createIfNotExists
+     * @return
+     * @throws GroupIdNotFoundException
+     */
+    public Group getOrMaybeCreateSimpleGroup(
+        String groupId,
+        boolean createIfNotExists
+    ) throws GroupIdNotFoundException {
+        Group group = groups.get(groupId);
+
+        if (group == null && !createIfNotExists) {
+            throw new GroupIdNotFoundException(String.format("Group %s not found.", groupId));
+        }
+
+        if (group == null) {
+            group = new GenericGroup(new LogContext(), groupId, GenericGroupState.EMPTY, time);
+            groups.put(groupId, group);
+        }
+
+        return group;
+    }
+
+    /**
      * Gets or maybe creates a consumer group.
      *
      * @param groupId           The group id.
