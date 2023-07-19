@@ -2959,8 +2959,13 @@ class ReplicaManagerTest {
       delayedElectLeaderPurgatoryParam = Some(mockDelayedElectLeaderPurgatory),
       delayedRemoteFetchPurgatoryParam = Some(mockDelayedRemoteFetchPurgatory),
       threadNamePrefix = Option(this.getClass.getName),
-      remoteLogManager = if (enableRemoteStorage) Some(mockRemoteLogManager) else None,
-      addPartitionsToTxnManager = Some(addPartitionsToTxnManager)) {
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
+      remoteLogManager = if (enableRemoteStorage) {
+        if (remoteLogManager.isDefined)
+          remoteLogManager
+        else
+          Some(mockRemoteLogManager)
+      } else None) {
 
       override protected def createReplicaFetcherManager(
         metrics: Metrics,
