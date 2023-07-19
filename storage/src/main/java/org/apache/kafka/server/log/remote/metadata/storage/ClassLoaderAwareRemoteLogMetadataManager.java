@@ -102,6 +102,11 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
+    public Long remoteLogSize(TopicIdPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
+        return withClassLoader(() -> delegate.remoteLogSize(topicPartition, leaderEpoch));
+    }
+
+    @Override
     public void configure(Map<String, ?> configs) {
         withClassLoader(() -> {
             delegate.configure(configs);

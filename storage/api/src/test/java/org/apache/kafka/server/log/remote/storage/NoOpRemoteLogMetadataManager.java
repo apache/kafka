@@ -75,6 +75,11 @@ public class NoOpRemoteLogMetadataManager implements RemoteLogMetadataManager {
     }
 
     @Override
+    public Long remoteLogSize(TopicIdPartition topicPartition, int leaderEpoch) {
+        return null;
+    }
+
+    @Override
     public void close() throws IOException {
     }
 

@@ -327,6 +327,17 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     @Override
+    public Long remoteLogSize(TopicIdPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
+        long remoteLogSize = 0L;
+        Iterator<RemoteLogSegmentMetadata> remoteLogSegmentMetadataIterator = remotePartitionMetadataStore.listRemoteLogSegments(topicPartition, leaderEpoch);
+        while (remoteLogSegmentMetadataIterator.hasNext()) {
+            RemoteLogSegmentMetadata remoteLogSegmentMetadata = remoteLogSegmentMetadataIterator.next();
+            remoteLogSize += remoteLogSegmentMetadata.segmentSizeInBytes();
+        }
+        return remoteLogSize;
+     }
+
+    @Override
     public void configure(Map<String, ?> configs) {
         Objects.requireNonNull(configs, "configs can not be null.");
 
