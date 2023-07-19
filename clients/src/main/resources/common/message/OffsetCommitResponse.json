@@ -28,7 +28,10 @@
   // Version 7 offsetCommitRequest supports a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 8 is the first flexible version.
-  "validVersions": "0-8",
+  //
+  // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The response is
+  // the same as version 8 but can return STALE_MEMBER_EPOCH when the new consumer group protocol is used.
+  "validVersions": "0-9",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,

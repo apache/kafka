@@ -1361,7 +1361,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)
-                        .setGenerationId(generation.generationId)
+                        .setGenerationIdOrMemberEpoch(generation.generationId)
                         .setMemberId(generation.memberId)
                         .setGroupInstanceId(groupInstanceId)
                         .setTopics(new ArrayList<>(requestTopicDataMap.values()))

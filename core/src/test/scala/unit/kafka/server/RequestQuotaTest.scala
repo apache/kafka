@@ -302,7 +302,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new OffsetCommitRequest.Builder(
             new OffsetCommitRequestData()
               .setGroupId("test-group")
-              .setGenerationId(1)
+              .setGenerationIdOrMemberEpoch(1)
               .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
               .setTopics(
                 Collections.singletonList(

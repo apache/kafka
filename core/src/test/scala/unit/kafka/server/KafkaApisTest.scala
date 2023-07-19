@@ -4080,7 +4080,7 @@ class KafkaApisTest {
         .setGroupId("test")
         .setMemberId("test")
         .setGroupInstanceId("instanceId")
-        .setGenerationId(100)
+        .setGenerationIdOrMemberEpoch(100)
         .setTopics(Collections.singletonList(
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
             .setName("test")

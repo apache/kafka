@@ -493,7 +493,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         new OffsetCommitRequestData()
           .setGroupId(group)
           .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-          .setGenerationId(1)
+          .setGenerationIdOrMemberEpoch(1)
           .setTopics(Collections.singletonList(
             new OffsetCommitRequestData.OffsetCommitRequestTopic()
               .setName(topic)

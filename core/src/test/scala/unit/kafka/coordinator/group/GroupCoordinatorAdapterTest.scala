@@ -644,7 +644,7 @@ class GroupCoordinatorAdapterTest {
     val data = new OffsetCommitRequestData()
       .setGroupId("group")
       .setMemberId("member")
-      .setGenerationId(10)
+      .setGenerationIdOrMemberEpoch(10)
       .setRetentionTimeMs(1000)
       .setTopics(List(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
