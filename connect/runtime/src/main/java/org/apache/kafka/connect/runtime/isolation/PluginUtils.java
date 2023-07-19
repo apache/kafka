@@ -353,7 +353,7 @@ public class PluginUtils {
         List<URL> parentUrls = new ArrayList<>();
         parentUrls.addAll(ClasspathHelper.forJavaClassPath());
         parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader.getParent()));
-        pluginSources.add(new PluginSource(null, classLoader.getParent(), parentUrls.toArray(new URL[0])));
+        pluginSources.add(new PluginSource(PluginSource.CLASSPATH, classLoader.getParent(), parentUrls.toArray(new URL[0])));
         return pluginSources;
     }
 
