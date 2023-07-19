@@ -173,6 +173,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
+    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 
@@ -2548,6 +2549,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                                 topicExists: Boolean = true,
                                                 topicNames: Map[Uuid, String] = getTopicNames()): AbstractResponse = {
     val apiKey = request.apiKey
+    println(s"Request = $request")
     val response = connectAndReceive[AbstractResponse](request)
     val error = requestKeyToError(topicNames, request.version())(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 
