@@ -58,6 +58,7 @@ import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LazyIndex;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
+import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TimeIndex;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.test.TestUtils;
@@ -89,6 +90,7 @@ import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
 
 import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT;
 import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_READER_METRICS_NAME_PREFIX;
@@ -321,8 +323,12 @@ public class RemoteLogManagerTest {
 
         // Verify the metrics for remote writes and for failures is zero before attempt to copy log segment
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteBytesOutRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
@@ -359,9 +365,13 @@ public class RemoteLogManagerTest {
 
         // Verify the metric for remote writes is updated correctly
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
-        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
+        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
         // Verify we did not report any failure for remote writes
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(10, brokerTopicStats.allTopicsStats().remoteBytesOutRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
     }
 
     @Test
@@ -438,7 +448,6 @@ public class RemoteLogManagerTest {
                 .get()
                 .getValue();
         return guage.value();
-
     }
 
     @Test
@@ -496,6 +505,9 @@ public class RemoteLogManagerTest {
         // Verify the metrics for remote write requests/failures is zero before attempt to copy log segment
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
@@ -508,6 +520,9 @@ public class RemoteLogManagerTest {
         // Verify the metric for remote write requests/failures was updated.
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
     }
 
     @Test
@@ -769,7 +784,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testRemoveMetricsOnClose() {
+    public void testRemoveMetricsOnClose() throws IOException {
         MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class);
         try {
             RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId,
@@ -789,10 +804,10 @@ public class RemoteLogManagerTest {
             KafkaMetricsGroup mockThreadPoolMetricsGroup = mockMetricsGroupCtor.constructed().get(1);
 
             List<String> remoteLogManagerMetricNames = Collections.singletonList(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
-            List<String> remoteStorageThreadPoolMetricNames = Arrays.asList(
-                REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE,
-                REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT
-            );
+            List<String> remoteStorageThreadPoolMetricNames = RemoteStorageThreadPool.METRIC_SUFFIXES
+                .stream()
+                .map(suffix -> REMOTE_LOG_READER_METRICS_NAME_PREFIX + suffix)
+                .collect(Collectors.toList());
 
             verify(mockRlmMetricsGroup, times(remoteLogManagerMetricNames.size())).newGauge(anyString(), any());
             // Verify that the RemoteLogManager metrics are removed

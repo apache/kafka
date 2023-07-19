@@ -170,7 +170,7 @@ public class RemoteLogManager implements Closeable {
                             String clusterId,
                             Time time,
                             Function<TopicPartition, Optional<UnifiedLog>> fetchLog,
-                            BrokerTopicStats brokerTopicStats) {
+                            BrokerTopicStats brokerTopicStats) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
@@ -577,6 +577,7 @@ public class RemoteLogManager implements Closeable {
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteWriteRequestRate().mark();
+                    brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().mark();
                     logger.error("Error occurred while copying log segments of partition: {}", topicIdPartition, ex);
                 }
             }
@@ -619,6 +620,7 @@ public class RemoteLogManager implements Closeable {
                     toPathIfExists(segment.lazyTimeIndex().get().file()), Optional.ofNullable(toPathIfExists(segment.txnIndex().file())),
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
             brokerTopicStats.topicStats(log.topicPartition().topic()).remoteWriteRequestRate().mark();
+            brokerTopicStats.allTopicsStats().remoteWriteRequestRate().mark();
             remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
@@ -626,7 +628,8 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
-                .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
+                .remoteBytesOutRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
+            brokerTopicStats.allTopicsStats().remoteBytesOutRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             copiedOffsetOption = OptionalLong.of(endOffset);
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
@@ -922,8 +925,11 @@ public class RemoteLogManager implements Closeable {
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
                 rlmScheduledThreadPool.close();
-                removeMetrics();
-                shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
+                try {
+                    shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
+                } finally {
+                    removeMetrics();
+                }
 
                 leaderOrFollowerTasks.clear();
                 closed = true;
