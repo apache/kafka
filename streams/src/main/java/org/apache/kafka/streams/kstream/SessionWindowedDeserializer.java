@@ -25,12 +25,6 @@ import org.apache.kafka.streams.state.internals.SessionKeySchema;
 
 import java.util.Map;
 
-/**
- *  The inner serde class can be specified by setting the property
- *  {@link StreamsConfig#DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS} or
- *  {@link StreamsConfig#DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS}
- *  if the no-arg constructor is called and hence it is not passed during initialization.
- */
 public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     private Deserializer<T> inner;
@@ -45,20 +39,37 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
     @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        if (inner == null) {
-            final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
-            final String value = (String) configs.get(propertyName);
+        final String windowedInnerClassSerdeConfig = (String) configs.get(StreamsConfig.WINDOWED_INNER_CLASS_SERDE);
+
+        Serde<T> windowInnerClassSerde = null;
+
+        if (windowedInnerClassSerdeConfig != null) {
             try {
-                inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).deserializer();
-                inner.configure(configs, isKey);
+                windowInnerClassSerde = Utils.newInstance(windowedInnerClassSerdeConfig, Serde.class);
             } catch (final ClassNotFoundException e) {
-                throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
+                throw new ConfigException(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, windowedInnerClassSerdeConfig,
+                    "Serde class " + windowedInnerClassSerdeConfig + " could not be found.");
             }
         }
+
+        if (inner != null && windowedInnerClassSerdeConfig != null) {
+            if (!inner.getClass().getName().equals(windowInnerClassSerde.deserializer().getClass().getName())) {
+                throw new IllegalArgumentException("Inner class deserializer set using constructor "
+                    + "(" + inner.getClass().getName() + ")" +
+                    " is different from the one set in windowed.inner.class.serde config " +
+                    "(" + windowInnerClassSerde.deserializer().getClass().getName() + ").");
+            }
+        } else if (inner == null && windowedInnerClassSerdeConfig == null) {
+            throw new IllegalArgumentException("Inner class deserializer should be set either via constructor " +
+                "or via the windowed.inner.class.serde config");
+        } else if (inner == null)
+            inner = windowInnerClassSerde.deserializer();
     }
 
     @Override
     public Windowed<T> deserialize(final String topic, final byte[] data) {
+        WindowedSerdes.verifyInnerDeserializerNotNull(inner, this);
+
         if (data == null || data.length == 0) {
             return null;
         }
@@ -69,7 +80,9 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
 
     @Override
     public void close() {
-        inner.close();
+        if (inner != null) {
+            inner.close();
+        }
     }
 
     // Only for testing

@@ -28,19 +28,26 @@ import java.util.Set;
 
 public class ConsumerMetadata extends Metadata {
     private final boolean includeInternalTopics;
+    private final boolean allowAutoTopicCreation;
     private final SubscriptionState subscription;
     private final Set<String> transientTopics;
 
     public ConsumerMetadata(long refreshBackoffMs,
                             long metadataExpireMs,
                             boolean includeInternalTopics,
+                            boolean allowAutoTopicCreation,
                             SubscriptionState subscription,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners) {
         super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.includeInternalTopics = includeInternalTopics;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.subscription = subscription;
         this.transientTopics = new HashSet<>();
+    }
+
+    public boolean allowAutoTopicCreation() {
+        return allowAutoTopicCreation;
     }
 
     @Override
@@ -48,9 +55,9 @@ public class ConsumerMetadata extends Metadata {
         if (subscription.hasPatternSubscription())
             return MetadataRequest.Builder.allTopics();
         List<String> topics = new ArrayList<>();
-        topics.addAll(subscription.groupSubscription());
+        topics.addAll(subscription.metadataTopics());
         topics.addAll(transientTopics);
-        return new MetadataRequest.Builder(topics, true);
+        return new MetadataRequest.Builder(topics, allowAutoTopicCreation);
     }
 
     synchronized void addTransientTopics(Set<String> topics) {
@@ -65,7 +72,7 @@ public class ConsumerMetadata extends Metadata {
 
     @Override
     protected synchronized boolean retainTopic(String topic, boolean isInternal, long nowMs) {
-        if (transientTopics.contains(topic) || subscription.isGroupSubscribed(topic))
+        if (transientTopics.contains(topic) || subscription.needsMetadata(topic))
             return true;
 
         if (isInternal && !includeInternalTopics)
@@ -73,5 +80,4 @@ public class ConsumerMetadata extends Metadata {
 
         return subscription.matchesSubscribedPattern(topic);
     }
-
 }

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -31,12 +31,14 @@ import java.util.Map;
  */
 public interface KafkaClientSupplier {
     /**
-     * Create an {@link AdminClient} which is used for internal topic management.
+     * Create an {@link Admin} which is used for internal topic management.
      *
      * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
-     * @return an instance of {@link AdminClient}
+     * @return an instance of {@link Admin}
      */
-    AdminClient getAdminClient(final Map<String, Object> config);
+    default Admin getAdmin(final Map<String, Object> config) {
+        throw new UnsupportedOperationException("Implementations of KafkaClientSupplier should implement the getAdmin() method.");
+    }
 
     /**
      * Create a {@link Producer} which is used to write records to sink topics.
@@ -50,7 +52,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to read records of source topics.
      *
-     * @param config {@link StreamsConfig#getMainConsumerConfigs(String, String) consumer config} which is
+     * @param config {@link StreamsConfig#getMainConsumerConfigs(String, String, int) consumer config} which is
      *               supplied by the {@link java.util.Properties} given to the {@link KafkaStreams} instance
      * @return an instance of Kafka consumer
      */

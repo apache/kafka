@@ -24,14 +24,13 @@ import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData._
-import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
-import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
-class AbstractCreateTopicsRequestTest extends BaseRequestTest {
+abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit =
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
@@ -41,7 +40,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
                 validateOnly: Boolean = false) = {
     val req = new CreateTopicsRequestData()
     req.setTimeoutMs(timeout)
-    req.setTopics(new CreatableTopicSet(topics.asJava.iterator()))
+    req.setTopics(new CreatableTopicCollection(topics.asJava.iterator()))
     req.setValidateOnly(validateOnly)
     new CreateTopicsRequest.Builder(req).build()
   }
@@ -68,16 +67,15 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       topic.setReplicationFactor(1.toShort)
     }
     if (config != null) {
-      val effectiveConfigs = new CreateableTopicConfigSet()
+      val effectiveConfigs = new CreateableTopicConfigCollection()
       config.foreach {
-        case (name, value) => {
+        case (name, value) =>
           effectiveConfigs.add(new CreateableTopicConfig().setName(name).setValue(value))
-        }
       }
       topic.setConfigs(effectiveConfigs)
     }
     if (assignment != null) {
-      val effectiveAssignments = new CreatableReplicaAssignmentSet()
+      val effectiveAssignments = new CreatableReplicaAssignmentCollection()
       assignment.foreach {
         case (partitionIndex, brokerIdList) => {
           val effectiveAssignment = new CreatableReplicaAssignment()
@@ -94,16 +92,15 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
-    val response = sendCreateTopicRequest(request)
+    val response = sendCreateTopicRequest(request, adminSocketServer)
 
-    assertTrue(s"There should be no errors, found " +
-      s"${response.errorCounts().keySet().asScala.mkString(", ")},",
-      response.errorCounts().keySet().asScala.find(_.code() > 0).isEmpty)
+    assertFalse(response.errorCounts().keySet().asScala.exists(_.code() > 0),
+      s"There should be no errors, found ${response.errorCounts().keySet().asScala.mkString(", ")},")
 
-    request.data().topics().asScala.foreach { case topic =>
+    request.data.topics.forEach { topic =>
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
-          new MetadataRequest.Builder(List(topic.name()).asJava, true).build()).topicMetadata.asScala
+          new MetadataRequest.Builder(List(topic.name()).asJava, false).build(), socketServer).topicMetadata.asScala
         val metadataForTopic = metadata.filter(_.topic == topic.name()).head
 
         val partitions = if (!topic.assignments().isEmpty)
@@ -117,23 +114,35 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
           topic.replicationFactor
 
         if (request.data.validateOnly) {
-          assertNotNull(s"Topic $topic should be created", metadataForTopic)
-          assertFalse(s"Error ${metadataForTopic.error} for topic $topic", metadataForTopic.error == Errors.NONE)
-          assertTrue("The topic should have no partitions", metadataForTopic.partitionMetadata.isEmpty)
+          assertNotNull(metadataForTopic)
+          assertNotEquals(Errors.NONE, metadataForTopic.error, s"Topic $topic should not be created")
+          assertTrue(metadataForTopic.partitionMetadata.isEmpty, "The topic should have no partitions")
         }
         else {
-          assertNotNull("The topic should be created", metadataForTopic)
+          assertNotNull(metadataForTopic, "The topic should be created")
           assertEquals(Errors.NONE, metadataForTopic.error)
-          assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
-          assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+          if (partitions == -1) {
+            assertEquals(configs.head.numPartitions, metadataForTopic.partitionMetadata.size, "The topic should have the default number of partitions")
+          } else {
+            assertEquals(partitions, metadataForTopic.partitionMetadata.size, "The topic should have the correct number of partitions")
+          }
+
+          if (replication == -1) {
+            assertEquals(configs.head.defaultReplicationFactor,
+              metadataForTopic.partitionMetadata.asScala.head.replicaIds.size, "The topic should have the default replication factor")
+          } else {
+            assertEquals(replication, metadataForTopic.partitionMetadata.asScala.head.replicaIds.size, "The topic should have the correct replication factor")
+          }
         }
       }
 
-      // Verify controller broker has the correct metadata
-      verifyMetadata(controllerSocketServer)
+      if (!isKRaftTest()) {
+        // Verify controller broker has the correct metadata
+        verifyMetadata(controllerSocketServer)
+      }
       if (!request.data.validateOnly) {
         // Wait until metadata is propagated and validate non-controller broker has the correct metadata
-        TestUtils.waitUntilMetadataIsPropagated(servers, topic.name(), 0)
+        TestUtils.waitForPartitionMetadata(brokers, topic.name(), 0)
       }
       verifyMetadata(notControllerSocketServer)
     }
@@ -142,41 +151,21 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def error(error: Errors, errorMessage: Option[String] = None): ApiError =
     new ApiError(error, errorMessage.orNull)
 
-  protected def toStructWithDuplicateFirstTopic(request: CreateTopicsRequest): Struct = {
-    val struct = request.toStruct
-    val topics = struct.getArray("create_topic_requests")
-    val firstTopic = topics(0).asInstanceOf[Struct]
-    val newTopics = firstTopic :: topics.toList
-    struct.set("create_topic_requests", newTopics.toArray)
-    struct
-  }
-
-  protected def addPartitionsAndReplicationFactorToFirstTopic(request: CreateTopicsRequest) = {
-    val struct = request.toStruct
-    val topics = struct.getArray("create_topic_requests")
-    val firstTopic = topics(0).asInstanceOf[Struct]
-    firstTopic.set("num_partitions", 1)
-    firstTopic.set("replication_factor", 1.toShort)
-    new CreateTopicsRequest(struct, request.version)
-  }
-
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
                                                   expectedResponse: Map[String, ApiError],
-                                                  checkErrorMessage: Boolean = true,
-                                                  requestStruct: Option[Struct] = None): Unit = {
-    val response = requestStruct.map(sendCreateTopicRequestStruct(_, request.version)).getOrElse(
-      sendCreateTopicRequest(request))
-    assertEquals("The response size should match", expectedResponse.size, response.data().topics().size)
+                                                  checkErrorMessage: Boolean = true): Unit = {
+    val response = sendCreateTopicRequest(request, adminSocketServer)
+    assertEquals(expectedResponse.size, response.data().topics().size, "The response size should match")
 
     expectedResponse.foreach { case (topicName, expectedError) =>
       val expected = expectedResponse(topicName)
       val actual = response.data().topics().find(topicName)
       if (actual == null) {
-        throw new RuntimeException(s"No response data found for topic ${topicName}")
+        throw new RuntimeException(s"No response data found for topic $topicName")
       }
-      assertEquals("The response error should match", expected.error.code(), actual.errorCode())
+      assertEquals(expected.error.code(), actual.errorCode(), "The response error code should match")
       if (checkErrorMessage) {
-        assertEquals(expected.message, actual.errorMessage())
+        assertEquals(expected.message, actual.errorMessage(), "The response error message should match")
       }
       // If no error validate topic exists
       if (expectedError.isSuccess && !request.data.validateOnly) {
@@ -186,26 +175,24 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateTopicExists(topic: String): Unit = {
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitForPartitionMetadata(brokers, topic, 0)
     val metadata = sendMetadataRequest(
       new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
-    assertTrue("The topic should be created", metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE))
+    assertTrue(metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE), "The topic should be created")
   }
 
-  protected def sendCreateTopicRequestStruct(requestStruct: Struct, apiVersion: Short,
-                                             socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = connectAndSendStruct(requestStruct, ApiKeys.CREATE_TOPICS, apiVersion, socketServer)
-    CreateTopicsResponse.parse(response, apiVersion)
+  protected def sendCreateTopicRequest(
+    request: CreateTopicsRequest,
+    socketServer: SocketServer = controllerSocketServer
+  ): CreateTopicsResponse = {
+    connectAndReceive[CreateTopicsResponse](request, socketServer)
   }
 
-  protected def sendCreateTopicRequest(request: CreateTopicsRequest, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = connectAndSend(request, ApiKeys.CREATE_TOPICS, socketServer)
-    CreateTopicsResponse.parse(response, request.version)
-  }
-
-  protected def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination)
-    MetadataResponse.parse(response, ApiKeys.METADATA.latestVersion)
+  protected def sendMetadataRequest(
+    request: MetadataRequest,
+    socketServer: SocketServer = anySocketServer
+  ): MetadataResponse = {
+    connectAndReceive[MetadataResponse](request, socketServer)
   }
 
 }

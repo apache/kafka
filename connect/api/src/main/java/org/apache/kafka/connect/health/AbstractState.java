@@ -17,8 +17,12 @@
 
 package org.apache.kafka.connect.health;
 
+import java.util.Objects;
+
+import org.apache.kafka.common.utils.Utils;
+
 /**
- * Provides the current status along with identifier for Connect worker and tasks.
+ * Provides the current status for a connector or a task, along with an identifier for its Connect worker
  */
 public abstract class AbstractState {
 
@@ -27,17 +31,17 @@ public abstract class AbstractState {
     private final String workerId;
 
     /**
-     * Construct a state for connector or task.
+     * Construct a state for a connector or task.
      *
-     * @param state  the status of connector or task; may not be null or empty
-     * @param workerId  the workerId associated with the connector or the task; may not be null or empty
-     * @param traceMessage  any error trace message associated with the connector or the task; may be null or empty
+     * @param state the status of a connector or task; may not be null or empty
+     * @param workerId the workerId associated with the connector or the task; may not be null or empty
+     * @param traceMessage any error trace message associated with the connector or the task; may be null or empty
      */
     public AbstractState(String state, String workerId, String traceMessage) {
-        if (state != null && !state.trim().isEmpty()) {
+        if (Utils.isBlank(state)) {
             throw new IllegalArgumentException("State must not be null or empty");
         }
-        if (workerId != null && !workerId.trim().isEmpty()) {
+        if (Utils.isBlank(workerId)) {
             throw new IllegalArgumentException("Worker ID must not be null or empty");
         }
         this.state = state;
@@ -70,5 +74,22 @@ public abstract class AbstractState {
      */
     public String traceMessage() {
         return traceMessage;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        AbstractState that = (AbstractState) o;
+        return state.equals(that.state)
+            && Objects.equals(traceMessage, that.traceMessage)
+            && workerId.equals(that.workerId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(state, traceMessage, workerId);
     }
 }

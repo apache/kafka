@@ -20,11 +20,11 @@ import java.util.concurrent.atomic.AtomicReference
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{CoreUtils, TestUtils, VerifiableProperties}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener}
 import org.apache.kafka.test.MockMetricsReporter
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 object KafkaMetricReporterClusterIdTest {
@@ -50,7 +50,7 @@ object KafkaMetricReporterClusterIdTest {
 
   class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
 
@@ -75,25 +75,25 @@ object KafkaMetricReporterClusterIdTest {
   }
 }
 
-class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
-  var server: KafkaServerStartable = null
-  var config: KafkaConfig = null
+class KafkaMetricReporterClusterIdTest extends QuorumTestHarness {
+  var server: KafkaServer = _
+  var config: KafkaConfig = _
 
-  @Before
-  override def setUp() {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.setProperty(KafkaConfig.KafkaMetricsReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
     props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
     props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
     props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
-    server = KafkaServerStartable.fromProps(props)
+    server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
   }
 
   @Test
-  def testClusterIdPresent() {
+  def testClusterIdPresent(): Unit = {
     assertEquals("", KafkaMetricReporterClusterIdTest.setupError.get())
 
     assertNotNull(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META)
@@ -104,13 +104,15 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
 
     assertEquals(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId(),
       KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
+
+    server.shutdown()
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @After
-  override def tearDown() {
+  @AfterEach
+  override def tearDown(): Unit = {
     server.shutdown()
     CoreUtils.delete(config.logDirs)
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
     super.tearDown()
   }
 }

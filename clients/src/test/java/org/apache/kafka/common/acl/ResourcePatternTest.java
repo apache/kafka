@@ -20,26 +20,30 @@ package org.apache.kafka.common.acl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ResourcePatternTest {
-    @Test(expected = IllegalArgumentException.class)
+
+    @Test
     public void shouldThrowIfResourceTypeIsAny() {
-        new ResourcePattern(ResourceType.ANY, "name", PatternType.LITERAL);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ResourcePattern(ResourceType.ANY, "name", PatternType.LITERAL));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfPatternTypeIsMatch() {
-        new ResourcePattern(ResourceType.TOPIC, "name", PatternType.MATCH);
+        assertThrows(IllegalArgumentException.class, () -> new ResourcePattern(ResourceType.TOPIC, "name", PatternType.MATCH));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfPatternTypeIsAny() {
-        new ResourcePattern(ResourceType.TOPIC, "name", PatternType.ANY);
+        assertThrows(IllegalArgumentException.class, () -> new ResourcePattern(ResourceType.TOPIC, "name", PatternType.ANY));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfResourceNameIsNull() {
-        new ResourcePattern(ResourceType.TOPIC, null, PatternType.ANY);
+        assertThrows(NullPointerException.class, () -> new ResourcePattern(ResourceType.TOPIC, null, PatternType.ANY));
     }
 }

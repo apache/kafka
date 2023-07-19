@@ -25,77 +25,84 @@ import org.apache.kafka.streams.state.{KeyValueBytesStoreSupplier, SessionBytesS
 object Materialized {
 
   /**
-   * Materialize a [[StateStore]] with the provided key and value [[Serde]]s.
+   * Materialize a `org.apache.kafka.streams.processor.StateStore` with the provided key and value Serdes.
    * An internal name will be used for the store.
    *
    * @tparam K         key type
    * @tparam V         value type
    * @tparam S         store type
-   * @param keySerde   the key [[Serde]] to use.
-   * @param valueSerde the value [[Serde]] to use.
+   * @param keySerde   the key Serde to use.
+   * @param valueSerde the value Serde to use.
    * @return a new [[Materialized]] instance with the given key and value serdes
    */
   def `with`[K, V, S <: StateStore](implicit keySerde: Serde[K], valueSerde: Serde[V]): MaterializedJ[K, V, S] =
     MaterializedJ.`with`(keySerde, valueSerde)
 
   /**
-   * Materialize a [[StateStore]] with the given name.
+   * Materialize a `org.apache.kafka.streams.processor.StateStore` with the given name.
    *
    * @tparam K         key type of the store
    * @tparam V         value type of the store
-   * @tparam S         type of the [[StateStore]]
+   * @tparam S         type of the `org.apache.kafka.streams.processor.StateStore`
    * @param storeName  the name of the underlying [[org.apache.kafka.streams.scala.kstream.KTable]] state store;
    *                   valid characters are ASCII alphanumerics, '.', '_' and '-'.
    * @param keySerde   the key serde to use.
    * @param valueSerde the value serde to use.
    * @return a new [[Materialized]] instance with the given storeName
    */
-  def as[K, V, S <: StateStore](storeName: String)(implicit keySerde: Serde[K],
-                                                   valueSerde: Serde[V]): MaterializedJ[K, V, S] =
+  def as[K, V, S <: StateStore](
+    storeName: String
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): MaterializedJ[K, V, S] =
     MaterializedJ.as(storeName).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
-   * Materialize a [[org.apache.kafka.streams.state.WindowStore]] using the provided [[WindowBytesStoreSupplier]].
+   * Materialize a `org.apache.kafka.streams.state.WindowStore` using the provided
+   * `org.apache.kafka.streams.state.WindowBytesStoreSupplier`.
    *
    * Important: Custom subclasses are allowed here, but they should respect the retention contract:
    * Window stores are required to retain windows at least as long as (window size + window grace period).
-   * Stores constructed via [[org.apache.kafka.streams.state.Stores]] already satisfy this contract.
+   * Stores constructed via `org.apache.kafka.streams.state.Stores` already satisfy this contract.
    *
    * @tparam K         key type of the store
    * @tparam V         value type of the store
-   * @param supplier   the [[WindowBytesStoreSupplier]] used to materialize the store
+   * @param supplier   the `org.apache.kafka.streams.state.WindowBytesStoreSupplier` used to materialize the store
    * @param keySerde   the key serde to use.
    * @param valueSerde the value serde to use.
    * @return a new [[Materialized]] instance with the given supplier
    */
-  def as[K, V](supplier: WindowBytesStoreSupplier)(implicit keySerde: Serde[K],
-                                                   valueSerde: Serde[V]): MaterializedJ[K, V, ByteArrayWindowStore] =
+  def as[K, V](
+    supplier: WindowBytesStoreSupplier
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): MaterializedJ[K, V, ByteArrayWindowStore] =
     MaterializedJ.as(supplier).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
-   * Materialize a [[org.apache.kafka.streams.state.SessionStore]] using the provided [[SessionBytesStoreSupplier]].
+   * Materialize a `org.apache.kafka.streams.state.SessionStore` using the provided
+   * `org.apache.kafka.streams.state.SessionBytesStoreSupplier`.
    *
    * Important: Custom subclasses are allowed here, but they should respect the retention contract:
    * Session stores are required to retain windows at least as long as (session inactivity gap + session grace period).
-   * Stores constructed via [[org.apache.kafka.streams.state.Stores]] already satisfy this contract.
+   * Stores constructed via `org.apache.kafka.streams.state.Stores` already satisfy this contract.
    *
    * @tparam K         key type of the store
    * @tparam V         value type of the store
-   * @param supplier   the [[SessionBytesStoreSupplier]] used to materialize the store
+   * @param supplier   the `org.apache.kafka.streams.state.SessionBytesStoreSupplier` used to materialize the store
    * @param keySerde   the key serde to use.
    * @param valueSerde the value serde to use.
    * @return a new [[Materialized]] instance with the given supplier
    */
-  def as[K, V](supplier: SessionBytesStoreSupplier)(implicit keySerde: Serde[K],
-                                                    valueSerde: Serde[V]): MaterializedJ[K, V, ByteArraySessionStore] =
+  def as[K, V](
+    supplier: SessionBytesStoreSupplier
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): MaterializedJ[K, V, ByteArraySessionStore] =
     MaterializedJ.as(supplier).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
-   * Materialize a [[org.apache.kafka.streams.state.KeyValueStore]] using the provided [[KeyValueBytesStoreSupplier]].
+   * Materialize a `org.apache.kafka.streams.state.KeyValueStore` using the provided
+   * `org.apache.kafka.streams.state.KeyValueBytesStoreSupplier`.
    *
    * @tparam K         key type of the store
    * @tparam V         value type of the store
-   * @param supplier   the [[KeyValueBytesStoreSupplier]] used to materialize the store
+   * @param supplier   the `org.apache.kafka.streams.state.KeyValueBytesStoreSupplier` used to
+   *                   materialize the store
    * @param keySerde   the key serde to use.
    * @param valueSerde the value serde to use.
    * @return a new [[Materialized]] instance with the given supplier

@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,20 +99,21 @@ public class LoginManager {
             LoginManager loginManager;
             Password jaasConfigValue = jaasContext.dynamicJaasConfig();
             if (jaasConfigValue != null) {
-                LoginMetadata<Password> loginMetadata = new LoginMetadata<>(jaasConfigValue, loginClass, loginCallbackClass);
+                LoginMetadata<Password> loginMetadata = new LoginMetadata<>(jaasConfigValue, loginClass, loginCallbackClass, configs);
                 loginManager = DYNAMIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
                     loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata);
                     DYNAMIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             } else {
-                LoginMetadata<String> loginMetadata = new LoginMetadata<>(jaasContext.name(), loginClass, loginCallbackClass);
+                LoginMetadata<String> loginMetadata = new LoginMetadata<>(jaasContext.name(), loginClass, loginCallbackClass, configs);
                 loginManager = STATIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
                     loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata);
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }
+            SecurityUtils.addConfiguredSecurityProviders(configs);
             return loginManager.acquire();
         }
     }
@@ -196,17 +198,23 @@ public class LoginManager {
         final T configInfo;
         final Class<? extends Login> loginClass;
         final Class<? extends AuthenticateCallbackHandler> loginCallbackClass;
+        final Map<String, Object> saslConfigs;
 
         LoginMetadata(T configInfo, Class<? extends Login> loginClass,
-                      Class<? extends AuthenticateCallbackHandler> loginCallbackClass) {
+                      Class<? extends AuthenticateCallbackHandler> loginCallbackClass,
+                      Map<String, ?> configs) {
             this.configInfo = configInfo;
             this.loginClass = loginClass;
             this.loginCallbackClass = loginCallbackClass;
+            this.saslConfigs = new HashMap<>();
+            configs.entrySet().stream()
+                    .filter(e -> e.getKey().startsWith("sasl."))
+                    .forEach(e -> saslConfigs.put(e.getKey(), e.getValue())); // value may be null
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(configInfo, loginClass, loginCallbackClass);
+            return Objects.hash(configInfo, loginClass, loginCallbackClass, saslConfigs);
         }
 
         @Override
@@ -217,7 +225,8 @@ public class LoginManager {
             LoginMetadata<?> loginMetadata = (LoginMetadata<?>) o;
             return Objects.equals(configInfo, loginMetadata.configInfo) &&
                    Objects.equals(loginClass, loginMetadata.loginClass) &&
-                   Objects.equals(loginCallbackClass, loginMetadata.loginCallbackClass);
+                   Objects.equals(loginCallbackClass, loginMetadata.loginCallbackClass) &&
+                   Objects.equals(saslConfigs, loginMetadata.saslConfigs);
         }
     }
 }

@@ -149,20 +149,20 @@ public class Microbenchmarks {
         t3.join();
         t4.join();
 
-        Map<String, Integer> values = new HashMap<String, Integer>();
+        Map<String, Integer> values = new HashMap<>();
         for (int i = 0; i < 100; i++)
             values.put(Integer.toString(i), i);
         System.out.println("HashMap:");
         benchMap(2, 1000000, values);
-        System.out.println("ConcurentHashMap:");
-        benchMap(2, 1000000, new ConcurrentHashMap<String, Integer>(values));
+        System.out.println("ConcurrentHashMap:");
+        benchMap(2, 1000000, new ConcurrentHashMap<>(values));
         System.out.println("CopyOnWriteMap:");
-        benchMap(2, 1000000, new CopyOnWriteMap<String, Integer>(values));
+        benchMap(2, 1000000, new CopyOnWriteMap<>(values));
     }
 
     private static void benchMap(int numThreads, final int iters, final Map<String, Integer> map) throws Exception {
-        final List<String> keys = new ArrayList<String>(map.keySet());
-        final List<Thread> threads = new ArrayList<Thread>();
+        final List<String> keys = new ArrayList<>(map.keySet());
+        final List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
             threads.add(new Thread() {
                 public void run() {

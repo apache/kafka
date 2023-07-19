@@ -19,11 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-
 
 public class ControlledShutdownRequest extends AbstractRequest {
 
@@ -48,46 +47,25 @@ public class ControlledShutdownRequest extends AbstractRequest {
     }
 
     private final ControlledShutdownRequestData data;
-    private final short version;
 
     private ControlledShutdownRequest(ControlledShutdownRequestData data, short version) {
         super(ApiKeys.CONTROLLED_SHUTDOWN, version);
         this.data = data;
-        this.version = version;
-    }
-
-    public ControlledShutdownRequest(Struct struct, short version) {
-        super(ApiKeys.CONTROLLED_SHUTDOWN, version);
-        this.data = new ControlledShutdownRequestData(struct, version);
-        this.version = version;
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        ControlledShutdownResponseData response = new ControlledShutdownResponseData();
-        response.setErrorCode(Errors.forException(e).code());
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new ControlledShutdownResponse(response);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()));
-        }
+    public ControlledShutdownResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ControlledShutdownResponseData data = new ControlledShutdownResponseData()
+                .setErrorCode(Errors.forException(e).code());
+        return new ControlledShutdownResponse(data);
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, short version) {
-        return new ControlledShutdownRequest(
-                ApiKeys.CONTROLLED_SHUTDOWN.parseRequest(version, buffer), version);
+        return new ControlledShutdownRequest(new ControlledShutdownRequestData(new ByteBufferAccessor(buffer), version),
+            version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
-    }
-
     public ControlledShutdownRequestData data() {
         return data;
     }

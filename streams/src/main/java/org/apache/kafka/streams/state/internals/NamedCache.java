@@ -16,36 +16,40 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.state.internals.metrics.NamedCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
     private final String name;
-    private final NavigableMap<Bytes, LRUNode> cache = new ConcurrentSkipListMap<>();
+    private final String storeName;
+    private final String taskName;
+    private final NavigableMap<Bytes, LRUNode> cache = new TreeMap<>();
     private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
     private ThreadCache.DirtyEntryFlushListener listener;
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
-    private final NamedCacheMetrics namedCacheMetrics;
+
+    private final StreamsMetricsImpl streamsMetrics;
+    private final Sensor hitRatioSensor;
+    private final Sensor totalCacheSizeSensor;
 
     // internal stats
     private long numReadHits = 0;
@@ -53,9 +57,22 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name, final StreamsMetricsImpl metrics) {
+    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics) {
         this.name = name;
-        this.namedCacheMetrics = new NamedCacheMetrics(metrics, name);
+        this.streamsMetrics = streamsMetrics;
+        storeName = ThreadCache.underlyingStoreNamefromCacheName(name);
+        taskName = ThreadCache.taskIDfromCacheName(name);
+        hitRatioSensor = NamedCacheMetrics.hitRatioSensor(
+            streamsMetrics,
+            Thread.currentThread().getName(),
+            taskName,
+            storeName
+        );
+        totalCacheSizeSensor = TaskMetrics.totalCacheSizeBytesSensor(
+                Thread.currentThread().getName(),
+                taskName,
+                streamsMetrics
+        );
     }
 
     synchronized final String name() {
@@ -172,6 +189,7 @@ class NamedCache {
             dirtyKeys.add(key);
         }
         currentSizeBytes += node.size();
+        totalCacheSizeSensor.record(currentSizeBytes);
     }
 
     synchronized long sizeInBytes() {
@@ -186,7 +204,7 @@ class NamedCache {
             return null;
         } else {
             numReadHits++;
-            namedCacheMetrics.hitRatioSensor.record((double) numReadHits / (double) (numReadHits + numReadMisses));
+            hitRatioSensor.record((double) numReadHits / (double) (numReadHits + numReadMisses));
         }
         return node;
     }
@@ -233,6 +251,7 @@ class NamedCache {
         if (eldest.entry.isDirty()) {
             flush(eldest);
         }
+        totalCacheSizeSensor.record(currentSizeBytes);
     }
 
     synchronized LRUCacheEntry putIfAbsent(final Bytes key, final LRUCacheEntry value) {
@@ -259,6 +278,7 @@ class NamedCache {
         remove(node);
         dirtyKeys.remove(key);
         currentSizeBytes -= node.size();
+        totalCacheSizeSensor.record(currentSizeBytes);
         return node.entry();
     }
 
@@ -266,12 +286,48 @@ class NamedCache {
         return cache.size();
     }
 
-    synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapIterator(final Bytes from, final Bytes to) {
-        return cache.subMap(from, true, to, true).entrySet().iterator();
+    public boolean isEmpty() {
+        return cache.isEmpty();
     }
 
-    synchronized Iterator<Map.Entry<Bytes, LRUNode>> allIterator() {
-        return cache.entrySet().iterator();
+    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to, final boolean toInclusive) {
+        final Set<Bytes> rangeSet = computeSubSet(from, to, toInclusive);
+        return keySetIterator(rangeSet, true);
+    }
+
+    synchronized Iterator<Bytes> reverseKeyRange(final Bytes from, final Bytes to) {
+        final Set<Bytes> rangeSet = computeSubSet(from, to, true);
+        return keySetIterator(rangeSet, false);
+    }
+
+    private Set<Bytes> computeSubSet(final Bytes from, final Bytes to, final boolean toInclusive) {
+        if (from == null && to == null) {
+            return cache.navigableKeySet();
+        } else if (from == null) {
+            return cache.headMap(to, toInclusive).keySet();
+        } else if (to == null) {
+            return cache.tailMap(from, true).keySet();
+        } else if (from.compareTo(to) > 0) {
+            return Collections.emptyNavigableSet();
+        } else {
+            return cache.navigableKeySet().subSet(from, true, to, toInclusive);
+        }
+    }
+
+    private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet, final boolean forward) {
+        if (forward) {
+            return new TreeSet<>(keySet).iterator();
+        } else {
+            return new TreeSet<>(keySet).descendingIterator();
+        }
+    }
+
+    synchronized Iterator<Bytes> allKeys() {
+        return keySetIterator(cache.navigableKeySet(), true);
+    }
+
+    synchronized Iterator<Bytes> reverseAllKeys() {
+        return keySetIterator(cache.navigableKeySet(), false);
     }
 
     synchronized LRUCacheEntry first() {
@@ -302,7 +358,14 @@ class NamedCache {
         currentSizeBytes = 0;
         dirtyKeys.clear();
         cache.clear();
-        namedCacheMetrics.removeAllSensors();
+        streamsMetrics.removeAllCacheLevelSensors(Thread.currentThread().getName(), taskName, storeName);
+    }
+
+    synchronized void clear() {
+        head = tail = null;
+        currentSizeBytes = 0;
+        dirtyKeys.clear();
+        cache.clear();
     }
 
     /**
@@ -348,68 +411,4 @@ class NamedCache {
         }
     }
 
-    private static class NamedCacheMetrics {
-        private final StreamsMetricsImpl metrics;
-
-        private final Sensor hitRatioSensor;
-        private final String taskName;
-        private final String cacheName;
-
-        private NamedCacheMetrics(final StreamsMetricsImpl metrics, final String cacheName) {
-            taskName = ThreadCache.taskIDfromCacheName(cacheName);
-            this.cacheName = cacheName;
-            this.metrics = metrics;
-            final String group = "stream-record-cache-metrics";
-
-            // add parent
-            final Map<String, String> allMetricTags = metrics.tagMap(
-                 "task-id", taskName,
-                "record-cache-id", "all"
-            );
-            final Sensor taskLevelHitRatioSensor = metrics.taskLevelSensor(taskName, "hitRatio", Sensor.RecordingLevel.DEBUG);
-            taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", allMetricTags),
-                new Avg()
-            );
-            taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", allMetricTags),
-                new Min()
-            );
-            taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", allMetricTags),
-                new Max()
-            );
-
-            // add child
-            final Map<String, String> metricTags = metrics.tagMap(
-                 "task-id", taskName,
-                "record-cache-id", ThreadCache.underlyingStoreNamefromCacheName(cacheName)
-            );
-
-            hitRatioSensor = metrics.cacheLevelSensor(
-                taskName,
-                cacheName,
-                "hitRatio",
-                Sensor.RecordingLevel.DEBUG,
-                taskLevelHitRatioSensor
-            );
-            hitRatioSensor.add(
-                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", metricTags),
-                new Avg()
-            );
-            hitRatioSensor.add(
-                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", metricTags),
-                new Min()
-            );
-            hitRatioSensor.add(
-                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", metricTags),
-                new Max()
-            );
-
-        }
-
-        private void removeAllSensors() {
-            metrics.removeAllCacheLevelSensors(taskName, cacheName);
-        }
-    }
 }

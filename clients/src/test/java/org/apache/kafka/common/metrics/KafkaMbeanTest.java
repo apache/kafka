@@ -17,11 +17,11 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Sum;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -32,10 +32,9 @@ import javax.management.RuntimeMBeanException;
 import java.lang.management.ManagementFactory;
 import java.util.List;
 
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaMbeanTest {
 
@@ -45,18 +44,18 @@ public class KafkaMbeanTest {
     private MetricName sumMetricName;
     private Metrics metrics;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         metrics = new Metrics();
         metrics.addReporter(new JmxReporter());
         sensor = metrics.sensor("kafka.requests");
         countMetricName = metrics.metricName("pack.bean1.count", "grp1");
-        sensor.add(countMetricName, new Count());
+        sensor.add(countMetricName, new WindowedCount());
         sumMetricName = metrics.metricName("pack.bean1.sum", "grp1");
-        sensor.add(sumMetricName, new Sum());
+        sensor.add(sumMetricName, new WindowedSum());
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         metrics.close();
     }
@@ -117,33 +116,24 @@ public class KafkaMbeanTest {
     }
 
     @Test
-    public void testInvoke() throws Exception {
-        try {
-            mBeanServer.invoke(objectName(countMetricName), "something", null, null);
-            fail("invoke should have failed");
-        } catch (RuntimeMBeanException e) {
-            assertThat(e.getCause(), instanceOf(UnsupportedOperationException.class));
-        }
+    public void testInvoke() {
+        RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
+            () -> mBeanServer.invoke(objectName(countMetricName), "something", null, null));
+        assertEquals(UnsupportedOperationException.class, e.getCause().getClass());
     }
 
     @Test
-    public void testSetAttribute() throws Exception {
-        try {
-            mBeanServer.setAttribute(objectName(countMetricName), new Attribute("anything", 1));
-            fail("setAttribute should have failed");
-        } catch (RuntimeMBeanException e) {
-            assertThat(e.getCause(), instanceOf(UnsupportedOperationException.class));
-        }
+    public void testSetAttribute() {
+        RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
+            () -> mBeanServer.setAttribute(objectName(countMetricName), new Attribute("anything", 1)));
+        assertEquals(UnsupportedOperationException.class, e.getCause().getClass());
     }
 
     @Test
-    public void testSetAttributes() throws Exception {
-        try {
-            mBeanServer.setAttributes(objectName(countMetricName), new AttributeList(1));
-            fail("setAttributes should have failed");
-        } catch (Exception e) {
-            assertThat(e.getCause(), instanceOf(UnsupportedOperationException.class));
-        }
+    public void testSetAttributes() {
+        RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
+            () -> mBeanServer.setAttributes(objectName(countMetricName), new AttributeList(1)));
+        assertEquals(UnsupportedOperationException.class, e.getCause().getClass());
     }
 
     private ObjectName objectName(MetricName metricName) throws Exception {

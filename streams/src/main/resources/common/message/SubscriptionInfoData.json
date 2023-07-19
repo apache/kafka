@@ -1,0 +1,163 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "name": "SubscriptionInfoData",
+  "validVersions": "1-11",
+  "flexibleVersions": "none",
+  "fields": [
+    {
+      "name": "version",
+      "versions": "1+",
+      "type": "int32"
+    },
+    {
+      "name": "latestSupportedVersion",
+      "versions": "3+",
+      "default": "-1",
+      "type": "int32"
+    },
+    {
+      "name": "processId",
+      "versions": "1+",
+      "type": "uuid"
+    },
+    /***** Protocol version 1-6 only (after 6 this is encoded in task offset sum map) *****/
+    {
+      "name": "prevTasks",
+      "versions": "1-6",
+      "type": "[]TaskId"
+    },
+    {
+      "name": "standbyTasks",
+      "versions": "1-6",
+      "type": "[]TaskId"
+    },
+    /***************/
+    {
+      "name": "userEndPoint",
+      "versions": "2+",
+      "type": "bytes"
+    },
+    {
+      "name": "taskOffsetSums",
+      "versions": "7+",
+      "type": "[]TaskOffsetSum"
+    },
+    {
+      "name": "uniqueField",
+      "versions": "8+",
+      "type": "int8"
+    },
+    {
+      "name": "errorCode",
+      "versions": "9+",
+      "type": "int32"
+    },
+    {
+      "name": "clientTags",
+      "versions": "11+",
+      "type": "[]ClientTag"
+    }
+  ],
+  "commonStructs": [
+    // TaskId was only used from 1-6, after 6 we encode each field of the TaskId separately along with the other information for that map entry
+    {
+      "name": "TaskId",
+      "versions": "1-6",
+      "fields": [
+        {
+          "name": "topicGroupId",
+          "versions": "1-6",
+          "type": "int32"
+        },
+        {
+          "name": "partition",
+          "versions": "1-6",
+          "type": "int32"
+        }
+      ]
+    },
+    {
+      "name": "TaskOffsetSum",
+      "versions": "7+",
+      "fields": [
+        {
+          "name": "topicGroupId",
+          "versions": "7+",
+          "type": "int32"
+        },
+        // Prior to version 10, in 7-9, the below fields (partition and offsetSum) were encoded via the nested
+        // partitionToOffsetSum struct. In 10+ all fields are encoded directly in the TaskOffsetSum struct
+        {
+          "name": "partition",
+          "versions": "10+",
+          "type": "int32"
+        },
+        {
+          "name": "offsetSum",
+          "versions": "10+",
+          "type": "int64"
+        },
+        {
+          "name": "namedTopology",
+          "versions": "10+",
+          "nullableVersions": "10+",
+          "ignorable":  "false",  // namedTopology is not ignorable because if you do, a TaskId may not be unique
+          "type": "string"
+        },
+        {
+          "name": "partitionToOffsetSum",
+          "versions": "7-9",
+          "type": "[]PartitionToOffsetSum"
+        }
+      ]
+    },
+
+    {
+      "name": "PartitionToOffsetSum",
+      "versions": "7-9",
+      "fields": [
+        {
+          "name": "partition",
+          "versions": "7-9",
+          "type": "int32"
+        },
+        {
+          "name": "offsetSum",
+          "versions": "7-9",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "name": "ClientTag",
+      "versions": "11+",
+      "fields": [
+        {
+          "name": "key",
+          "versions": "11+",
+          "type": "bytes"
+        },
+        {
+          "name": "value",
+          "versions": "11+",
+          "type": "bytes"
+        }
+      ]
+    }
+  ],
+  "type": "data"
+}

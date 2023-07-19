@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Describes new partitions for a particular topic in a call to {@link AdminClient#createPartitions(Map)}.
+ * Describes new partitions for a particular topic in a call to {@link Admin#createPartitions(Map)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class NewPartitions {

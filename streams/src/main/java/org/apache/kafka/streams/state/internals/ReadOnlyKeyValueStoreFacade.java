@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<K, V> {
     protected final TimestampedKeyValueStore<K, V> inner;
@@ -30,8 +32,7 @@ public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<
 
     @Override
     public V get(final K key) {
-        final ValueAndTimestamp<V> valueAndTimestamp = inner.get(key);
-        return valueAndTimestamp == null ? null : valueAndTimestamp.value();
+        return getValueOrNull(inner.get(key));
     }
 
     @Override
@@ -41,8 +42,25 @@ public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<
     }
 
     @Override
+    public KeyValueIterator<K, V> reverseRange(final K from,
+                                               final K to) {
+        return new KeyValueIteratorFacade<>(inner.reverseRange(from, to));
+    }
+
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix,
+                                                                           final PS prefixKeySerializer) {
+        return new KeyValueIteratorFacade<>(inner.prefixScan(prefix, prefixKeySerializer));
+    }
+
+    @Override
     public KeyValueIterator<K, V> all() {
         return new KeyValueIteratorFacade<>(inner.all());
+    }
+
+    @Override
+    public KeyValueIterator<K, V> reverseAll() {
+        return new KeyValueIteratorFacade<>(inner.reverseAll());
     }
 
     @Override

@@ -58,8 +58,10 @@ object ControllerState {
     def value = 4
   }
 
-  case object PartitionReassignment extends ControllerState {
+  case object AlterPartitionReassignment extends ControllerState {
     def value = 5
+
+    override def rateAndTimeMetricName: Option[String] = Some("PartitionReassignmentRateAndTimeMs")
   }
 
   case object AutoLeaderBalance extends ControllerState {
@@ -98,7 +100,23 @@ object ControllerState {
     def value = 14
   }
 
+  case object ListPartitionReassignment extends ControllerState {
+    def value = 15
+  }
+
+  case object UpdateMetadataResponseReceived extends ControllerState {
+    def value = 16
+
+    override protected def hasRateAndTimeMetric: Boolean = false
+  }
+
+  case object UpdateFeatures extends ControllerState {
+    def value = 17
+  }
+
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
-    PartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange, LeaderAndIsrResponseReceived,
-    LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable, TopicUncleanLeaderElectionEnable)
+    AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange,
+    LeaderAndIsrResponseReceived, LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable,
+    TopicUncleanLeaderElectionEnable, ListPartitionReassignment, UpdateMetadataResponseReceived,
+    UpdateFeatures)
 }

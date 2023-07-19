@@ -13,15 +13,15 @@
 package kafka.api
 
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import java.util.Properties
 
 import org.apache.kafka.common.internals.Topic
@@ -38,14 +38,14 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec() {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
+  def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(): Unit = {
+    val consumer = TestUtils.createConsumer(bootstrapServers())
     val offsetMap = Map(
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
     ).asJava
     consumer.commitSync(offsetMap)
     val logManager = servers.head.getLogManager
-    def getGroupMetadataLogOpt: Option[Log] =
+    def getGroupMetadataLogOpt: Option[UnifiedLog] =
       logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
 
     TestUtils.waitUntilTrue(() => getGroupMetadataLogOpt.exists(_.logSegments.exists(_.log.batches.asScala.nonEmpty)),
@@ -55,7 +55,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
     val incorrectCompressionCodecs = logSegments
       .flatMap(_.log.batches.asScala.map(_.compressionType))
       .filter(_ != offsetsTopicCompressionCodec)
-    assertEquals("Incorrect compression codecs should be empty", Seq.empty, incorrectCompressionCodecs)
+    assertEquals(Seq.empty, incorrectCompressionCodecs, "Incorrect compression codecs should be empty")
 
     consumer.close()
   }

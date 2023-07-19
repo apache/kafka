@@ -16,86 +16,112 @@
  */
 package org.apache.kafka.common.record;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.apache.kafka.common.errors.CorruptRecordException;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ArgumentsProvider;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
+import java.util.stream.Stream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(value = Parameterized.class)
 public class LegacyRecordTest {
 
-    private final byte magic;
-    private final long timestamp;
-    private final ByteBuffer key;
-    private final ByteBuffer value;
-    private final CompressionType compression;
-    private final TimestampType timestampType;
-    private final LegacyRecord record;
+    private static class Args {
+        final byte magic;
+        final long timestamp;
+        final ByteBuffer key;
+        final ByteBuffer value;
+        final CompressionType compression;
+        final TimestampType timestampType;
+        final LegacyRecord record;
 
-    public LegacyRecordTest(byte magic, long timestamp, byte[] key, byte[] value, CompressionType compression) {
-        this.magic = magic;
-        this.timestamp = timestamp;
-        this.timestampType = TimestampType.CREATE_TIME;
-        this.key = key == null ? null : ByteBuffer.wrap(key);
-        this.value = value == null ? null : ByteBuffer.wrap(value);
-        this.compression = compression;
-        this.record = LegacyRecord.create(magic, timestamp, key, value, compression, timestampType);
+        public Args(byte magic, long timestamp, byte[] key, byte[] value, CompressionType compression) {
+            this.magic = magic;
+            this.timestamp = timestamp;
+            this.timestampType = TimestampType.CREATE_TIME;
+            this.key = key == null ? null : ByteBuffer.wrap(key);
+            this.value = value == null ? null : ByteBuffer.wrap(value);
+            this.compression = compression;
+            this.record = LegacyRecord.create(magic, timestamp, key, value, compression, timestampType);
+        }
+
+        @Override
+        public String toString() {
+            return "magic=" + magic +
+                ", compression=" + compression +
+                ", timestamp=" + timestamp;
+        }
     }
 
-    @Test
-    public void testFields() {
-        assertEquals(compression, record.compressionType());
+    private static class LegacyRecordArgumentsProvider implements ArgumentsProvider {
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+            byte[] payload = new byte[1000];
+            Arrays.fill(payload, (byte) 1);
+            List<Arguments> arguments = new ArrayList<>();
+            for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1))
+                for (long timestamp : Arrays.asList(RecordBatch.NO_TIMESTAMP, 0L, 1L))
+                    for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
+                        for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
+                            for (CompressionType compression : CompressionType.values())
+                                arguments.add(Arguments.of(new Args(magic, timestamp, key, value, compression)));
+            return arguments.stream();
+        }
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(LegacyRecordArgumentsProvider.class)
+    public void testFields(Args args) {
+        LegacyRecord record = args.record;
+        ByteBuffer key = args.key;
+        assertEquals(args.compression, record.compressionType());
         assertEquals(key != null, record.hasKey());
         assertEquals(key, record.key());
         if (key != null)
             assertEquals(key.limit(), record.keySize());
-        assertEquals(magic, record.magic());
-        assertEquals(value, record.value());
-        if (value != null)
-            assertEquals(value.limit(), record.valueSize());
-        if (magic > 0) {
-            assertEquals(timestamp, record.timestamp());
-            assertEquals(timestampType, record.timestampType());
+        assertEquals(args.magic, record.magic());
+        assertEquals(args.value, record.value());
+        if (args.value != null)
+            assertEquals(args.value.limit(), record.valueSize());
+        if (args.magic > 0) {
+            assertEquals(args.timestamp, record.timestamp());
+            assertEquals(args.timestampType, record.timestampType());
         } else {
             assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
             assertEquals(TimestampType.NO_TIMESTAMP_TYPE, record.timestampType());
         }
     }
 
-    @Test
-    public void testChecksum() {
+    @ParameterizedTest
+    @ArgumentsSource(LegacyRecordArgumentsProvider.class)
+    public void testChecksum(Args args) {
+        LegacyRecord record = args.record;
         assertEquals(record.checksum(), record.computeChecksum());
 
-        byte attributes = LegacyRecord.computeAttributes(magic, this.compression, TimestampType.CREATE_TIME);
+        byte attributes = LegacyRecord.computeAttributes(args.magic, args.compression, TimestampType.CREATE_TIME);
         assertEquals(record.checksum(), LegacyRecord.computeChecksum(
-                magic,
+                args.magic,
                 attributes,
-                this.timestamp,
-                this.key == null ? null : this.key.array(),
-                this.value == null ? null : this.value.array()
+                args.timestamp,
+                args.key == null ? null : args.key.array(),
+                args.value == null ? null : args.value.array()
         ));
         assertTrue(record.isValid());
         for (int i = LegacyRecord.CRC_OFFSET + LegacyRecord.CRC_LENGTH; i < record.sizeInBytes(); i++) {
             LegacyRecord copy = copyOf(record);
             copy.buffer().put(i, (byte) 69);
             assertFalse(copy.isValid());
-            try {
-                copy.ensureValid();
-                fail("Should fail the above test.");
-            } catch (InvalidRecordException e) {
-                // this is good
-            }
+            assertThrows(CorruptRecordException.class, copy::ensureValid);
         }
     }
 
@@ -107,23 +133,10 @@ public class LegacyRecordTest {
         return new LegacyRecord(buffer);
     }
 
-    @Test
-    public void testEquality() {
-        assertEquals(record, copyOf(record));
-    }
-
-    @Parameters
-    public static Collection<Object[]> data() {
-        byte[] payload = new byte[1000];
-        Arrays.fill(payload, (byte) 1);
-        List<Object[]> values = new ArrayList<>();
-        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1))
-            for (long timestamp : Arrays.asList(RecordBatch.NO_TIMESTAMP, 0L, 1L))
-                for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
-                    for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
-                        for (CompressionType compression : CompressionType.values())
-                            values.add(new Object[] {magic, timestamp, key, value, compression});
-        return values;
+    @ParameterizedTest
+    @ArgumentsSource(LegacyRecordArgumentsProvider.class)
+    public void testEquality(Args args) {
+        assertEquals(args.record, copyOf(args.record));
     }
 
 }

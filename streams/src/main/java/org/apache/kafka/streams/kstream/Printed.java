@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 
 import java.io.IOException;
@@ -31,15 +32,12 @@ import java.util.Objects;
  * @param <V> value type
  * @see KStream#print(Printed)
  */
-public class Printed<K, V> {
+public class Printed<K, V> implements NamedOperation<Printed<K, V>> {
     protected final OutputStream outputStream;
     protected String label;
-    protected KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-        @Override
-        public String apply(final K key, final V value) {
-            return String.format("%s, %s", key, value);
-        }
-    };
+    protected String processorName;
+    protected KeyValueMapper<? super K, ? super V, String> mapper =
+        (KeyValueMapper<K, V, String>) (key, value) -> String.format("%s, %s", key, value);
 
     private Printed(final OutputStream outputStream) {
         this.outputStream = outputStream;
@@ -53,6 +51,7 @@ public class Printed<K, V> {
         this.outputStream = printed.outputStream;
         this.label = printed.label;
         this.mapper = printed.mapper;
+        this.processorName = printed.processorName;
     }
 
     /**
@@ -65,7 +64,7 @@ public class Printed<K, V> {
      */
     public static <K, V> Printed<K, V> toFile(final String filePath) {
         Objects.requireNonNull(filePath, "filePath can't be null");
-        if (filePath.trim().isEmpty()) {
+        if (Utils.isBlank(filePath)) {
             throw new TopologyException("filePath can't be an empty string");
         }
         try {
@@ -120,6 +119,18 @@ public class Printed<K, V> {
     public Printed<K, V> withKeyValueMapper(final KeyValueMapper<? super K, ? super V, String> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         this.mapper = mapper;
+        return this;
+    }
+
+    /**
+     * Print the records of a {@link KStream} with provided processor name.
+     *
+     * @param processorName the processor name to be used. If {@code null} a default processor name will be generated
+     ** @return this
+     */
+    @Override
+    public Printed<K, V> withName(final String processorName) {
+        this.processorName = processorName;
         return this;
     }
 }

@@ -50,21 +50,24 @@ import java.util.Objects;
  * @param <K> type of record key
  * @param <V> type of record value
  */
-public class Consumed<K, V> {
+public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
 
     protected Serde<K> keySerde;
     protected Serde<V> valueSerde;
     protected TimestampExtractor timestampExtractor;
     protected Topology.AutoOffsetReset resetPolicy;
+    protected String processorName;
 
     private Consumed(final Serde<K> keySerde,
                      final Serde<V> valueSerde,
                      final TimestampExtractor timestampExtractor,
-                     final Topology.AutoOffsetReset resetPolicy) {
+                     final Topology.AutoOffsetReset resetPolicy,
+                     final String processorName) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.timestampExtractor = timestampExtractor;
         this.resetPolicy = resetPolicy;
+        this.processorName = processorName;
     }
 
     /**
@@ -72,7 +75,12 @@ public class Consumed<K, V> {
      * @param consumed  the instance of {@link Consumed} to copy
      */
     protected Consumed(final Consumed<K, V> consumed) {
-        this(consumed.keySerde, consumed.valueSerde, consumed.timestampExtractor, consumed.resetPolicy);
+        this(consumed.keySerde,
+             consumed.valueSerde,
+             consumed.timestampExtractor,
+             consumed.resetPolicy,
+             consumed.processorName
+        );
     }
 
     /**
@@ -90,7 +98,7 @@ public class Consumed<K, V> {
                                              final Serde<V> valueSerde,
                                              final TimestampExtractor timestampExtractor,
                                              final Topology.AutoOffsetReset resetPolicy) {
-        return new Consumed<>(keySerde, valueSerde, timestampExtractor, resetPolicy);
+        return new Consumed<>(keySerde, valueSerde, timestampExtractor, resetPolicy, null);
 
     }
 
@@ -105,7 +113,7 @@ public class Consumed<K, V> {
      */
     public static <K, V> Consumed<K, V> with(final Serde<K> keySerde,
                                              final Serde<V> valueSerde) {
-        return new Consumed<>(keySerde, valueSerde, null, null);
+        return new Consumed<>(keySerde, valueSerde, null, null, null);
     }
 
     /**
@@ -117,7 +125,7 @@ public class Consumed<K, V> {
      * @return a new instance of {@link Consumed}
      */
     public static <K, V> Consumed<K, V> with(final TimestampExtractor timestampExtractor) {
-        return new Consumed<>(null, null, timestampExtractor, null);
+        return new Consumed<>(null, null, timestampExtractor, null, null);
     }
 
     /**
@@ -129,7 +137,19 @@ public class Consumed<K, V> {
      * @return a new instance of {@link Consumed}
      */
     public static <K, V> Consumed<K, V> with(final Topology.AutoOffsetReset resetPolicy) {
-        return new Consumed<>(null, null, null, resetPolicy);
+        return new Consumed<>(null, null, null, resetPolicy, null);
+    }
+
+    /**
+     * Create an instance of {@link Consumed} with provided processor name.
+     *
+     * @param processorName the processor name to be used. If {@code null} a default processor name will be generated
+     * @param <K>         key type
+     * @param <V>         value type
+     * @return a new instance of {@link Consumed}
+     */
+    public static <K, V> Consumed<K, V> as(final String processorName) {
+        return new Consumed<>(null, null, null, null, processorName);
     }
 
     /**
@@ -173,6 +193,18 @@ public class Consumed<K, V> {
      */
     public Consumed<K, V> withOffsetResetPolicy(final Topology.AutoOffsetReset resetPolicy) {
         this.resetPolicy = resetPolicy;
+        return this;
+    }
+
+    /**
+     * Configure the instance of {@link Consumed} with a processor name.
+     *
+     * @param processorName the processor name to be used. If {@code null} a default processor name will be generated
+     * @return this
+     */
+    @Override
+    public Consumed<K, V> withName(final String processorName) {
+        this.processorName = processorName;
         return this;
     }
 

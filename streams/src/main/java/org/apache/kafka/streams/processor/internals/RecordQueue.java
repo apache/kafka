@@ -18,55 +18,82 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
 
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
- * partition timestamp defined as the minimum timestamp of records in its queue; in addition, its partition
- * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
+ * partition timestamp defined as the largest timestamp seen on the partition so far; this is passed to the
+ * timestamp extractor.
  */
 public class RecordQueue {
 
-    static final long UNKNOWN = ConsumerRecord.NO_TIMESTAMP;
+    public static final long UNKNOWN = ConsumerRecord.NO_TIMESTAMP;
 
     private final Logger log;
-    private final SourceNode source;
+    private final SourceNode<?, ?> source;
     private final TopicPartition partition;
-    private final ProcessorContext processorContext;
+    private final ProcessorContext<?, ?> processorContext;
     private final TimestampExtractor timestampExtractor;
     private final RecordDeserializer recordDeserializer;
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
-    private long partitionTime = UNKNOWN;
     private StampedRecord headRecord = null;
+    private long partitionTime = UNKNOWN;
+
+    private final Sensor droppedRecordsSensor;
+    private final Sensor consumedSensor;
+    private long headRecordSizeInBytes;
 
     RecordQueue(final TopicPartition partition,
-                final SourceNode source,
+                final SourceNode<?, ?> source,
                 final TimestampExtractor timestampExtractor,
                 final DeserializationExceptionHandler deserializationExceptionHandler,
-                final InternalProcessorContext processorContext,
+                final InternalProcessorContext<?, ?> processorContext,
                 final LogContext logContext) {
         this.source = source;
         this.partition = partition;
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
-        this.recordDeserializer = new RecordDeserializer(
+        this.processorContext = processorContext;
+
+        final String threadName = Thread.currentThread().getName();
+        droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
+            threadName,
+            processorContext.taskId().toString(),
+            processorContext.metrics()
+        );
+        consumedSensor = TopicMetrics.consumedSensor(
+            threadName,
+            processorContext.taskId().toString(),
+            source.name(),
+            partition.topic(),
+            processorContext.metrics()
+        );
+        recordDeserializer = new RecordDeserializer(
             source,
             deserializationExceptionHandler,
             logContext,
-            processorContext.metrics().skippedRecordsSensor()
+            droppedRecordsSensor
         );
-        this.processorContext = processorContext;
         this.log = logContext.logger(RecordQueue.class);
+        this.headRecordSizeInBytes = 0L;
+    }
+
+    void setPartitionTime(final long partitionTime) {
+        this.partitionTime = partitionTime;
     }
 
     /**
@@ -74,7 +101,7 @@ public class RecordQueue {
      *
      * @return SourceNode
      */
-    public SourceNode source() {
+    public SourceNode<?, ?> source() {
         return source;
     }
 
@@ -98,7 +125,7 @@ public class RecordQueue {
             fifoQueue.addLast(rawRecord);
         }
 
-        maybeUpdateTimestamp();
+        updateHead();
 
         return size();
     }
@@ -108,11 +135,16 @@ public class RecordQueue {
      *
      * @return StampedRecord
      */
-    public StampedRecord poll() {
+    public StampedRecord poll(final long wallClockTime) {
         final StampedRecord recordToReturn = headRecord;
-        headRecord = null;
 
-        maybeUpdateTimestamp();
+        consumedSensor.record(headRecordSizeInBytes, wallClockTime);
+
+        headRecord = null;
+        headRecordSizeInBytes = 0L;
+        partitionTime = Math.max(partitionTime, recordToReturn.timestamp);
+
+        updateHead();
 
         return recordToReturn;
     }
@@ -137,30 +169,43 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the tracked partition timestamp
+     * Returns the head record's timestamp
      *
      * @return timestamp
      */
-    public long timestamp() {
-        return partitionTime;
+    public long headRecordTimestamp() {
+        return headRecord == null ? UNKNOWN : headRecord.timestamp;
+    }
+
+    public Long headRecordOffset() {
+        return headRecord == null ? null : headRecord.offset();
     }
 
     /**
-     * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
+     * Clear the fifo queue of its elements
      */
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
+        headRecordSizeInBytes = 0L;
         partitionTime = UNKNOWN;
     }
 
-    private void maybeUpdateTimestamp() {
+    public void close() {
+        processorContext.metrics().removeSensor(consumedSensor);
+    }
+
+    private void updateHead() {
+        ConsumerRecord<byte[], byte[]> lastCorruptedRecord = null;
+
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
-            final ConsumerRecord<Object, Object> deserialized = recordDeserializer.deserialize(processorContext, raw);
+            final ConsumerRecord<Object, Object> deserialized =
+                recordDeserializer.deserialize(processorContext, raw);
 
             if (deserialized == null) {
                 // this only happens if the deserializer decides to skip. It has already logged the reason.
+                lastCorruptedRecord = raw;
                 continue;
             }
 
@@ -182,16 +227,24 @@ public class RecordQueue {
                         "Skipping record due to negative extracted timestamp. topic=[{}] partition=[{}] offset=[{}] extractedTimestamp=[{}] extractor=[{}]",
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
-                ((StreamsMetricsImpl) processorContext.metrics()).skippedRecordsSensor().record();
+                droppedRecordsSensor.record();
                 continue;
             }
-
             headRecord = new StampedRecord(deserialized, timestamp);
-
-            // update the partition timestamp if the current head record's timestamp has exceed its value
-            if (timestamp > partitionTime) {
-                partitionTime = timestamp;
-            }
+            headRecordSizeInBytes = consumerRecordSizeInBytes(raw);
         }
+
+        // if all records in the FIFO queue are corrupted, make the last one the headRecord
+        // This record is used to update the offsets. See KAFKA-6502 for more details.
+        if (headRecord == null && lastCorruptedRecord != null) {
+            headRecord = new CorruptedRecord(lastCorruptedRecord);
+        }
+    }
+
+    /**
+     * @return the local partitionTime for this particular RecordQueue
+     */
+    long partitionTime() {
+        return partitionTime;
     }
 }

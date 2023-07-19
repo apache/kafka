@@ -29,14 +29,16 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG;
@@ -65,9 +67,10 @@ import static org.junit.Assert.fail;
  */
 @Category(IntegrationTest.class)
 public class ErrorHandlingIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
-
+    private static final int NUM_WORKERS = 1;
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
     private static final String TASK_ID = "error-conn-0";
@@ -75,19 +78,21 @@ public class ErrorHandlingIntegrationTest {
     private static final int EXPECTED_CORRECT_RECORDS = 19;
     private static final int EXPECTED_INCORRECT_RECORDS = 1;
     private static final int NUM_TASKS = 1;
-    private static final int CONNECTOR_SETUP_DURATION_MS = 5000;
-    private static final int CONSUME_MAX_DURATION_MS = 5000;
+    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
 
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws InterruptedException {
         // setup Connect cluster with defaults
         connect = new EmbeddedConnectCluster.Builder().build();
 
         // start Connect cluster
         connect.start();
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
@@ -123,7 +128,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
 
-        // tolerate all erros
+        // tolerate all errors
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
 
         // retry for up to one second
@@ -133,6 +138,8 @@ public class ErrorHandlingIntegrationTest {
         connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
 
         connect.configureConnector(CONNECTOR_NAME, props);
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         waitForCondition(this::checkForPartitionAssignment,
                 CONNECTOR_SETUP_DURATION_MS,
@@ -171,6 +178,77 @@ public class ErrorHandlingIntegrationTest {
         }
 
         connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME,
+                "Connector tasks did not stop in time.");
+
+    }
+
+    @Test
+    public void testErrantRecordReporter() throws Exception {
+        // create test topic
+        connect.kafka().createTopic("test-topic");
+
+        // setup connector config
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, ErrantRecordSinkConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put(TOPICS_CONFIG, "test-topic");
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+
+        // log all errors, along with message metadata
+        props.put(ERRORS_LOG_ENABLE_CONFIG, "true");
+        props.put(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
+
+        // produce bad messages into dead letter queue
+        props.put(DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC);
+        props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
+        props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+
+        // tolerate all errors
+        props.put(ERRORS_TOLERANCE_CONFIG, "all");
+
+        // retry for up to one second
+        props.put(ERRORS_RETRY_TIMEOUT_CONFIG, "1000");
+
+        // set expected records to successfully reach the task
+        connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
+
+        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::checkForPartitionAssignment,
+            CONNECTOR_SETUP_DURATION_MS,
+            "Connector task was not assigned a partition.");
+
+        // produce some strings into test topic
+        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
+            connect.kafka().produce("test-topic", "key-" + i, "value-" + i);
+        }
+
+        // consume all records from test topic
+        log.info("Consuming records from test topic");
+        int i = 0;
+        for (ConsumerRecord<byte[], byte[]> rec : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic")) {
+            String k = new String(rec.key());
+            String v = new String(rec.value());
+            log.debug("Consumed record (key='{}', value='{}') from topic {}", k, v, rec.topic());
+            assertEquals("Unexpected key", k, "key-" + i);
+            assertEquals("Unexpected value", v, "value-" + i);
+            i++;
+        }
+
+        // wait for records to reach the task
+        connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
+
+        // consume failed records from dead letter queue topic
+        log.info("Consuming records from test topic");
+        ConsumerRecords<byte[], byte[]> messages = connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC);
+
+        connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME,
+            "Connector tasks did not stop in time.");
     }
 
     /**
@@ -185,7 +263,7 @@ public class ErrorHandlingIntegrationTest {
         try {
             ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
             return info != null && info.tasks().size() == NUM_TASKS
-                    && connectorHandle.taskHandle(TASK_ID).partitionsAssigned() == 1;
+                    && connectorHandle.taskHandle(TASK_ID).numPartitionsAssigned() == 1;
         }  catch (Exception e) {
             // Log the exception and return that the partitions were not assigned
             log.error("Could not check connector state info.", e);

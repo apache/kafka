@@ -20,24 +20,29 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 
-public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
+public abstract class BaseRepartitionNode<K, V> extends GraphNode {
 
     protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
     protected final String sinkName;
     protected final String sourceName;
     protected final String repartitionTopic;
-    protected final ProcessorParameters processorParameters;
-
+    protected final ProcessorParameters<K, V, ?, ?> processorParameters;
+    protected final StreamPartitioner<K, V> partitioner;
+    protected final InternalTopicProperties internalTopicProperties;
 
     BaseRepartitionNode(final String nodeName,
                         final String sourceName,
-                        final ProcessorParameters processorParameters,
+                        final ProcessorParameters<K, V, ?, ?> processorParameters,
                         final Serde<K> keySerde,
                         final Serde<V> valueSerde,
                         final String sinkName,
-                        final String repartitionTopic) {
+                        final String repartitionTopic,
+                        final StreamPartitioner<K, V> partitioner,
+                        final InternalTopicProperties internalTopicProperties) {
 
         super(nodeName);
 
@@ -47,11 +52,25 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
         this.sourceName = sourceName;
         this.repartitionTopic = repartitionTopic;
         this.processorParameters = processorParameters;
+        this.partitioner = partitioner;
+        this.internalTopicProperties = internalTopicProperties;
     }
 
-    abstract Serializer<V> getValueSerializer();
+    Serializer<V> valueSerializer() {
+        return valueSerde != null ? valueSerde.serializer() : null;
+    }
 
-    abstract Deserializer<V> getValueDeserializer();
+    Deserializer<V> valueDeserializer() {
+        return valueSerde != null ? valueSerde.deserializer() : null;
+    }
+
+    Serializer<K> keySerializer() {
+        return keySerde != null ? keySerde.serializer() : null;
+    }
+
+    Deserializer<K> keyDeserializer() {
+        return keySerde != null ? keySerde.deserializer() : null;
+    }
 
     @Override
     public String toString() {
@@ -61,7 +80,68 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
                ", sinkName='" + sinkName + '\'' +
                ", sourceName='" + sourceName + '\'' +
                ", repartitionTopic='" + repartitionTopic + '\'' +
-               ", processorParameters=" + processorParameters +
+               ", processorParameters=" + processorParameters + '\'' +
+               ", partitioner=" + partitioner +
+               ", internalTopicProperties=" + internalTopicProperties +
                "} " + super.toString();
+    }
+
+    public abstract static class BaseRepartitionNodeBuilder<K, V, T extends BaseRepartitionNode<K, V>> {
+        protected String nodeName;
+        protected ProcessorParameters<K, V, ?, ?> processorParameters;
+        protected Serde<K> keySerde;
+        protected Serde<V> valueSerde;
+        protected String sinkName;
+        protected String sourceName;
+        protected String repartitionTopic;
+        protected StreamPartitioner<K, V> partitioner;
+        protected InternalTopicProperties internalTopicProperties = InternalTopicProperties.empty();
+
+        public BaseRepartitionNodeBuilder<K, V, T> withProcessorParameters(final ProcessorParameters<K, V, ?, ?> processorParameters) {
+            this.processorParameters = processorParameters;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withKeySerde(final Serde<K> keySerde) {
+            this.keySerde = keySerde;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withValueSerde(final Serde<V> valueSerde) {
+            this.valueSerde = valueSerde;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withSinkName(final String sinkName) {
+            this.sinkName = sinkName;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withSourceName(final String sourceName) {
+            this.sourceName = sourceName;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withRepartitionTopic(final String repartitionTopic) {
+            this.repartitionTopic = repartitionTopic;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
+            this.partitioner = partitioner;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withNodeName(final String nodeName) {
+            this.nodeName = nodeName;
+            return this;
+        }
+
+        public BaseRepartitionNodeBuilder<K, V, T> withInternalTopicProperties(final InternalTopicProperties internalTopicProperties) {
+            this.internalTopicProperties = internalTopicProperties;
+            return this;
+        }
+
+        public abstract T build();
     }
 }

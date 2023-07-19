@@ -52,14 +52,14 @@ public class SafeObjectInputStream extends ObjectInputStream {
     protected Class<?> resolveClass(ObjectStreamClass desc) throws IOException, ClassNotFoundException {
         String name = desc.getName();
 
-        if (isBlacklisted(name)) {
+        if (isBlocked(name)) {
             throw new SecurityException("Illegal type to deserialize: prevented for security reasons");
         }
 
         return super.resolveClass(desc);
     }
 
-    private boolean isBlacklisted(String name) {
+    private boolean isBlocked(String name) {
         for (String list : DEFAULT_NO_DESERIALIZE_CLASS_NAMES) {
             if (name.endsWith(list)) {
                 return true;

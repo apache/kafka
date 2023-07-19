@@ -21,14 +21,19 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class LoggingSignalHandler {
 
     private static final Logger log = LoggerFactory.getLogger(LoggingSignalHandler.class);
+
+    private static final List<String> SIGNALS = Arrays.asList("TERM", "INT", "HUP");
 
     private final Constructor<?> signalConstructor;
     private final Class<?> signalHandlerClass;
@@ -61,16 +66,22 @@ public class LoggingSignalHandler {
      */
     public void register() throws ReflectiveOperationException {
         Map<String, Object> jvmSignalHandlers = new ConcurrentHashMap<>();
-        register("TERM", jvmSignalHandlers);
-        register("INT", jvmSignalHandlers);
-        register("HUP", jvmSignalHandlers);
+
+        for (String signal : SIGNALS) {
+            register(signal, jvmSignalHandlers);
+        }
+        log.info("Registered signal handlers for " + String.join(", ", SIGNALS));
     }
 
     private Object createSignalHandler(final Map<String, Object> jvmSignalHandlers) {
         InvocationHandler invocationHandler = new InvocationHandler() {
 
-            private String getName(Object signal) throws ReflectiveOperationException {
-                return (String) signalGetNameMethod.invoke(signal);
+            private String getName(Object signal) throws Throwable {
+                try {
+                    return (String) signalGetNameMethod.invoke(signal);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
             }
 
             private void handle(Object signalHandler, Object signal) throws ReflectiveOperationException {

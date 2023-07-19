@@ -29,7 +29,7 @@ import java.util.concurrent.CountDownLatch;
  * Demonstrates, using the high-level KStream DSL, how to read data from a source (input) topic and how to
  * write data to a sink (output) topic.
  *
- * In this example, we implement a simple "pipe" program that reads from a source topic "streams-file-input"
+ * In this example, we implement a simple "pipe" program that reads from a source topic "streams-plaintext-input"
  * and writes the data as-is (i.e. unmodified) into a sink topic "streams-pipe-output".
  *
  * Before running this example you must create the input topic and the output topic (e.g. via

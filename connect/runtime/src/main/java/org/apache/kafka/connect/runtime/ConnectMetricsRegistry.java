@@ -20,8 +20,10 @@ import org.apache.kafka.common.MetricNameTemplate;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class ConnectMetricsRegistry {
@@ -41,6 +43,13 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate connectorType;
     public final MetricNameTemplate connectorClass;
     public final MetricNameTemplate connectorVersion;
+    public final MetricNameTemplate connectorTotalTaskCount;
+    public final MetricNameTemplate connectorRunningTaskCount;
+    public final MetricNameTemplate connectorPausedTaskCount;
+    public final MetricNameTemplate connectorFailedTaskCount;
+    public final MetricNameTemplate connectorUnassignedTaskCount;
+    public final MetricNameTemplate connectorDestroyedTaskCount;
+    public final MetricNameTemplate connectorRestartingTaskCount;
     public final MetricNameTemplate taskStatus;
     public final MetricNameTemplate taskRunningRatio;
     public final MetricNameTemplate taskPauseRatio;
@@ -87,6 +96,7 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate taskStartupSuccessPercentage;
     public final MetricNameTemplate taskStartupFailureTotal;
     public final MetricNameTemplate taskStartupFailurePercentage;
+    public final MetricNameTemplate connectProtocol;
     public final MetricNameTemplate leaderName;
     public final MetricNameTemplate epoch;
     public final MetricNameTemplate rebalanceCompletedTotal;
@@ -102,9 +112,14 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate dlqProduceRequests;
     public final MetricNameTemplate dlqProduceFailures;
     public final MetricNameTemplate lastErrorTimestamp;
+    public final MetricNameTemplate transactionSizeMin;
+    public final MetricNameTemplate transactionSizeMax;
+    public final MetricNameTemplate transactionSizeAvg;
+
+    public Map<MetricNameTemplate, TaskStatus.State> connectorStatusMetrics;
 
     public ConnectMetricsRegistry() {
-        this(new LinkedHashSet<String>());
+        this(new LinkedHashSet<>());
     }
 
     public ConnectMetricsRegistry(Set<String> tags) {
@@ -113,8 +128,8 @@ public class ConnectMetricsRegistry {
         connectorTags.add(CONNECTOR_TAG_NAME);
 
         connectorStatus = createTemplate("status", CONNECTOR_GROUP_NAME,
-                                         "The status of the connector. One of 'unassigned', 'running', 'paused', 'failed', or " +
-                                         "'destroyed'.",
+                                         "The status of the connector. One of 'unassigned', 'running', 'paused', 'stopped', 'failed', or " +
+                                         "'restarting'.",
                                          connectorTags);
         connectorType = createTemplate("connector-type", CONNECTOR_GROUP_NAME, "The type of the connector. One of 'source' or 'sink'.",
                                        connectorTags);
@@ -129,7 +144,7 @@ public class ConnectMetricsRegistry {
 
         taskStatus = createTemplate("status", TASK_GROUP_NAME,
                                     "The status of the connector task. One of 'unassigned', 'running', 'paused', 'failed', or " +
-                                    "'destroyed'.",
+                                    "'restarting'.",
                                     workerTaskTags);
         taskRunningRatio = createTemplate("running-ratio", TASK_GROUP_NAME,
                                           "The fraction of time this task has spent in the running state.", workerTaskTags);
@@ -139,9 +154,9 @@ public class ConnectMetricsRegistry {
                                            "The maximum time in milliseconds taken by this task to commit offsets.", workerTaskTags);
         taskCommitTimeAvg = createTemplate("offset-commit-avg-time-ms", TASK_GROUP_NAME,
                                            "The average time in milliseconds taken by this task to commit offsets.", workerTaskTags);
-        taskBatchSizeMax = createTemplate("batch-size-max", TASK_GROUP_NAME, "The maximum size of the batches processed by the connector.",
+        taskBatchSizeMax = createTemplate("batch-size-max", TASK_GROUP_NAME, "The number of records in the largest batch the task has processed so far.",
                                           workerTaskTags);
-        taskBatchSizeAvg = createTemplate("batch-size-avg", TASK_GROUP_NAME, "The average size of the batches processed by the connector.",
+        taskBatchSizeAvg = createTemplate("batch-size-avg", TASK_GROUP_NAME, "The average number of records in the batches the task has processed so far.",
                                           workerTaskTags);
         taskCommitFailurePercentage = createTemplate("offset-commit-failure-percentage", TASK_GROUP_NAME,
                                                      "The average percentage of this task's offset commit attempts that failed.",
@@ -164,15 +179,14 @@ public class ConnectMetricsRegistry {
                                                "belonging to the named source connector in this worker.",
                                                sourceTaskTags);
         sourceRecordWriteRate = createTemplate("source-record-write-rate", SOURCE_TASK_GROUP_NAME,
-                                               "The average per-second number of records output from the transformations and written" +
-                                               " to Kafka for this task belonging to the named source connector in this worker. This" +
-                                               " is after transformations are applied and excludes any records filtered out by the " +
-                                               "transformations.",
+                                               "The average per-second number of records written to Kafka for this task belonging to the " +
+                                                "named source connector in this worker, since the task was last restarted. This is after " +
+                                                "transformations are applied, and excludes any records filtered out by the transformations.",
                                                sourceTaskTags);
         sourceRecordWriteTotal = createTemplate("source-record-write-total", SOURCE_TASK_GROUP_NAME,
-                                                "The number of records output from the transformations and written to Kafka for this" +
-                                                " task belonging to the named source connector in this worker, since the task was " +
-                                                "last restarted.",
+                                                "The number of records output written to Kafka for this task belonging to the " +
+                                                "named source connector in this worker, since the task was last restarted. This is after " +
+                                                "transformations are applied, and excludes any records filtered out by the transformations.",
                                                 sourceTaskTags);
         sourceRecordPollBatchTimeMax = createTemplate("poll-batch-max-time-ms", SOURCE_TASK_GROUP_NAME,
                                                       "The maximum time in milliseconds taken by this task to poll for a batch of " +
@@ -194,6 +208,16 @@ public class ConnectMetricsRegistry {
                                                     "The average number of records that have been produced by this task but not yet " +
                                                     "completely written to Kafka.",
                                                     sourceTaskTags);
+
+        transactionSizeMin = createTemplate("transaction-size-min", SOURCE_TASK_GROUP_NAME,
+                                            "The number of records in the smallest transaction the task has committed so far. ",
+                                            sourceTaskTags);
+        transactionSizeMax = createTemplate("transaction-size-max", SOURCE_TASK_GROUP_NAME,
+                                            "The number of records in the largest transaction the task has committed so far.",
+                                            sourceTaskTags);
+        transactionSizeAvg = createTemplate("transaction-size-avg", SOURCE_TASK_GROUP_NAME,
+                                            "The average number of records in the transactions the task has committed so far.",
+                                            sourceTaskTags);
 
         /***** Sink worker task level *****/
         Set<String> sinkTaskTags = new LinkedHashSet<>(tags);
@@ -288,9 +312,39 @@ public class ConnectMetricsRegistry {
         taskStartupFailurePercentage = createTemplate("task-startup-failure-percentage", WORKER_GROUP_NAME,
                                                       "The average percentage of this worker's tasks starts that failed.", workerTags);
 
+        Set<String> workerConnectorTags = new LinkedHashSet<>(tags);
+        workerConnectorTags.add(CONNECTOR_TAG_NAME);
+        connectorTotalTaskCount = createTemplate("connector-total-task-count", WORKER_GROUP_NAME,
+            "The number of tasks of the connector on the worker.", workerConnectorTags);
+        connectorRunningTaskCount = createTemplate("connector-running-task-count", WORKER_GROUP_NAME,
+            "The number of running tasks of the connector on the worker.", workerConnectorTags);
+        connectorPausedTaskCount = createTemplate("connector-paused-task-count", WORKER_GROUP_NAME,
+            "The number of paused tasks of the connector on the worker.", workerConnectorTags);
+        connectorFailedTaskCount = createTemplate("connector-failed-task-count", WORKER_GROUP_NAME,
+            "The number of failed tasks of the connector on the worker.", workerConnectorTags);
+        connectorUnassignedTaskCount = createTemplate("connector-unassigned-task-count",
+            WORKER_GROUP_NAME,
+            "The number of unassigned tasks of the connector on the worker.", workerConnectorTags);
+        connectorDestroyedTaskCount = createTemplate("connector-destroyed-task-count",
+            WORKER_GROUP_NAME,
+            "The number of destroyed tasks of the connector on the worker.", workerConnectorTags);
+        connectorRestartingTaskCount = createTemplate("connector-restarting-task-count",
+            WORKER_GROUP_NAME,
+            "The number of restarting tasks of the connector on the worker.", workerConnectorTags);
+
+        connectorStatusMetrics = new HashMap<>();
+        connectorStatusMetrics.put(connectorRunningTaskCount, TaskStatus.State.RUNNING);
+        connectorStatusMetrics.put(connectorPausedTaskCount, TaskStatus.State.PAUSED);
+        connectorStatusMetrics.put(connectorFailedTaskCount, TaskStatus.State.FAILED);
+        connectorStatusMetrics.put(connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED);
+        connectorStatusMetrics.put(connectorDestroyedTaskCount, TaskStatus.State.DESTROYED);
+        connectorStatusMetrics.put(connectorRestartingTaskCount, TaskStatus.State.RESTARTING);
+        connectorStatusMetrics = Collections.unmodifiableMap(connectorStatusMetrics);
+
         /***** Worker rebalance level *****/
         Set<String> rebalanceTags = new LinkedHashSet<>(tags);
 
+        connectProtocol = createTemplate("connect-protocol", WORKER_REBALANCE_GROUP_NAME, "The Connect protocol used by this cluster", rebalanceTags);
         leaderName = createTemplate("leader-name", WORKER_REBALANCE_GROUP_NAME, "The name of the group leader.", rebalanceTags);
         epoch = createTemplate("epoch", WORKER_REBALANCE_GROUP_NAME, "The epoch or generation number of this worker.", rebalanceTags);
         rebalanceCompletedTotal = createTemplate("completed-rebalances-total", WORKER_REBALANCE_GROUP_NAME,

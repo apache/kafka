@@ -20,6 +20,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 public class KeyValueIteratorFacade<K, V> implements KeyValueIterator<K, V> {
     private final KeyValueIterator<K, ValueAndTimestamp<V>> innerIterator;
 
@@ -40,7 +42,7 @@ public class KeyValueIteratorFacade<K, V> implements KeyValueIterator<K, V> {
     @Override
     public KeyValue<K, V> next() {
         final KeyValue<K, ValueAndTimestamp<V>> innerKeyValue = innerIterator.next();
-        return KeyValue.pair(innerKeyValue.key, innerKeyValue.value.value());
+        return KeyValue.pair(innerKeyValue.key, getValueOrNull(innerKeyValue.value));
     }
 
     @Override

@@ -16,28 +16,29 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class LoginManagerTest {
 
     private Password dynamicPlainContext;
     private Password dynamicDigestContext;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         dynamicPlainContext = new Password(PlainLoginModule.class.getName() +
                 " required user=\"plainuser\" password=\"plain-secret\";");
@@ -47,7 +48,7 @@ public class LoginManagerTest {
                 Collections.singletonList("SCRAM-SHA-256"));
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         LoginManager.closeAll();
     }
@@ -107,6 +108,48 @@ public class LoginManagerTest {
         verifyLoginManagerRelease(dynamicPlainLogin, 2, plainJaasContext, configs);
         verifyLoginManagerRelease(dynamicDigestLogin, 2, digestJaasContext, configs);
         verifyLoginManagerRelease(staticScramLogin, 2, scramJaasContext, configs);
+    }
+
+    @Test
+    public void testLoginManagerWithDifferentConfigs() throws Exception {
+        Map<String, Object> configs1 = new HashMap<>();
+        configs1.put("sasl.jaas.config", dynamicPlainContext);
+        configs1.put("client.id", "client");
+        configs1.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://host1:1234");
+        Map<String, Object> configs2 = new HashMap<>(configs1);
+        configs2.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://host2:1234");
+        JaasContext dynamicContext = JaasContext.loadClientContext(configs1);
+        Map<String, Object> configs3 = new HashMap<>(configs1);
+        configs3.put("client.id", "client3");
+
+        LoginManager dynamicLogin1 = LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, configs1);
+        LoginManager dynamicLogin2 = LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, configs2);
+
+        assertEquals(dynamicPlainContext, dynamicLogin1.cacheKey());
+        assertEquals(dynamicPlainContext, dynamicLogin2.cacheKey());
+        assertNotSame(dynamicLogin1, dynamicLogin2);
+
+        assertSame(dynamicLogin1, LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, configs1));
+        assertSame(dynamicLogin2, LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, configs2));
+        assertSame(dynamicLogin1, LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, new HashMap<>(configs1)));
+        assertSame(dynamicLogin1, LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, configs3));
+
+
+        JaasContext staticContext = JaasContext.loadClientContext(Collections.emptyMap());
+        LoginManager staticLogin1 = LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256", DefaultLogin.class, configs1);
+        LoginManager staticLogin2 = LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256", DefaultLogin.class, configs2);
+        assertNotSame(staticLogin1, dynamicLogin1);
+        assertNotSame(staticLogin2, dynamicLogin2);
+        assertNotSame(staticLogin1, staticLogin2);
+        assertSame(staticLogin1, LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256", DefaultLogin.class, configs1));
+        assertSame(staticLogin2, LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256", DefaultLogin.class, configs2));
+        assertSame(staticLogin1, LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256", DefaultLogin.class, new HashMap<>(configs1)));
+        assertSame(staticLogin1, LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256", DefaultLogin.class, configs3));
+
+        verifyLoginManagerRelease(dynamicLogin1, 4, dynamicContext, configs1);
+        verifyLoginManagerRelease(dynamicLogin2, 2, dynamicContext, configs2);
+        verifyLoginManagerRelease(staticLogin1, 4, staticContext, configs1);
+        verifyLoginManagerRelease(staticLogin2, 2, staticContext, configs2);
     }
 
     private void verifyLoginManagerRelease(LoginManager loginManager, int acquireCount, JaasContext jaasContext,

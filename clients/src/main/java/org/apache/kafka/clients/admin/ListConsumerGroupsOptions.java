@@ -17,13 +17,37 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#listConsumerGroups()}.
+ * Options for {@link Admin#listConsumerGroups()}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
+
+    private Set<ConsumerGroupState> states = Collections.emptySet();
+
+    /**
+     * If states is set, only groups in these states will be returned by listConsumerGroups()
+     * Otherwise, all groups are returned.
+     * This operation is supported by brokers with version 2.6.0 or later.
+     */
+    public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
+        this.states = (states == null) ? Collections.emptySet() : new HashSet<>(states);
+        return this;
+    }
+
+    /**
+     * Returns the list of States that are requested or empty if no states have been specified
+     */
+    public Set<ConsumerGroupState> states() {
+        return states;
+    }
 }

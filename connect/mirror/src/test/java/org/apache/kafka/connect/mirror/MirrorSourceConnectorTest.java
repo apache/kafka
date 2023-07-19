@@ -1,0 +1,686 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.connect.mirror;
+
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeAclsResult;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.NewTopic;
+
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
+import org.junit.jupiter.api.Test;
+
+import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
+import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+
+public class MirrorSourceConnectorTest {
+    private ConfigPropertyFilter getConfigPropertyFilter() {
+        return new ConfigPropertyFilter() {
+            @Override
+            public boolean shouldReplicateConfigProperty(String prop) {
+                return true;
+            }
+
+        };
+    }
+
+    @Test
+    public void testReplicatesHeartbeatsByDefault() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
+        assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
+    }
+
+    @Test
+    public void testReplicatesHeartbeatsDespiteFilter() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> false, new DefaultConfigPropertyFilter());
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
+        assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
+    }
+
+    @Test
+    public void testNoCycles() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+        assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.topic1"), "should not allow cycles");
+        assertTrue(connector.shouldReplicateTopic("topic1"), "should allow anything else");
+        assertTrue(connector.shouldReplicateTopic("source.topic1"), "should allow anything else");
+    }
+
+    @Test
+    public void testIdentityReplication() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter());
+        assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("topic1"), "should allow normal topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should allow normal topics");
+        assertFalse(connector.shouldReplicateTopic("target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should allow heartbeat topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.heartbeats"), "should allow heartbeat topics");
+    }
+
+    @Test
+    public void testAclFiltering() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+        assertFalse(connector.shouldReplicateAcl(
+            new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
+        assertTrue(connector.shouldReplicateAcl(
+            new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
+    }
+
+    @Test
+    public void testAclTransformation() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+        AclBinding allowAllAclBinding = new AclBinding(
+            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
+        AclBinding processedAllowAllAclBinding = connector.targetAclBinding(allowAllAclBinding);
+        String expectedRemoteTopicName = "source" + DefaultReplicationPolicy.SEPARATOR_DEFAULT
+            + allowAllAclBinding.pattern().name();
+        assertEquals(expectedRemoteTopicName, processedAllowAllAclBinding.pattern().name(), "should change topic name");
+        assertEquals(processedAllowAllAclBinding.entry().operation(), AclOperation.READ, "should change ALL to READ");
+        assertEquals(processedAllowAllAclBinding.entry().permissionType(), AclPermissionType.ALLOW, "should not change ALLOW");
+
+        AclBinding denyAllAclBinding = new AclBinding(
+            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.DENY));
+        AclBinding processedDenyAllAclBinding = connector.targetAclBinding(denyAllAclBinding);
+        assertEquals(processedDenyAllAclBinding.entry().operation(), AclOperation.ALL, "should not change ALL");
+        assertEquals(processedDenyAllAclBinding.entry().permissionType(), AclPermissionType.DENY, "should not change DENY");
+    }
+
+    @Test
+    public void testNoBrokerAclAuthorizer() throws Exception {
+        Admin sourceAdmin = mock(Admin.class);
+        Admin targetAdmin = mock(Admin.class);
+        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin);
+
+        ExecutionException describeAclsFailure = new ExecutionException(
+                "Failed to describe ACLs",
+                new SecurityDisabledException("No ACL authorizer configured on this broker")
+        );
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Collection<AclBinding>> describeAclsFuture = mock(KafkaFuture.class);
+        when(describeAclsFuture.get()).thenThrow(describeAclsFailure);
+        DescribeAclsResult describeAclsResult = mock(DescribeAclsResult.class);
+        when(describeAclsResult.values()).thenReturn(describeAclsFuture);
+        when(sourceAdmin.describeAcls(any())).thenReturn(describeAclsResult);
+
+        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
+            LogCaptureAppender.setClassLoggerToTrace(MirrorSourceConnector.class);
+            connector.syncTopicAcls();
+            long aclSyncDisableMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("Consider disabling topic ACL syncing"))
+                    .count();
+            assertEquals(1, aclSyncDisableMessages, "Should have recommended that user disable ACL syncing");
+            long aclSyncSkippingMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("skipping topic ACL sync"))
+                    .count();
+            assertEquals(0, aclSyncSkippingMessages, "Should not have logged ACL sync skip at same time as suggesting ACL sync be disabled");
+
+            connector.syncTopicAcls();
+            connector.syncTopicAcls();
+            aclSyncDisableMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("Consider disabling topic ACL syncing"))
+                    .count();
+            assertEquals(1, aclSyncDisableMessages, "Should not have recommended that user disable ACL syncing more than once");
+            aclSyncSkippingMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("skipping topic ACL sync"))
+                    .count();
+            assertEquals(2, aclSyncSkippingMessages, "Should have logged ACL sync skip instead of suggesting disabling ACL syncing");
+        }
+
+        // We should never have tried to perform an ACL sync on the target cluster
+        verifyNoInteractions(targetAdmin);
+    }
+
+    @Test
+    public void testConfigPropertyFiltering() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+        ArrayList<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config, true);
+        assertTrue(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertTrue(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
+        assertFalse(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    @Deprecated
+    public void testConfigPropertyFilteringWithAlterConfigs() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        // When "use.defaults.from" set to "target" by default, the config with default value should be excluded
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config, false);
+        assertTrue(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertFalse(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
+        assertFalse(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    @Deprecated
+    public void testConfigPropertyFilteringWithAlterConfigsAndSourceDefault() {
+        Map<String, Object> filterConfig = Collections.singletonMap(DefaultConfigPropertyFilter.USE_DEFAULTS_FROM, "source");
+        DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
+        filter.configure(filterConfig);
+
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(),  x -> true, filter);
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        // When "use.defaults.from" explicitly set to "source", the config with default value should be replicated
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config, false);
+        assertTrue(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertTrue(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
+        assertFalse(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    public void testNewTopicConfigs() throws Exception {
+        Map<String, Object> filterConfig = new HashMap<>();
+        filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
+                + "leader\\.replication\\.throttled\\.replicas, "
+                + "message\\.timestamp\\.difference\\.max\\.ms, "
+                + "message\\.timestamp\\.type, "
+                + "unclean\\.leader\\.election\\.enable, "
+                + "min\\.insync\\.replicas,"
+                + "exclude_param.*");
+        DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
+        filter.configure(filterConfig);
+
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, filter));
+
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        entries.add(new ConfigEntry("exclude_param.param1", "value-param1"));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doAnswer(invocation -> {
+            Map<String, NewTopic> newTopics = invocation.getArgument(0);
+            assertNotNull(newTopics.get("source." + topic));
+            Map<String, String> targetConfig = newTopics.get("source." + topic).configs();
+
+            // property 'name-1' isn't defined in the exclude filter -> should be replicated
+            assertNotNull(targetConfig.get("name-1"), "should replicate properties");
+
+            // this property is in default list, just double check it:
+            String prop1 = "min.insync.replicas";
+            assertNull(targetConfig.get(prop1), "should not replicate excluded properties " + prop1);
+            // this property is only in exclude filter custom parameter, also tests regex on the way:
+            String prop2 = "exclude_param.param1";
+            assertNull(targetConfig.get(prop2), "should not replicate excluded properties " + prop2);
+            return null;
+        }).when(connector).createNewTopics(any());
+        connector.createNewTopics(Collections.singleton(topic), Collections.singletonMap(topic, 1L));
+        verify(connector).createNewTopics(any(), any());
+    }
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsRequested() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
+        Admin admin = mock(Admin.class);
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
+        doNothing().when(connector).deprecatedAlterConfigs(any());
+        connector.syncTopicConfigs();
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
+        verify(connector).incrementalAlterConfigs(topicConfigs);
+
+        // the next time we sync topic configurations, expect to use the deprecated API
+        connector.syncTopicConfigs();
+        verify(connector, times(1)).deprecatedAlterConfigs(topicConfigs);
+    }
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsRequired() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
+        Admin admin = mock(Admin.class);
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
+        ConfigEntry entryWithNonDefaultValue = new ConfigEntry("name-1", "value-1");
+        ConfigEntry entryWithDefaultValue = new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false,
+                Collections.emptyList(), ConfigEntry.ConfigType.STRING, "");
+        entries.add(entryWithNonDefaultValue);
+        entries.add(entryWithDefaultValue);
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+
+        doAnswer(invocation -> {
+            Map<ConfigResource, Collection<AlterConfigOp>> configOps = invocation.getArgument(0);
+            assertNotNull(configOps);
+            assertEquals(1, configOps.size());
+
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, "source." + topic);
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ops.add(new AlterConfigOp(entryWithNonDefaultValue, AlterConfigOp.OpType.SET));
+            ops.add(new AlterConfigOp(entryWithDefaultValue, AlterConfigOp.OpType.DELETE));
+
+            assertEquals(ops, configOps.get(configResource));
+
+            return alterConfigsResult(configResource);
+        }).when(admin).incrementalAlterConfigs(any());
+
+        connector.syncTopicConfigs();
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
+        verify(connector).incrementalAlterConfigs(topicConfigs);
+    }
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsRequiredButUnsupported() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
+        Admin admin = mock(Admin.class);
+        ConnectorContext connectorContext = mock(ConnectorContext.class);
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
+        connector.initialize(connectorContext);
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
+
+        connector.syncTopicConfigs();
+        verify(connectorContext).raiseError(isA(ConnectException.class));
+    }
+
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsNeverUsed() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfigs = new MirrorSourceConfig(props);
+
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfigs, new DefaultConfigPropertyFilter(), null));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doNothing().when(connector).deprecatedAlterConfigs(any());
+        connector.syncTopicConfigs();
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
+        verify(connector).deprecatedAlterConfigs(topicConfigs);
+        verify(connector, never()).incrementalAlterConfigs(any());
+    }
+
+    @Test
+    public void testMirrorSourceConnectorTaskConfig() {
+        List<TopicPartition> knownSourceTopicPartitions = new ArrayList<>();
+
+        // topic `t0` has 8 partitions
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 0));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 1));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 2));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 3));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 4));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 5));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 6));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 7));
+
+        // topic `t1` has 2 partitions
+        knownSourceTopicPartitions.add(new TopicPartition("t1", 0));
+        knownSourceTopicPartitions.add(new TopicPartition("t1", 1));
+
+        // topic `t2` has 2 partitions
+        knownSourceTopicPartitions.add(new TopicPartition("t2", 0));
+        knownSourceTopicPartitions.add(new TopicPartition("t2", 1));
+
+        // MirrorConnectorConfig example for test
+        MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
+
+        // MirrorSourceConnector as minimum to run taskConfig()
+        MirrorSourceConnector connector = new MirrorSourceConnector(knownSourceTopicPartitions, config);
+
+        // distribute the topic-partition to 3 tasks by round-robin
+        List<Map<String, String>> output = connector.taskConfigs(3);
+
+        // the expected assignments over 3 tasks:
+        // t1 -> [t0p0, t0p3, t0p6, t1p1]
+        // t2 -> [t0p1, t0p4, t0p7, t2p0]
+        // t3 -> [t0p2, t0p5, t1p0, t2p1]
+
+        Map<String, String> t1 = output.get(0);
+        assertEquals("t0-0,t0-3,t0-6,t1-1", t1.get(TASK_TOPIC_PARTITIONS), "Config for t1 is incorrect");
+
+        Map<String, String> t2 = output.get(1);
+        assertEquals("t0-1,t0-4,t0-7,t2-0", t2.get(TASK_TOPIC_PARTITIONS), "Config for t2 is incorrect");
+
+        Map<String, String> t3 = output.get(2);
+        assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS), "Config for t3 is incorrect");
+    }
+
+    @Test
+    public void testRefreshTopicPartitions() throws Exception {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        connector.initialize(mock(ConnectorContext.class));
+        connector = spy(connector);
+
+        Config topicConfig = new Config(Arrays.asList(
+                new ConfigEntry("cleanup.policy", "compact"),
+                new ConfigEntry("segment.bytes", "100")));
+        Map<String, Config> configs = Collections.singletonMap("topic", topicConfig);
+
+        List<TopicPartition> sourceTopicPartitions = Collections.singletonList(new TopicPartition("topic", 0));
+        doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
+        doReturn(Collections.emptyList()).when(connector).findTargetTopicPartitions();
+        doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("topic"));
+        doNothing().when(connector).createNewTopics(any());
+
+        connector.refreshTopicPartitions();
+        // if target topic is not created, refreshTopicPartitions() will call createTopicPartitions() again
+        connector.refreshTopicPartitions();
+
+        Map<String, Long> expectedPartitionCounts = new HashMap<>();
+        expectedPartitionCounts.put("source.topic", 1L);
+        Map<String, String> configMap = MirrorSourceConnector.configToMap(topicConfig);
+        assertEquals(2, configMap.size(), "configMap has incorrect size");
+
+        Map<String, NewTopic> expectedNewTopics = new HashMap<>();
+        expectedNewTopics.put("source.topic", new NewTopic("source.topic", 1, (short) 0).configs(configMap));
+
+        verify(connector, times(2)).computeAndCreateTopicPartitions();
+        verify(connector, times(2)).createNewTopics(eq(expectedNewTopics));
+        verify(connector, times(0)).createNewPartitions(any());
+
+        List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition("source.topic", 0));
+        doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
+        connector.refreshTopicPartitions();
+
+        // once target topic is created, refreshTopicPartitions() will NOT call computeAndCreateTopicPartitions() again
+        verify(connector, times(2)).computeAndCreateTopicPartitions();
+    }
+
+    @Test
+    public void testRefreshTopicPartitionsTopicOnTargetFirst() throws Exception {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        connector.initialize(mock(ConnectorContext.class));
+        connector = spy(connector);
+
+        Config topicConfig = new Config(Arrays.asList(
+                new ConfigEntry("cleanup.policy", "compact"),
+                new ConfigEntry("segment.bytes", "100")));
+        Map<String, Config> configs = Collections.singletonMap("source.topic", topicConfig);
+
+        List<TopicPartition> sourceTopicPartitions = Collections.emptyList();
+        List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition("source.topic", 0));
+        doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
+        doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
+        doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("source.topic"));
+        doReturn(Collections.emptyMap()).when(connector).describeTopicConfigs(Collections.emptySet());
+        doNothing().when(connector).createNewTopics(any());
+        doNothing().when(connector).createNewPartitions(any());
+
+        // partitions appearing on the target cluster should not cause reconfiguration
+        connector.refreshTopicPartitions();
+        connector.refreshTopicPartitions();
+        verify(connector, times(0)).computeAndCreateTopicPartitions();
+
+        sourceTopicPartitions = Collections.singletonList(new TopicPartition("topic", 0));
+        doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
+
+        // when partitions are added to the source cluster, reconfiguration is triggered
+        connector.refreshTopicPartitions();
+        verify(connector, times(1)).computeAndCreateTopicPartitions();
+    }
+
+    @Test
+    public void testIsCycleWithNullUpstreamTopic() {
+        class CustomReplicationPolicy extends DefaultReplicationPolicy {
+            @Override
+            public String upstreamTopic(String topic) {
+                return null;
+            }
+        }
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new CustomReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        assertDoesNotThrow(() -> connector.isCycle(".b"));
+    }
+
+    @Test
+    public void testExactlyOnceSupport() {
+        String readCommitted = "read_committed";
+        String readUncommitted = "read_uncommitted";
+        String readGarbage = "read_garbage";
+
+        // Connector is configured correctly, but exactly-once can't be supported
+        assertExactlyOnceSupport(null, null, false);
+        assertExactlyOnceSupport(readUncommitted, null, false);
+        assertExactlyOnceSupport(null, readUncommitted, false);
+        assertExactlyOnceSupport(readUncommitted, readUncommitted, false);
+
+        // Connector is configured correctly, and exactly-once can be supported
+        assertExactlyOnceSupport(readCommitted, null, true);
+        assertExactlyOnceSupport(null, readCommitted, true);
+        assertExactlyOnceSupport(readUncommitted, readCommitted, true);
+        assertExactlyOnceSupport(readCommitted, readCommitted, true);
+
+        // Connector is configured incorrectly, but is able to react gracefully
+        assertExactlyOnceSupport(readGarbage, null, false);
+        assertExactlyOnceSupport(null, readGarbage, false);
+        assertExactlyOnceSupport(readGarbage, readGarbage, false);
+        assertExactlyOnceSupport(readCommitted, readGarbage, false);
+        assertExactlyOnceSupport(readUncommitted, readGarbage, false);
+        assertExactlyOnceSupport(readGarbage, readUncommitted, false);
+        assertExactlyOnceSupport(readGarbage, readCommitted, true);
+    }
+
+    private void assertExactlyOnceSupport(String defaultIsolationLevel, String sourceIsolationLevel, boolean expected) {
+        Map<String, String> props = makeProps();
+        if (defaultIsolationLevel != null) {
+            props.put(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, defaultIsolationLevel);
+        }
+        if (sourceIsolationLevel != null) {
+            props.put(SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, sourceIsolationLevel);
+        }
+        ExactlyOnceSupport expectedSupport = expected ? ExactlyOnceSupport.SUPPORTED : ExactlyOnceSupport.UNSUPPORTED;
+        ExactlyOnceSupport actualSupport = new MirrorSourceConnector().exactlyOnceSupport(props);
+        assertEquals(expectedSupport, actualSupport);
+    }
+
+    @Test
+    public void testExactlyOnceSupportValidation() {
+        String exactlyOnceSupport = "exactly.once.support";
+
+        Map<String, String> props = makeProps();
+        Optional<ConfigValue> configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        props.put(exactlyOnceSupport, "requested");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        props.put(exactlyOnceSupport, "garbage");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        props.put(exactlyOnceSupport, "required");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertTrue(configValue.isPresent());
+        List<String> errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        String errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(ISOLATION_LEVEL_CONFIG),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'isolation.level' consumer property"
+        );
+
+        props.put(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, "read_committed");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        // Make sure that an unrelated invalid property doesn't cause an exception to be thrown and is instead handled and reported gracefully
+        props.put(OFFSET_LAG_MAX, "bad");
+        // Ensure that the issue with the invalid property is reported...
+        configValue = validateProperty(OFFSET_LAG_MAX, props);
+        assertTrue(configValue.isPresent());
+        errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(OFFSET_LAG_MAX),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'offset.lag.max' property"
+        );
+        // ... and that it does not cause any issues with validation for exactly-once support...
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        // ... regardless of whether validation for exactly-once support does or does not find an error
+        props.remove(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG);
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertTrue(configValue.isPresent());
+        errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(ISOLATION_LEVEL_CONFIG),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'isolation.level' consumer property"
+        );
+    }
+
+    private Optional<ConfigValue> validateProperty(String name, Map<String, String> props) {
+        List<ConfigValue> results = new MirrorSourceConnector().validate(props)
+                .configValues().stream()
+                .filter(cv -> name.equals(cv.name()))
+                .collect(Collectors.toList());
+
+        assertTrue(results.size() <= 1, "Connector produced multiple config values for '" + name + "' property");
+
+        if (results.isEmpty())
+            return Optional.empty();
+
+        ConfigValue result = results.get(0);
+        assertNotNull(result, "Connector should not have record null config value for '" + name + "' property");
+        return Optional.of(result);
+    }
+}

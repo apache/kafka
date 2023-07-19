@@ -16,9 +16,12 @@
 {
   "apiKey": 34,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "AlterReplicaLogDirsRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
+  // Version 2 enables flexible versions.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "Dirs", "type": "[]AlterReplicaLogDir", "versions": "0+", 
       "about": "The alterations to make for each directory.", "fields": [
@@ -26,7 +29,7 @@
         "about": "The absolute directory path." },
       { "name": "Topics", "type": "[]AlterReplicaLogDirTopic", "versions": "0+",
         "about": "The topics to add to the directory.",  "fields": [
-        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]int32", "versions": "0+",
           "about": "The partition indexes." }

@@ -20,12 +20,13 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The result of the {@link AdminClient#deleteConsumerGroups(Collection)} call.
+ * The result of the {@link Admin#deleteConsumerGroups(Collection)} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupsResult {
@@ -40,7 +41,9 @@ public class DeleteConsumerGroupsResult {
      * individual deletions.
      */
     public Map<String, KafkaFuture<Void>> deletedGroups() {
-        return futures;
+        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
+        futures.forEach((key, future) -> deletedGroups.put(key, future));
+        return deletedGroups;
     }
 
     /**

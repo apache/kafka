@@ -50,8 +50,7 @@ class CompositeKeyValueIterator<K, V, StoreType> implements KeyValueIterator<K, 
 
     @Override
     public boolean hasNext() {
-        while ((current == null || !current.hasNext())
-                && storeIterator.hasNext()) {
+        while ((current == null || !current.hasNext()) && storeIterator.hasNext()) {
             close();
             current = nextIteratorFunction.apply(storeIterator.next());
         }
@@ -67,8 +66,4 @@ class CompositeKeyValueIterator<K, V, StoreType> implements KeyValueIterator<K, 
         return current.next();
     }
 
-    @Override
-    public void remove() {
-        throw new UnsupportedOperationException("Remove not supported");
-    }
 }

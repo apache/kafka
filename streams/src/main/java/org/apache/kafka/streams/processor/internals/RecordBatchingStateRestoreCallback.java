@@ -29,9 +29,4 @@ public interface RecordBatchingStateRestoreCallback extends BatchingStateRestore
     default void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
         throw new UnsupportedOperationException();
     }
-
-    @Override
-    default void restore(final byte[] key, final byte[] value) {
-        throw new UnsupportedOperationException();
-    }
 }

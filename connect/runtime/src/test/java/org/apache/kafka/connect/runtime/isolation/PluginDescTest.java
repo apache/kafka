@@ -22,6 +22,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -36,7 +37,7 @@ public class PluginDescTest {
     private final ClassLoader systemLoader = ClassLoader.getSystemClassLoader();
     private final String regularVersion = "1.0.0";
     private final String newerVersion = "1.0.1";
-    private final String snaphotVersion = "1.0.0-SNAPSHOT";
+    private final String snapshotVersion = "1.0.0-SNAPSHOT";
     private final String noVersion = "undefined";
     private PluginClassLoader pluginLoader;
 
@@ -48,6 +49,7 @@ public class PluginDescTest {
         pluginLoader = new PluginClassLoader(location, new URL[0], systemLoader);
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testRegularPluginDesc() {
         PluginDesc<Connector> connectorDesc = new PluginDesc<>(
@@ -60,11 +62,11 @@ public class PluginDescTest {
 
         PluginDesc<Converter> converterDesc = new PluginDesc<>(
                 Converter.class,
-                snaphotVersion,
+                snapshotVersion,
                 pluginLoader
         );
 
-        assertPluginDesc(converterDesc, Converter.class, snaphotVersion, pluginLoader.location());
+        assertPluginDesc(converterDesc, Converter.class, snapshotVersion, pluginLoader.location());
 
         PluginDesc<Transformation> transformDesc = new PluginDesc<>(
                 Transformation.class,
@@ -75,6 +77,7 @@ public class PluginDescTest {
         assertPluginDesc(transformDesc, Transformation.class, noVersion, pluginLoader.location());
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescWithSystemClassLoader() {
         String location = "classpath";
@@ -88,11 +91,11 @@ public class PluginDescTest {
 
         PluginDesc<Converter> converterDesc = new PluginDesc<>(
                 Converter.class,
-                snaphotVersion,
+                snapshotVersion,
                 systemLoader
         );
 
-        assertPluginDesc(converterDesc, Converter.class, snaphotVersion, location);
+        assertPluginDesc(converterDesc, Converter.class, snapshotVersion, location);
 
         PluginDesc<Transformation> transformDesc = new PluginDesc<>(
                 Transformation.class,
@@ -129,17 +132,18 @@ public class PluginDescTest {
         assertPluginDesc(converterDesc, Converter.class, nullVersion, location);
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescEquality() {
         PluginDesc<Connector> connectorDescPluginPath = new PluginDesc<>(
                 Connector.class,
-                snaphotVersion,
+                snapshotVersion,
                 pluginLoader
         );
 
         PluginDesc<Connector> connectorDescClasspath = new PluginDesc<>(
                 Connector.class,
-                snaphotVersion,
+                snapshotVersion,
                 systemLoader
         );
 
@@ -176,6 +180,7 @@ public class PluginDescTest {
         assertNotEquals(transformDescPluginPath, transformDescClasspath);
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescComparison() {
         PluginDesc<Connector> connectorDescPluginPath = new PluginDesc<>(
@@ -200,7 +205,7 @@ public class PluginDescTest {
 
         PluginDesc<Converter> converterDescClasspath = new PluginDesc<>(
                 Converter.class,
-                snaphotVersion,
+                snapshotVersion,
                 systemLoader
         );
 
@@ -219,6 +224,20 @@ public class PluginDescTest {
         );
 
         assertNewer(transformDescPluginPath, transformDescClasspath);
+
+        PluginDesc<Predicate> predicateDescPluginPath = new PluginDesc<>(
+                Predicate.class,
+                regularVersion,
+                pluginLoader
+        );
+
+        PluginDesc<Predicate> predicateDescClasspath = new PluginDesc<>(
+                Predicate.class,
+                regularVersion,
+                systemLoader
+        );
+
+        assertNewer(predicateDescPluginPath, predicateDescClasspath);
     }
 
     private static <T> void assertPluginDesc(

@@ -31,6 +31,7 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
 
     private final Bytes from;
     private final Bytes to;
+    private final boolean forward;
     protected final Iterator<S> segments;
     protected final HasNextCondition hasNextCondition;
 
@@ -40,13 +41,16 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
     SegmentIterator(final Iterator<S> segments,
                     final HasNextCondition hasNextCondition,
                     final Bytes from,
-                    final Bytes to) {
+                    final Bytes to,
+                    final boolean forward) {
         this.segments = segments;
         this.hasNextCondition = hasNextCondition;
         this.from = from;
         this.to = to;
+        this.forward = forward;
     }
 
+    @Override
     public void close() {
         if (currentIterator != null) {
             currentIterator.close();
@@ -66,14 +70,14 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
     public boolean hasNext() {
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextConditionHasNext()) || !currentSegment.isOpen())
-                && segments.hasNext()) {
+            && segments.hasNext()) {
             close();
             currentSegment = segments.next();
             try {
-                if (from == null || to == null) {
-                    currentIterator = currentSegment.all();
-                } else {
+                if (forward) {
                     currentIterator = currentSegment.range(from, to);
+                } else {
+                    currentIterator = currentSegment.reverseRange(from, to);
                 }
             } catch (final InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.
@@ -87,19 +91,16 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
         try {
             hasNext = hasNextCondition.hasNext(currentIterator);
         } catch (final InvalidStateStoreException e) {
-            //already closed so ignore
+            // already closed so ignore
         }
         return hasNext;
     }
 
+    @Override
     public KeyValue<Bytes, byte[]> next() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
         return currentIterator.next();
-    }
-
-    public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 }

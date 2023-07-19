@@ -21,8 +21,19 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Materializes a key-value store as either a {@link TimestampedKeyValueStoreBuilder} or a
+ * {@link VersionedKeyValueStoreBuilder} depending on whether the store is versioned or not.
+ */
 public class KeyValueStoreMaterializer<K, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
+
     private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
 
     public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -32,16 +43,33 @@ public class KeyValueStoreMaterializer<K, V> {
     /**
      * @return  StoreBuilder
      */
-    public StoreBuilder<KeyValueStore<K, V>> materialize() {
+    public StoreBuilder<?> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            final String name = materialized.storeName();
-            supplier = Stores.persistentKeyValueStore(name);
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemoryKeyValueStore(materialized.storeName());
+                    break;
+                case ROCKS_DB:
+                    supplier = Stores.persistentTimestampedKeyValueStore(materialized.storeName());
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
+            }
         }
-        final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde());
+
+        final StoreBuilder<?> builder;
+        if (supplier instanceof VersionedBytesStoreSupplier) {
+            builder = Stores.versionedKeyValueStoreBuilder(
+                (VersionedBytesStoreSupplier) supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
+        } else {
+            builder = Stores.timestampedKeyValueStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
+        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());
@@ -50,7 +78,11 @@ public class KeyValueStoreMaterializer<K, V> {
         }
 
         if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
+            if (!(builder instanceof VersionedKeyValueStoreBuilder)) {
+                builder.withCachingEnabled();
+            } else {
+                LOG.info("Not enabling caching for store '{}' as versioned stores do not support caching.", supplier.name());
+            }
         }
         return builder;
     }

@@ -19,27 +19,32 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.assertThrows;
+
 @SuppressWarnings("unchecked")
 public class StateSerdesTest {
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfTopicNameIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes(null, byte[].class, byte[].class);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes(null, byte[].class, byte[].class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfKeyClassIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", null, byte[].class);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", null, byte[].class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfValueClassIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", byte[].class, null);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, null));
     }
 
     @Test
@@ -63,45 +68,72 @@ public class StateSerdesTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownKeyTypeForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", Class.class, byte[].class);
+        assertThrows(IllegalArgumentException.class, () -> StateSerdes.withBuiltinTypes("anyName", Class.class, byte[].class));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownValueTypeForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", byte[].class, Class.class);
+        assertThrows(IllegalArgumentException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, Class.class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfTopicNameIsNull() {
-        new StateSerdes<>(null, Serdes.ByteArray(), Serdes.ByteArray());
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>(null, Serdes.ByteArray(), Serdes.ByteArray()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfKeyClassIsNull() {
-        new StateSerdes<>("anyName", null, Serdes.ByteArray());
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>("anyName", null, Serdes.ByteArray()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfValueClassIsNull() {
-        new StateSerdes<>("anyName", Serdes.ByteArray(), null);
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>("anyName", Serdes.ByteArray(), null));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowIfIncompatibleSerdeForValue() throws ClassNotFoundException {
         final Class myClass = Class.forName("java.lang.String");
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
-        stateSerdes.rawValue(myInt);
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt));
+        assertThat(
+            e.getMessage(),
+            equalTo(
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                "is not compatible to the actual value type (value type: java.lang.Integer). " +
+                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
+    public void shouldSkipValueAndTimestampeInformationForErrorOnTimestampAndValueSerialization() throws ClassNotFoundException {
+        final Class myClass = Class.forName("java.lang.String");
+        final StateSerdes<Object, Object> stateSerdes =
+            new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), new ValueAndTimestampSerde(Serdes.serdeFrom(myClass)));
+        final Integer myInt = 123;
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(ValueAndTimestamp.make(myInt, 0L)));
+        assertThat(
+            e.getMessage(),
+            equalTo(
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                    "is not compatible to the actual value type (value type: java.lang.Integer). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
+    }
+
+    @Test
     public void shouldThrowIfIncompatibleSerdeForKey() throws ClassNotFoundException {
         final Class myClass = Class.forName("java.lang.String");
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
-        stateSerdes.rawKey(myInt);
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawKey(myInt));
+        assertThat(
+            e.getMessage(),
+            equalTo(
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                    "is not compatible to the actual key type (key type: java.lang.Integer). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
 
 }

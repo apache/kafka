@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImp
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Map;
 
 public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
@@ -33,12 +35,21 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
     }
 
+    /**
+     * Marker interface for a buffer configuration that will strictly enforce size constraints
+     * (bytes and/or number of records) on the buffer, so it is suitable for reducing duplicate
+     * results downstream, but does not promise to eliminate them entirely.
+     */
+    interface EagerBufferConfig extends BufferConfig<EagerBufferConfig> {
+
+    }
+
     interface BufferConfig<BC extends BufferConfig<BC>> {
         /**
          * Create a size-constrained buffer in terms of the maximum number of keys it will store.
          */
-        static BufferConfig<?> maxRecords(final long recordLimit) {
-            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE);
+        static EagerBufferConfig maxRecords(final long recordLimit) {
+            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE, Collections.emptyMap());
         }
 
         /**
@@ -49,8 +60,8 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
         /**
          * Create a size-constrained buffer in terms of the maximum number of bytes it will use.
          */
-        static BufferConfig<?> maxBytes(final long byteLimit) {
-            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit);
+        static EagerBufferConfig maxBytes(final long byteLimit) {
+            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit, Collections.emptyMap());
         }
 
         /**
@@ -108,7 +119,26 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * This buffer is "not strict" in the sense that it may emit early, so it is suitable for reducing
          * duplicate results downstream, but does not promise to eliminate them.
          */
-        BufferConfig emitEarlyWhenFull();
+        EagerBufferConfig emitEarlyWhenFull();
+
+        /**
+         * Disable the changelog for this suppression's internal buffer.
+         * This will turn off fault-tolerance for the suppression, and will result in data loss in the event of a rebalance.
+         * By default the changelog is enabled.
+         * @return this
+         */
+        BC withLoggingDisabled();
+
+        /**
+         * Indicates that a changelog topic should be created containing the currently suppressed
+         * records. Due to the short-lived nature of records in this topic it is likely more
+         * compactable than changelog topics for KTables.
+         *
+         * @param config Configs that should be applied to the changelog. Note: Any unrecognized
+         *               configs will be ignored.
+         * @return this
+         */
+        BC withLoggingEnabled(final Map<String, String> config);
     }
 
     /**
@@ -123,8 +153,8 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
      *
      * To accomplish this, the operator will buffer events from the window until the window close (that is,
      * until the end-time passes, and additionally until the grace period expires). Since windowed operators
-     * are required to reject late events for a window whose grace period is expired, there is an additional
-     * guarantee that the final results emitted from this suppression will match any queriable state upstream.
+     * are required to reject out-of-order events for a window whose grace period is expired, there is an additional
+     * guarantee that the final results emitted from this suppression will match any queryable state upstream.
      *
      * @param bufferConfig A configuration specifying how much space to use for buffering intermediate results.
      *                     This is required to be a "strict" config, since it would violate the "final results"

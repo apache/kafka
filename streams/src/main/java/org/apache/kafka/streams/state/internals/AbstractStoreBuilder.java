@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 
 abstract public class AbstractStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
-    private Map<String, String> logConfig = new HashMap<>();
+    protected Map<String, String> logConfig = new HashMap<>();
     protected final String name;
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
@@ -38,8 +38,8 @@ abstract public class AbstractStoreBuilder<K, V, T extends StateStore> implement
                                 final Serde<K> keySerde,
                                 final Serde<V> valueSerde,
                                 final Time time) {
-        Objects.requireNonNull(name, "name can't be null");
-        Objects.requireNonNull(time, "time can't be null");
+        Objects.requireNonNull(name, "name cannot be null");
+        Objects.requireNonNull(time, "time cannot be null");
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -62,7 +62,7 @@ abstract public class AbstractStoreBuilder<K, V, T extends StateStore> implement
     public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
         Objects.requireNonNull(config, "config can't be null");
         enableLogging = true;
-        logConfig = config;
+        logConfig.putAll(config);
         return this;
     }
 

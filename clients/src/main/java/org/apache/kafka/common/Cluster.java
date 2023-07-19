@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -46,6 +46,8 @@ public final class Cluster {
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
     private final Map<Integer, Node> nodesById;
     private final ClusterResource clusterResource;
+    private final Map<String, Uuid> topicIds;
+    private final Map<Uuid, String> topicNames;
 
     /**
      * Create a new cluster with the given id, nodes and partitions
@@ -57,7 +59,7 @@ public final class Cluster {
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, null);
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, null, Collections.emptyMap());
     }
 
     /**
@@ -71,7 +73,7 @@ public final class Cluster {
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics,
                    Node controller) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, controller);
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, controller, Collections.emptyMap());
     }
 
     /**
@@ -86,7 +88,23 @@ public final class Cluster {
                    Set<String> invalidTopics,
                    Set<String> internalTopics,
                    Node controller) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller);
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, Collections.emptyMap());
+    }
+
+    /**
+     * Create a new cluster with the given id, nodes, partitions and topicIds
+     * @param nodes The nodes in the cluster
+     * @param partitions Information about a subset of the topic-partitions this cluster hosts
+     */
+    public Cluster(String clusterId,
+                   Collection<Node> nodes,
+                   Collection<PartitionInfo> partitions,
+                   Set<String> unauthorizedTopics,
+                   Set<String> invalidTopics,
+                   Set<String> internalTopics,
+                   Node controller,
+                   Map<String, Uuid> topicIds) {
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds);
     }
 
     private Cluster(String clusterId,
@@ -96,7 +114,8 @@ public final class Cluster {
                     Set<String> unauthorizedTopics,
                     Set<String> invalidTopics,
                     Set<String> internalTopics,
-                    Node controller) {
+                    Node controller,
+                    Map<String, Uuid> topicIds) {
         this.isBootstrapConfigured = isBootstrapConfigured;
         this.clusterResource = new ClusterResource(clusterId);
         // make a randomized, unmodifiable copy of the nodes
@@ -106,27 +125,69 @@ public final class Cluster {
 
         // Index the nodes for quick lookup
         Map<Integer, Node> tmpNodesById = new HashMap<>();
-        for (Node node : nodes)
+        Map<Integer, List<PartitionInfo>> tmpPartitionsByNode = new HashMap<>(nodes.size());
+        for (Node node : nodes) {
             tmpNodesById.put(node.id(), node);
+            // Populate the map here to make it easy to add the partitions per node efficiently when iterating over
+            // the partitions
+            tmpPartitionsByNode.put(node.id(), new ArrayList<>());
+        }
         this.nodesById = Collections.unmodifiableMap(tmpNodesById);
 
         // index the partition infos by topic, topic+partition, and node
+        // note that this code is performance sensitive if there are a large number of partitions so we are careful
+        // to avoid unnecessary work
         Map<TopicPartition, PartitionInfo> tmpPartitionsByTopicPartition = new HashMap<>(partitions.size());
         Map<String, List<PartitionInfo>> tmpPartitionsByTopic = new HashMap<>();
-        Map<String, List<PartitionInfo>> tmpAvailablePartitionsByTopic = new HashMap<>();
-        Map<Integer, List<PartitionInfo>> tmpPartitionsByNode = new HashMap<>();
         for (PartitionInfo p : partitions) {
             tmpPartitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
-            tmpPartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
-            if (p.leader() != null) {
-                tmpAvailablePartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
-                tmpPartitionsByNode.merge(p.leader().id(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
-            }
+            tmpPartitionsByTopic.computeIfAbsent(p.topic(), topic -> new ArrayList<>()).add(p);
+
+            // The leader may not be known
+            if (p.leader() == null || p.leader().isEmpty())
+                continue;
+
+            // If it is known, its node information should be available
+            List<PartitionInfo> partitionsForNode = Objects.requireNonNull(tmpPartitionsByNode.get(p.leader().id()));
+            partitionsForNode.add(p);
         }
+
+        // Update the values of `tmpPartitionsByNode` to contain unmodifiable lists
+        for (Map.Entry<Integer, List<PartitionInfo>> entry : tmpPartitionsByNode.entrySet()) {
+            tmpPartitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        }
+
+        // Populate `tmpAvailablePartitionsByTopic` and update the values of `tmpPartitionsByTopic` to contain
+        // unmodifiable lists
+        Map<String, List<PartitionInfo>> tmpAvailablePartitionsByTopic = new HashMap<>(tmpPartitionsByTopic.size());
+        for (Map.Entry<String, List<PartitionInfo>> entry : tmpPartitionsByTopic.entrySet()) {
+            String topic = entry.getKey();
+            List<PartitionInfo> partitionsForTopic = Collections.unmodifiableList(entry.getValue());
+            tmpPartitionsByTopic.put(topic, partitionsForTopic);
+            // Optimise for the common case where all partitions are available
+            boolean foundUnavailablePartition = partitionsForTopic.stream().anyMatch(p -> p.leader() == null);
+            List<PartitionInfo> availablePartitionsForTopic;
+            if (foundUnavailablePartition) {
+                availablePartitionsForTopic = new ArrayList<>(partitionsForTopic.size());
+                for (PartitionInfo p : partitionsForTopic) {
+                    if (p.leader() != null)
+                        availablePartitionsForTopic.add(p);
+                }
+                availablePartitionsForTopic = Collections.unmodifiableList(availablePartitionsForTopic);
+            } else {
+                availablePartitionsForTopic = partitionsForTopic;
+            }
+            tmpAvailablePartitionsByTopic.put(topic, availablePartitionsForTopic);
+        }
+
         this.partitionsByTopicPartition = Collections.unmodifiableMap(tmpPartitionsByTopicPartition);
         this.partitionsByTopic = Collections.unmodifiableMap(tmpPartitionsByTopic);
         this.availablePartitionsByTopic = Collections.unmodifiableMap(tmpAvailablePartitionsByTopic);
         this.partitionsByNode = Collections.unmodifiableMap(tmpPartitionsByNode);
+        this.topicIds = Collections.unmodifiableMap(topicIds);
+        Map<Uuid, String> tmpTopicNames = new HashMap<>();
+        topicIds.forEach((key, value) -> tmpTopicNames.put(value, key));
+        this.topicNames = Collections.unmodifiableMap(tmpTopicNames);
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
         this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
@@ -153,7 +214,7 @@ public final class Cluster {
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
         return new Cluster(null, true, nodes, new ArrayList<>(0),
-            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null);
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
     }
 
     /**
@@ -175,12 +236,32 @@ public final class Cluster {
     }
 
     /**
-     * Get the node by the node id (or null if no such node exists)
+     * Get the node by the node id (or null if the node is not online or does not exist)
      * @param id The id of the node
-     * @return The node, or null if no such node exists
+     * @return The node, or null if the node is not online or does not exist
      */
     public Node nodeById(int id) {
         return this.nodesById.get(id);
+    }
+
+    /**
+     * Get the node by node id if the replica for the given partition is online
+     * @param partition
+     * @param id
+     * @return the node
+     */
+    public Optional<Node> nodeIfOnline(TopicPartition partition, int id) {
+        Node node = nodeById(id);
+        PartitionInfo partitionInfo = partition(partition);
+
+        if (node != null && partitionInfo != null &&
+            !Arrays.asList(partitionInfo.offlineReplicas()).contains(node) &&
+            Arrays.asList(partitionInfo.replicas()).contains(node)) {
+
+            return Optional.of(node);
+        } else {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -272,6 +353,18 @@ public final class Cluster {
 
     public Node controller() {
         return controller;
+    }
+
+    public Collection<Uuid> topicIds() {
+        return topicIds.values();
+    }
+
+    public Uuid topicId(String topic) {
+        return topicIds.getOrDefault(topic, Uuid.ZERO_UUID);
+    }
+
+    public String topicName(Uuid topicId) {
+        return topicNames.get(topicId);
     }
 
     @Override

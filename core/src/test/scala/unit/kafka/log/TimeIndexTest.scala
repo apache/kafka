@@ -18,64 +18,63 @@
 package kafka.log
 
 import java.io.File
-
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.junit.{After, Before, Test}
-import org.junit.Assert.assertEquals
-import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.storage.internals.log.{CorruptIndexException, TimeIndex, TimestampOffset}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 
 /**
  * Unit test for time index.
  */
-class TimeIndexTest extends JUnitSuite {
-  var idx: TimeIndex = null
+class TimeIndexTest {
+  var idx: TimeIndex = _
   val maxEntries = 30
   val baseOffset = 45L
 
-  @Before
-  def setup() {
-    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
+  @BeforeEach
+  def setup(): Unit = {
+    this.idx = new TimeIndex(nonExistentTempFile(), baseOffset, maxEntries * 12)
   }
 
-  @After
-  def teardown() {
+  @AfterEach
+  def teardown(): Unit = {
     if(this.idx != null)
       this.idx.file.delete()
   }
 
   @Test
-  def testLookUp() {
+  def testLookUp(): Unit = {
     // Empty time index
-    assertEquals(TimestampOffset(-1L, baseOffset), idx.lookup(100L))
+    assertEquals(new TimestampOffset(-1L, baseOffset), idx.lookup(100L))
 
     // Add several time index entries.
     appendEntries(maxEntries - 1)
 
     // look for timestamp smaller than the earliest entry
-    assertEquals(TimestampOffset(-1L, baseOffset), idx.lookup(9))
+    assertEquals(new TimestampOffset(-1L, baseOffset), idx.lookup(9))
     // look for timestamp in the middle of two entries.
-    assertEquals(TimestampOffset(20L, 65L), idx.lookup(25))
+    assertEquals(new TimestampOffset(20L, 65L), idx.lookup(25))
     // look for timestamp same as the one in the entry
-    assertEquals(TimestampOffset(30L, 75L), idx.lookup(30))
+    assertEquals(new TimestampOffset(30L, 75L), idx.lookup(30))
   }
 
   @Test
   def testEntry(): Unit = {
     appendEntries(maxEntries - 1)
-    assertEquals(TimestampOffset(10L, 55L), idx.entry(0))
-    assertEquals(TimestampOffset(20L, 65L), idx.entry(1))
-    assertEquals(TimestampOffset(30L, 75L), idx.entry(2))
-    assertEquals(TimestampOffset(40L, 85L), idx.entry(3))
-  }
-
-  @Test(expected = classOf[IllegalArgumentException])
-  def testEntryOverflow(): Unit = {
-    idx.entry(0)
+    assertEquals(new TimestampOffset(10L, 55L), idx.entry(0))
+    assertEquals(new TimestampOffset(20L, 65L), idx.entry(1))
+    assertEquals(new TimestampOffset(30L, 75L), idx.entry(2))
+    assertEquals(new TimestampOffset(40L, 85L), idx.entry(3))
   }
 
   @Test
-  def testTruncate() {
+  def testEntryOverflow(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => idx.entry(0))
+  }
+
+  @Test
+  def testTruncate(): Unit = {
     appendEntries(maxEntries - 1)
     idx.truncate()
     assertEquals(0, idx.entries)
@@ -86,23 +85,19 @@ class TimeIndexTest extends JUnitSuite {
   }
 
   @Test
-  def testAppend() {
+  def testAppend(): Unit = {
     appendEntries(maxEntries - 1)
-    intercept[IllegalArgumentException] {
-      idx.maybeAppend(10000L, 1000L)
-    }
-    intercept[InvalidOffsetException] {
-      idx.maybeAppend(10000L, (maxEntries - 2) * 10, true)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => idx.maybeAppend(10000L, 1000L))
+    assertThrows(classOf[InvalidOffsetException], () => idx.maybeAppend(10000L, (maxEntries - 2) * 10, true))
     idx.maybeAppend(10000L, 1000L, true)
   }
 
-  private def appendEntries(numEntries: Int) {
+  private def appendEntries(numEntries: Int): Unit = {
     for (i <- 1 to numEntries)
       idx.maybeAppend(i * 10, i * 10 + baseOffset)
   }
 
-  def nonExistantTempFile(): File = {
+  def nonExistentTempFile(): File = {
     val file = TestUtils.tempFile()
     file.delete()
     file
@@ -119,7 +114,7 @@ class TimeIndexTest extends JUnitSuite {
     var shouldCorruptOffset = false
     var shouldCorruptTimestamp = false
     var shouldCorruptLength = false
-    idx = new TimeIndex(idx.file, baseOffset = baseOffset, maxIndexSize = maxEntries * 12) {
+    idx = new TimeIndex(idx.file, baseOffset, maxEntries * 12) {
       override def lastEntry = {
         val superLastEntry = super.lastEntry
         val offset = if (shouldCorruptOffset) baseOffset - 1 else superLastEntry.offset
@@ -133,15 +128,15 @@ class TimeIndexTest extends JUnitSuite {
     }
 
     shouldCorruptOffset = true
-    intercept[CorruptIndexException](idx.sanityCheck())
+    assertThrows(classOf[CorruptIndexException], () => idx.sanityCheck())
     shouldCorruptOffset = false
 
     shouldCorruptTimestamp = true
-    intercept[CorruptIndexException](idx.sanityCheck())
+    assertThrows(classOf[CorruptIndexException], () => idx.sanityCheck())
     shouldCorruptTimestamp = false
 
     shouldCorruptLength = true
-    intercept[CorruptIndexException](idx.sanityCheck())
+    assertThrows(classOf[CorruptIndexException], () => idx.sanityCheck())
     shouldCorruptLength = false
 
     idx.sanityCheck()

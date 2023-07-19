@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 public class CreateTopicsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<CreateTopicsRequest> {
@@ -40,6 +41,23 @@ public class CreateTopicsRequest extends AbstractRequest {
             if (data.validateOnly() && version == 0)
                 throw new UnsupportedVersionException("validateOnly is not supported in version 0 of " +
                         "CreateTopicsRequest");
+
+            final List<String> topicsWithDefaults = data.topics()
+                .stream()
+                .filter(topic -> topic.assignments().isEmpty())
+                .filter(topic ->
+                    topic.numPartitions() == CreateTopicsRequest.NO_NUM_PARTITIONS
+                        || topic.replicationFactor() == CreateTopicsRequest.NO_REPLICATION_FACTOR)
+                .map(CreatableTopic::name)
+                .collect(Collectors.toList());
+
+            if (!topicsWithDefaults.isEmpty() && version < 4) {
+                throw new UnsupportedVersionException("Creating topics with default "
+                    + "partitions/replication factor are only supported in CreateTopicRequest "
+                    + "version 4+. The following topics need values for partitions and replicas: "
+                    + topicsWithDefaults);
+            }
+
             return new CreateTopicsRequest(data, version);
         }
 
@@ -47,26 +65,29 @@ public class CreateTopicsRequest extends AbstractRequest {
         public String toString() {
             return data.toString();
         }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Builder && this.data.equals(((Builder) other).data);
+        }
+
+        @Override
+        public int hashCode() {
+            return data.hashCode();
+        }
     }
 
     private final CreateTopicsRequestData data;
-    private final short version;
 
     public static final int NO_NUM_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
 
-    private CreateTopicsRequest(CreateTopicsRequestData data, short version) {
+    public CreateTopicsRequest(CreateTopicsRequestData data, short version) {
         super(ApiKeys.CREATE_TOPICS, version);
         this.data = data;
-        this.version = version;
     }
 
-    public CreateTopicsRequest(Struct struct, short version) {
-        super(ApiKeys.CREATE_TOPICS, version);
-        this.data = new CreateTopicsRequestData(struct, version);
-        this.version = version;
-    }
-
+    @Override
     public CreateTopicsRequestData data() {
         return data;
     }
@@ -88,14 +109,6 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     public static CreateTopicsRequest parse(ByteBuffer buffer, short version) {
-        return new CreateTopicsRequest(ApiKeys.CREATE_TOPICS.parseRequest(version, buffer), version);
-    }
-
-    /**
-     * Visible for testing.
-     */
-    @Override
-    public Struct toStruct() {
-        return data.toStruct(version);
+        return new CreateTopicsRequest(new CreateTopicsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

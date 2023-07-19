@@ -16,134 +16,176 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
+import java.nio.BufferUnderflowException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
- * Kafka's generalized group management protocol. Below is the version 0 format:
- *
- * <pre>
- * Subscription => Version Topics
- *   Version    => Int16
- *   Topics     => [String]
- *   UserData   => Bytes
- *
- * Assignment => Version TopicPartitions
- *   Version         => int16
- *   TopicPartitions => [Topic Partitions]
- *     Topic         => String
- *     Partitions    => [int32]
- * </pre>
+ * Kafka's generalized group management protocol.
  *
  * The current implementation assumes that future versions will not break compatibility. When
  * it encounters a newer version, it parses it using the current format. This basically means
  * that new versions cannot remove or reorder any of the existing fields.
  */
 public class ConsumerProtocol {
-
     public static final String PROTOCOL_TYPE = "consumer";
 
-    public static final String VERSION_KEY_NAME = "version";
-    public static final String TOPICS_KEY_NAME = "topics";
-    public static final String TOPIC_KEY_NAME = "topic";
-    public static final String PARTITIONS_KEY_NAME = "partitions";
-    public static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
-    public static final String USER_DATA_KEY_NAME = "user_data";
+    static {
+        // Safety check to ensure that both parts of the consumer protocol remain in sync.
+        if (ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION
+                != ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION)
+            throw new IllegalStateException("Subscription and Assignment schemas must have the " +
+                "same lowest version");
 
-    public static final short CONSUMER_PROTOCOL_V0 = 0;
-    public static final Schema CONSUMER_PROTOCOL_HEADER_SCHEMA = new Schema(
-            new Field(VERSION_KEY_NAME, Type.INT16));
-    private static final Struct CONSUMER_PROTOCOL_HEADER_V0 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA)
-            .set(VERSION_KEY_NAME, CONSUMER_PROTOCOL_V0);
-
-    public static final Schema SUBSCRIPTION_V0 = new Schema(
-            new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
-    public static final Schema TOPIC_ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_KEY_NAME, Type.STRING),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
-    public static final Schema ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
-
-    public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
-        Struct struct = new Struct(SUBSCRIPTION_V0);
-        struct.set(USER_DATA_KEY_NAME, subscription.userData());
-        struct.set(TOPICS_KEY_NAME, subscription.topics().toArray());
-        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V0.sizeOf() + SUBSCRIPTION_V0.sizeOf(struct));
-        CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
-        SUBSCRIPTION_V0.write(buffer, struct);
-        buffer.flip();
-        return buffer;
+        if (ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION
+                != ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION)
+            throw new IllegalStateException("Subscription and Assignment schemas must have the " +
+                "same highest version");
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
-        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
-        Short version = header.getShort(VERSION_KEY_NAME);
-        checkVersionCompatibility(version);
-        Struct struct = SUBSCRIPTION_V0.read(buffer);
-        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<String> topics = new ArrayList<>();
-        for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
-            topics.add((String) topicObj);
-        return new PartitionAssignor.Subscription(topics, userData);
+    public static short deserializeVersion(final ByteBuffer buffer) {
+        try {
+            return buffer.getShort();
+        } catch (BufferUnderflowException e) {
+            throw new SchemaException("Buffer underflow while parsing consumer protocol's header", e);
+        }
     }
 
-    public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
-        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
-        Short version = header.getShort(VERSION_KEY_NAME);
-        checkVersionCompatibility(version);
-        Struct struct = ASSIGNMENT_V0.read(buffer);
-        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<TopicPartition> partitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                partitions.add(new TopicPartition(topic, partition));
+    public static ByteBuffer serializeSubscription(final Subscription subscription) {
+        return serializeSubscription(subscription, ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
+    }
+
+    public static ByteBuffer serializeSubscription(final Subscription subscription, short version) {
+        version = checkSubscriptionVersion(version);
+
+        ConsumerProtocolSubscription data = new ConsumerProtocolSubscription();
+
+        List<String> topics = new ArrayList<>(subscription.topics());
+        Collections.sort(topics);
+        data.setTopics(topics);
+
+        data.setUserData(subscription.userData() != null ? subscription.userData().duplicate() : null);
+
+        List<TopicPartition> ownedPartitions = new ArrayList<>(subscription.ownedPartitions());
+        ownedPartitions.sort(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
+        ConsumerProtocolSubscription.TopicPartition partition = null;
+        for (TopicPartition tp : ownedPartitions) {
+            if (partition == null || !partition.topic().equals(tp.topic())) {
+                partition = new ConsumerProtocolSubscription.TopicPartition().setTopic(tp.topic());
+                data.ownedPartitions().add(partition);
             }
+            partition.partitions().add(tp.partition());
         }
-        return new PartitionAssignor.Assignment(partitions, userData);
+        subscription.rackId().ifPresent(data::setRackId);
+
+        data.setGenerationId(subscription.generationId().orElse(-1));
+        return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
-    public static ByteBuffer serializeAssignment(PartitionAssignor.Assignment assignment) {
-        Struct struct = new Struct(ASSIGNMENT_V0);
-        struct.set(USER_DATA_KEY_NAME, assignment.userData());
-        List<Struct> topicAssignments = new ArrayList<>();
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.partitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
-            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            topicAssignments.add(topicAssignment);
+    public static Subscription deserializeSubscription(final ByteBuffer buffer, short version) {
+        version = checkSubscriptionVersion(version);
+
+        try {
+            ConsumerProtocolSubscription data =
+                new ConsumerProtocolSubscription(new ByteBufferAccessor(buffer), version);
+
+            List<TopicPartition> ownedPartitions = new ArrayList<>();
+            for (ConsumerProtocolSubscription.TopicPartition tp : data.ownedPartitions()) {
+                for (Integer partition : tp.partitions()) {
+                    ownedPartitions.add(new TopicPartition(tp.topic(), partition));
+                }
+            }
+
+            return new Subscription(
+                data.topics(),
+                data.userData() != null ? data.userData().duplicate() : null,
+                ownedPartitions,
+                data.generationId(),
+                data.rackId() == null || data.rackId().isEmpty() ? Optional.empty() : Optional.of(data.rackId()));
+        } catch (BufferUnderflowException e) {
+            throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
         }
-        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V0.sizeOf() + ASSIGNMENT_V0.sizeOf(struct));
-        CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
-        ASSIGNMENT_V0.write(buffer, struct);
-        buffer.flip();
-        return buffer;
     }
 
-    private static void checkVersionCompatibility(short version) {
-        // check for invalid versions
-        if (version < CONSUMER_PROTOCOL_V0)
+    public static Subscription deserializeSubscription(final ByteBuffer buffer) {
+        return deserializeSubscription(buffer, deserializeVersion(buffer));
+    }
+
+    public static ByteBuffer serializeAssignment(final Assignment assignment) {
+        return serializeAssignment(assignment, ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION);
+    }
+
+    public static ByteBuffer serializeAssignment(final Assignment assignment, short version) {
+        version = checkAssignmentVersion(version);
+
+        ConsumerProtocolAssignment data = new ConsumerProtocolAssignment();
+        data.setUserData(assignment.userData() != null ? assignment.userData().duplicate() : null);
+        assignment.partitions().forEach(tp -> {
+            ConsumerProtocolAssignment.TopicPartition partition = data.assignedPartitions().find(tp.topic());
+            if (partition == null) {
+                partition = new ConsumerProtocolAssignment.TopicPartition().setTopic(tp.topic());
+                data.assignedPartitions().add(partition);
+            }
+            partition.partitions().add(tp.partition());
+        });
+        return MessageUtil.toVersionPrefixedByteBuffer(version, data);
+    }
+
+    public static Assignment deserializeAssignment(final ByteBuffer buffer, short version) {
+        version = checkAssignmentVersion(version);
+
+        try {
+            ConsumerProtocolAssignment data =
+                new ConsumerProtocolAssignment(new ByteBufferAccessor(buffer), version);
+
+            List<TopicPartition> assignedPartitions = new ArrayList<>();
+            for (ConsumerProtocolAssignment.TopicPartition tp : data.assignedPartitions()) {
+                for (Integer partition : tp.partitions()) {
+                    assignedPartitions.add(new TopicPartition(tp.topic(), partition));
+                }
+            }
+
+            return new Assignment(
+                assignedPartitions,
+                data.userData() != null ? data.userData().duplicate() : null);
+        } catch (BufferUnderflowException e) {
+            throw new SchemaException("Buffer underflow while parsing consumer protocol's assignment", e);
+        }
+    }
+
+    public static Assignment deserializeAssignment(final ByteBuffer buffer) {
+        return deserializeAssignment(buffer, deserializeVersion(buffer));
+    }
+
+    private static short checkSubscriptionVersion(final short version) {
+        if (version < ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION)
             throw new SchemaException("Unsupported subscription version: " + version);
-
-        // otherwise, assume versions can be parsed as V0
+        else if (version > ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION)
+            return ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION;
+        else
+            return version;
     }
 
+    private static short checkAssignmentVersion(final short version) {
+        if (version < ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION)
+            throw new SchemaException("Unsupported assignment version: " + version);
+        else if (version > ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION)
+            return ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION;
+        else
+            return version;
+    }
 }

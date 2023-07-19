@@ -26,6 +26,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * A simple source connector that is capable of producing static data with
+ * {@link org.apache.kafka.connect.data.Struct Struct} schemas.
+ */
 public class SchemaSourceConnector extends SourceConnector {
 
     private Map<String, String> config;
@@ -48,9 +52,9 @@ public class SchemaSourceConnector extends SourceConnector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         ArrayList<Map<String, String>> configs = new ArrayList<>();
-        for (Integer i = 0; i < maxTasks; i++) {
+        for (int i = 0; i < maxTasks; i++) {
             Map<String, String> props = new HashMap<>(config);
-            props.put(SchemaSourceTask.ID_CONFIG, i.toString());
+            props.put(SchemaSourceTask.ID_CONFIG, String.valueOf(i));
             configs.add(props);
         }
         return configs;

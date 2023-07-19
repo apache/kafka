@@ -75,16 +75,31 @@ public class TopicConfig {
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
         "their data. If set to -1, no time limit is applied.";
 
+    public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
+    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tier storage for a topic, set `remote.storage.enable` as true. " +
+            "You can not disable this config once it is enabled. It will be provided in future versions.";
+
+    public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
+    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milli seconds to keep the local log segment before it gets deleted. " +
+            "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
+            "to `retention.ms` value.";
+
+    public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
+    public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
+            "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
+            "less than or equal to `retention.bytes` value.";
+
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
-    public static final String MAX_MESSAGE_BYTES_DOC = "<p>The largest record batch size allowed by Kafka. If this " +
-        "is increased and there are consumers older than 0.10.2, the consumers' fetch size must also be increased so that " +
-        "the they can fetch record batches this large.</p>" +
-        "<p>In the latest message format version, records are always grouped into batches for efficiency. In previous " +
-        "message format versions, uncompressed records are not grouped into batches and this limit only applies to a " +
-        "single record in that case.</p>";
+    public static final String MAX_MESSAGE_BYTES_DOC =
+        "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +
+        "If this is increased and there are consumers older than 0.10.2, the consumers' fetch " +
+        "size must also be increased so that they can fetch record batches this large. " +
+        "In the latest message format version, records are always grouped into batches for efficiency. " +
+        "In previous message format versions, uncompressed records are not grouped into batches and this " +
+        "limit only applies to a single record in that case.";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
-    public static final String INDEX_INTERVAL_BYTES_DOCS = "This setting controls how frequently " +
+    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +
         "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
         "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
         "position in the log but makes the index larger. You probably don't need to change this.";
@@ -104,6 +119,10 @@ public class TopicConfig {
     public static final String MIN_COMPACTION_LAG_MS_DOC = "The minimum time a message will remain " +
         "uncompacted in the log. Only applicable for logs that are being compacted.";
 
+    public static final String MAX_COMPACTION_LAG_MS_CONFIG = "max.compaction.lag.ms";
+    public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
+        "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +
         "the log compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
@@ -111,16 +130,22 @@ public class TopicConfig {
         "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
         "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
         "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
-        "space in the log.";
+        "space in the log. If the " + MAX_COMPACTION_LAG_MS_CONFIG + " or the " + MIN_COMPACTION_LAG_MS_CONFIG +
+        " configurations are also specified, then the log compactor considers the log to be eligible for compaction " +
+        "as soon as either: (i) the dirty ratio threshold has been met and the log has had dirty (uncompacted) " +
+        "records for at least the " + MIN_COMPACTION_LAG_MS_CONFIG + " duration, or (ii) if the log has had " +
+        "dirty (uncompacted) records for at most the " + MAX_COMPACTION_LAG_MS_CONFIG + " period.";
 
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";
     public static final String CLEANUP_POLICY_DELETE = "delete";
-    public static final String CLEANUP_POLICY_DOC = "A string that is either \"" + CLEANUP_POLICY_DELETE +
-        "\" or \"" + CLEANUP_POLICY_COMPACT + "\" or both. This string designates the retention policy to use on " +
-        "old log segments. The default policy (\"delete\") will discard old segments when their retention " +
-        "time or size limit has been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
-        "compaction</a> on the topic.";
+    public static final String CLEANUP_POLICY_DOC = "This config designates the retention policy to " +
+        "use on log segments. The \"delete\" policy (which is the default) will discard old segments " +
+        "when their retention time or size limit has been reached. The \"compact\" policy will enable " +
+        "<a href=\"#compaction\">log compaction</a>, which retains the latest value for each key. " +
+        "It is also possible to specify both policies in a comma-separated list (e.g. \"delete,compact\"). " +
+        "In this case, old segments will be discarded per the retention time and size configuration, " +
+        "while retained segments will be compacted.";
 
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
@@ -148,13 +173,25 @@ public class TopicConfig {
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
+    /**
+     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
+     * for most situations.
+     */
+    @Deprecated
     public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "Specify the message format version the broker " +
-        "will use to append messages to the logs. The value should be a valid ApiVersion. Some examples are: " +
-        "0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format " +
-        "version, the user is certifying that all the existing messages on disk are smaller or equal than the " +
-        "specified version. Setting this value incorrectly will cause consumers with older versions to break as " +
-        "they will receive messages with a format that they don't understand.";
+
+    /**
+     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
+     * for most situations.
+     */
+    @Deprecated
+    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
+        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
+        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
+        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
+        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
+        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
+        "that they don't understand.";
 
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +

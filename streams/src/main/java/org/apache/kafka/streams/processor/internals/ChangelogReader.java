@@ -17,32 +17,61 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 
-import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Performs bulk read operations from a set of partitions. Used to
- * restore  {@link org.apache.kafka.streams.processor.StateStore}s from their
- * change logs
+ * See {@link StoreChangelogReader}.
  */
-public interface ChangelogReader {
+public interface ChangelogReader extends ChangelogRegister {
     /**
-     * Register a state store and it's partition for later restoration.
-     * @param restorer the state restorer to register
+     * Restore all registered state stores by reading from their changelogs
+     *
+     * @return the total number of records restored in this call
      */
-    void register(final StateRestorer restorer);
+    long restore(final Map<TaskId, Task> tasks);
 
     /**
-     * Restore all registered state stores by reading from their changelogs.
-     * @return all topic partitions that have been restored
+     * Transit to restore active changelogs mode
      */
-    Collection<TopicPartition> restore(final RestoringTasks active);
+    void enforceRestoreActive();
 
     /**
-     * @return the restored offsets for all persistent stores.
+     * Transit to update standby changelogs mode
      */
-    Map<TopicPartition, Long> restoredOffsets();
+    void transitToUpdateStandby();
 
-    void reset();
+    /**
+     * @return true if the reader is in restoring active changelog mode;
+     *         false if the reader is in updating standby changelog mode
+     */
+    boolean isRestoringActive();
+
+    /**
+     * @return the changelog partitions that have been completed restoring
+     */
+    Set<TopicPartition> completedChangelogs();
+
+    /**
+     * Returns whether all changelog partitions were completely read.
+     *
+     * Since changelog partitions for standby tasks are never completely read, this method will always return
+     * {@code false} if the changelog reader registered changelog partitions for standby tasks.
+     *
+     * @return {@code true} if all changelog partitions were completely read and no standby changelog partitions are read,
+     *         {@code false} otherwise
+     */
+    boolean allChangelogsCompleted();
+
+    /**
+     * Clear all partitions
+     */
+    void clear();
+
+    /**
+     * @return whether the changelog reader has just been cleared or is uninitialized
+     */
+    boolean isEmpty();
 }

@@ -24,7 +24,13 @@ import java.util.Map;
 public class SchemaUtil {
 
     public static SchemaBuilder copySchemaBasics(Schema source) {
-        return copySchemaBasics(source, new SchemaBuilder(source.type()));
+        SchemaBuilder builder;
+        if (source.type() == Schema.Type.ARRAY) {
+            builder = SchemaBuilder.array(source.valueSchema());
+        } else {
+            builder = new SchemaBuilder(source.type());
+        }
+        return copySchemaBasics(source, builder);
     }
 
     public static SchemaBuilder copySchemaBasics(Schema source, SchemaBuilder builder) {

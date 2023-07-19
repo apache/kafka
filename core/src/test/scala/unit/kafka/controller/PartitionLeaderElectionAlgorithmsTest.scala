@@ -16,14 +16,13 @@
  */
 package kafka.controller
 
-import org.junit.Assert._
-import org.junit.{Before, Test}
-import org.scalatest.junit.JUnitSuite
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
-class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
-  private var controllerContext: ControllerContext = null
+class PartitionLeaderElectionAlgorithmsTest {
+  private var controllerContext: ControllerContext = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     controllerContext = new ControllerContext
     controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec")

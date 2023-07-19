@@ -3,12 +3,14 @@
 Using Vagrant to get up and running.
 
 1) Install Virtual Box [https://www.virtualbox.org/](https://www.virtualbox.org/)
-2) Install Vagrant >= 1.6.4 [http://www.vagrantup.com/](http://www.vagrantup.com/)
+2) Install Vagrant >= 1.6.4 [https://www.vagrantup.com/](https://www.vagrantup.com/)
 3) Install Vagrant Plugins:
+```
+$ vagrant plugin install vagrant-hostmanager
 
-    $ vagrant plugin install vagrant-hostmanager
-    # Optional
-    $ vagrant plugin install vagrant-cachier # Caches & shares package downloads across VMs
+# Optional, to caches & shares package downloads across VMs
+$ vagrant plugin install vagrant-cachier
+```
 
 In the main Kafka folder, do a normal Kafka build:
 
@@ -48,16 +50,14 @@ To log into one of the machines:
 
     vagrant ssh <machineName>
 
-You can access the brokers and zookeeper by their IP or hostname, e.g.
+You can access the brokers by their IP or hostname, e.g.
 
-    # Specify ZooKeeper node 1 by it's IP: 192.168.50.11
-    bin/kafka-topics.sh --create --zookeeper 192.168.50.11:2181 --replication-factor 3 --partitions 1 --topic sandbox
+    # Specify brokers by their hostnames: broker1, broker2, broker3 (or just one of them)
+    bin/kafka-topics.sh --create --bootstrap-server broker1:9092 --replication-factor 3 --partitions 1 --topic sandbox
+    bin/kafka-console-producer.sh --bootstrap-server broker1:9092,broker2:9092,broker3:9092 --topic sandbox
 
-    # Specify brokers by their hostnames: broker1, broker2, broker3
-    bin/kafka-console-producer.sh --broker-list broker1:9092,broker2:9092,broker3:9092 --topic sandbox
-
-    # Specify ZooKeeper node by its hostname: zk1
-    bin/kafka-console-consumer.sh --zookeeper zk1:2181 --topic sandbox --from-beginning
+    # Specify brokers by their IP: 192.168.50.51, 192.168.50.52, 192.168.50.53
+    bin/kafka-console-consumer.sh --bootstrap-server 192.168.50.51:9092,192.168.50.52:9092,192.168.50.53:9092 --topic sandbox --from-beginning
 
 If you need to update the running cluster, you can re-run the provisioner (the
 step that installs software and configures services):
@@ -127,7 +127,7 @@ Next, configure parameters in `Vagrantfile.local`. A few are *required*:
 
 Now start things up, but specify the aws provider:
 
-    $ vagrant/vagrant-up.sh
+    $ vagrant/vagrant-up.sh --aws
 
 Your instances should get tagged with a name including your hostname to make
 them identifiable and make it easier to track instances in the AWS management

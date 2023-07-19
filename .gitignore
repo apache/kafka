@@ -6,6 +6,7 @@ build/
 build_eclipse/
 out/
 .gradle/
+.vscode/
 lib_managed/
 src_managed/
 project/boot/
@@ -34,8 +35,7 @@ Vagrantfile.local
 config/server-*
 config/zookeeper-*
 core/data/*
-gradle/wrapper/*
-gradlew
+gradle/wrapper/*.jar
 gradlew.bat
 
 results
@@ -52,4 +52,10 @@ docs/generated/
 kafkatest.egg-info/
 systest/
 *.swp
-clients/src/generated
+jmh-benchmarks/generated
+jmh-benchmarks/src/main/generated
+**/.jqwik-database
+**/src/generated
+**/src/generated-test
+
+storage/kafka-tiered-storage/

@@ -16,33 +16,55 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
  * Manages the {@link KeyValueSegment}s that are used by the {@link RocksDBSegmentedBytesStore}
  */
 class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
+    private final RocksDBMetricsRecorder metricsRecorder;
+
     KeyValueSegments(final String name,
+                     final String metricsScope,
                      final long retentionPeriod,
                      final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }
 
     @Override
     public KeyValueSegment getOrCreateSegment(final long segmentId,
-                                              final InternalProcessorContext context) {
+                                              final ProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
-            final KeyValueSegment newSegment = new KeyValueSegment(segmentName(segmentId), name, segmentId);
+            final KeyValueSegment newSegment =
+                new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
             }
 
-            newSegment.openDB(context);
+            newSegment.openDB(context.appConfigs(), context.stateDir());
             return newSegment;
         }
+    }
+
+    @Override
+    public KeyValueSegment getOrCreateSegmentIfLive(final long segmentId,
+                                                    final ProcessorContext context,
+                                                    final long streamTime) {
+        final KeyValueSegment segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
+        cleanupExpiredSegments(streamTime);
+        return segment;
+    }
+
+    @Override
+    public void openExisting(final ProcessorContext context, final long streamTime) {
+        metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
+        super.openExisting(context, streamTime);
     }
 }

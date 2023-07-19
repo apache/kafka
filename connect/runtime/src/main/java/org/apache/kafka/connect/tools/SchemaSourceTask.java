@@ -26,7 +26,6 @@ import org.apache.kafka.tools.ThroughputThrottler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +46,6 @@ public class SchemaSourceTask extends SourceTask {
     private static final String SEQNO_FIELD = "seqno";
     private ThroughputThrottler throttler;
 
-    private String name; // Connector name
     private int id; // Task ID
     private String topic;
     private Map<String, Integer> partition;
@@ -58,7 +56,7 @@ public class SchemaSourceTask extends SourceTask {
     private boolean multipleSchema;
     private int partitionCount;
 
-    private static Schema valueSchema = SchemaBuilder.struct().version(1).name("record")
+    private final static Schema VALUE_SCHEMA = SchemaBuilder.struct().version(1).name("record")
         .field("boolean", Schema.BOOLEAN_SCHEMA)
         .field("int", Schema.INT32_SCHEMA)
         .field("long", Schema.INT64_SCHEMA)
@@ -69,7 +67,7 @@ public class SchemaSourceTask extends SourceTask {
         .field("seqno", Schema.INT64_SCHEMA)
         .build();
 
-    private static Schema valueSchema2 = SchemaBuilder.struct().version(2).name("record")
+    private final static Schema VALUE_SCHEMA_2 = SchemaBuilder.struct().version(2).name("record")
         .field("boolean", Schema.BOOLEAN_SCHEMA)
         .field("int", Schema.INT32_SCHEMA)
         .field("long", Schema.INT64_SCHEMA)
@@ -89,13 +87,13 @@ public class SchemaSourceTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         final long throughput;
+        String name = props.get(NAME_CONFIG);
         try {
-            name = props.get(NAME_CONFIG);
             id = Integer.parseInt(props.get(ID_CONFIG));
             topic = props.get(TOPIC_CONFIG);
             maxNumMsgs = Long.parseLong(props.get(NUM_MSGS_CONFIG));
             multipleSchema = Boolean.parseBoolean(props.get(MULTIPLE_SCHEMA_CONFIG));
-            partitionCount = Integer.parseInt(props.containsKey(PARTITION_COUNT_CONFIG) ? props.get(PARTITION_COUNT_CONFIG) : "1");
+            partitionCount = Integer.parseInt(props.getOrDefault(PARTITION_COUNT_CONFIG, "1"));
             throughput = Long.parseLong(props.get(THROUGHPUT_CONFIG));
         } catch (NumberFormatException e) {
             throw new ConnectException("Invalid SchemaSourceTask configuration", e);
@@ -115,7 +113,7 @@ public class SchemaSourceTask extends SourceTask {
     }
 
     @Override
-    public List<SourceRecord> poll() throws InterruptedException {
+    public List<SourceRecord> poll() {
         if (count < maxNumMsgs) {
             long sendStartMs = System.currentTimeMillis();
             if (throttler.shouldThrottle(seqno - startingSeqno, sendStartMs)) {
@@ -127,7 +125,7 @@ public class SchemaSourceTask extends SourceTask {
             final Struct data;
             final SourceRecord srcRecord;
             if (!multipleSchema || count % 2 == 0) {
-                data = new Struct(valueSchema)
+                data = new Struct(VALUE_SCHEMA)
                     .put("boolean", true)
                     .put("int", 12)
                     .put("long", 12L)
@@ -137,9 +135,9 @@ public class SchemaSourceTask extends SourceTask {
                     .put("id", id)
                     .put("seqno", seqno);
 
-                srcRecord = new SourceRecord(partition, ccOffset, topic, id, Schema.STRING_SCHEMA, "key", valueSchema, data);
+                srcRecord = new SourceRecord(partition, ccOffset, topic, id, Schema.STRING_SCHEMA, "key", VALUE_SCHEMA, data);
             } else {
-                data = new Struct(valueSchema2)
+                data = new Struct(VALUE_SCHEMA_2)
                     .put("boolean", true)
                     .put("int", 12)
                     .put("long", 12L)
@@ -150,17 +148,16 @@ public class SchemaSourceTask extends SourceTask {
                     .put("id", id)
                     .put("seqno", seqno);
 
-                srcRecord = new SourceRecord(partition, ccOffset, topic, id, Schema.STRING_SCHEMA, "key", valueSchema2, data);
+                srcRecord = new SourceRecord(partition, ccOffset, topic, id, Schema.STRING_SCHEMA, "key", VALUE_SCHEMA_2, data);
             }
 
             System.out.println("{\"task\": " + id + ", \"seqno\": " + seqno + "}");
-            List<SourceRecord> result = Collections.singletonList(srcRecord);
             seqno++;
             count++;
-            return result;
+            return Collections.singletonList(srcRecord);
         } else {
             throttler.throttle();
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
     }
 

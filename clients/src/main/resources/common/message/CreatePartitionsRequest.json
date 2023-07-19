@@ -16,19 +16,26 @@
 {
   "apiKey": 37,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreatePartitionsRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
+  //
+  // Version 2 adds flexible version support
+  //
+  // Version 3 is identical to version 2 but may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the partitions creation is throttled (KIP-599).
+  "validVersions": "0-3",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "Topics", "type": "[]CreatePartitionsTopic", "versions": "0+",
       "about": "Each topic that we want to create new partitions inside.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Count", "type": "int32", "versions": "0+",
         "about": "The new partition count." },
       { "name": "Assignments", "type": "[]CreatePartitionsAssignment", "versions": "0+", "nullableVersions": "0+", 
         "about": "The new partition assignments.", "fields": [
-        { "name": "BrokerIds", "type": "[]int32", "versions": "0+",
+        { "name": "BrokerIds", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The assigned broker IDs." }
       ]}
     ]},

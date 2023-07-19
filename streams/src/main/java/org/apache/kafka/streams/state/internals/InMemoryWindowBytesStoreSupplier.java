@@ -52,13 +52,7 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
 
     @Override
     public String metricsScope() {
-        return "in-memory-window-state";
-    }
-
-    @Deprecated
-    @Override
-    public int segments() {
-        throw new IllegalStateException("Segments is deprecated and should not be called");
+        return "in-memory-window";
     }
 
     @Override
@@ -81,5 +75,15 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     @Override
     public boolean retainDuplicates() {
         return retainDuplicates;
+    }
+
+    @Override
+    public String toString() {
+        return "InMemoryWindowBytesStoreSupplier{" +
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", windowSize=" + windowSize +
+            ", retainDuplicates=" + retainDuplicates +
+            '}';
     }
 }

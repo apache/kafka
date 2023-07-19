@@ -1,0 +1,45 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 5,
+  "type": "metadata",
+  "name": "PartitionChangeRecord",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "The partition id." },
+    { "name": "TopicId", "type": "uuid", "versions": "0+",
+      "about": "The unique ID of this topic." },
+    { "name": "Isr", "type":  "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 0,
+      "about": "null if the ISR didn't change; the new in-sync replicas otherwise." },
+    { "name": "Leader", "type": "int32", "default": "-2", "entityType": "brokerId",
+      "versions": "0+", "taggedVersions": "0+", "tag": 1,
+      "about": "-1 if there is now no leader; -2 if the leader didn't change; the new leader otherwise." },
+    { "name": "Replicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 2,
+      "about": "null if the replicas didn't change; the new replicas otherwise." },
+    { "name": "RemovingReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 3,
+      "about": "null if the removing replicas didn't change; the new removing replicas otherwise." },
+    { "name": "AddingReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 4,
+      "about": "null if the adding replicas didn't change; the new adding replicas otherwise." },
+    { "name": "LeaderRecoveryState", "type": "int8", "default": "-1", "versions": "0+", "taggedVersions": "0+", "tag": 5,
+      "about": "-1 if it didn't change; 0 if the leader was elected from the ISR or recovered from an unclean election; 1 if the leader that was elected using unclean leader election and it is still recovering." }
+  ]
+}

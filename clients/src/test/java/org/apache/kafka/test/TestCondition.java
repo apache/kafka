@@ -23,5 +23,5 @@ package org.apache.kafka.test;
 @FunctionalInterface
 public interface TestCondition {
 
-    boolean conditionMet() throws InterruptedException;
+    boolean conditionMet() throws Exception;
 }

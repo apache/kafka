@@ -22,350 +22,341 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.TrustManagerFactory;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.Closeable;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.Principal;
-import java.security.SecureRandom;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 
-public class SslFactory implements Reconfigurable {
+public class SslFactory implements Reconfigurable, Closeable {
     private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
 
     private final Mode mode;
     private final String clientAuthConfigOverride;
     private final boolean keystoreVerifiableUsingTruststore;
-
-    private String protocol;
-    private String provider;
-    private String kmfAlgorithm;
-    private String tmfAlgorithm;
-    private SecurityStore keystore = null;
-    private SecurityStore truststore;
-    private String[] cipherSuites;
-    private String[] enabledProtocols;
     private String endpointIdentification;
-    private SecureRandom secureRandomImplementation;
-    private SSLContext sslContext;
-    private boolean needClientAuth;
-    private boolean wantClientAuth;
+    private SslEngineFactory sslEngineFactory;
+    private Map<String, Object> sslEngineFactoryConfig;
 
     public SslFactory(Mode mode) {
         this(mode, null, false);
     }
 
-    public SslFactory(Mode mode, String clientAuthConfigOverride, boolean keystoreVerifiableUsingTruststore) {
+    /**
+     * Create an SslFactory.
+     *
+     * @param mode                                  Whether to use client or server mode.
+     * @param clientAuthConfigOverride              The value to override ssl.client.auth with, or null
+     *                                              if we don't want to override it.
+     * @param keystoreVerifiableUsingTruststore     True if we should require the keystore to be verifiable
+     *                                              using the truststore.
+     */
+    public SslFactory(Mode mode,
+                      String clientAuthConfigOverride,
+                      boolean keystoreVerifiableUsingTruststore) {
         this.mode = mode;
         this.clientAuthConfigOverride = clientAuthConfigOverride;
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
-        this.protocol =  (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
-        this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
+        if (sslEngineFactory != null) {
+            throw new IllegalStateException("SslFactory was already configured.");
+        }
+        this.endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
-        @SuppressWarnings("unchecked")
-        List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
-        if (cipherSuitesList != null && !cipherSuitesList.isEmpty())
-            this.cipherSuites = cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
-
-        @SuppressWarnings("unchecked")
-        List<String> enabledProtocolsList = (List<String>) configs.get(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
-        if (enabledProtocolsList != null && !enabledProtocolsList.isEmpty())
-            this.enabledProtocols = enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
-
-        String endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-        if (endpointIdentification != null)
-            this.endpointIdentification = endpointIdentification;
-
-        String secureRandomImplementation = (String) configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
-        if (secureRandomImplementation != null) {
+        // The input map must be a mutable RecordingMap in production.
+        Map<String, Object> nextConfigs = (Map<String, Object>) configs;
+        if (clientAuthConfigOverride != null) {
+            nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
+        }
+        SslEngineFactory builder = instantiateSslEngineFactory(nextConfigs);
+        if (keystoreVerifiableUsingTruststore) {
             try {
-                this.secureRandomImplementation = SecureRandom.getInstance(secureRandomImplementation);
-            } catch (GeneralSecurityException e) {
-                throw new KafkaException(e);
+                SslEngineValidator.validate(builder, builder);
+            } catch (Exception e) {
+                throw new ConfigException("A client SSLEngine created with the provided settings " +
+                        "can't connect to a server SSLEngine created with those settings.", e);
             }
         }
-
-        String clientAuthConfig = clientAuthConfigOverride;
-        if (clientAuthConfig == null)
-            clientAuthConfig = (String) configs.get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
-        if (clientAuthConfig != null) {
-            if (clientAuthConfig.equals("required"))
-                this.needClientAuth = true;
-            else if (clientAuthConfig.equals("requested"))
-                this.wantClientAuth = true;
-        }
-
-        this.kmfAlgorithm = (String) configs.get(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
-        this.tmfAlgorithm = (String) configs.get(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
-
-        this.keystore = createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
-                       (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-                       (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-                       (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
-
-        this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
-                         (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-                         (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-        try {
-            this.sslContext = createSSLContext(keystore, truststore);
-            log.debug("Created SSL context with keystore {} truststore {}", keystore, truststore);
-        } catch (Exception e) {
-            throw new KafkaException(e);
-        }
+        this.sslEngineFactory = builder;
     }
 
     @Override
     public Set<String> reconfigurableConfigs() {
-        return SslConfigs.RECONFIGURABLE_CONFIGS;
+        return sslEngineFactory.reconfigurableConfigs();
     }
 
     @Override
-    public void validateReconfiguration(Map<String, ?> configs) {
-        try {
-            SecurityStore newKeystore = maybeCreateNewKeystore(configs);
-            SecurityStore newTruststore = maybeCreateNewTruststore(configs);
-            if (newKeystore != null || newTruststore != null) {
-                SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
-                SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
-                createSSLContext(keystore, truststore);
-            }
-        } catch (Exception e) {
-            throw new ConfigException("Validation of dynamic config update failed", e);
-        }
+    public void validateReconfiguration(Map<String, ?> newConfigs) {
+        createNewSslEngineFactory(newConfigs);
     }
 
     @Override
-    public void reconfigure(Map<String, ?> configs) throws KafkaException {
-        SecurityStore newKeystore = maybeCreateNewKeystore(configs);
-        SecurityStore newTruststore = maybeCreateNewTruststore(configs);
-        if (newKeystore != null || newTruststore != null) {
-            try {
-                SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
-                SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
-                this.sslContext = createSSLContext(keystore, truststore);
-                log.info("Created new SSL context with keystore {} truststore {}", keystore, truststore);
-                this.keystore = keystore;
-                this.truststore = truststore;
-            } catch (Exception e) {
-                throw new ConfigException("Reconfiguration of SSL keystore/truststore failed", e);
-            }
+    public void reconfigure(Map<String, ?> newConfigs) throws KafkaException {
+        SslEngineFactory newSslEngineFactory = createNewSslEngineFactory(newConfigs);
+        if (newSslEngineFactory != this.sslEngineFactory) {
+            Utils.closeQuietly(this.sslEngineFactory, "close stale ssl engine factory");
+            this.sslEngineFactory = newSslEngineFactory;
+            log.info("Created new {} SSL engine builder with keystore {} truststore {}", mode,
+                    newSslEngineFactory.keystore(), newSslEngineFactory.truststore());
         }
     }
 
-    private SecurityStore maybeCreateNewKeystore(Map<String, ?> configs) {
-        boolean keystoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG), keystore.type) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG), keystore.path) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG), keystore.password) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG), keystore.keyPassword);
-
-        if (!keystoreChanged) {
-            keystoreChanged = keystore.modified();
-        }
-        if (keystoreChanged) {
-            return createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
-                    (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-                    (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-                    (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
-        } else
-            return null;
-    }
-
-    private SecurityStore maybeCreateNewTruststore(Map<String, ?> configs) {
-        boolean truststoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG), truststore.type) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG), truststore.path) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG), truststore.password);
-
-        if (!truststoreChanged) {
-            truststoreChanged = truststore.modified();
-        }
-        if (truststoreChanged) {
-            return createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
-                    (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-                    (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-        } else
-            return null;
-    }
-
-    // package access for testing
-    SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) throws GeneralSecurityException, IOException  {
-        SSLContext sslContext;
-        if (provider != null)
-            sslContext = SSLContext.getInstance(protocol, provider);
-        else
-            sslContext = SSLContext.getInstance(protocol);
-
-        KeyManager[] keyManagers = null;
-        if (keystore != null) {
-            String kmfAlgorithm = this.kmfAlgorithm != null ? this.kmfAlgorithm : KeyManagerFactory.getDefaultAlgorithm();
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
-            KeyStore ks = keystore.load();
-            Password keyPassword = keystore.keyPassword != null ? keystore.keyPassword : keystore.password;
-            kmf.init(ks, keyPassword.value().toCharArray());
-            keyManagers = kmf.getKeyManagers();
-        }
-
-        String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-        KeyStore ts = truststore == null ? null : truststore.load();
-        tmf.init(ts);
-
-        sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
-        boolean verifyKeystore = keystore != null && keystore != this.keystore;
-        boolean verifyTruststore = truststore != null && truststore != this.truststore;
-        if (verifyKeystore || verifyTruststore) {
-            if (this.keystore == null)
-                throw new ConfigException("Cannot add SSL keystore to an existing listener for which no keystore was configured.");
-            if (keystoreVerifiableUsingTruststore) {
-                SSLConfigValidatorEngine.validate(this, sslContext, this.sslContext);
-                SSLConfigValidatorEngine.validate(this, this.sslContext, sslContext);
-            }
-            if (verifyKeystore &&
-                    !CertificateEntries.create(this.keystore.load()).equals(CertificateEntries.create(keystore.load()))) {
-                throw new ConfigException("Keystore DistinguishedName or SubjectAltNames do not match");
-            }
-        }
-        return sslContext;
-    }
-
-    public SSLEngine createSslEngine(String peerHost, int peerPort) {
-        return createSslEngine(sslContext, peerHost, peerPort);
-    }
-
-    private SSLEngine createSslEngine(SSLContext sslContext, String peerHost, int peerPort) {
-        SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
-        if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
-        if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
-
-        // SSLParameters#setEndpointIdentificationAlgorithm enables endpoint validation
-        // only in client mode. Hence, validation is enabled only for clients.
-        if (mode == Mode.SERVER) {
-            sslEngine.setUseClientMode(false);
-            if (needClientAuth)
-                sslEngine.setNeedClientAuth(needClientAuth);
-            else
-                sslEngine.setWantClientAuth(wantClientAuth);
+    private SslEngineFactory instantiateSslEngineFactory(Map<String, Object> configs) {
+        @SuppressWarnings("unchecked")
+        Class<? extends SslEngineFactory> sslEngineFactoryClass =
+                (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+        SslEngineFactory sslEngineFactory;
+        if (sslEngineFactoryClass == null) {
+            sslEngineFactory = new DefaultSslEngineFactory();
         } else {
-            sslEngine.setUseClientMode(true);
-            SSLParameters sslParams = sslEngine.getSSLParameters();
-            sslParams.setEndpointIdentificationAlgorithm(endpointIdentification);
-            sslEngine.setSSLParameters(sslParams);
+            sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
         }
-        return sslEngine;
+        sslEngineFactory.configure(configs);
+        this.sslEngineFactoryConfig = configs;
+        return sslEngineFactory;
+    }
+
+    private SslEngineFactory createNewSslEngineFactory(Map<String, ?> newConfigs) {
+        if (sslEngineFactory == null) {
+            throw new IllegalStateException("SslFactory has not been configured.");
+        }
+        Map<String, Object> nextConfigs = new HashMap<>(sslEngineFactoryConfig);
+        copyMapEntries(nextConfigs, newConfigs, reconfigurableConfigs());
+        if (clientAuthConfigOverride != null) {
+            nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
+        }
+        if (!sslEngineFactory.shouldBeRebuilt(nextConfigs)) {
+            return sslEngineFactory;
+        }
+        try {
+            SslEngineFactory newSslEngineFactory = instantiateSslEngineFactory(nextConfigs);
+            if (sslEngineFactory.keystore() == null) {
+                if (newSslEngineFactory.keystore() != null) {
+                    throw new ConfigException("Cannot add SSL keystore to an existing listener for " +
+                            "which no keystore was configured.");
+                }
+            } else {
+                if (newSslEngineFactory.keystore() == null) {
+                    throw new ConfigException("Cannot remove the SSL keystore from an existing listener for " +
+                            "which a keystore was configured.");
+                }
+
+                CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore());
+            }
+            if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
+                throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
+                        "truststore was configured.");
+            }
+            if (keystoreVerifiableUsingTruststore) {
+                if (sslEngineFactory.truststore() != null || sslEngineFactory.keystore() != null) {
+                    SslEngineValidator.validate(sslEngineFactory, newSslEngineFactory);
+                }
+            }
+            return newSslEngineFactory;
+        } catch (Exception e) {
+            log.debug("Validation of dynamic config update of SSLFactory failed.", e);
+            throw new ConfigException("Validation of dynamic config update of SSLFactory failed: " + e);
+        }
+    }
+
+    public SSLEngine createSslEngine(Socket socket) {
+        return createSslEngine(peerHost(socket), socket.getPort());
     }
 
     /**
-     * Returns a configured SSLContext.
-     * @return SSLContext.
+     * Prefer `createSslEngine(Socket)` if a `Socket` instance is available. If using this overload,
+     * avoid reverse DNS resolution in the computation of `peerHost`.
      */
-    public SSLContext sslContext() {
-        return sslContext;
+    public SSLEngine createSslEngine(String peerHost, int peerPort) {
+        if (sslEngineFactory == null) {
+            throw new IllegalStateException("SslFactory has not been configured.");
+        }
+        if (mode == Mode.SERVER) {
+            return sslEngineFactory.createServerSslEngine(peerHost, peerPort);
+        } else {
+            return sslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
+        }
     }
 
-    private SecurityStore createKeystore(String type, String path, Password password, Password keyPassword) {
-        if (path == null && password != null) {
-            throw new KafkaException("SSL key store is not specified, but key store password is specified.");
-        } else if (path != null && password == null) {
-            throw new KafkaException("SSL key store is specified, but key store password is not specified.");
-        } else if (path != null && password != null) {
-            return new SecurityStore(type, path, password, keyPassword);
-        } else
-            return null; // path == null, clients may use this path with brokers that don't require client auth
+    /**
+     * Returns host/IP address of remote host without reverse DNS lookup to be used as the host
+     * for creating SSL engine. This is used as a hint for session reuse strategy and also for
+     * hostname verification of server hostnames.
+     * <p>
+     * Scenarios:
+     * <ul>
+     *   <li>Server-side
+     *   <ul>
+     *     <li>Server accepts connection from a client. Server knows only client IP
+     *     address. We want to avoid reverse DNS lookup of the client IP address since the server
+     *     does not verify or use client hostname. The IP address can be used directly.</li>
+     *   </ul>
+     *   </li>
+     *   <li>Client-side
+     *   <ul>
+     *     <li>Client connects to server using hostname. No lookup is necessary
+     *     and the hostname should be used to create the SSL engine. This hostname is validated
+     *     against the hostname in SubjectAltName (dns) or CommonName in the certificate if
+     *     hostname verification is enabled. Authentication fails if hostname does not match.</li>
+     *     <li>Client connects to server using IP address, but certificate contains only
+     *     SubjectAltName (dns). Use of reverse DNS lookup to determine hostname introduces
+     *     a security vulnerability since authentication would be reliant on a secure DNS.
+     *     Hence hostname verification should fail in this case.</li>
+     *     <li>Client connects to server using IP address and certificate contains
+     *     SubjectAltName (ipaddress). This could be used when Kafka is on a private network.
+     *     If reverse DNS lookup is used, authentication would succeed using IP address if lookup
+     *     fails and IP address is used, but authentication would fail if lookup succeeds and
+     *     dns name is used. For consistency and to avoid dependency on a potentially insecure
+     *     DNS, reverse DNS lookup should be avoided and the IP address specified by the client for
+     *     connection should be used to create the SSL engine.</li>
+     *   </ul></li>
+     * </ul>
+     */
+    private String peerHost(Socket socket) {
+        return new InetSocketAddress(socket.getInetAddress(), 0).getHostString();
     }
 
-    private SecurityStore createTruststore(String type, String path, Password password) {
-        if (path == null && password != null) {
-            throw new KafkaException("SSL trust store is not specified, but trust store password is specified.");
-        } else if (path != null) {
-            return new SecurityStore(type, path, password, null);
-        } else
-            return null;
+    public SslEngineFactory sslEngineFactory() {
+        return sslEngineFactory;
     }
 
-    // package access for testing
-    static class SecurityStore {
-        private final String type;
-        private final String path;
-        private final Password password;
-        private final Password keyPassword;
-        private final Long fileLastModifiedMs;
+    /**
+     * Copy entries from one map into another.
+     *
+     * @param destMap   The map to copy entries into.
+     * @param srcMap    The map to copy entries from.
+     * @param keySet    Only entries with these keys will be copied.
+     * @param <K>       The map key type.
+     * @param <V>       The map value type.
+     */
+    private static <K, V> void copyMapEntries(Map<K, V> destMap,
+                                              Map<K, ? extends V> srcMap,
+                                              Set<K> keySet) {
+        for (K k : keySet) {
+            copyMapEntry(destMap, srcMap, k);
+        }
+    }
 
-        SecurityStore(String type, String path, Password password, Password keyPassword) {
-            Objects.requireNonNull(type, "type must not be null");
-            this.type = type;
-            this.path = path;
-            this.password = password;
-            this.keyPassword = keyPassword;
-            fileLastModifiedMs = lastModifiedMs(path);
+    /**
+     * Copy entry from one map into another.
+     *
+     * @param destMap   The map to copy entries into.
+     * @param srcMap    The map to copy entries from.
+     * @param key       The entry with this key will be copied
+     * @param <K>       The map key type.
+     * @param <V>       The map value type.
+     */
+    private static <K, V> void copyMapEntry(Map<K, V> destMap,
+                                            Map<K, ? extends V> srcMap,
+                                            K key) {
+        if (srcMap.containsKey(key)) {
+            destMap.put(key, srcMap.get(key));
+        }
+    }
+
+    @Override
+    public void close() {
+        Utils.closeQuietly(sslEngineFactory, "close engine factory");
+    }
+
+    static class CertificateEntries {
+        private final String alias;
+        private final Principal subjectPrincipal;
+        private final Set<List<?>> subjectAltNames;
+
+        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException {
+            Enumeration<String> aliases = keystore.aliases();
+            List<CertificateEntries> entries = new ArrayList<>();
+            while (aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+                Certificate cert  = keystore.getCertificate(alias);
+                if (cert instanceof X509Certificate)
+                    entries.add(new CertificateEntries(alias, (X509Certificate) cert));
+            }
+            return entries;
         }
 
-        /**
-         * Loads this keystore
-         * @return the keystore
-         * @throws KafkaException if the file could not be read or if the keystore could not be loaded
-         *   using the specified configs (e.g. if the password or keystore type is invalid)
-         */
-        KeyStore load() {
-            try (InputStream in = Files.newInputStream(Paths.get(path))) {
-                KeyStore ks = KeyStore.getInstance(type);
-                // If a password is not set access to the truststore is still available, but integrity checking is disabled.
-                char[] passwordChars = password != null ? password.value().toCharArray() : null;
-                ks.load(in, passwordChars);
-                return ks;
-            } catch (GeneralSecurityException | IOException e) {
-                throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
+        static void ensureCompatible(KeyStore newKeystore, KeyStore oldKeystore) throws GeneralSecurityException {
+            List<CertificateEntries> newEntries = CertificateEntries.create(newKeystore);
+            List<CertificateEntries> oldEntries = CertificateEntries.create(oldKeystore);
+            if (newEntries.size() != oldEntries.size()) {
+                throw new ConfigException(String.format("Keystore entries do not match, existing store contains %d entries, new store contains %d entries",
+                    oldEntries.size(), newEntries.size()));
+            }
+            for (int i = 0; i < newEntries.size(); i++) {
+                CertificateEntries newEntry = newEntries.get(i);
+                CertificateEntries oldEntry = oldEntries.get(i);
+                Principal newPrincipal = newEntry.subjectPrincipal;
+                Principal oldPrincipal = oldEntry.subjectPrincipal;
+                // Compare principal objects to compare canonical names (e.g. to ignore leading/trailing whitespaces).
+                // Canonical names may differ if the tags of a field changes from one with a printable string representation
+                // to one without or vice-versa due to optional conversion to hex representation based on the tag. So we
+                // also compare Principal.getName which compares the RFC2253 name. If either matches, allow dynamic update.
+                if (!Objects.equals(newPrincipal, oldPrincipal) && !newPrincipal.getName().equalsIgnoreCase(oldPrincipal.getName())) {
+                    throw new ConfigException(String.format("Keystore DistinguishedName does not match: " +
+                        " existing={alias=%s, DN=%s}, new={alias=%s, DN=%s}",
+                        oldEntry.alias, oldEntry.subjectPrincipal, newEntry.alias, newEntry.subjectPrincipal));
+                }
+                if (!newEntry.subjectAltNames.containsAll(oldEntry.subjectAltNames)) {
+                    throw new ConfigException(String.format("Keystore SubjectAltNames do not match: " +
+                            " existing={alias=%s, SAN=%s}, new={alias=%s, SAN=%s}",
+                        oldEntry.alias, oldEntry.subjectAltNames, newEntry.alias, newEntry.subjectAltNames));
+                }
             }
         }
 
-        private Long lastModifiedMs(String path) {
-            try {
-                return Files.getLastModifiedTime(Paths.get(path)).toMillis();
-            } catch (IOException e) {
-                log.error("Modification time of key store could not be obtained: " + path, e);
-                return null;
-            }
+        CertificateEntries(String alias, X509Certificate cert) throws GeneralSecurityException {
+            this.alias = alias;
+            this.subjectPrincipal = cert.getSubjectX500Principal();
+            Collection<List<?>> altNames = cert.getSubjectAlternativeNames();
+            // use a set for comparison
+            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.emptySet();
         }
 
-        boolean modified() {
-            Long modifiedMs = lastModifiedMs(path);
-            return modifiedMs != null && !Objects.equals(modifiedMs, this.fileLastModifiedMs);
+        @Override
+        public int hashCode() {
+            return Objects.hash(subjectPrincipal, subjectAltNames);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof CertificateEntries))
+                return false;
+            CertificateEntries other = (CertificateEntries) obj;
+            return Objects.equals(subjectPrincipal, other.subjectPrincipal) &&
+                    Objects.equals(subjectAltNames, other.subjectAltNames);
         }
 
         @Override
         public String toString() {
-            return "SecurityStore(" +
-                    "path=" + path +
-                    ", modificationTime=" + (fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs)) + ")";
+            return "subjectPrincipal=" + subjectPrincipal +
+                    ", subjectAltNames=" + subjectAltNames;
         }
     }
 
@@ -374,32 +365,48 @@ public class SslFactory implements Reconfigurable {
      * The validator checks that a successful handshake can be performed using the keystore and
      * truststore configured on this SslFactory.
      */
-    private static class SSLConfigValidatorEngine {
+    private static class SslEngineValidator {
         private static final ByteBuffer EMPTY_BUF = ByteBuffer.allocate(0);
         private final SSLEngine sslEngine;
         private SSLEngineResult handshakeResult;
         private ByteBuffer appBuffer;
         private ByteBuffer netBuffer;
 
-        static void validate(SslFactory sslFactory, SSLContext clientSslContext, SSLContext serverSslContext) throws SSLException {
-            SSLConfigValidatorEngine clientEngine = new SSLConfigValidatorEngine(sslFactory, clientSslContext, Mode.CLIENT);
-            SSLConfigValidatorEngine serverEngine = new SSLConfigValidatorEngine(sslFactory, serverSslContext, Mode.SERVER);
-            try {
-                clientEngine.beginHandshake();
-                serverEngine.beginHandshake();
-                while (!serverEngine.complete() || !clientEngine.complete()) {
-                    clientEngine.handshake(serverEngine);
-                    serverEngine.handshake(clientEngine);
-                }
-            } finally {
-                clientEngine.close();
-                serverEngine.close();
+        static void validate(SslEngineFactory oldEngineBuilder,
+                             SslEngineFactory newEngineBuilder) throws SSLException {
+            validate(createSslEngineForValidation(oldEngineBuilder, Mode.SERVER),
+                    createSslEngineForValidation(newEngineBuilder, Mode.CLIENT));
+            validate(createSslEngineForValidation(newEngineBuilder, Mode.SERVER),
+                    createSslEngineForValidation(oldEngineBuilder, Mode.CLIENT));
+        }
+
+        private static SSLEngine createSslEngineForValidation(SslEngineFactory sslEngineFactory, Mode mode) {
+            // Use empty hostname, disable hostname verification
+            if (mode == Mode.SERVER) {
+                return sslEngineFactory.createServerSslEngine("", 0);
+            } else {
+                return sslEngineFactory.createClientSslEngine("", 0, "");
             }
         }
 
-        private SSLConfigValidatorEngine(SslFactory sslFactory, SSLContext sslContext, Mode mode) {
-            this.sslEngine = sslFactory.createSslEngine(sslContext, "localhost", 0); // these hints are not used for validation
-            sslEngine.setUseClientMode(mode == Mode.CLIENT);
+        static void validate(SSLEngine clientEngine, SSLEngine serverEngine) throws SSLException {
+            SslEngineValidator clientValidator = new SslEngineValidator(clientEngine);
+            SslEngineValidator serverValidator = new SslEngineValidator(serverEngine);
+            try {
+                clientValidator.beginHandshake();
+                serverValidator.beginHandshake();
+                while (!serverValidator.complete() || !clientValidator.complete()) {
+                    clientValidator.handshake(serverValidator);
+                    serverValidator.handshake(clientValidator);
+                }
+            } finally {
+                clientValidator.close();
+                serverValidator.close();
+            }
+        }
+
+        private SslEngineValidator(SSLEngine engine) {
+            this.sslEngine = engine;
             appBuffer = ByteBuffer.allocate(sslEngine.getSession().getApplicationBufferSize());
             netBuffer = ByteBuffer.allocate(sslEngine.getSession().getPacketBufferSize());
         }
@@ -407,12 +414,13 @@ public class SslFactory implements Reconfigurable {
         void beginHandshake() throws SSLException {
             sslEngine.beginHandshake();
         }
-
-        void handshake(SSLConfigValidatorEngine peerEngine) throws SSLException {
+        void handshake(SslEngineValidator peerValidator) throws SSLException {
             SSLEngineResult.HandshakeStatus handshakeStatus = sslEngine.getHandshakeStatus();
             while (true) {
                 switch (handshakeStatus) {
                     case NEED_WRAP:
+                        if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
+                            return;
                         handshakeResult = sslEngine.wrap(EMPTY_BUF, netBuffer);
                         switch (handshakeResult.getStatus()) {
                             case OK: break;
@@ -428,11 +436,11 @@ public class SslFactory implements Reconfigurable {
                         }
                         return;
                     case NEED_UNWRAP:
-                        if (peerEngine.netBuffer.position() == 0) // no data to unwrap, return to process peer
+                        if (peerValidator.netBuffer.position() == 0) // no data to unwrap, return to process peer
                             return;
-                        peerEngine.netBuffer.flip(); // unwrap the data from peer
-                        handshakeResult = sslEngine.unwrap(peerEngine.netBuffer, appBuffer);
-                        peerEngine.netBuffer.compact();
+                        peerValidator.netBuffer.flip(); // unwrap the data from peer
+                        handshakeResult = sslEngine.unwrap(peerValidator.netBuffer, appBuffer);
+                        peerValidator.netBuffer.compact();
                         handshakeStatus = handshakeResult.getHandshakeStatus();
                         switch (handshakeResult.getStatus()) {
                             case OK: break;
@@ -475,50 +483,6 @@ public class SslFactory implements Reconfigurable {
             } catch (Exception e) {
                 // ignore
             }
-        }
-    }
-
-    static class CertificateEntries {
-        private final Principal subjectPrincipal;
-        private final Set<List<?>> subjectAltNames;
-
-        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException {
-            Enumeration<String> aliases = keystore.aliases();
-            List<CertificateEntries> entries = new ArrayList<>();
-            while (aliases.hasMoreElements()) {
-                String alias = aliases.nextElement();
-                Certificate cert  = keystore.getCertificate(alias);
-                if (cert instanceof X509Certificate)
-                    entries.add(new CertificateEntries((X509Certificate) cert));
-            }
-            return entries;
-        }
-
-        CertificateEntries(X509Certificate cert) throws GeneralSecurityException {
-            this.subjectPrincipal = cert.getSubjectX500Principal();
-            Collection<List<?>> altNames = cert.getSubjectAlternativeNames();
-            // use a set for comparison
-            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.emptySet();
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(subjectPrincipal, subjectAltNames);
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof CertificateEntries))
-                return false;
-            CertificateEntries other = (CertificateEntries) obj;
-            return Objects.equals(subjectPrincipal, other.subjectPrincipal) &&
-                    Objects.equals(subjectAltNames, other.subjectAltNames);
-        }
-
-        @Override
-        public String toString() {
-            return "subjectPrincipal=" + subjectPrincipal +
-                    ", subjectAltNames=" + subjectAltNames;
         }
     }
 }

@@ -16,18 +16,34 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.connect.errors.ConnectException;
+
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * An abstract implementation of {@link Callback} that also implements the {@link Future} interface. This allows for
+ * operations like waiting until the callback is completed via {@link #onCompletion(Throwable, Object)}. The result
+ * from the callback can be converted by concrete implementations of this class before being retrieved via
+ * {@link Future#get}.
+ * @param <U> the callback result type
+ * @param <T> the future result type obtained after converting the callback result
+ */
 public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Future<T> {
 
-    private Callback<T> underlying;
-    private CountDownLatch finishedLatch;
-    private T result = null;
-    private Throwable exception = null;
+    private final Callback<T> underlying;
+    private final CountDownLatch finishedLatch;
+    private volatile T result = null;
+    private volatile Throwable exception = null;
+    private volatile boolean cancelled = false;
+
+    public ConvertingFutureCallback() {
+        this(null);
+    }
 
     public ConvertingFutureCallback(Callback<T> underlying) {
         this.underlying = underlying;
@@ -38,21 +54,46 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
 
     @Override
     public void onCompletion(Throwable error, U result) {
-        this.exception = error;
-        this.result = convert(result);
-        if (underlying != null)
-            underlying.onCompletion(error, this.result);
-        finishedLatch.countDown();
+        synchronized (this) {
+            if (isDone()) {
+                return;
+            }
+            
+            if (error != null) {
+                this.exception = error;
+            } else {
+                this.result = convert(result);
+            }
+
+            if (underlying != null)
+                underlying.onCompletion(error, this.result);
+            finishedLatch.countDown();
+        }
     }
 
     @Override
-    public boolean cancel(boolean b) {
+    public boolean cancel(boolean mayInterruptIfRunning) {
+        synchronized (this) {
+            if (isDone()) {
+                return false;
+            }
+            if (mayInterruptIfRunning) {
+                this.cancelled = true;
+                finishedLatch.countDown();
+                return true;
+            }
+        }
+        try {
+            finishedLatch.await();
+        } catch (InterruptedException e) {
+            throw new ConnectException("Interrupted while waiting for task to complete", e);
+        }
         return false;
     }
 
     @Override
     public boolean isCancelled() {
-        return false;
+        return cancelled;
     }
 
     @Override
@@ -75,6 +116,9 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     }
 
     private T result() throws ExecutionException {
+        if (cancelled) {
+            throw new CancellationException();
+        }
         if (exception != null) {
             throw new ExecutionException(exception);
         }

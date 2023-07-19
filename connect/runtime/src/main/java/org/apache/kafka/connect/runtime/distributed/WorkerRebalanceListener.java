@@ -25,13 +25,15 @@ import java.util.Collection;
  */
 public interface WorkerRebalanceListener {
     /**
-     * Invoked when a new assignment is created by joining the Connect worker group. This is invoked for both successful
-     * and unsuccessful assignments.
+     * Invoked when a new assignment is created by joining the Connect worker group. This is
+     * invoked for both successful and unsuccessful assignments.
      */
-    void onAssigned(ConnectProtocol.Assignment assignment, int generation);
+    void onAssigned(ExtendedAssignment assignment, int generation);
 
     /**
-     * Invoked when a rebalance operation starts, revoking ownership for the set of connectors and tasks.
+     * Invoked when a rebalance operation starts, revoking ownership for the set of connectors
+     * and tasks. Depending on the Connect protocol version, the collection of revoked connectors
+     * or tasks might refer to all or some of the connectors and tasks running on the worker.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
 }

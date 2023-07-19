@@ -22,6 +22,7 @@ import org.apache.kafka.connect.util.Callback;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Future;
 
 /**
@@ -53,12 +54,9 @@ public interface OffsetBackingStore {
     /**
      * Get the values for the specified keys
      * @param keys list of keys to look up
-     * @param callback callback to invoke on completion
      * @return future for the resulting map from key to value
      */
-    Future<Map<ByteBuffer, ByteBuffer>> get(
-            Collection<ByteBuffer> keys,
-            Callback<Map<ByteBuffer, ByteBuffer>> callback);
+    Future<Map<ByteBuffer, ByteBuffer>> get(Collection<ByteBuffer> keys);
 
     /**
      * Set the specified keys and values.
@@ -66,8 +64,14 @@ public interface OffsetBackingStore {
      * @param callback callback to invoke on completion
      * @return void future for the operation
      */
-    Future<Void> set(Map<ByteBuffer, ByteBuffer> values,
-                            Callback<Void> callback);
+    Future<Void> set(Map<ByteBuffer, ByteBuffer> values, Callback<Void> callback);
+
+    /**
+     * Get all the partitions for the specified connector.
+     * @param connectorName the name of the connector whose partitions are to be retrieved
+     * @return set of connector partitions
+     */
+    Set<Map<String, Object>> connectorPartitions(String connectorName);
 
     /**
      * Configure class with the given key-value pairs

@@ -19,13 +19,15 @@ package kafka
 
 import java.util.Properties
 import java.util.concurrent.atomic._
-
 import kafka.log._
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.{FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 
 /**
  * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
@@ -34,36 +36,37 @@ import org.apache.kafka.common.utils.Utils
 object StressTestLog {
   val running = new AtomicBoolean(true)
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir())
     val time = new MockTime
     val logProperties = new Properties()
-    logProperties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
-    logProperties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
-    logProperties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
+    logProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, 64*1024*1024: java.lang.Integer)
+    logProperties.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Int.MaxValue: java.lang.Integer)
+    logProperties.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024*1024: java.lang.Integer)
 
-    val log = Log(dir = dir,
-      config = LogConfig(logProperties),
+    val log = UnifiedLog(dir = dir,
+      config = new LogConfig(logProperties),
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
-      maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
+      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
       brokerTopicStats = new BrokerTopicStats,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true)
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)
     reader.start()
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
+    Exit.addShutdownHook("stress-test-shutdown-hook", {
         running.set(false)
         writer.join()
         reader.join()
         Utils.delete(dir)
-      }
     })
 
     while(running.get) {
@@ -77,7 +80,7 @@ object StressTestLog {
   abstract class WorkerThread extends Thread {
     val threadInfo = "Thread: " + Thread.currentThread.getName + " Class: " + getClass.getName
 
-    override def run() {
+    override def run(): Unit = {
       try {
         while(running.get)
           work()
@@ -90,7 +93,7 @@ object StressTestLog {
       }
     }
 
-    def work()
+    def work(): Unit
     def isMakingProgress(): Boolean
   }
 
@@ -108,7 +111,7 @@ object StressTestLog {
       false
     }
 
-    def checkProgress() {
+    def checkProgress(): Unit = {
       // Check if we are making progress every 500ms
       val curTime = System.currentTimeMillis
       if ((curTime - lastProgressCheckTime) > 500) {
@@ -118,24 +121,24 @@ object StressTestLog {
     }
   }
 
-  class WriterThread(val log: Log) extends WorkerThread with LogProgress {
-    override def work() {
+  class WriterThread(val log: UnifiedLog) extends WorkerThread with LogProgress {
+    override def work(): Unit = {
       val logAppendInfo = log.appendAsLeader(TestUtils.singletonRecords(currentOffset.toString.getBytes), 0)
-      require(logAppendInfo.firstOffset.forall(_ == currentOffset) && logAppendInfo.lastOffset == currentOffset)
+      require((!logAppendInfo.firstOffset.isPresent || logAppendInfo.firstOffset.get().messageOffset == currentOffset)
+        && logAppendInfo.lastOffset == currentOffset)
       currentOffset += 1
       if (currentOffset % 1000 == 0)
         Thread.sleep(50)
     }
   }
 
-  class ReaderThread(val log: Log) extends WorkerThread with LogProgress {
-    override def work() {
+  class ReaderThread(val log: UnifiedLog) extends WorkerThread with LogProgress {
+    override def work(): Unit = {
       try {
         log.read(currentOffset,
-          maxLength = 1024,
-          maxOffset = Some(currentOffset + 1),
-          minOneMessage = true,
-          includeAbortedTxns = false).records match {
+          maxLength = 1,
+          isolation = FetchIsolation.LOG_END,
+          minOneMessage = true).records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
             val first = read.batches.iterator.next()
             require(first.lastOffset == currentOffset, "We should either read nothing or the message we asked for.")

@@ -24,4 +24,7 @@ public class BadRequestException extends ConnectRestException {
         super(Response.Status.BAD_REQUEST, message);
     }
 
+    public BadRequestException(String message, Throwable throwable) {
+        super(Response.Status.BAD_REQUEST, message, throwable);
+    }
 }

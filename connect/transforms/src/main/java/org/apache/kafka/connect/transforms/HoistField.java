@@ -26,7 +26,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public abstract class HoistField<R extends ConnectRecord<R>> implements Transformation<R> {
@@ -50,7 +50,7 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         fieldName = config.getString("field");
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
@@ -59,7 +59,9 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
         final Object value = operatingValue(record);
 
         if (schema == null) {
-            return newRecord(record, null, Collections.singletonMap(fieldName, value));
+            Map<String, Object> updatedValue = new HashMap<>();
+            updatedValue.put(fieldName, value);
+            return newRecord(record, null, updatedValue);
         } else {
             Schema updatedSchema = schemaUpdateCache.get(schema);
             if (updatedSchema == null) {

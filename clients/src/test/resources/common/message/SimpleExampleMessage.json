@@ -1,0 +1,66 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+{
+  "name": "SimpleExampleMessage",
+  "type": "header",
+  "validVersions": "0-2",
+  "flexibleVersions": "1+",
+  "fields": [
+    { "name": "processId", "versions": "1+", "type": "uuid" },
+    { "name": "myTaggedIntArray", "type": "[]int32",
+        "taggedVersions": "1+", "tag": 0 },
+    { "name": "myNullableString", "type": "string", "default": "null",
+        "nullableVersions": "1+", "taggedVersions": "1+", "tag": 1 },
+    { "name": "myInt16", "type": "int16", "default": "123",
+        "taggedVersions": "1+", "tag": 2 },
+    { "name": "myFloat64", "type": "float64", "default": "12.34",
+        "taggedVersions": "1+", "tag": 3 },
+    { "name": "myString", "type": "string", "taggedVersions": "1+", "tag": 4 },
+    { "name": "myBytes", "type": "bytes",
+        "nullableVersions": "1+", "taggedVersions": "1+", "tag": 5 },
+    { "name": "taggedUuid", "type": "uuid", "default": "H3KKO4NTRPaCWtEmm3vW7A",
+        "taggedVersions": "1+", "tag": 6 },
+    { "name": "taggedLong", "type": "int64", "default": "0xcafcacafcacafca",
+        "taggedVersions": "1+", "tag": 7 },
+    { "name": "zeroCopyByteBuffer", "versions": "1", "type": "bytes", "zeroCopy": true },
+    { "name": "nullableZeroCopyByteBuffer", "versions": "1", "nullableVersions": "0+",
+      "type": "bytes", "zeroCopy": true },
+    { "name": "myStruct", "type": "MyStruct", "versions": "2+", "about": "Test Struct field",
+      "fields": [
+        { "name": "structId", "type": "int32", "versions": "2+", "about": "Int field in struct"},
+        { "name": "arrayInStruct", "type": "[]StructArray", "versions": "2+",
+          "fields": [
+            { "name": "arrayFieldId", "type": "int32", "versions": "2+"}
+          ]}
+    ]},
+    { "name": "myTaggedStruct", "type": "TaggedStruct", "versions": "2+", "about": "Test Tagged Struct field",
+      "taggedVersions": "2+", "tag": 8,
+      "fields": [
+        { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}
+    ]},
+    { "name": "taggedLongFlexibleVersionSubset", "type": "int64", "default": "0", "ignorable": true,
+      "taggedVersions": "2+", "tag": 9 },
+    { "name": "myCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name": "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name": "myUint16", "type": "uint16", "versions": "1+", "default": "33000" },
+    { "name": "myUint32", "type": "uint32", "versions": "1+", "default": "1234567" }
+  ],
+  "commonStructs": [
+    { "name": "TestCommonStruct", "versions": "0+", "fields": [
+      { "name": "foo", "type": "int32", "default": "123", "versions": "0+" },
+      { "name": "bar", "type": "int32", "default": "123", "versions": "0+" }
+    ]}
+  ]
+}

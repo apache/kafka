@@ -17,122 +17,139 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
-
-import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.common.protocol.types.Type.INT16;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
+import java.util.Objects;
 
 /**
  * The header for a request in the Kafka protocol
  */
-public class RequestHeader extends AbstractRequestResponse {
-    private static final String API_KEY_FIELD_NAME = "api_key";
-    private static final String API_VERSION_FIELD_NAME = "api_version";
-    private static final String CLIENT_ID_FIELD_NAME = "client_id";
-    private static final String CORRELATION_ID_FIELD_NAME = "correlation_id";
+public class RequestHeader implements AbstractRequestResponse {
+    private final static int SIZE_NOT_INITIALIZED = -1;
+    private final RequestHeaderData data;
+    private final short headerVersion;
+    private int size = SIZE_NOT_INITIALIZED;
 
-    public static final Schema SCHEMA = new Schema(
-            new Field(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
-            new Field(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
-            new Field(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"),
-            new Field(CLIENT_ID_FIELD_NAME, NULLABLE_STRING, "A user specified identifier for the client making the request.", ""));
-
-    // Version 0 of the controlled shutdown API used a non-standard request header (the clientId is missing).
-    // This can be removed once we drop support for that version.
-    private static final Schema CONTROLLED_SHUTDOWN_V0_SCHEMA = new Schema(
-            new Field(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
-            new Field(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
-            new Field(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"));
-
-    private final ApiKeys apiKey;
-    private final short apiVersion;
-    private final String clientId;
-    private final int correlationId;
-
-    public RequestHeader(Struct struct) {
-        short apiKey = struct.getShort(API_KEY_FIELD_NAME);
-        if (!ApiKeys.hasId(apiKey))
-            throw new InvalidRequestException("Unknown API key " + apiKey);
-
-        this.apiKey = ApiKeys.forId(apiKey);
-        apiVersion = struct.getShort(API_VERSION_FIELD_NAME);
-
-        // only v0 of the controlled shutdown request is missing the clientId
-        if (struct.hasField(CLIENT_ID_FIELD_NAME))
-            clientId = struct.getString(CLIENT_ID_FIELD_NAME);
-        else
-            clientId = "";
-        correlationId = struct.getInt(CORRELATION_ID_FIELD_NAME);
+    public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
+        this(new RequestHeaderData().
+                setRequestApiKey(requestApiKey.id).
+                setRequestApiVersion(requestVersion).
+                setClientId(clientId).
+                setCorrelationId(correlationId),
+            requestApiKey.requestHeaderVersion(requestVersion));
     }
 
-    public RequestHeader(ApiKeys apiKey, short version, String clientId, int correlation) {
-        this.apiKey = requireNonNull(apiKey);
-        this.apiVersion = version;
-        this.clientId = clientId;
-        this.correlationId = correlation;
-    }
-
-    public Struct toStruct() {
-        Schema schema = schema(apiKey.id, apiVersion);
-        Struct struct = new Struct(schema);
-        struct.set(API_KEY_FIELD_NAME, apiKey.id);
-        struct.set(API_VERSION_FIELD_NAME, apiVersion);
-
-        // only v0 of the controlled shutdown request is missing the clientId
-        if (struct.hasField(CLIENT_ID_FIELD_NAME))
-            struct.set(CLIENT_ID_FIELD_NAME, clientId);
-        struct.set(CORRELATION_ID_FIELD_NAME, correlationId);
-        return struct;
+    public RequestHeader(RequestHeaderData data, short headerVersion) {
+        this.data = data;
+        this.headerVersion = headerVersion;
     }
 
     public ApiKeys apiKey() {
-        return apiKey;
+        return ApiKeys.forId(data.requestApiKey());
     }
 
     public short apiVersion() {
-        return apiVersion;
+        return data.requestApiVersion();
+    }
+
+    public short headerVersion() {
+        return headerVersion;
     }
 
     public String clientId() {
-        return clientId;
+        return data.clientId();
     }
 
     public int correlationId() {
-        return correlationId;
+        return data.correlationId();
+    }
+
+    public RequestHeaderData data() {
+        return data;
+    }
+
+    // Visible for testing.
+    void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
+        data.write(new ByteBufferAccessor(buffer), serializationCache, headerVersion);
+    }
+
+    /**
+     * Calculates the size of {@link RequestHeader} in bytes.
+     *
+     * This method to calculate size should be only when it is immediately followed by
+     * {@link #write(ByteBuffer, ObjectSerializationCache)} method call. In such cases, ObjectSerializationCache
+     * helps to avoid the serialization twice. In all other cases, {@link #size()} should be preferred instead.
+     *
+     * Calls to this method leads to calculation of size every time it is invoked. {@link #size()} should be preferred
+     * instead.
+     *
+     * Visible for testing.
+     */
+    int size(ObjectSerializationCache serializationCache) {
+        this.size = data.size(serializationCache, headerVersion);
+        return size;
+    }
+
+    /**
+     * Returns the size of {@link RequestHeader} in bytes.
+     *
+     * Calls to this method are idempotent and inexpensive since it returns the cached value of size after the first
+     * invocation.
+     */
+    public int size() {
+        if (this.size == SIZE_NOT_INITIALIZED) {
+            this.size = size(new ObjectSerializationCache());
+        }
+        return size;
     }
 
     public ResponseHeader toResponseHeader() {
-        return new ResponseHeader(correlationId);
+        return new ResponseHeader(data.correlationId(), apiKey().responseHeaderVersion(apiVersion()));
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
+        short apiKey = -1;
         try {
-            short apiKey = buffer.getShort();
+            // We derive the header version from the request api version, so we read that first.
+            // The request api version is part of `RequestHeaderData`, so we reset the buffer position after the read.
+            int bufferStartPositionForHeader = buffer.position();
+            apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
-            Schema schema = schema(apiKey, apiVersion);
-            buffer.rewind();
-            return new RequestHeader(schema.read(buffer));
-        } catch (InvalidRequestException e) {
-            throw e;
-        } catch (Throwable  ex) {
+            short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
+            buffer.position(bufferStartPositionForHeader);
+            final RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
+            // Due to a quirk in the protocol, client ID is marked as nullable.
+            // However, we treat a null client ID as equivalent to an empty client ID.
+            if (headerData.clientId() == null) {
+                headerData.setClientId("");
+            }
+            final RequestHeader header = new RequestHeader(headerData, headerVersion);
+            // Size of header is calculated by the shift in the position of buffer's start position during parsing.
+            // Prior to parsing, the buffer's start position points to header data and after the parsing operation
+            // the buffer's start position points to api message. For more information on how the buffer is
+            // constructed, see RequestUtils#serialize()
+            header.size = Math.max(buffer.position() - bufferStartPositionForHeader, 0);
+            return header;
+        } catch (UnsupportedVersionException e) {
+            throw new InvalidRequestException("Unknown API key " + apiKey, e);
+        } catch (Throwable ex) {
             throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKey is: " +
-                    buffer.getShort(0), ex);
+                    apiKey, ex);
         }
     }
 
     @Override
     public String toString() {
-        return "RequestHeader(apiKey=" + apiKey +
-                ", apiVersion=" + apiVersion +
-                ", clientId=" + clientId +
-                ", correlationId=" + correlationId +
+        return "RequestHeader(apiKey=" + apiKey() +
+                ", apiVersion=" + apiVersion() +
+                ", clientId=" + clientId() +
+                ", correlationId=" + correlationId() +
+                ", headerVersion=" + headerVersion +
                 ")";
     }
 
@@ -140,28 +157,13 @@ public class RequestHeader extends AbstractRequestResponse {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         RequestHeader that = (RequestHeader) o;
-        return apiKey == that.apiKey &&
-                apiVersion == that.apiVersion &&
-                correlationId == that.correlationId &&
-                (clientId == null ? that.clientId == null : clientId.equals(that.clientId));
+        return headerVersion == that.headerVersion &&
+            Objects.equals(data, that.data);
     }
 
     @Override
     public int hashCode() {
-        int result = apiKey.hashCode();
-        result = 31 * result + (int) apiVersion;
-        result = 31 * result + (clientId != null ? clientId.hashCode() : 0);
-        result = 31 * result + correlationId;
-        return result;
-    }
-
-    private static Schema schema(short apiKey, short version) {
-        if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN.id && version == 0)
-            // This will be removed once we remove support for v0 of ControlledShutdownRequest, which
-            // depends on a non-standard request header (it does not have a clientId)
-            return CONTROLLED_SHUTDOWN_V0_SCHEMA;
-        return SCHEMA;
+        return Objects.hash(data, headerVersion);
     }
 }

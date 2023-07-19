@@ -25,29 +25,53 @@ import java.util.Objects;
  *
  * @param <V>
  */
-public class ValueAndTimestamp<V> {
+public final class ValueAndTimestamp<V> {
     private final V value;
     private final long timestamp;
 
     private ValueAndTimestamp(final V value,
                               final long timestamp) {
-        Objects.requireNonNull(value);
         this.value = value;
         this.timestamp = timestamp;
     }
 
     /**
-     * Create a new {@link ValueAndTimestamp} instance if the provide {@code value} is not {@code null}.
+     * Create a new {@link ValueAndTimestamp} instance if the provided {@code value} is not {@code null}.
      *
      * @param value      the value
      * @param timestamp  the timestamp
      * @param <V> the type of the value
-     * @return a new {@link ValueAndTimestamp} instance if the provide {@code value} is not {@code null};
+     * @return a new {@link ValueAndTimestamp} instance if the provided {@code value} is not {@code null};
      *         otherwise {@code null} is returned
      */
     public static <V> ValueAndTimestamp<V> make(final V value,
                                                 final long timestamp) {
         return value == null ? null : new ValueAndTimestamp<>(value, timestamp);
+    }
+
+    /**
+     * Create a new {@link ValueAndTimestamp} instance. The provided {@code value} may be {@code null}.
+     *
+     * @param value      the value
+     * @param timestamp  the timestamp
+     * @param <V> the type of the value
+     * @return a new {@link ValueAndTimestamp} instance
+     */
+    public static <V> ValueAndTimestamp<V> makeAllowNullable(
+        final V value, final long timestamp) {
+        return new ValueAndTimestamp<>(value, timestamp);
+    }
+
+    /**
+     * Return the wrapped {@code value} of the given {@code valueAndTimestamp} parameter
+     * if the parameter is not {@code null}.
+     *
+     * @param valueAndTimestamp a {@link ValueAndTimestamp} instance; can be {@code null}
+     * @param <V> the type of the value
+     * @return the wrapped {@code value} of {@code valueAndTimestamp} if not {@code null}; otherwise {@code null}
+     */
+    public static <V> V getValueOrNull(final ValueAndTimestamp<V> valueAndTimestamp) {
+        return valueAndTimestamp == null ? null : valueAndTimestamp.value();
     }
 
     public V value() {

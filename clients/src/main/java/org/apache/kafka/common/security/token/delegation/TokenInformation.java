@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * A class representing a delegation token details.
@@ -29,17 +30,24 @@ import java.util.Collection;
 @InterfaceStability.Evolving
 public class TokenInformation {
 
-    private KafkaPrincipal owner;
-    private Collection<KafkaPrincipal> renewers;
-    private long issueTimestamp;
-    private long maxTimestamp;
+    private final KafkaPrincipal owner;
+    private final KafkaPrincipal tokenRequester;
+    private final Collection<KafkaPrincipal> renewers;
+    private final long issueTimestamp;
+    private final long maxTimestamp;
     private long expiryTimestamp;
-    private String tokenId;
+    private final String tokenId;
 
-    public TokenInformation(String tokenId, KafkaPrincipal owner, Collection<KafkaPrincipal> renewers,
-                            long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
+    public TokenInformation(String tokenId, KafkaPrincipal owner,
+                            Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
+        this(tokenId, owner, owner, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
+    }
+
+    public TokenInformation(String tokenId, KafkaPrincipal owner, KafkaPrincipal tokenRequester,
+                            Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
         this.tokenId = tokenId;
         this.owner = owner;
+        this.tokenRequester = tokenRequester;
         this.renewers = renewers;
         this.issueTimestamp =  issueTimestamp;
         this.maxTimestamp =  maxTimestamp;
@@ -48,6 +56,10 @@ public class TokenInformation {
 
     public KafkaPrincipal owner() {
         return owner;
+    }
+
+    public KafkaPrincipal tokenRequester() {
+        return tokenRequester;
     }
 
     public String ownerAsString() {
@@ -87,13 +99,14 @@ public class TokenInformation {
     }
 
     public boolean ownerOrRenewer(KafkaPrincipal principal) {
-        return owner.equals(principal) || renewers.contains(principal);
+        return owner.equals(principal) || tokenRequester.equals(principal) || renewers.contains(principal);
     }
 
     @Override
     public String toString() {
         return "TokenInformation{" +
             "owner=" + owner +
+            ", tokenRequester=" + tokenRequester +
             ", renewers=" + renewers +
             ", issueTimestamp=" + issueTimestamp +
             ", maxTimestamp=" + maxTimestamp +
@@ -113,28 +126,16 @@ public class TokenInformation {
 
         TokenInformation that = (TokenInformation) o;
 
-        if (issueTimestamp != that.issueTimestamp) {
-            return false;
-        }
-        if (maxTimestamp != that.maxTimestamp) {
-            return false;
-        }
-        if (owner != null ? !owner.equals(that.owner) : that.owner != null) {
-            return false;
-        }
-        if (renewers != null ? !renewers.equals(that.renewers) : that.renewers != null) {
-            return false;
-        }
-        return tokenId != null ? tokenId.equals(that.tokenId) : that.tokenId == null;
+        return issueTimestamp == that.issueTimestamp &&
+            maxTimestamp == that.maxTimestamp &&
+            Objects.equals(owner, that.owner) &&
+            Objects.equals(tokenRequester, that.tokenRequester) &&
+            Objects.equals(renewers, that.renewers) &&
+            Objects.equals(tokenId, that.tokenId);
     }
 
     @Override
     public int hashCode() {
-        int result = owner != null ? owner.hashCode() : 0;
-        result = 31 * result + (renewers != null ? renewers.hashCode() : 0);
-        result = 31 * result + (int) (issueTimestamp ^ (issueTimestamp >>> 32));
-        result = 31 * result + (int) (maxTimestamp ^ (maxTimestamp >>> 32));
-        result = 31 * result + (tokenId != null ? tokenId.hashCode() : 0);
-        return result;
+        return Objects.hash(owner, tokenRequester, renewers, issueTimestamp, maxTimestamp, expiryTimestamp, tokenId);
     }
 }

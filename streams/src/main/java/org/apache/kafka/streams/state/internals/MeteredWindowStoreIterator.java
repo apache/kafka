@@ -20,27 +20,28 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
+import java.util.function.Function;
 
 class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
 
     private final WindowStoreIterator<byte[]> iter;
     private final Sensor sensor;
     private final StreamsMetrics metrics;
-    private final StateSerdes<?, V> serdes;
+    private final Function<byte[], V> valueFrom;
     private final long startNs;
     private final Time time;
 
     MeteredWindowStoreIterator(final WindowStoreIterator<byte[]> iter,
                                final Sensor sensor,
                                final StreamsMetrics metrics,
-                               final StateSerdes<?, V> serdes,
+                               final Function<byte[], V> valueFrom,
                                final Time time) {
         this.iter = iter;
         this.sensor = sensor;
         this.metrics = metrics;
-        this.serdes = serdes;
+        this.valueFrom = valueFrom;
         this.startNs = time.nanoseconds();
         this.time = time;
     }
@@ -53,12 +54,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
     @Override
     public KeyValue<Long, V> next() {
         final KeyValue<Long, byte[]> next = iter.next();
-        return KeyValue.pair(next.key, serdes.valueFrom(next.value));
-    }
-
-    @Override
-    public void remove() {
-        iter.remove();
+        return KeyValue.pair(next.key, valueFrom.apply(next.value));
     }
 
     @Override
@@ -66,7 +62,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
         try {
             iter.close();
         } finally {
-            metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
+            sensor.record(time.nanoseconds() - startNs);
         }
     }
 

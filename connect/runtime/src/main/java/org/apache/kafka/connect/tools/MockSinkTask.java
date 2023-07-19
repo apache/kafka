@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.tools;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -60,17 +58,12 @@ public class MockSinkTask extends SinkTask {
     public void put(Collection<SinkRecord> records) {
         if (MockConnector.TASK_FAILURE.equals(mockMode)) {
             long now = System.currentTimeMillis();
-            if (now > startTimeMs + failureDelayMs) {
+            if (now - startTimeMs > failureDelayMs) {
                 log.debug("Triggering sink task failure");
                 throw new RuntimeException();
             }
             setTimeout();
         }
-    }
-
-    @Override
-    public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
-
     }
 
     @Override

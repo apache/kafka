@@ -18,15 +18,20 @@
 package org.apache.kafka.streams.tests;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class SystemTestUtilTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private final Map<String, String> expectedParsedMap = new TreeMap<>();
 
@@ -45,21 +50,21 @@ public class SystemTestUtilTest {
         assertEquals(sortedParsedMap, expectedParsedMap);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowExceptionOnNull() {
-        SystemTestUtil.parseConfigs(null);
+        assertThrows(NullPointerException.class, () -> SystemTestUtil.parseConfigs(null));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowExceptionIfNotCorrectKeyValueSeparator() {
         final String badString = "foo:bar,baz:boo";
-        SystemTestUtil.parseConfigs(badString);
+        assertThrows(IllegalStateException.class, () -> SystemTestUtil.parseConfigs(badString));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowExceptionIfNotCorrectKeyValuePairSeparator() {
         final String badString = "foo=bar;baz=boo";
-        SystemTestUtil.parseConfigs(badString);
+        assertThrows(IllegalStateException.class, () -> SystemTestUtil.parseConfigs(badString));
     }
 
     @Test

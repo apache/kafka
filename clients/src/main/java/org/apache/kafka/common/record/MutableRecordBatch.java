@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.CloseableIterator;
 
 /**
  * A mutable record batch is one that can be modified in place (without copying). This is used by the broker
@@ -33,7 +35,7 @@ public interface MutableRecordBatch extends RecordBatch {
     /**
      * Set the max timestamp for this batch. When using log append time, this effectively overrides the individual
      * timestamps of all the records contained in the batch. To avoid recompression, the record fields are not updated
-     * by this method, but clients ignore them if the timestamp time is log append time. Note that firstTimestamp is not
+     * by this method, but clients ignore them if the timestamp time is log append time. Note that baseTimestamp is not
      * updated by this method.
      *
      * This typically requires re-computation of the batch's CRC.
@@ -55,4 +57,12 @@ public interface MutableRecordBatch extends RecordBatch {
      */
     void writeTo(ByteBufferOutputStream outputStream);
 
+    /**
+     * Return an iterator which skips parsing key, value and headers from the record stream, and therefore the resulted
+     * {@code org.apache.kafka.common.record.Record}'s key and value fields would be empty. This iterator is used
+     * when the read record's key and value are not needed and hence can save some byte buffer allocating / GC overhead.
+     *
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier);
 }

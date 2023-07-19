@@ -17,53 +17,23 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class FindCoordinatorResponse extends AbstractResponse {
-    private static final String COORDINATOR_KEY_NAME = "coordinator";
-
-    // coordinator level field names
-    private static final String NODE_ID_KEY_NAME = "node_id";
-    private static final String HOST_KEY_NAME = "host";
-    private static final String PORT_KEY_NAME = "port";
-
-    private static final Schema FIND_COORDINATOR_BROKER_V0 = new Schema(
-            new Field(NODE_ID_KEY_NAME, INT32, "The broker id."),
-            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
-
-    private static final Schema FIND_COORDINATOR_RESPONSE_V0 = new Schema(
-            ERROR_CODE,
-            new Field(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator " +
-                    "for a consumer group."));
-
-    private static final Schema FIND_COORDINATOR_RESPONSE_V1 = new Schema(
-            THROTTLE_TIME_MS,
-            ERROR_CODE,
-            ERROR_MESSAGE,
-            new Field(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator"));
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema FIND_COORDINATOR_RESPONSE_V2 = FIND_COORDINATOR_RESPONSE_V1;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1, FIND_COORDINATOR_RESPONSE_V2};
-    }
 
     /**
      * Possible error codes:
@@ -75,88 +45,136 @@ public class FindCoordinatorResponse extends AbstractResponse {
      * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
      */
 
+    private final FindCoordinatorResponseData data;
 
-    private final int throttleTimeMs;
-    private final String errorMessage;
-    private final Errors error;
-    private final Node node;
-
-    public FindCoordinatorResponse(Errors error, Node node) {
-        this(DEFAULT_THROTTLE_TIME, error, node);
+    public FindCoordinatorResponse(FindCoordinatorResponseData data) {
+        super(ApiKeys.FIND_COORDINATOR);
+        this.data = data;
     }
 
-    public FindCoordinatorResponse(int throttleTimeMs, Errors error, Node node) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
-        this.node = node;
-        this.errorMessage = null;
+    public Optional<Coordinator> coordinatorByKey(String key) {
+        Objects.requireNonNull(key);
+        if (this.data.coordinators().isEmpty()) {
+            // version <= 3
+            return Optional.of(new Coordinator()
+                    .setErrorCode(data.errorCode())
+                    .setErrorMessage(data.errorMessage())
+                    .setHost(data.host())
+                    .setPort(data.port())
+                    .setNodeId(data.nodeId())
+                    .setKey(key));
+        }
+        // version >= 4
+        return data.coordinators().stream().filter(c -> c.key().equals(key)).findFirst();
     }
 
-    public FindCoordinatorResponse(Struct struct) {
-        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
-        error = Errors.forCode(struct.get(ERROR_CODE));
-        errorMessage = struct.getOrElse(ERROR_MESSAGE, null);
+    @Override
+    public FindCoordinatorResponseData data() {
+        return data;
+    }
 
-        Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
-        int nodeId = broker.getInt(NODE_ID_KEY_NAME);
-        String host = broker.getString(HOST_KEY_NAME);
-        int port = broker.getInt(PORT_KEY_NAME);
-        node = new Node(nodeId, host, port);
+    public Node node() {
+        return new Node(data.nodeId(), data.host(), data.port());
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
+    }
+
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
     }
 
     public boolean hasError() {
-        return this.error != Errors.NONE;
+        return error() != Errors.NONE;
     }
 
     public Errors error() {
-        return error;
+        return Errors.forCode(data.errorCode());
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
-    }
-
-    public Node node() {
-        return node;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.responseSchema(version));
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-        struct.set(ERROR_CODE, error.code());
-        struct.setIfExists(ERROR_MESSAGE, errorMessage);
-
-        Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
-        coordinator.set(NODE_ID_KEY_NAME, node.id());
-        coordinator.set(HOST_KEY_NAME, node.host());
-        coordinator.set(PORT_KEY_NAME, node.port());
-        struct.set(COORDINATOR_KEY_NAME, coordinator);
-        return struct;
+        if (!data.coordinators().isEmpty()) {
+            Map<Errors, Integer> errorCounts = new HashMap<>();
+            for (Coordinator coordinator : data.coordinators()) {
+                updateErrorCounts(errorCounts, Errors.forCode(coordinator.errorCode()));
+            }
+            return errorCounts;
+        } else {
+            return errorCounts(error());
+        }
     }
 
     public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer));
+        return new FindCoordinatorResponse(new FindCoordinatorResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
     public String toString() {
-        return "FindCoordinatorResponse(" +
-                "throttleTimeMs=" + throttleTimeMs +
-                ", errorMessage='" + errorMessage + '\'' +
-                ", error=" + error +
-                ", node=" + node +
-                ')';
+        return data.toString();
     }
 
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 2;
     }
+
+    public List<FindCoordinatorResponseData.Coordinator> coordinators() {
+        if (!data.coordinators().isEmpty())
+            return data.coordinators();
+        else {
+            FindCoordinatorResponseData.Coordinator coordinator = new Coordinator()
+                    .setErrorCode(data.errorCode())
+                    .setErrorMessage(data.errorMessage())
+                    .setKey(null)
+                    .setNodeId(data.nodeId())
+                    .setHost(data.host())
+                    .setPort(data.port());
+            return Collections.singletonList(coordinator);
+        }
+    }
+
+    public static FindCoordinatorResponse prepareOldResponse(Errors error, Node node) {
+        FindCoordinatorResponseData data = new FindCoordinatorResponseData();
+        data.setErrorCode(error.code())
+            .setErrorMessage(error.message())
+            .setNodeId(node.id())
+            .setHost(node.host())
+            .setPort(node.port());
+        return new FindCoordinatorResponse(data);
+    }
+
+    public static FindCoordinatorResponse prepareResponse(Errors error, String key, Node node) {
+        FindCoordinatorResponseData data = new FindCoordinatorResponseData();
+        data.setCoordinators(Collections.singletonList(
+                new FindCoordinatorResponseData.Coordinator()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setKey(key)
+                .setHost(node.host())
+                .setPort(node.port())
+                .setNodeId(node.id())));
+        return new FindCoordinatorResponse(data);
+    }
+
+    public static FindCoordinatorResponse prepareErrorResponse(Errors error, List<String> keys) {
+        FindCoordinatorResponseData data = new FindCoordinatorResponseData();
+        List<FindCoordinatorResponseData.Coordinator> coordinators = new ArrayList<>(keys.size());
+        for (String key : keys) {
+            FindCoordinatorResponseData.Coordinator coordinator = new FindCoordinatorResponseData.Coordinator()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setKey(key)
+                .setHost(Node.noNode().host())
+                .setPort(Node.noNode().port())
+                .setNodeId(Node.noNode().id());
+            coordinators.add(coordinator);
+        }
+        data.setCoordinators(coordinators);
+        return new FindCoordinatorResponse(data);
+    }
+
 }

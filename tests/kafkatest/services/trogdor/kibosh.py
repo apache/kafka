@@ -45,7 +45,7 @@ class KiboshService(Service):
         :param persist:             Where the log files and pid files will be created.
         """
         Service.__init__(self, context, num_nodes=0)
-        if (len(nodes) == 0):
+        if not nodes:
             raise RuntimeError("You must supply at least one node to run the service on.")
         for node in nodes:
             self.nodes.append(node)
@@ -97,11 +97,11 @@ class KiboshService(Service):
                                                         (self.pidfile_path, self.pidfile_path), allow_fail=True)]
 
     def wait_node(self, node, timeout_sec=None):
-        return len(self.pids(node)) == 0
+        return not self.pids(node)
 
     def kibosh_process_running(self, node):
         pids = self.pids(node)
-        if len(pids) == 0:
+        if not pids:
             return True
         return False
 
@@ -133,9 +133,12 @@ class KiboshService(Service):
         :param node:        The node.
         :param spec:        An array of FaultSpec objects describing the faults.
         """
-        fault_array = [spec.kibosh_message for spec in specs]
-        obj = { 'faults': fault_array }
-        obj_json = json.dumps(obj)
+        if not specs:
+            obj_json = "{}"
+        else:
+            fault_array = [spec.kibosh_message for spec in specs]
+            obj = { 'faults': fault_array }
+            obj_json = json.dumps(obj)
         node.account.create_file(self.control_path, obj_json)
 
     def get_fault_json(self, node):

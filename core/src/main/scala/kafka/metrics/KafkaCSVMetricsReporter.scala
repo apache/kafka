@@ -20,7 +20,6 @@
 
 package kafka.metrics
 
-import com.yammer.metrics.Metrics
 import java.io.File
 import java.nio.file.Files
 
@@ -29,6 +28,7 @@ import java.util.concurrent.TimeUnit
 
 import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
 
@@ -36,8 +36,8 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
                               with KafkaCSVMetricsReporterMBean
                               with Logging {
 
-  private var csvDir: File = null
-  private var underlying: CsvReporter = null
+  private var csvDir: File = _
+  private var underlying: CsvReporter = _
   private var running = false
   private var initialized = false
 
@@ -45,14 +45,14 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   override def getMBeanName = "kafka:type=kafka.metrics.KafkaCSVMetricsReporter"
 
 
-  override def init(props: VerifiableProperties) {
+  override def init(props: VerifiableProperties): Unit = {
     synchronized {
       if (!initialized) {
         val metricsConfig = new KafkaMetricsConfig(props)
         csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
         Utils.delete(csvDir)
-        Files.createDirectories(csvDir.toPath())
-        underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
+        Files.createDirectories(csvDir.toPath)
+        underlying = new CsvReporter(KafkaYammerMetrics.defaultRegistry(), csvDir)
         if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
           initialized = true
           startReporter(metricsConfig.pollingIntervalSecs)
@@ -62,7 +62,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   }
 
 
-  override def startReporter(pollingPeriodSecs: Long) {
+  override def startReporter(pollingPeriodSecs: Long): Unit = {
     synchronized {
       if (initialized && !running) {
         underlying.start(pollingPeriodSecs, TimeUnit.SECONDS)
@@ -73,13 +73,13 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   }
 
 
-  override def stopReporter() {
+  override def stopReporter(): Unit = {
     synchronized {
       if (initialized && running) {
         underlying.shutdown()
         running = false
         info("Stopped Kafka CSV metrics reporter")
-        underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
+        underlying = new CsvReporter(KafkaYammerMetrics.defaultRegistry(), csvDir)
       }
     }
   }

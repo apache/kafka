@@ -20,10 +20,9 @@ package kafka.coordinator.group
 import java.util
 
 import kafka.utils.nonthreadsafe
-import org.apache.kafka.common.protocol.Errors
-
 
 case class MemberSummary(memberId: String,
+                         groupInstanceId: Option[String],
                          clientId: String,
                          clientHost: String,
                          metadata: Array[Byte],
@@ -54,23 +53,31 @@ private object MemberMetadata {
  *                            and the group transitions to stable
  */
 @nonthreadsafe
-private[group] class MemberMetadata(val memberId: String,
-                                    val groupId: String,
+private[group] class MemberMetadata(var memberId: String,
+                                    val groupInstanceId: Option[String],
                                     val clientId: String,
                                     val clientHost: String,
-                                    val rebalanceTimeoutMs: Int,
-                                    val sessionTimeoutMs: Int,
+                                    var rebalanceTimeoutMs: Int,
+                                    var sessionTimeoutMs: Int,
                                     val protocolType: String,
-                                    var supportedProtocols: List[(String, Array[Byte])]) {
+                                    var supportedProtocols: List[(String, Array[Byte])],
+                                    var assignment: Array[Byte] = Array.empty[Byte]) {
 
-  var assignment: Array[Byte] = Array.empty[Byte]
-  var awaitingJoinCallback: JoinGroupResult => Unit = null
-  var awaitingSyncCallback: (Array[Byte], Errors) => Unit = null
-  var latestHeartbeat: Long = -1
-  var isLeaving: Boolean = false
+  var awaitingJoinCallback: JoinGroupResult => Unit = _
+  var awaitingSyncCallback: SyncGroupResult => Unit = _
   var isNew: Boolean = false
 
-  def isAwaitingJoin = awaitingJoinCallback != null
+  def isStaticMember: Boolean = groupInstanceId.isDefined
+
+  // This variable is used to track heartbeat completion through the delayed
+  // heartbeat purgatory. When scheduling a new heartbeat expiration, we set
+  // this value to `false`. Upon receiving the heartbeat (or any other event
+  // indicating the liveness of the client), we set it to `true` so that the
+  // delayed heartbeat can be completed.
+  var heartbeatSatisfied: Boolean = false
+
+  def isAwaitingJoin: Boolean = awaitingJoinCallback != null
+  def isAwaitingSync: Boolean = awaitingSyncCallback != null
 
   /**
    * Get metadata corresponding to the provided protocol.
@@ -83,11 +90,17 @@ private[group] class MemberMetadata(val memberId: String,
     }
   }
 
-  def shouldKeepAlive(deadlineMs: Long): Boolean = {
-    if (isAwaitingJoin)
-      !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
-    else awaitingSyncCallback != null ||
-      latestHeartbeat + sessionTimeoutMs > deadlineMs
+  def hasSatisfiedHeartbeat: Boolean = {
+    if (isNew) {
+      // New members can be expired while awaiting join, so we have to check this first
+      heartbeatSatisfied
+    } else if (isAwaitingJoin || isAwaitingSync) {
+      // Members that are awaiting a rebalance automatically satisfy expected heartbeats
+      true
+    } else {
+      // Otherwise we require the next heartbeat
+      heartbeatSatisfied
+    }
   }
 
   /**
@@ -107,11 +120,11 @@ private[group] class MemberMetadata(val memberId: String,
   }
 
   def summary(protocol: String): MemberSummary = {
-    MemberSummary(memberId, clientId, clientHost, metadata(protocol), assignment)
+    MemberSummary(memberId, groupInstanceId, clientId, clientHost, metadata(protocol), assignment)
   }
 
   def summaryNoMetadata(): MemberSummary = {
-    MemberSummary(memberId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
+    MemberSummary(memberId, groupInstanceId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
   }
 
   /**
@@ -129,12 +142,12 @@ private[group] class MemberMetadata(val memberId: String,
   override def toString: String = {
     "MemberMetadata(" +
       s"memberId=$memberId, " +
+      s"groupInstanceId=$groupInstanceId, " +
       s"clientId=$clientId, " +
       s"clientHost=$clientHost, " +
       s"sessionTimeoutMs=$sessionTimeoutMs, " +
       s"rebalanceTimeoutMs=$rebalanceTimeoutMs, " +
-      s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
+      s"supportedProtocols=${supportedProtocols.map(_._1)}" +
       ")"
   }
-
 }

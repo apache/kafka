@@ -20,8 +20,8 @@ import java.nio.charset.StandardCharsets
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class ReassignPartitionsZNodeTest {
 
@@ -34,23 +34,22 @@ class ReassignPartitionsZNodeTest {
   private val reassignmentJson = """{"version":1,"partitions":[{"topic":"foo","partition":0,"replicas":[1,2]}]}"""
 
   @Test
-  def testEncode() {
+  def testEncode(): Unit = {
     val encodedJsonString = new String(ReassignPartitionsZNode.encode(reassignPartitionData), StandardCharsets.UTF_8)
     assertEquals(reassignmentJson, encodedJsonString)
   }
 
   @Test
-  def testDecodeInvalidJson() {
+  def testDecodeInvalidJson(): Unit = {
     val result = ReassignPartitionsZNode.decode("invalid json".getBytes)
-    assertTrue(result.isLeft)
-    assertTrue(result.left.get.isInstanceOf[JsonProcessingException])
+    val exception = result.left.getOrElse(throw new AssertionError(s"decode should have failed, result $result"))
+    assertTrue(exception.isInstanceOf[JsonProcessingException])
   }
 
   @Test
-  def testDecodeValidJson() {
+  def testDecodeValidJson(): Unit = {
     val result = ReassignPartitionsZNode.decode(reassignmentJson.getBytes)
-    assertTrue(result.isRight)
-    val assignmentMap = result.right.get
-    assertEquals(Seq(replica1, replica2), assignmentMap(new TopicPartition(topic, partition1)))
+    val replicas = result.map(assignmentMap => assignmentMap(new TopicPartition(topic, partition1)))
+    assertEquals(Right(Seq(replica1, replica2)), replicas)
   }
 }

@@ -18,27 +18,35 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
+import org.apache.kafka.streams.processor.internals.assignment.LegacySubscriptionInfoSerde;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.state.HostInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -47,17 +55,24 @@ import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
 
 public class StreamsUpgradeTest {
 
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsUpgradeTest requires one argument (properties-file) but no provided: ");
@@ -69,37 +84,63 @@ public class StreamsUpgradeTest {
         System.out.println("StreamsTest instance started (StreamsUpgradeTest trunk)");
         System.out.println("props=" + streamsProperties);
 
+        final KafkaStreams streams = buildStreams(streamsProperties);
+        streams.start();
+
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
+            System.out.println("closing Kafka Streams instance");
+            System.out.flush();
+            streams.close();
+            System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
+            System.out.flush();
+        });
+    }
+
+    public static KafkaStreams buildStreams(final Properties streamsProperties) {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream dataStream = builder.stream("data");
+        final KTable<String, Integer> dataTable = builder.table(
+            "data", Consumed.with(stringSerde, intSerde));
+        final KStream<String, Integer> dataStream = dataTable.toStream();
         dataStream.process(SmokeTestUtil.printProcessorSupplier("data"));
         dataStream.to("echo");
 
+        final boolean runFkJoin = Boolean.parseBoolean(streamsProperties.getProperty(
+            "test.run_fk_join",
+            "false"));
+        if (runFkJoin) {
+            try {
+                final KTable<Integer, String> fkTable = builder.table(
+                    "fk", Consumed.with(intSerde, stringSerde));
+                buildFKTable(dataStream, fkTable);
+            } catch (final Exception e) {
+                System.err.println("Caught " + e.getMessage());
+            }
+        }
+
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
 
         final KafkaClientSupplier kafkaClientSupplier;
         if (streamsProperties.containsKey("test.future.metadata")) {
-            streamsProperties.remove("test.future.metadata");
             kafkaClientSupplier = new FutureKafkaClientSupplier();
         } else {
             kafkaClientSupplier = new DefaultKafkaClientSupplier();
         }
         config.putAll(streamsProperties);
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), config, kafkaClientSupplier);
-        streams.start();
+        return new KafkaStreams(builder.build(), config, kafkaClientSupplier);
+    }
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                System.out.println("closing Kafka Streams instance");
-                System.out.flush();
-                streams.close();
-                System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
-                System.out.flush();
-            }
-        });
+    private static void buildFKTable(final KStream<String, Integer> primaryTable,
+                                     final KTable<Integer, String> otherTable) {
+        final KStream<String, String> kStream = primaryTable.toTable()
+            .join(otherTable, v -> v, (k0, v0) -> v0)
+            .toStream();
+        kStream.process(SmokeTestUtil.printProcessorSupplier("fk"));
+        kStream.to("fk-result", Produced.with(stringSerde, stringSerde));
     }
 
     private static class FutureKafkaClientSupplier extends DefaultKafkaClientSupplier {
@@ -111,39 +152,69 @@ public class StreamsUpgradeTest {
     }
 
     public static class FutureStreamsPartitionAssignor extends StreamsPartitionAssignor {
+        private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("t1", "v1"), mkEntry("t2", "v2"));
+        private final Logger log = LoggerFactory.getLogger(FutureStreamsPartitionAssignor.class);
+
+        private AtomicInteger usedSubscriptionMetadataVersionPeek;
+        private AtomicLong nextScheduledRebalanceMs;
 
         public FutureStreamsPartitionAssignor() {
-            usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1;
+            usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION + 1;
         }
 
         @Override
-        public Subscription subscription(final Set<String> topics) {
+        public void configure(final Map<String, ?> configs) {
+            final Object o = configs.get("test.future.metadata");
+            if (o instanceof AtomicInteger) {
+                usedSubscriptionMetadataVersionPeek = (AtomicInteger) o;
+            } else {
+                // will not be used, just adding a dummy container for simpler code paths
+                usedSubscriptionMetadataVersionPeek = new AtomicInteger();
+            }
+            configs.remove("test.future.metadata");
+            nextScheduledRebalanceMs = new AssignorConfiguration(configs).referenceContainer().nextScheduledRebalanceMs;
+
+            super.configure(configs);
+        }
+
+        @Override
+        public ByteBuffer subscriptionUserData(final Set<String> topics) {
             // Adds the following information to subscription
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
             // 3. Task ids of valid local states on the client's state directory.
-
-            final TaskManager taskManager = taskManger();
-            final Set<TaskId> previousActiveTasks = taskManager.prevActiveTaskIds();
-            final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
-            standbyTasks.removeAll(previousActiveTasks);
-            final FutureSubscriptionInfo data = new FutureSubscriptionInfo(
-                usedSubscriptionMetadataVersion,
-                SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1,
-                taskManager.processId(),
-                previousActiveTasks,
-                standbyTasks,
-                userEndPoint());
-
-            taskManager.updateSubscriptionsFromMetadata(topics);
-
-            return new Subscription(new ArrayList<>(topics), data.encode());
+            final TaskManager taskManager = taskManager();
+            handleRebalanceStart(topics);
+            byte uniqueField = 0;
+            if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
+                uniqueField++;
+                return new SubscriptionInfo(
+                    usedSubscriptionMetadataVersion,
+                    LATEST_SUPPORTED_VERSION + 1,
+                    taskManager.processId(),
+                    userEndPoint(),
+                    taskManager.getTaskOffsetSums(),
+                    uniqueField,
+                    0,
+                    CLIENT_TAGS
+                ).encode();
+            } else {
+                return new FutureSubscriptionInfo(
+                    usedSubscriptionMetadataVersion,
+                    taskManager.processId(),
+                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
+                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
+                    userEndPoint())
+                    .encode();
+            }
         }
 
         @Override
-        public void onAssignment(final PartitionAssignor.Assignment assignment) {
+        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment,
+                                 final ConsumerGroupMetadata metadata) {
             try {
-                super.onAssignment(assignment);
+                super.onAssignment(assignment, metadata);
+                usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
                 return;
             } catch (final TaskAssignmentException cannotProcessFutureVersion) {
                 // continue
@@ -159,43 +230,46 @@ public class StreamsUpgradeTest {
                 throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
             }
 
-            if (usedVersion > AssignmentInfo.LATEST_SUPPORTED_VERSION + 1) {
+            if (usedVersion > LATEST_SUPPORTED_VERSION + 1) {
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                    + "; latest supported version: " + AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                                                    + "; latest supported version: " + LATEST_SUPPORTED_VERSION + 1);
             }
 
             final AssignmentInfo info = AssignmentInfo.decode(
-                assignment.userData().putInt(0, AssignmentInfo.LATEST_SUPPORTED_VERSION));
+                assignment.userData().putInt(0, LATEST_SUPPORTED_VERSION));
+
+            if (maybeUpdateSubscriptionVersion(usedVersion, info.commonlySupportedVersion())) {
+                log.info("Requested to schedule immediate rebalance due to version probing.");
+                nextScheduledRebalanceMs.set(0L);
+                usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
+            }
 
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
-            Collections.sort(partitions, PARTITION_COMPARATOR);
+            partitions.sort(PARTITION_COMPARATOR);
 
-            // version 1 field
-            final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-            // version 2 fields
-            final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
-            final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
+            final Map<TaskId, Set<TopicPartition>> activeTasks = getActiveTasks(partitions, info);
 
-            processLatestVersionAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-            partitionsByHost = info.partitionsByHost();
-
-            final TaskManager taskManager = taskManger();
-            taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-            taskManager.setPartitionsByHostState(partitionsByHost);
-            taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
-            taskManager.updateSubscriptionsFromAssignment(partitions);
+            final TaskManager taskManager = taskManager();
+            taskManager.handleAssignment(activeTasks, info.standbyTasks());
+            usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
         }
 
         @Override
-        public Map<String, Assignment> assign(final Cluster metadata,
-                                              final Map<String, Subscription> subscriptions) {
+        public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscription) {
+            final Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
+            final Set<Integer> supportedVersions = new HashSet<>();
+            for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
+                final Subscription subscription = entry.getValue();
+                final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+                supportedVersions.add(info.latestSupportedVersion());
+            }
             Map<String, Assignment> assignment = null;
 
             final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
             for (final Subscription subscription : subscriptions.values()) {
                 final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
-                if (info.version() < SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1) {
-                    assignment = super.assign(metadata, subscriptions);
+                if (info.version() < LATEST_SUPPORTED_VERSION + 1) {
+                    assignment = super.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
                     break;
                 }
             }
@@ -203,27 +277,33 @@ public class StreamsUpgradeTest {
             boolean bumpUsedVersion = false;
             final boolean bumpSupportedVersion;
             if (assignment != null) {
-                bumpSupportedVersion = supportedVersions.size() == 1 && supportedVersions.iterator().next() == SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1;
+                bumpSupportedVersion = supportedVersions.size() == 1 && supportedVersions.iterator().next() == LATEST_SUPPORTED_VERSION + 1;
             } else {
                 for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
                     final Subscription subscription = entry.getValue();
 
                     final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData()
-                        .putInt(0, SubscriptionInfo.LATEST_SUPPORTED_VERSION)
-                        .putInt(4, SubscriptionInfo.LATEST_SUPPORTED_VERSION));
+                        .putInt(0, LATEST_SUPPORTED_VERSION)
+                        .putInt(4, LATEST_SUPPORTED_VERSION));
 
                     downgradedSubscriptions.put(
                         entry.getKey(),
                         new Subscription(
                             subscription.topics(),
                             new SubscriptionInfo(
+                                LATEST_SUPPORTED_VERSION,
+                                LATEST_SUPPORTED_VERSION,
                                 info.processId(),
-                                info.prevTasks(),
-                                info.standbyTasks(),
-                                info.userEndPoint())
-                                .encode()));
+                                info.userEndPoint(),
+                                taskManager().getTaskOffsetSums(),
+                                (byte) 0,
+                                0,
+                                CLIENT_TAGS
+                            ).encode(),
+                            subscription.ownedPartitions()
+                        ));
                 }
-                assignment = super.assign(metadata, downgradedSubscriptions);
+                assignment = super.assign(metadata, new GroupSubscription(downgradedSubscriptions)).groupAssignment();
                 bumpUsedVersion = true;
                 bumpSupportedVersion = true;
             }
@@ -242,50 +322,58 @@ public class StreamsUpgradeTest {
                             .encode()));
             }
 
-            return newAssignment;
+            return new GroupAssignment(newAssignment);
         }
     }
 
-    private static class FutureSubscriptionInfo extends SubscriptionInfo {
+    private static class FutureSubscriptionInfo {
+        private final int version;
+        private final UUID processId;
+        private final Set<TaskId> activeTasks;
+        private final Set<TaskId> standbyTasks;
+        private final String userEndPoint;
+
         // for testing only; don't apply version checks
         FutureSubscriptionInfo(final int version,
-                               final int latestSupportedVersion,
                                final UUID processId,
-                               final Set<TaskId> prevTasks,
+                               final Set<TaskId> activeTasks,
                                final Set<TaskId> standbyTasks,
                                final String userEndPoint) {
-            super(version, latestSupportedVersion, processId, prevTasks, standbyTasks, userEndPoint);
-        }
-
-        public ByteBuffer encode() {
-            if (version() <= SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
-                final ByteBuffer buf = super.encode();
-                // super.encode() always encodes `LATEST_SUPPORTED_VERSION` as "latest supported version"
-                // need to update to future version
-                buf.putInt(4, latestSupportedVersion());
-                return buf;
+            this.version = version;
+            this.processId = processId;
+            this.activeTasks = activeTasks;
+            this.standbyTasks = standbyTasks;
+            this.userEndPoint = userEndPoint;
+            if (version <= LATEST_SUPPORTED_VERSION) {
+                throw new IllegalArgumentException("this class can't be used with version " + version);
             }
+        }
 
-            final ByteBuffer buf = encodeFutureVersion();
+        private ByteBuffer encode() {
+            final byte[] endPointBytes = LegacySubscriptionInfoSerde.prepareUserEndPoint(userEndPoint);
+
+            final ByteBuffer buf = ByteBuffer.allocate(
+                4 + // used version
+                4 + // latest supported version version
+                16 + // client ID
+                4 + activeTasks.size() * 8 +   // length + active tasks
+                4 + standbyTasks.size() * 8 +  // length + standby tasks
+                4 + endPointBytes.length +      // length + endpoint
+                4 + //uniqueField
+                4 //assignment error code
+            );
+
+            buf.putInt(version); // used version
+            buf.putInt(version); // supported version
+            LegacySubscriptionInfoSerde.encodeClientUUID(buf, processId);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, activeTasks, version);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks, version);
+            LegacySubscriptionInfoSerde.encodeUserEndPoint(buf, endPointBytes);
+
             buf.rewind();
-            return buf;
-        }
-
-        private ByteBuffer encodeFutureVersion() {
-            final byte[] endPointBytes = prepareUserEndPoint();
-
-            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
-
-            buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
-            buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version
-            encodeClientUUID(buf);
-            encodeTasks(buf, prevTasks());
-            encodeTasks(buf, standbyTasks());
-            encodeUserEndPoint(buf, endPointBytes);
 
             return buf;
         }
-
     }
 
     private static class FutureAssignmentInfo extends AssignmentInfo {
@@ -296,6 +384,7 @@ public class StreamsUpgradeTest {
         private FutureAssignmentInfo(final boolean bumpUsedVersion,
                                      final boolean bumpSupportedVersion,
                                      final ByteBuffer bytes) {
+            super(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION);
             this.bumpUsedVersion = bumpUsedVersion;
             this.bumpSupportedVersion = bumpSupportedVersion;
             originalUserMetadata = bytes;
@@ -310,13 +399,13 @@ public class StreamsUpgradeTest {
             try (final DataOutputStream out = new DataOutputStream(baos)) {
                 if (bumpUsedVersion) {
                     originalUserMetadata.getInt(); // discard original used version
-                    out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                    out.writeInt(LATEST_SUPPORTED_VERSION + 1);
                 } else {
                     out.writeInt(originalUserMetadata.getInt());
                 }
                 if (bumpSupportedVersion) {
                     originalUserMetadata.getInt(); // discard original supported version
-                    out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                    out.writeInt(LATEST_SUPPORTED_VERSION + 1);
                 }
 
                 try {

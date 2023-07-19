@@ -37,7 +37,7 @@ public abstract class KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> 
         final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
         Collections.addAll(stores, storeNames1);
         Collections.addAll(stores, storeNames2);
-        return stores.toArray(new String[stores.size()]);
+        return stores.toArray(new String[0]);
     }
 
 }

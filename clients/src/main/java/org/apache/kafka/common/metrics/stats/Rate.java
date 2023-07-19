@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
+import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
 
 /**
  * The rate of the given quantity. By default this is the total observed over a set of samples from a sampled statistic
@@ -40,7 +40,7 @@ public class Rate implements MeasurableStat {
     }
 
     public Rate(TimeUnit unit) {
-        this(unit, new SampledTotal());
+        this(unit, new WindowedSum());
     }
 
     public Rate(SampledStat stat) {
@@ -64,7 +64,7 @@ public class Rate implements MeasurableStat {
     @Override
     public double measure(MetricConfig config, long now) {
         double value = stat.measure(config, now);
-        return value / convert(windowSize(config, now));
+        return value / convert(windowSize(config, now), unit);
     }
 
     public long windowSize(MetricConfig config, long now) {
@@ -91,48 +91,17 @@ public class Rate implements MeasurableStat {
         if (numFullWindows < minFullWindows)
             totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
 
-        return totalElapsedTimeMs;
+        // If window size is being calculated at the exact beginning of the window with no prior samples, the window size
+        // will result in a value of 0. Calculation of rate over a window is size 0 is undefined, hence, we assume the
+        // minimum window size to be at least 1ms.
+        return Math.max(totalElapsedTimeMs, 1);
     }
 
-    private double convert(long timeMs) {
-        switch (unit) {
-            case NANOSECONDS:
-                return timeMs * 1000.0 * 1000.0;
-            case MICROSECONDS:
-                return timeMs * 1000.0;
-            case MILLISECONDS:
-                return timeMs;
-            case SECONDS:
-                return timeMs / 1000.0;
-            case MINUTES:
-                return timeMs / (60.0 * 1000.0);
-            case HOURS:
-                return timeMs / (60.0 * 60.0 * 1000.0);
-            case DAYS:
-                return timeMs / (24.0 * 60.0 * 60.0 * 1000.0);
-            default:
-                throw new IllegalStateException("Unknown unit: " + unit);
-        }
-    }
-
-    public static class SampledTotal extends SampledStat {
-
-        public SampledTotal() {
-            super(0.0d);
-        }
-
-        @Override
-        protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
-            sample.value += value;
-        }
-
-        @Override
-        public double combine(List<Sample> samples, MetricConfig config, long now) {
-            double total = 0.0;
-            for (Sample sample : samples)
-                total += sample.value;
-            return total;
-        }
-
+    @Override
+    public String toString() {
+        return "Rate(" +
+            "unit=" + unit +
+            ", stat=" + stat +
+            ')';
     }
 }

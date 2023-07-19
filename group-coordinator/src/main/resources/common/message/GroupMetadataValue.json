@@ -1,0 +1,48 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "type": "data",
+  "name": "GroupMetadataValue",
+  // Version 4 is the first flexible version.
+  // KIP-915: bumping the version will no longer make this record backward compatible.
+  // We suggest to add/remove only tagged fields to maintain backward compatibility.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
+  "fields": [
+    { "name": "protocolType", "versions": "0+", "type": "string"},
+    { "name": "generation", "versions": "0+", "type": "int32" },
+    { "name": "protocol", "versions": "0+", "type": "string", "nullableVersions": "0+" },
+    { "name": "leader", "versions": "0+", "type": "string", "nullableVersions": "0+" },
+    { "name": "currentStateTimestamp", "versions": "2+", "type": "int64", "default": -1, "ignorable": true},
+    { "name": "members", "versions": "0+", "type": "[]MemberMetadata" }
+  ],
+  "commonStructs": [
+    {
+      "name": "MemberMetadata",
+      "versions": "0+",
+      "fields": [
+        { "name": "memberId", "versions": "0+", "type": "string" },
+        { "name": "groupInstanceId", "versions": "3+", "type": "string", "default": "null", "nullableVersions": "3+", "ignorable": true},
+        { "name": "clientId", "versions": "0+", "type": "string" },
+        { "name": "clientHost", "versions": "0+", "type": "string" },
+        { "name": "rebalanceTimeout", "versions": "1+", "type": "int32", "default": -1, "ignorable": true},
+        { "name": "sessionTimeout", "versions": "0+", "type": "int32" },
+        { "name": "subscription", "versions": "0+", "type": "bytes" },
+        { "name": "assignment", "versions": "0+", "type": "bytes" }
+      ]
+    }
+  ]
+}

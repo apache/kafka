@@ -18,13 +18,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -35,8 +32,13 @@ import org.junit.runner.RunWith;
 
 import java.util.Collections;
 
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class TimestampedKeyValueStoreBuilderTest {
@@ -44,14 +46,17 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Mock(type = MockType.NICE)
     private KeyValueBytesStoreSupplier supplier;
     @Mock(type = MockType.NICE)
-    private KeyValueStore<Bytes, byte[]> inner;
+    private RocksDBTimestampedStore inner;
     private TimestampedKeyValueStoreBuilder<String, String> builder;
 
     @Before
     public void setUp() {
-        EasyMock.expect(supplier.get()).andReturn(inner);
-        EasyMock.expect(supplier.name()).andReturn("name");
-        EasyMock.replay(supplier);
+        expect(supplier.get()).andReturn(inner);
+        expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope");
+        expect(inner.persistent()).andReturn(true).anyTimes();
+        replay(supplier, inner);
+
         builder = new TimestampedKeyValueStoreBuilder<>(
             supplier,
             Serdes.String(),
@@ -92,8 +97,8 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         final TimestampedKeyValueStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
@@ -103,9 +108,9 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         final TimestampedKeyValueStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
@@ -114,30 +119,82 @@ public class TimestampedKeyValueStoreBuilderTest {
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
-    @SuppressWarnings("all")
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerIfInnerIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
+    @Test
+    public void shouldNotWrapTimestampedByteStore() {
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name", "metrics-scope"));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        final TimestampedKeyValueStore<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedStore.class));
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerIfKeySerdeIsNull() {
+    @Test
+    public void shouldWrapPlainKeyValueStoreAsTimestampStore() {
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBStore("name", "metrics-scope"));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        final TimestampedKeyValueStore<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(KeyValueToTimestampedKeyValueByteStoreAdapter.class));
+    }
+
+    @SuppressWarnings("all")
+    @Test
+    public void shouldThrowNullPointerIfInnerIsNull() {
+        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerIfKeySerdeIsNull() {
+        reset(supplier);
+        expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope").anyTimes();
+        replay(supplier);
+
+        // does not throw
         new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerIfValueSerdeIsNull() {
+    @Test
+    public void shouldNotThrowNullPointerIfValueSerdeIsNull() {
+        reset(supplier);
+        expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope").anyTimes();
+        replay(supplier);
+
+        // does not throw
         new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
+        reset(supplier);
+        expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope").anyTimes();
+        replay(supplier);
+
+        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name", null));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
     }
 
 }

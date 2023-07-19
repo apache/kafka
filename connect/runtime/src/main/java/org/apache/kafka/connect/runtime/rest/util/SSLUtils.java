@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.connect.runtime.rest.util;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 import java.util.Arrays;
@@ -28,34 +30,48 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Helper class for setting up SSL for RestServer and RestClient
+ * Helper class for setting up SSL for {@link RestServer} and {@link RestClient}
  */
 public class SSLUtils {
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
 
-    /**
-     * Configures SSL/TLS for HTTPS Jetty Server / Client
-     */
-    public static SslContextFactory createSslContextFactory(WorkerConfig config) {
-        return createSslContextFactory(config, false);
-    }
 
     /**
-     * Configures SSL/TLS for HTTPS Jetty Server / Client
+     * Configures SSL/TLS for HTTPS Jetty Server using configs with the given prefix
      */
-    public static SslContextFactory createSslContextFactory(WorkerConfig config, boolean client) {
-        Map<String, Object> sslConfigValues = config.valuesWithPrefixAllOrNothing("listeners.https.");
+    public static SslContextFactory createServerSideSslContextFactory(AbstractConfig config, String prefix) {
+        Map<String, Object> sslConfigValues = config.valuesWithPrefixAllOrNothing(prefix);
 
-        SslContextFactory ssl = new SslContextFactory();
+        final SslContextFactory.Server ssl = new SslContextFactory.Server();
 
         configureSslContextFactoryKeyStore(ssl, sslConfigValues);
         configureSslContextFactoryTrustStore(ssl, sslConfigValues);
         configureSslContextFactoryAlgorithms(ssl, sslConfigValues);
         configureSslContextFactoryAuthentication(ssl, sslConfigValues);
 
-        if (client)
-            configureSslContextFactoryEndpointIdentification(ssl, sslConfigValues);
+        return ssl;
+    }
+
+    /**
+     * Configures SSL/TLS for HTTPS Jetty Server
+     */
+    public static SslContextFactory createServerSideSslContextFactory(AbstractConfig config) {
+        return createServerSideSslContextFactory(config, "listeners.https.");
+    }
+
+    /**
+     * Configures SSL/TLS for HTTPS Jetty Client
+     */
+    public static SslContextFactory createClientSideSslContextFactory(AbstractConfig config) {
+        Map<String, Object> sslConfigValues = config.valuesWithPrefixAllOrNothing("listeners.https.");
+
+        final SslContextFactory.Client ssl = new SslContextFactory.Client();
+
+        configureSslContextFactoryKeyStore(ssl, sslConfigValues);
+        configureSslContextFactoryTrustStore(ssl, sslConfigValues);
+        configureSslContextFactoryAlgorithms(ssl, sslConfigValues);
+        configureSslContextFactoryEndpointIdentification(ssl, sslConfigValues);
 
         return ssl;
     }
@@ -107,7 +123,7 @@ public class SSLUtils {
     @SuppressWarnings("unchecked")
     protected static void configureSslContextFactoryAlgorithms(SslContextFactory ssl, Map<String, Object> sslConfigValues) {
         List<String> sslEnabledProtocols = (List<String>) getOrDefault(sslConfigValues, SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(COMMA_WITH_WHITESPACE.split(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS)));
-        ssl.setIncludeProtocols(sslEnabledProtocols.toArray(new String[sslEnabledProtocols.size()]));
+        ssl.setIncludeProtocols(sslEnabledProtocols.toArray(new String[0]));
 
         String sslProvider = (String) sslConfigValues.get(SslConfigs.SSL_PROVIDER_CONFIG);
         if (sslProvider != null)
@@ -117,7 +133,7 @@ public class SSLUtils {
 
         List<String> sslCipherSuites = (List<String>) sslConfigValues.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
         if (sslCipherSuites != null)
-            ssl.setIncludeCipherSuites(sslCipherSuites.toArray(new String[sslCipherSuites.size()]));
+            ssl.setIncludeCipherSuites(sslCipherSuites.toArray(new String[0]));
 
         ssl.setKeyManagerFactoryAlgorithm((String) getOrDefault(sslConfigValues, SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM));
 
@@ -129,7 +145,7 @@ public class SSLUtils {
     }
 
     /**
-     * Configures Protocol, Algorithm and Provider related settings in SslContextFactory
+     * Configures hostname verification related settings in SslContextFactory
      */
     protected static void configureSslContextFactoryEndpointIdentification(SslContextFactory ssl, Map<String, Object> sslConfigValues) {
         String sslEndpointIdentificationAlg = (String) sslConfigValues.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
@@ -140,7 +156,7 @@ public class SSLUtils {
     /**
      * Configures Authentication related settings in SslContextFactory
      */
-    protected static void configureSslContextFactoryAuthentication(SslContextFactory ssl, Map<String, Object> sslConfigValues) {
+    protected static void configureSslContextFactoryAuthentication(SslContextFactory.Server ssl, Map<String, Object> sslConfigValues) {
         String sslClientAuth = (String) getOrDefault(sslConfigValues, BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
         switch (sslClientAuth) {
             case "requested":

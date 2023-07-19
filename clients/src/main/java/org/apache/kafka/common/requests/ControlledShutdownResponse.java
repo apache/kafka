@@ -19,13 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
-import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionSet;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,11 +40,8 @@ public class ControlledShutdownResponse extends AbstractResponse {
     private final ControlledShutdownResponseData data;
 
     public ControlledShutdownResponse(ControlledShutdownResponseData data) {
+        super(ApiKeys.CONTROLLED_SHUTDOWN);
         this.data = data;
-    }
-
-    public ControlledShutdownResponse(Struct struct, short version) {
-        this.data = new ControlledShutdownResponseData(struct, version);
     }
 
     public Errors error() {
@@ -55,18 +50,24 @@ public class ControlledShutdownResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(error(), 1);
-    }
-
-    public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
-        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN.parseResponse(version, buffer), version);
+        return errorCounts(error());
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
+    public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
+        return new ControlledShutdownResponse(new ControlledShutdownResponseData(new ByteBufferAccessor(buffer), version));
+    }
+
+    @Override
     public ControlledShutdownResponseData data() {
         return data;
     }
@@ -74,7 +75,7 @@ public class ControlledShutdownResponse extends AbstractResponse {
     public static ControlledShutdownResponse prepareResponse(Errors error, Set<TopicPartition> tps) {
         ControlledShutdownResponseData data = new ControlledShutdownResponseData();
         data.setErrorCode(error.code());
-        ControlledShutdownResponseData.RemainingPartitionSet pSet = new RemainingPartitionSet();
+        ControlledShutdownResponseData.RemainingPartitionCollection pSet = new ControlledShutdownResponseData.RemainingPartitionCollection();
         tps.forEach(tp -> {
             pSet.add(new RemainingPartition()
                     .setTopicName(tp.topic())

@@ -122,12 +122,14 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             throw new ConfigException(ConfigName.STATIC_VALUE, null, "No value specified for static field: " + staticField);
         }
 
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
     public R apply(R record) {
-        if (operatingSchema(record) == null) {
+        if (operatingValue(record) == null) {
+            return record;
+        } else if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
             return applyWithSchema(record);

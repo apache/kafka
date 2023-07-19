@@ -21,13 +21,17 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -38,7 +42,9 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertThrows;
 
+@SuppressWarnings("deprecation")
 public class SuppressTopologyTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
 
@@ -47,20 +53,20 @@ public class SuppressTopologyTest {
         "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
         "      --> KSTREAM-KEY-SELECT-0000000001\n" +
         "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
-        "      --> KSTREAM-FILTER-0000000004\n" +
+        "      --> counts-repartition-filter\n" +
         "      <-- KSTREAM-SOURCE-0000000000\n" +
-        "    Processor: KSTREAM-FILTER-0000000004 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000003\n" +
+        "    Processor: counts-repartition-filter (stores: [])\n" +
+        "      --> counts-repartition-sink\n" +
         "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-        "    Sink: KSTREAM-SINK-0000000003 (topic: counts-repartition)\n" +
-        "      <-- KSTREAM-FILTER-0000000004\n" +
+        "    Sink: counts-repartition-sink (topic: counts-repartition)\n" +
+        "      <-- counts-repartition-filter\n" +
         "\n" +
         "  Sub-topology: 1\n" +
-        "    Source: KSTREAM-SOURCE-0000000005 (topics: [counts-repartition])\n" +
+        "    Source: counts-repartition-source (topics: [counts-repartition])\n" +
         "      --> KSTREAM-AGGREGATE-0000000002\n" +
         "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [counts])\n" +
         "      --> myname\n" +
-        "      <-- KSTREAM-SOURCE-0000000005\n" +
+        "      <-- counts-repartition-source\n" +
         "    Processor: myname (stores: [myname-store])\n" +
         "      --> KTABLE-TOSTREAM-0000000006\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
@@ -79,20 +85,20 @@ public class SuppressTopologyTest {
         "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
         "      --> KSTREAM-KEY-SELECT-0000000001\n" +
         "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
-        "      --> KSTREAM-FILTER-0000000004\n" +
+        "      --> counts-repartition-filter\n" +
         "      <-- KSTREAM-SOURCE-0000000000\n" +
-        "    Processor: KSTREAM-FILTER-0000000004 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000003\n" +
+        "    Processor: counts-repartition-filter (stores: [])\n" +
+        "      --> counts-repartition-sink\n" +
         "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-        "    Sink: KSTREAM-SINK-0000000003 (topic: counts-repartition)\n" +
-        "      <-- KSTREAM-FILTER-0000000004\n" +
+        "    Sink: counts-repartition-sink (topic: counts-repartition)\n" +
+        "      <-- counts-repartition-filter\n" +
         "\n" +
         "  Sub-topology: 1\n" +
-        "    Source: KSTREAM-SOURCE-0000000005 (topics: [counts-repartition])\n" +
+        "    Source: counts-repartition-source (topics: [counts-repartition])\n" +
         "      --> KSTREAM-AGGREGATE-0000000002\n" +
         "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [counts])\n" +
         "      --> KTABLE-SUPPRESS-0000000006\n" +
-        "      <-- KSTREAM-SOURCE-0000000005\n" +
+        "      <-- counts-repartition-source\n" +
         "    Processor: KTABLE-SUPPRESS-0000000006 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000007])\n" +
         "      --> KTABLE-TOSTREAM-0000000008\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
@@ -207,5 +213,34 @@ public class SuppressTopologyTest {
 
         // without the name, the suppression node does not increment the topology index
         assertThat(namedNodeTopology, is(NAMED_INTERMEDIATE_TOPOLOGY));
+    }
+
+    @Test
+    public void shouldThrowOnSuppressForMaterializedVersionedTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Object, Object> versionedTable = builder.table(
+            "input",
+            Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+        );
+
+        assertThrows(
+            TopologyException.class,
+            () -> versionedTable.suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()))
+        );
+    }
+
+    @Test
+    public void shouldThrowOnSuppressForNonMaterializedVersionedTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+                "input",
+                Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+        ).filter((k, v) -> true)
+        .suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()));
+
+        assertThrows(
+            TopologyException.class,
+            builder::build
+        );
     }
 }

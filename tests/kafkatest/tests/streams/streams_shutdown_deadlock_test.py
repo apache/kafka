@@ -13,7 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 from kafkatest.tests.kafka_test import KafkaTest
+from kafkatest.services.kafka import quorum
 from kafkatest.services.streams import StreamsSmokeTestShutdownDeadlockService
 
 
@@ -29,7 +32,9 @@ class StreamsShutdownDeadlockTest(KafkaTest):
 
         self.driver = StreamsSmokeTestShutdownDeadlockService(test_context, self.kafka)
 
-    def test_shutdown_wont_deadlock(self):
+    @cluster(num_nodes=3)
+    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    def test_shutdown_wont_deadlock(self, metadata_quorum):
         """
         Start ShutdownDeadLockTest, wait for upt to 1 minute, and check that the process exited.
         If it hasn't exited then fail as it is deadlocked

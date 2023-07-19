@@ -16,9 +16,17 @@
 {
   "apiKey": 18,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "ApiVersionsRequest",
   // Versions 0 through 2 of ApiVersionsRequest are the same.
-  "validVersions": "0-2",
+  //
+  // Version 3 is the first flexible version and adds ClientSoftwareName and ClientSoftwareVersion.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
+    { "name": "ClientSoftwareName", "type": "string", "versions": "3+",
+      "ignorable": true, "about": "The name of the client." },
+    { "name": "ClientSoftwareVersion", "type": "string", "versions": "3+",
+      "ignorable": true, "about": "The version of the client." }
   ]
 }

@@ -20,9 +20,9 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#renewDelegationToken(byte[], RenewDelegationTokenOptions)}.
+ * Options for {@link Admin#renewDelegationToken(byte[], RenewDelegationTokenOptions)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class RenewDelegationTokenOptions extends AbstractOptions<RenewDelegationTokenOptions> {

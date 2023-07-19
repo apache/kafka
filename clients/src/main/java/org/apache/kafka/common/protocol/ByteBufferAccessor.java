@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.utils.ByteUtils;
+
 import java.nio.ByteBuffer;
 
 public class ByteBufferAccessor implements Readable, Writable {
@@ -47,8 +49,35 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
-    public void readArray(byte[] arr) {
+    public double readDouble() {
+        return ByteUtils.readDouble(buf);
+    }
+
+    @Override
+    public byte[] readArray(int size) {
+        int remaining = buf.remaining();
+        if (size > remaining) {
+            throw new RuntimeException("Error reading byte array of " + size + " byte(s): only " + remaining +
+                    " byte(s) available");
+        }
+        byte[] arr = new byte[size];
         buf.get(arr);
+        return arr;
+    }
+
+    @Override
+    public int readUnsignedVarint() {
+        return ByteUtils.readUnsignedVarint(buf);
+    }
+
+    @Override
+    public ByteBuffer readByteBuffer(int length) {
+        ByteBuffer res = buf.slice();
+        res.limit(length);
+
+        buf.position(buf.position() + length);
+
+        return res;
     }
 
     @Override
@@ -72,7 +101,55 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
-    public void writeArray(byte[] arr) {
+    public void writeDouble(double val) {
+        ByteUtils.writeDouble(val, buf);
+    }
+
+    @Override
+    public void writeByteArray(byte[] arr) {
         buf.put(arr);
+    }
+
+    @Override
+    public void writeUnsignedVarint(int i) {
+        ByteUtils.writeUnsignedVarint(i, buf);
+    }
+
+    @Override
+    public void writeByteBuffer(ByteBuffer src) {
+        buf.put(src.duplicate());
+    }
+
+    @Override
+    public void writeVarint(int i) {
+        ByteUtils.writeVarint(i, buf);
+    }
+
+    @Override
+    public void writeVarlong(long i) {
+        ByteUtils.writeVarlong(i, buf);
+    }
+
+    @Override
+    public int readVarint() {
+        return ByteUtils.readVarint(buf);
+    }
+
+    @Override
+    public long readVarlong() {
+        return ByteUtils.readVarlong(buf);
+    }
+
+    @Override
+    public int remaining() {
+        return buf.remaining();
+    }
+
+    public void flip() {
+        buf.flip();
+    }
+
+    public ByteBuffer buffer() {
+        return buf;
     }
 }

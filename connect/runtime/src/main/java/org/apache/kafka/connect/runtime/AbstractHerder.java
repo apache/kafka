@@ -16,29 +16,49 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -54,18 +74,25 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
  * must invoke the lifecycle hooks appropriately.
- *
+ * <p>
  * This class takes the following approach for sending status updates to the backing store:
  *
- * 1) When the connector or task is starting, we overwrite the previous state blindly. This ensures that
+ * <ol>
+ * <li>
+ *    When the connector or task is starting, we overwrite the previous state blindly. This ensures that
  *    every rebalance will reset the state of tasks to the proper state. The intuition is that there should
  *    be less chance of write conflicts when the worker has just received its assignment and is starting tasks.
  *    In particular, this prevents us from depending on the generation absolutely. If the group disappears
@@ -73,34 +100,44 @@ import java.util.regex.Pattern;
  *    generation with the updated one. The danger of this approach is that slow starting tasks may cause the
  *    status to be overwritten after a rebalance has completed.
  *
- * 2) If the connector or task fails or is shutdown, we use {@link StatusBackingStore#putSafe(ConnectorStatus)},
+ * <li>
+ *    If the connector or task fails or is shutdown, we use {@link StatusBackingStore#putSafe(ConnectorStatus)},
  *    which provides a little more protection if the worker is no longer in the group (in which case the
  *    task may have already been started on another worker). Obviously this is still racy. If the task has just
  *    started on another worker, we may not have the updated status cached yet. In this case, we'll overwrite
  *    the value which will cause the state to be inconsistent (most likely until the next rebalance). Until
  *    we have proper producer groups with fenced groups, there is not much else we can do.
+ * </ol>
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
+
+    private final Logger log = LoggerFactory.getLogger(AbstractHerder.class);
 
     private final String workerId;
     protected final Worker worker;
     private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
+    private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    protected volatile boolean running = false;
+    private final ExecutorService connectorExecutor;
 
-    private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
                           String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
-                          ConfigBackingStore configBackingStore) {
+                          ConfigBackingStore configBackingStore,
+                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
         this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
+        this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
+        this.connectorExecutor = Executors.newCachedThreadPool();
     }
 
     @Override
@@ -120,11 +157,24 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
         this.worker.stop();
+        this.connectorExecutor.shutdown();
+        Utils.closeQuietly(this.connectorClientConfigOverridePolicy, "connector client config override policy");
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
     }
 
     @Override
     public void onStartup(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RUNNING,
+                workerId, generation()));
+    }
+
+    @Override
+    public void onStop(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, AbstractStatus.State.STOPPED,
                 workerId, generation()));
     }
 
@@ -180,8 +230,22 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     @Override
     public void onDeletion(String connector) {
         for (TaskStatus status : statusBackingStore.getAll(connector))
-            statusBackingStore.put(new TaskStatus(status.id(), TaskStatus.State.DESTROYED, workerId, generation()));
+            onDeletion(status.id());
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation()));
+    }
+
+    @Override
+    public void onDeletion(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
+    }
+
+    public void onRestart(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RESTARTING,
+                workerId, generation()));
+    }
+
+    public void onRestart(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RESTARTING, workerId, generation()));
     }
 
     @Override
@@ -204,16 +268,62 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     /*
-     * Retrieves config map by connector name
+     * Retrieves raw config map by connector name.
      */
-    protected abstract Map<String, String> config(String connName);
+    protected abstract Map<String, String> rawConfig(String connName);
+
+    @Override
+    public void connectorConfig(String connName, Callback<Map<String, String>> callback) {
+        // Subset of connectorInfo, so piggy back on that implementation
+        connectorInfo(connName, (error, result) -> {
+            if (error != null)
+                callback.onCompletion(error, null);
+            else
+                callback.onCompletion(null, result.config());
+        });
+    }
+
+    @Override
+    public Collection<String> connectors() {
+        return configBackingStore.snapshot().connectors();
+    }
+
+    @Override
+    public ConnectorInfo connectorInfo(String connector) {
+        final ClusterConfigState configState = configBackingStore.snapshot();
+
+        if (!configState.contains(connector))
+            return null;
+        Map<String, String> config = configState.rawConnectorConfig(connector);
+
+        return new ConnectorInfo(
+            connector,
+            config,
+            configState.tasks(connector),
+            connectorType(config)
+        );
+    }
+
+    protected Map<ConnectorTaskId, Map<String, String>> buildTasksConfig(String connector) {
+        final ClusterConfigState configState = configBackingStore.snapshot();
+
+        if (!configState.contains(connector))
+            return Collections.emptyMap();
+
+        Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
+        for (ConnectorTaskId cti : configState.tasks(connector)) {
+            configs.put(cti, configState.taskConfig(cti));
+        }
+
+        return configs;
+    }
 
     @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
         if (connector == null)
             throw new NotFoundException("No status found for connector " + connName);
-        
+
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
@@ -227,9 +337,27 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        Map<String, String> conf = config(connName);
-        return new ConnectorStateInfo(connName, connectorState, taskStates,
-            conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+        Map<String, String> conf = rawConfig(connName);
+        return new ConnectorStateInfo(connName, connectorState, taskStates, connectorType(conf));
+    }
+
+    @Override
+    public ActiveTopicsInfo connectorActiveTopics(String connName) {
+        Collection<String> topics = statusBackingStore.getAllTopics(connName).stream()
+                .map(TopicStatus::topic)
+                .collect(Collectors.toList());
+        return new ActiveTopicsInfo(connName, topics);
+    }
+
+    @Override
+    public void resetConnectorActiveTopics(String connName) {
+        statusBackingStore.getAllTopics(connName).stream()
+                .forEach(status -> statusBackingStore.deleteTopic(status.connector(), status.topic()));
+    }
+
+    @Override
+    public StatusBackingStore statusBackingStore() {
+        return statusBackingStore;
     }
 
     @Override
@@ -243,14 +371,96 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
-    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
-                                                                    ConfigDef configDef,
-                                                                    Map<String, String> config) {
+    protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
+        return configDef.validateAll(config);
+    }
+
+    protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
         return configDef.validateAll(config);
     }
 
     @Override
-    public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps) {
+    public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback) {
+        validateConnectorConfig(connectorProps, callback, true);
+    }
+
+    @Override
+    public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback, boolean doLog) {
+        connectorExecutor.submit(() -> {
+            try {
+                ConfigInfos result = validateConnectorConfig(connectorProps, doLog);
+                callback.onCompletion(null, result);
+            } catch (Throwable t) {
+                callback.onCompletion(t, null);
+            }
+        });
+    }
+
+    /**
+     * Build the {@link RestartPlan} that describes what should and should not be restarted given the restart request
+     * and the current status of the connector and task instances.
+     *
+     * @param request the restart request; may not be null
+     * @return the restart plan, or empty if this worker has no status for the connector named in the request and therefore the
+     *         connector cannot be restarted
+     */
+    public Optional<RestartPlan> buildRestartPlan(RestartRequest request) {
+        String connectorName = request.connectorName();
+        ConnectorStatus connectorStatus = statusBackingStore.get(connectorName);
+        if (connectorStatus == null) {
+            return Optional.empty();
+        }
+
+        // If requested, mark the connector as restarting
+        AbstractStatus.State connectorState = request.shouldRestartConnector(connectorStatus) ? AbstractStatus.State.RESTARTING : connectorStatus.state();
+        ConnectorStateInfo.ConnectorState connectorInfoState = new ConnectorStateInfo.ConnectorState(
+                connectorState.toString(),
+                connectorStatus.workerId(),
+                connectorStatus.trace()
+        );
+
+        // Collect the task states, If requested, mark the task as restarting
+        List<ConnectorStateInfo.TaskState> taskStates = statusBackingStore.getAll(connectorName)
+                .stream()
+                .map(taskStatus -> {
+                    AbstractStatus.State taskState = request.shouldRestartTask(taskStatus) ? AbstractStatus.State.RESTARTING : taskStatus.state();
+                    return new ConnectorStateInfo.TaskState(
+                            taskStatus.id().task(),
+                            taskState.toString(),
+                            taskStatus.workerId(),
+                            taskStatus.trace()
+                    );
+                })
+                .collect(Collectors.toList());
+        // Construct the response from the various states
+        Map<String, String> conf = rawConfig(connectorName);
+        ConnectorStateInfo stateInfo = new ConnectorStateInfo(
+                connectorName,
+                connectorInfoState,
+                taskStates,
+                connectorType(conf)
+        );
+        return Optional.of(new RestartPlan(request, stateInfo));
+    }
+
+    protected boolean connectorUsesConsumer(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        return connectorType == org.apache.kafka.connect.health.ConnectorType.SINK;
+    }
+
+    protected boolean connectorUsesAdmin(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        if (connectorType == org.apache.kafka.connect.health.ConnectorType.SOURCE) {
+            return SourceConnectorConfig.usesTopicCreation(connProps);
+        } else {
+            return SinkConnectorConfig.hasDlqTopicConfig(connProps);
+        }
+    }
+
+    protected boolean connectorUsesProducer(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        return connectorType == org.apache.kafka.connect.health.ConnectorType.SOURCE
+            || SinkConnectorConfig.hasDlqTopicConfig(connProps);
+    }
+
+    ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
         if (worker.configTransformer() != null) {
             connectorProps = worker.configTransformer().transform(connectorProps);
         }
@@ -259,51 +469,161 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
 
         Connector connector = getConnector(connType);
-        ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
-        try {
-            ConfigDef baseConfigDef;
+        ClassLoader connectorLoader = plugins().connectorLoader(connType);
+        try (LoaderSwap loaderSwap = plugins().withClassLoader(connectorLoader)) {
+            org.apache.kafka.connect.health.ConnectorType connectorType;
+            ConfigDef enrichedConfigDef;
+            Map<String, ConfigValue> validatedConnectorConfig;
             if (connector instanceof SourceConnector) {
-                baseConfigDef = SourceConnectorConfig.configDef();
+                connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
+                enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
+                validatedConnectorConfig = validateSourceConnectorConfig((SourceConnector) connector, enrichedConfigDef, connectorProps);
             } else {
-                baseConfigDef = SinkConnectorConfig.configDef();
                 SinkConnectorConfig.validate(connectorProps);
+                connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
+                enrichedConfigDef = ConnectorConfig.enrich(plugins(), SinkConnectorConfig.configDef(), connectorProps, false);
+                validatedConnectorConfig = validateSinkConnectorConfig((SinkConnector) connector, enrichedConfigDef, connectorProps);
             }
-            ConfigDef enrichedConfigDef = ConnectorConfig.enrich(plugins(), baseConfigDef, connectorProps, false);
-            Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
-                    connector,
-                    enrichedConfigDef,
-                    connectorProps
+
+            connectorProps.entrySet().stream()
+                .filter(e -> e.getValue() == null)
+                .map(Map.Entry::getKey)
+                .forEach(prop ->
+                    validatedConnectorConfig.computeIfAbsent(prop, ConfigValue::new)
+                        .addErrorMessage("Null value can not be supplied as the configuration value.")
             );
+
             List<ConfigValue> configValues = new ArrayList<>(validatedConnectorConfig.values());
             Map<String, ConfigKey> configKeys = new LinkedHashMap<>(enrichedConfigDef.configKeys());
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
 
             // do custom connector-specific validation
-            Config config = connector.validate(connectorProps);
-            if (null == config) {
-                throw new BadRequestException(
-                    String.format(
-                        "%s.validate() must return a Config that is not null.",
-                        connector.getClass().getName()
-                    )
-                );
-            }
             ConfigDef configDef = connector.config();
             if (null == configDef) {
                 throw new BadRequestException(
-                    String.format(
-                        "%s.config() must return a ConfigDef that is not null.",
-                        connector.getClass().getName()
-                    )
+                        String.format(
+                                "%s.config() must return a ConfigDef that is not null.",
+                                connector.getClass().getName()
+                        )
+                );
+            }
+            Config config = connector.validate(connectorProps);
+            if (null == config) {
+                throw new BadRequestException(
+                        String.format(
+                                "%s.validate() must return a Config that is not null.",
+                                connector.getClass().getName()
+                        )
                 );
             }
             configKeys.putAll(configDef.configKeys());
             allGroups.addAll(configDef.groups());
             configValues.addAll(config.configValues());
-            return generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
+            ConfigInfos configInfos =  generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
+
+            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps, doLog);
+            String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
+            ConfigInfos producerConfigInfos = null;
+            ConfigInfos consumerConfigInfos = null;
+            ConfigInfos adminConfigInfos = null;
+
+            if (connectorUsesProducer(connectorType, connectorProps)) {
+                producerConfigInfos = validateClientOverrides(
+                    connName,
+                    ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+                    connectorConfig,
+                    ProducerConfig.configDef(),
+                    connector.getClass(),
+                    connectorType,
+                    ConnectorClientConfigRequest.ClientType.PRODUCER,
+                    connectorClientConfigOverridePolicy);
+            }
+            if (connectorUsesAdmin(connectorType, connectorProps)) {
+                adminConfigInfos = validateClientOverrides(
+                    connName,
+                    ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+                    connectorConfig,
+                    AdminClientConfig.configDef(),
+                    connector.getClass(),
+                    connectorType,
+                    ConnectorClientConfigRequest.ClientType.ADMIN,
+                    connectorClientConfigOverridePolicy);
+            }
+            if (connectorUsesConsumer(connectorType, connectorProps)) {
+                consumerConfigInfos = validateClientOverrides(
+                    connName,
+                    ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+                    connectorConfig,
+                    ConsumerConfig.configDef(),
+                    connector.getClass(),
+                    connectorType,
+                    ConnectorClientConfigRequest.ClientType.CONSUMER,
+                    connectorClientConfigOverridePolicy);
+            }
+            return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
         }
+    }
+
+    private static ConfigInfos mergeConfigInfos(String connType, ConfigInfos... configInfosList) {
+        int errorCount = 0;
+        List<ConfigInfo> configInfoList = new LinkedList<>();
+        Set<String> groups = new LinkedHashSet<>();
+        for (ConfigInfos configInfos : configInfosList) {
+            if (configInfos != null) {
+                errorCount += configInfos.errorCount();
+                configInfoList.addAll(configInfos.values());
+                groups.addAll(configInfos.groups());
+            }
+        }
+        return new ConfigInfos(connType, errorCount, new ArrayList<>(groups), configInfoList);
+    }
+
+    private static ConfigInfos validateClientOverrides(String connName,
+                                                      String prefix,
+                                                      AbstractConfig connectorConfig,
+                                                      ConfigDef configDef,
+                                                      Class<? extends Connector> connectorClass,
+                                                      org.apache.kafka.connect.health.ConnectorType connectorType,
+                                                      ConnectorClientConfigRequest.ClientType clientType,
+                                                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        int errorCount = 0;
+        List<ConfigInfo> configInfoList = new LinkedList<>();
+        Map<String, ConfigKey> configKeys = configDef.configKeys();
+        Set<String> groups = new LinkedHashSet<>();
+        Map<String, Object> clientConfigs = new HashMap<>();
+        for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
+            String configName = rawClientConfig.getKey();
+            Object rawConfigValue = rawClientConfig.getValue();
+            ConfigKey configKey = configDef.configKeys().get(configName);
+            Object parsedConfigValue = configKey != null
+                ? ConfigDef.parseType(configName, rawConfigValue, configKey.type)
+                : rawConfigValue;
+            clientConfigs.put(configName, parsedConfigValue);
+        }
+        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
+            connName, connectorType, connectorClass, clientConfigs, clientType);
+        List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        if (configValues != null) {
+            for (ConfigValue validatedConfigValue : configValues) {
+                ConfigKey configKey = configKeys.get(validatedConfigValue.name());
+                ConfigKeyInfo configKeyInfo = null;
+                if (configKey != null) {
+                    if (configKey.group != null) {
+                        groups.add(configKey.group);
+                    }
+                    configKeyInfo = convertConfigKey(configKey, prefix);
+                }
+
+                ConfigValue configValue = new ConfigValue(prefix + validatedConfigValue.name(), validatedConfigValue.value(),
+                                                          validatedConfigValue.recommendedValues(), validatedConfigValue.errorMessages());
+                if (configValue.errorMessages().size() > 0) {
+                    errorCount++;
+                }
+                ConfigValueInfo configValueInfo = convertConfigValue(configValue, configKey != null ? configKey.type : null);
+                configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
+            }
+        }
+        return new ConfigInfos(connectorClass.toString(), errorCount, new ArrayList<>(groups), configInfoList);
     }
 
     // public for testing
@@ -316,8 +636,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             String configName = configValue.name();
             configValueMap.put(configName, configValue);
             if (!configKeys.containsKey(configName)) {
-                configValue.addErrorMessage("Configuration is not defined: " + configName);
                 configInfoList.add(new ConfigInfo(null, convertConfigValue(configValue, null)));
+                errorCount += configValue.errorMessages().size();
             }
         }
 
@@ -336,8 +656,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
-    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
-        String name = configKey.name;
+    public static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+        return convertConfigKey(configKey, "");
+    }
+
+    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey, String prefix) {
+        String name = prefix + configKey.name;
         Type type = configKey.type;
         String typeName = configKey.type.name();
 
@@ -376,21 +700,29 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     protected Connector getConnector(String connType) {
-        if (tempConnectors.containsKey(connType)) {
-            return tempConnectors.get(connType);
-        } else {
-            Connector connector = plugins().newConnector(connType);
-            tempConnectors.put(connType, connector);
-            return connector;
-        }
+        return tempConnectors.computeIfAbsent(connType, k -> plugins().newConnector(k));
     }
 
-    /*
-     * Retrieves ConnectorType for the corresponding connector class
-     * @param connClass class of the connector
+    /**
+     * Retrieves ConnectorType for the class specified in the connector config
+     * @param connConfig the connector config, may be null
+     * @return the {@link ConnectorType} of the connector, or {@link ConnectorType#UNKNOWN} if an error occurs or the
+     * type cannot be determined
      */
-    public ConnectorType connectorTypeForClass(String connClass) {
-        return ConnectorType.from(getConnector(connClass).getClass());
+    public ConnectorType connectorType(Map<String, String> connConfig) {
+        if (connConfig == null) {
+            return ConnectorType.UNKNOWN;
+        }
+        String connClass = connConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        if (connClass == null) {
+            return ConnectorType.UNKNOWN;
+        }
+        try {
+            return ConnectorType.from(getConnector(connClass).getClass());
+        } catch (ConnectException e) {
+            log.warn("Unable to retrieve connector type", e);
+            return ConnectorType.UNKNOWN;
+        }
     }
 
     /**
@@ -419,7 +751,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             callback.onCompletion(
                 new BadRequestException(
                     messages.append(
-                        "\nYou can also find the above list of errors at the endpoint `/{connectorType}/config/validate`"
+                        "\nYou can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
                     ).toString()
                 ), null
             );
@@ -431,7 +763,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
             t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
-            return output.toString("UTF-8");
+            return output.toString(StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             return null;
         }
@@ -461,12 +793,36 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return result;
     }
 
-    private static Set<String> keysWithVariableValues(Map<String, String> rawConfig, Pattern pattern) {
+    public boolean taskConfigsChanged(ClusterConfigState configState, String connName, List<Map<String, String>> taskProps) {
+        int currentNumTasks = configState.taskCount(connName);
+        boolean result = false;
+        if (taskProps.size() != currentNumTasks) {
+            log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, taskProps.size());
+            result = true;
+        } else {
+            for (int index = 0; index < currentNumTasks; index++) {
+                ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
+                if (!taskProps.get(index).equals(configState.taskConfig(taskId))) {
+                    log.debug("Connector {} has change in configuration for task {}-{}", connName, connName, index);
+                    result = true;
+                }
+            }
+        }
+        if (result) {
+            log.debug("Reconfiguring connector {}: writing new updated configurations for tasks", connName);
+        } else {
+            log.debug("Skipping reconfiguration of connector {} as generated configs appear unchanged", connName);
+        }
+        return result;
+    }
+
+    // Visible for testing
+    static Set<String> keysWithVariableValues(Map<String, String> rawConfig, Pattern pattern) {
         Set<String> keys = new HashSet<>();
         for (Map.Entry<String, String> config : rawConfig.entrySet()) {
             if (config.getValue() != null) {
                 Matcher matcher = pattern.matcher(config.getValue());
-                if (matcher.matches()) {
+                if (matcher.find()) {
                     keys.add(config.getKey());
                 }
             }
@@ -474,4 +830,99 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return keys;
     }
 
+    @Override
+    public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
+        Plugins p = plugins();
+        Class<?> pluginClass;
+        try {
+            pluginClass = p.pluginClass(pluginName);
+        } catch (ClassNotFoundException cnfe) {
+            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+        }
+
+        try (LoaderSwap loaderSwap = p.withClassLoader(pluginClass.getClassLoader())) {
+            Object plugin = p.newPlugin(pluginName);
+            PluginType pluginType = PluginType.from(plugin.getClass());
+            // Contains definitions coming from Connect framework
+            ConfigDef baseConfigDefs = null;
+            // Contains definitions specifically declared on the plugin
+            ConfigDef pluginConfigDefs;
+            switch (pluginType) {
+                case SINK:
+                    baseConfigDefs = SinkConnectorConfig.configDef();
+                    pluginConfigDefs = ((SinkConnector) plugin).config();
+                    break;
+                case SOURCE:
+                    baseConfigDefs = SourceConnectorConfig.configDef();
+                    pluginConfigDefs = ((SourceConnector) plugin).config();
+                    break;
+                case CONVERTER:
+                    pluginConfigDefs = ((Converter) plugin).config();
+                    break;
+                case HEADER_CONVERTER:
+                    pluginConfigDefs = ((HeaderConverter) plugin).config();
+                    break;
+                case TRANSFORMATION:
+                    pluginConfigDefs = ((Transformation<?>) plugin).config();
+                    break;
+                case PREDICATE:
+                    pluginConfigDefs = ((Predicate<?>) plugin).config();
+                    break;
+                default:
+                    throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
+            }
+
+            // Track config properties by name and, if the same property is defined in multiple places,
+            // give precedence to the one defined by the plugin class
+            // Preserve the ordering of properties as they're returned from each ConfigDef
+            Map<String, ConfigKey> configsMap = new LinkedHashMap<>(pluginConfigDefs.configKeys());
+            if (baseConfigDefs != null)
+                baseConfigDefs.configKeys().forEach(configsMap::putIfAbsent);
+
+            List<ConfigKeyInfo> results = new ArrayList<>();
+            for (ConfigKey configKey : configsMap.values()) {
+                results.add(AbstractHerder.convertConfigKey(configKey));
+            }
+            return results;
+        } catch (ClassNotFoundException e) {
+            throw new ConnectException("Failed to load plugin class or one of its dependencies", e);
+        }
+    }
+
+    @Override
+    public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        ClusterConfigState configSnapshot = configBackingStore.snapshot();
+        try {
+            if (!configSnapshot.contains(connName)) {
+                cb.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                return;
+            }
+            // The worker asynchronously processes the request and completes the passed callback when done
+            worker.connectorOffsets(connName, configSnapshot.connectorConfig(connName), cb);
+        } catch (Throwable t) {
+            cb.onCompletion(t, null);
+        }
+    }
+
+    @Override
+    public void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
+        if (offsets == null || offsets.isEmpty()) {
+            callback.onCompletion(new ConnectException("The offsets to be altered may not be null or empty"), null);
+            return;
+        }
+        modifyConnectorOffsets(connName, offsets, callback);
+    }
+
+    @Override
+    public void resetConnectorOffsets(String connName, Callback<Message> callback) {
+        modifyConnectorOffsets(connName, null, callback);
+    }
+
+    /**
+     * Service external requests to alter or reset connector offsets.
+     * @param connName the name of the connector whose offsets are to be modified
+     * @param offsets the offsets to be written; this should be {@code null} for offsets reset requests
+     * @param cb callback to invoke upon completion
+     */
+    protected abstract void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
 }

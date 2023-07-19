@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.rocksdb.Options;
-
 public class RocksDBTimestampedSegmentedBytesStoreTest
     extends AbstractRocksDBSegmentedBytesStoreTest<TimestampedSegment> {
+
+    private final static String METRICS_SCOPE = "metrics-scope";
 
     RocksDBTimestampedSegmentedBytesStore getBytesStore() {
         return new RocksDBTimestampedSegmentedBytesStore(
             storeName,
-            "metrics-scope",
+            METRICS_SCOPE,
             retention,
             segmentInterval,
             schema
@@ -33,11 +33,6 @@ public class RocksDBTimestampedSegmentedBytesStoreTest
 
     @Override
     TimestampedSegments newSegments() {
-        return new TimestampedSegments(storeName, retention, segmentInterval);
-    }
-
-    @Override
-    Options getOptions(final TimestampedSegment segment) {
-        return segment.getOptions();
+        return new TimestampedSegments(storeName, METRICS_SCOPE, retention, segmentInterval);
     }
 }

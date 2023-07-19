@@ -19,41 +19,43 @@ package kafka.server
 
 import java.util.concurrent.{Delayed, TimeUnit}
 
-import kafka.network
-import kafka.network.RequestChannel
-import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
 
+trait ThrottleCallback {
+  def startThrottling(): Unit
+  def endThrottling(): Unit
+}
 
 /**
   * Represents a request whose response has been delayed.
-  * @param request The request that has been delayed
   * @param time Time instance to use
   * @param throttleTimeMs Delay associated with this request
-  * @param channelThrottlingCallback Callback for channel throttling
+  * @param callback Callback for channel throttling
   */
-class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val throttleTimeMs: Int, channelThrottlingCallback: Response => Unit)
-  extends Delayed with Logging {
-  var endTime = time.milliseconds + throttleTimeMs
+class ThrottledChannel(
+  val time: Time,
+  val throttleTimeMs: Int,
+  val callback: ThrottleCallback
+) extends Delayed with Logging {
+
+  private val endTimeNanos = time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(throttleTimeMs)
 
   // Notify the socket server that throttling has started for this channel.
-  channelThrottlingCallback(new RequestChannel.StartThrottlingResponse(request))
+  callback.startThrottling()
 
   // Notify the socket server that throttling has been done for this channel.
   def notifyThrottlingDone(): Unit = {
     trace(s"Channel throttled for: $throttleTimeMs ms")
-    channelThrottlingCallback(new network.RequestChannel.EndThrottlingResponse(request))
+    callback.endThrottling()
   }
 
   override def getDelay(unit: TimeUnit): Long = {
-    unit.convert(endTime - time.milliseconds, TimeUnit.MILLISECONDS)
+    unit.convert(endTimeNanos - time.nanoseconds(), TimeUnit.NANOSECONDS)
   }
 
   override def compareTo(d: Delayed): Int = {
     val other = d.asInstanceOf[ThrottledChannel]
-    if (this.endTime < other.endTime) -1
-    else if (this.endTime > other.endTime) 1
-    else 0
+    java.lang.Long.compare(this.endTimeNanos, other.endTimeNanos)
   }
 }

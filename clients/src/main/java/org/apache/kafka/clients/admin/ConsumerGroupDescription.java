@@ -49,7 +49,7 @@ public class ConsumerGroupDescription {
         this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
     }
 
-    ConsumerGroupDescription(String groupId,
+    public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
                                     String partitionAssignor,
@@ -128,7 +128,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * authorizedOperations for this group
+     * authorizedOperations for this group, or null if that information is not known.
      */
     public  Set<AclOperation> authorizedOperations() {
         return authorizedOperations;

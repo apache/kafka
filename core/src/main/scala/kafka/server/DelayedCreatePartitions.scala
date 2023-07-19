@@ -26,14 +26,28 @@ import scala.collection._
 /**
   * The create metadata maintained by the delayed create topic or create partitions operations.
   */
-case class CreatePartitionsMetadata(topic: String, replicaAssignments: Map[Int, Seq[Int]], error: ApiError)
+case class CreatePartitionsMetadata(topic: String, partitions: Set[Int], error: ApiError)
+
+object CreatePartitionsMetadata {
+  def apply(topic: String, partitions: Set[Int]): CreatePartitionsMetadata = {
+    CreatePartitionsMetadata(topic, partitions, ApiError.NONE)
+  }
+
+  def apply(topic: String, error: Errors): CreatePartitionsMetadata = {
+    CreatePartitionsMetadata(topic, Set.empty, new ApiError(error, null))
+  }
+
+  def apply(topic: String, throwable: Throwable): CreatePartitionsMetadata = {
+    CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(throwable))
+  }
+}
 
 /**
   * A delayed create topic or create partitions operation that is stored in the topic purgatory.
   */
 class DelayedCreatePartitions(delayMs: Long,
                               createMetadata: Seq[CreatePartitionsMetadata],
-                              adminManager: AdminManager,
+                              adminManager: ZkAdminManager,
                               responseCallback: Map[String, ApiError] => Unit)
   extends DelayedOperation(delayMs) {
 
@@ -46,7 +60,7 @@ class DelayedCreatePartitions(delayMs: Long,
     trace(s"Trying to complete operation for $createMetadata")
 
     val leaderlessPartitionCount = createMetadata.filter(_.error.isSuccess).foldLeft(0) { case (topicCounter, metadata) =>
-      topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
+      topicCounter + missingLeaderCount(metadata.topic, metadata.partitions)
     }
 
     if (leaderlessPartitionCount == 0) {
@@ -61,11 +75,11 @@ class DelayedCreatePartitions(delayMs: Long,
   /**
     * Check for partitions that are still missing a leader, update their error code and call the responseCallback
     */
-  override def onComplete() {
+  override def onComplete(): Unit = {
     trace(s"Completing operation for $createMetadata")
     val results = createMetadata.map { metadata =>
       // ignore topics that already have errors
-      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet) > 0)
+      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.partitions) > 0)
         (metadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
       else
         (metadata.topic, metadata.error)
@@ -83,6 +97,6 @@ class DelayedCreatePartitions(delayMs: Long,
 
   private def isMissingLeader(topic: String, partition: Int): Boolean = {
     val partitionInfo = adminManager.metadataCache.getPartitionInfo(topic, partition)
-    partitionInfo.isEmpty || partitionInfo.get.basePartitionState.leader == LeaderAndIsr.NoLeader
+    partitionInfo.forall(_.leader == LeaderAndIsr.NoLeader)
   }
 }
