@@ -131,7 +131,7 @@ versions += [
   netty: "4.1.94.Final",
   pcollections: "4.0.1",
   powermock: "2.0.9",
-  reflections: "0.9.12",
+  reflections: "0.10.2",
   reload4j: "1.2.25",
   rocksDB: "7.1.2",
   scalaCollectionCompat: "2.10.0",
