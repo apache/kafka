@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util.Properties
-import kafka.server.metadata.ZkConfigRepository
+import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils.TestUtils
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
@@ -40,7 +40,7 @@ class ZkAdminManagerTest {
   private val metrics = new Metrics()
   private val brokerId = 1
   private val topic = "topic-1"
-  private val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+  private val metadataCache: MetadataCache = mock(classOf[ZkMetadataCache])
 
   @AfterEach
   def tearDown(): Unit = {
@@ -150,7 +150,7 @@ class ZkAdminManagerTest {
 
   @Test
   def testUnknownPartitionsWhenCacheUninitialized(): Unit = {
-    when(metadataCache.isInitialized()).thenReturn(false)
+    when(metadataCache.asInstanceOf[ZkMetadataCache].isInitialized()).thenReturn(false)
 
     val zkAdminManager = new ZkAdminManager(mock(classOf[KafkaConfig]), mock(classOf[Metrics]), metadataCache, zkClient)
 

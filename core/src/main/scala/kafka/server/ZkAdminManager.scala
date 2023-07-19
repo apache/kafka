@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.DynamicConfig.QuotaConfigs
-import kafka.server.metadata.ZkConfigRepository
+import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -161,7 +161,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    controllerMutationQuota: ControllerMutationQuota,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
-    if (!metadataCache.isInitialized()) {
+    if (!metadataCache.asInstanceOf[ZkMetadataCache].isInitialized()) {
       responseCallback(toCreate.view.mapValues(_ => new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)).toMap)
     } else {
       // 1. map over topics creating assignment and calling zookeeper

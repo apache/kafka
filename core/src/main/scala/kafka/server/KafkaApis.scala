@@ -1905,7 +1905,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
-    if (!zkSupport.controller.isActive) {
+    if (!zkSupport.canControllerHandle()) {
       createTopicsRequest.data.topics.forEach { topic =>
         results.add(new CreatableTopicResult().setName(topic.name)
           .setErrorCode(Errors.NOT_CONTROLLER.code))
@@ -2014,7 +2014,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
-    if (!zkSupport.controller.isActive) {
+    if (!zkSupport.canControllerHandle()) {
       val result = createPartitionsRequest.data.topics.asScala.map { topic =>
         (topic.name, new ApiError(Errors.NOT_CONTROLLER, null))
       }.toMap
@@ -2065,7 +2065,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
     val results = new DeletableTopicResultCollection(deleteTopicRequest.numberOfTopics())
     val toDelete = mutable.Set[String]()
-    if (!zkSupport.controller.isActive) {
+    if (!zkSupport.canControllerHandle()) {
       deleteTopicRequest.topics().forEach { topic =>
         results.add(new DeletableTopicResult()
           .setName(topic.name())
@@ -3428,7 +3428,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
 
-    if (!zkSupport.controller.isActive) {
+    if (!zkSupport.canControllerHandle()) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
     } else if (authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
@@ -3447,7 +3447,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val alterPartitionRequest = request.body[AlterPartitionRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    if (!zkSupport.controller.isActive)
+    if (!zkSupport.canControllerHandle())
       requestHelper.sendResponseExemptThrottle(request, alterPartitionRequest.getErrorResponse(
         AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
     else
@@ -3479,7 +3479,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
-    } else if (!zkSupport.controller.isActive) {
+    } else if (!zkSupport.canControllerHandle()) {
       sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER)))
     } else if (!config.isFeatureVersioningSupported) {
       sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
@@ -3539,7 +3539,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
         s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
       return
-    } else if (!zkSupport.controller.isActive) {
+    } else if (!zkSupport.canControllerHandle()) {
       requestHelper.sendErrorResponseMaybeThrottle(request, new NotControllerException(
         s"Broker $brokerId is not the active controller"))
       return
@@ -3657,7 +3657,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val allocateProducerIdsRequest = request.body[AllocateProducerIdsRequest]
 
-    if (!zkSupport.controller.isActive)
+    if (!zkSupport.canControllerHandle())
       requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs =>
         allocateProducerIdsRequest.getErrorResponse(throttleTimeMs, Errors.NOT_CONTROLLER.exception))
     else

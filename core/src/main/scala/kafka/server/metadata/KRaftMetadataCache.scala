@@ -405,7 +405,5 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       image.highestOffsetAndEpoch().offset,
       true)
   }
-
-  override def isInitialized(): Boolean = _currentImage != MetadataImage.EMPTY
 }
 

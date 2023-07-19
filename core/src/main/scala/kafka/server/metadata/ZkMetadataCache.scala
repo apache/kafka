@@ -585,5 +585,5 @@ class ZkMetadataCache(
 
   override def getFeatureOption: Option[Features] = _features
 
-  override def isInitialized(): Boolean = metadataSnapshot != EMPTY_METADATA
+  def isInitialized(): Boolean = metadataSnapshot != EMPTY_METADATA
 }
