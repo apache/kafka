@@ -83,7 +83,7 @@ versions += [
   commonsCli: "1.4",
   commonsValidator: "1.7",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "8.1.1",
+  gradle: "8.2.1",
   grgit: "4.1.1",
   httpclient: "4.5.14",
   jackson: "2.13.5",
