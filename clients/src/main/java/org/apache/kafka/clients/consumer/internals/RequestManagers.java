@@ -123,7 +123,7 @@ public class RequestManagers<K, V> implements Closeable {
                 final IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
                 final FetchConfig<K, V> fetchConfig = createFetchConfig(config);
                 final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-                final long requestTimeoutMs = config.getLong(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+                final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
                         metadata,
                         isolationLevel,

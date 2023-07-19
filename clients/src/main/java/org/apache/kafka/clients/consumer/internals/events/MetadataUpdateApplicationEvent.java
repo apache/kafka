@@ -30,6 +30,24 @@ public class MetadataUpdateApplicationEvent extends ApplicationEvent {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        MetadataUpdateApplicationEvent that = (MetadataUpdateApplicationEvent) o;
+
+        return timestamp == that.timestamp;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
+        return result;
+    }
+
+    @Override
     public String toString() {
         return "MetadataUpdateApplicationEvent{" +
                 "timestamp=" + timestamp +

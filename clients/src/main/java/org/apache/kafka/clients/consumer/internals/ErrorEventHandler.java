@@ -28,7 +28,11 @@ public class ErrorEventHandler {
         this.backgroundEventQueue = backgroundEventQueue;
     }
 
-    public void handle(Throwable e) {
+    public void handle(RuntimeException e) {
         backgroundEventQueue.add(new ErrorBackgroundEvent(e));
+    }
+
+    public void handle(Throwable e) {
+        handle(new RuntimeException(e));
     }
 }

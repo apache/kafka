@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -162,8 +161,8 @@ public class ApplicationEventProcessor<K, V> {
 
     private boolean process(final ListOffsetsApplicationEvent event) {
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch,
-                        event.requireTimestamps);
+                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
+                        event.requireTimestamps());
         event.chain(future);
         return true;
     }
@@ -199,7 +198,7 @@ public class ApplicationEventProcessor<K, V> {
 
     private boolean process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+                this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic());
         event.chain(future);
         return true;
     }

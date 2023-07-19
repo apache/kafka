@@ -35,6 +35,24 @@ public class NoopBackgroundEvent extends BackgroundEvent {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        NoopBackgroundEvent that = (NoopBackgroundEvent) o;
+
+        return message.equals(that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + message.hashCode();
+        return result;
+    }
+
+    @Override
     public String toString() {
         return "NoopBackgroundEvent{" +
                 "message='" + message + '\'' +

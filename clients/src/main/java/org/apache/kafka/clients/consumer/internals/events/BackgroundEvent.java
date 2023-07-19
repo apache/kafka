@@ -36,4 +36,26 @@ public abstract class BackgroundEvent {
     public Type type() {
         return type;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        BackgroundEvent that = (BackgroundEvent) o;
+
+        return type == that.type;
+    }
+
+    @Override
+    public int hashCode() {
+        return type.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "BackgroundEvent{" +
+                "type=" + type +
+                '}';
+    }
 }

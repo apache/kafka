@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -39,9 +40,7 @@ import java.util.function.Supplier;
 public class DefaultEventHandler<K, V> implements EventHandler {
 
     private final Logger log;
-    private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final DefaultBackgroundThread<K, V> backgroundThread;
     private final IdempotentCloser closer = new IdempotentCloser();
 
@@ -53,9 +52,7 @@ public class DefaultEventHandler<K, V> implements EventHandler {
                                final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                final Supplier<RequestManagers<K, V>> requestManagersSupplier) {
         this.log = logContext.logger(DefaultEventHandler.class);
-        this.time = time;
         this.applicationEventQueue = applicationEventQueue;
-        this.backgroundEventQueue = backgroundEventQueue;
         this.backgroundThread = new DefaultBackgroundThread<>(time,
                 logContext,
                 applicationEventQueue,
@@ -66,16 +63,6 @@ public class DefaultEventHandler<K, V> implements EventHandler {
     }
 
     @Override
-    public Optional<BackgroundEvent> poll() {
-        return Optional.ofNullable(backgroundEventQueue.poll());
-    }
-
-    @Override
-    public boolean isEmpty() {
-        return backgroundEventQueue.isEmpty();
-    }
-
-    @Override
     public boolean add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         backgroundThread.wakeup();
@@ -83,11 +70,11 @@ public class DefaultEventHandler<K, V> implements EventHandler {
     }
 
     @Override
-    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Duration timeout) {
+    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
-        Objects.requireNonNull(timeout, "Duration provided to addAndGet must be non-null");
+        Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
-        return event.get(time.timer(timeout));
+        return event.get(timer);
     }
 
     public void close(final Duration timeout) {
@@ -110,6 +97,5 @@ public class DefaultEventHandler<K, V> implements EventHandler {
                     }
                 },
                 () -> log.info("The default consumer event handler was already closed"));
-
     }
 }

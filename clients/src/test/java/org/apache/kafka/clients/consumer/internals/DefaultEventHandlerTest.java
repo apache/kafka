@@ -26,8 +26,6 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.BlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultEventHandlerTest {
 
@@ -50,8 +48,6 @@ public class DefaultEventHandlerTest {
 
     @Test
     public void testBasicHandlerOps() {
-        assertTrue(handler.isEmpty());
-        assertFalse(handler.poll().isPresent());
         handler.add(new NoopApplicationEvent("test"));
         assertEquals(1, aq.size());
     }

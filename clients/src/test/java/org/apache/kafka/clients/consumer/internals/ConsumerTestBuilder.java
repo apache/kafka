@@ -21,9 +21,11 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -38,6 +40,7 @@ import org.apache.kafka.common.utils.Time;
 import java.io.Closeable;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -62,9 +65,11 @@ public class ConsumerTestBuilder implements Closeable {
     final BlockingQueue<ApplicationEvent> applicationEventQueue;
     final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue;
     final ConsumerConfig config;
+    final long retryBackoffMs;
     final SubscriptionState subscriptions;
     final ConsumerMetadata metadata;
     final FetchConfig<String, String> fetchConfig;
+    final Metrics metrics;
     final FetchMetricsManager metricsManager;
     final NetworkClientDelegate networkClientDelegate;
     final OffsetsRequestManager offsetsRequestManager;
@@ -74,6 +79,7 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchRequestManager<String, String> fetchRequestManager;
     final RequestManagers<String, String> requestManagers;
     final ApplicationEventProcessor<String, String> applicationEventProcessor;
+    final BackgroundEventProcessor backgroundEventProcessor;
     final MockClient client;
 
     private final String topic1 = "test1";
@@ -109,9 +115,9 @@ public class ConsumerTestBuilder implements Closeable {
 
         this.config = new ConsumerConfig(properties);
         IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
-        final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         final long requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        Metrics metrics = createMetrics(config, time);
+        this.metrics = createMetrics(config, time);
 
         this.subscriptions = createSubscriptionState(config, logContext);
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
@@ -164,6 +170,7 @@ public class ConsumerTestBuilder implements Closeable {
                 requestManagers,
                 metadata,
                 logContext));
+        this.backgroundEventProcessor = spy(new BackgroundEventProcessor(logContext, backgroundEventQueue));
     }
 
     @Override
@@ -217,22 +224,35 @@ public class ConsumerTestBuilder implements Closeable {
         final PrototypeAsyncConsumer<String, String> consumer;
 
         public PrototypeAsyncConsumerTestBuilder(Optional<String> groupIdOpt) {
+            String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+            List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
+                    config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
+            );
             FetchCollector<String, String> fetchCollector = new FetchCollector<>(logContext,
                     metadata,
                     subscriptions,
                     fetchConfig,
                     metricsManager,
                     time);
-            this.consumer = spy(new PrototypeAsyncConsumer<>(logContext,
+            this.consumer = spy(new PrototypeAsyncConsumer<>(
+                    logContext,
+                    clientId,
+                    new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
+                    new FetchBuffer<>(logContext),
+                    fetchCollector,
+                    new ConsumerInterceptors<>(Collections.emptyList()),
                     time,
                     eventHandler,
-                    groupIdOpt,
+                    backgroundEventQueue,
+                    metrics,
                     subscriptions,
-                    3000,
                     metadata,
-                    new ConsumerInterceptors<>(Collections.emptyList()),
-                    new FetchBuffer<>(logContext),
-                    fetchCollector));
+                    retryBackoffMs,
+                    REQUEST_TIMEOUT_MS,
+                    60000,
+                    assignors,
+                    groupIdOpt.orElse(null)));
         }
 
         @Override

@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,20 +32,14 @@ import java.util.Map;
  * or equals to the target timestamp)
  */
 public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
-    final Map<TopicPartition, Long> timestampsToSearch;
-    final boolean requireTimestamps;
+
+    private final Map<TopicPartition, Long> timestampsToSearch;
+    private final boolean requireTimestamps;
 
     public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps) {
         super(Type.LIST_OFFSETS);
-        this.timestampsToSearch = timestampToSearch;
+        this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
-    }
-
-    @Override
-    public String toString() {
-        return "ListOffsetsApplicationEvent {" +
-                "timestampsToSearch=" + timestampsToSearch + ", " +
-                "requireTimestamps=" + requireTimestamps + '}';
     }
 
     /**
@@ -59,4 +54,40 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
             offsetsByTimes.put(entry.getKey(), null);
         return offsetsByTimes;
     }
+
+    public Map<TopicPartition, Long> timestampsToSearch() {
+        return timestampsToSearch;
+    }
+
+    public boolean requireTimestamps() {
+        return requireTimestamps;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        ListOffsetsApplicationEvent that = (ListOffsetsApplicationEvent) o;
+
+        if (requireTimestamps != that.requireTimestamps) return false;
+        return timestampsToSearch.equals(that.timestampsToSearch);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + timestampsToSearch.hashCode();
+        result = 31 * result + (requireTimestamps ? 1 : 0);
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "ListOffsetsApplicationEvent {" +
+                "timestampsToSearch=" + timestampsToSearch + ", " +
+                "requireTimestamps=" + requireTimestamps + '}';
+    }
+
 }

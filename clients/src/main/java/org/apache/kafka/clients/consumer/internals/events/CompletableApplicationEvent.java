@@ -64,4 +64,30 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
             }
         });
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        CompletableApplicationEvent<?> that = (CompletableApplicationEvent<?>) o;
+
+        return future.equals(that.future);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + future.hashCode();
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "CompletableApplicationEvent{" +
+                "future=" + future +
+                ", type=" + type +
+                '}';
+    }
 }

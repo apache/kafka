@@ -101,8 +101,8 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
-        backgroundThread.start();
         assertFalse(backgroundThread.isRunning());
+        backgroundThread.start();
 
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
@@ -110,10 +110,10 @@ public class DefaultBackgroundThreadTest {
         TestUtils.waitForCondition(backgroundThread::isRunning,
                 maxWaitMs,
                 "Thread did not start within " + maxWaitMs + " ms");
-
-        assertTrue(backgroundThread.isRunning());
         backgroundThread.close();
-        assertFalse(backgroundThread.isRunning());
+        TestUtils.waitForCondition(() -> !backgroundThread.isRunning(),
+                maxWaitMs,
+                "Thread did not stop within " + maxWaitMs + " ms");
     }
 
     @Test
@@ -196,7 +196,7 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testFetchTopicMetadata() {
         when(this.topicMetadataRequestManager.requestTopicMetadata(Optional.of(anyString()))).thenReturn(new CompletableFuture<>());
-        this.applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic"));
+        this.applicationEventsQueue.add(new TopicMetadataApplicationEvent(Optional.of("topic")));
         backgroundThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
         backgroundThread.close();

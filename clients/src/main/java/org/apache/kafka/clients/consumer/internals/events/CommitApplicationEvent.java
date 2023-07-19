@@ -21,8 +21,10 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
+
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -38,6 +40,24 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
         return offsets;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        CommitApplicationEvent that = (CommitApplicationEvent) o;
+
+        return offsets.equals(that.offsets);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + offsets.hashCode();
+        return result;
     }
 
     @Override

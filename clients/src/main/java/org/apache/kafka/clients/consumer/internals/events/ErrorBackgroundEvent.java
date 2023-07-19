@@ -16,16 +16,37 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class ErrorBackgroundEvent extends BackgroundEvent {
-    private final Throwable error;
+import java.util.Objects;
 
-    public ErrorBackgroundEvent(Throwable error) {
+public class ErrorBackgroundEvent extends BackgroundEvent {
+
+    private final RuntimeException error;
+
+    public ErrorBackgroundEvent(RuntimeException error) {
         super(Type.ERROR);
-        this.error = error;
+        this.error = Objects.requireNonNull(error);
     }
 
-    public Throwable error() {
+    public RuntimeException error() {
         return error;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        ErrorBackgroundEvent that = (ErrorBackgroundEvent) o;
+
+        return error.equals(that.error);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + error.hashCode();
+        return result;
     }
 
     @Override

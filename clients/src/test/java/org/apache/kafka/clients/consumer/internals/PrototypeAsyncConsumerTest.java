@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -149,7 +150,7 @@ public class PrototypeAsyncConsumerTest {
             assertNotNull(constructedEvents);
             assertEquals(1, constructedEvents.size());
             OffsetFetchApplicationEvent event = constructedEvents.get(0);
-            verify(eventHandler).addAndGet(eq(event), any(Duration.class));
+            verify(eventHandler).addAndGet(eq(event), any(Timer.class));
         }
     }
 
@@ -204,7 +205,7 @@ public class PrototypeAsyncConsumerTest {
                 .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().offset()));
         assertEquals(expectedOffsets, result);
         verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Duration.class));
+                ArgumentMatchers.isA(Timer.class));
     }
 
     @Test
@@ -217,7 +218,7 @@ public class PrototypeAsyncConsumerTest {
                 () -> consumer.beginningOffsets(partitions,
                         Duration.ofMillis(1)));
         assertEquals(eventProcessingFailure, consumerError);
-        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Duration.class));
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
     }
 
     @Test
@@ -228,7 +229,7 @@ public class PrototypeAsyncConsumerTest {
                         Collections.singletonList(new TopicPartition("t1", 0)),
                         Duration.ofMillis(1)));
         verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Duration.class));
+                ArgumentMatchers.isA(Timer.class));
     }
 
     @Test
@@ -247,7 +248,7 @@ public class PrototypeAsyncConsumerTest {
                 assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ofMillis(1)));
         assertEquals(expectedResult, result);
         verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Duration.class));
+                ArgumentMatchers.isA(Timer.class));
     }
 
     // This test ensures same behaviour as the current consumer when offsetsForTimes is called
@@ -265,7 +266,7 @@ public class PrototypeAsyncConsumerTest {
                         Duration.ofMillis(0)));
         assertEquals(expectedResult, result);
         verify(eventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Duration.class));
+                ArgumentMatchers.isA(Timer.class));
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

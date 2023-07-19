@@ -114,15 +114,13 @@ public class DefaultBackgroundThread<K, V> extends KafkaThread implements Closea
      * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        if (!applicationEventQueue.isEmpty()) {
-            LinkedList<ApplicationEvent> res = new LinkedList<>();
-            this.applicationEventQueue.drainTo(res);
+        LinkedList<ApplicationEvent> events = new LinkedList<>();
+        applicationEventQueue.drainTo(events);
 
-            for (ApplicationEvent event : res) {
-                log.debug("Consuming application event: {}", event);
-                Objects.requireNonNull(event);
-                applicationEventProcessor.process(event);
-            }
+        for (ApplicationEvent event : events) {
+            log.debug("Consuming application event: {}", event);
+            Objects.requireNonNull(event);
+            applicationEventProcessor.process(event);
         }
 
         final long currentTimeMs = time.milliseconds();
