@@ -219,7 +219,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   }
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
-    Option(_currentImage.cluster().broker(brokerId)).
+    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
       flatMap(_.node(listenerName.value()).asScala)
   }
 
