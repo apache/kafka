@@ -1135,6 +1135,17 @@ public class RecordAccumulator {
         this.free.close();
     }
 
+    public void onLeaderEpochBump(TopicPartition topicPartition) {
+        Deque<ProducerBatch> deque = getDeque(topicPartition);
+
+        if (deque == null) return;
+        synchronized (deque) {
+            deque.forEach(batch -> {
+                batch.resetRetryBackoff();
+            });
+        }
+    }
+
     /**
      * Partitioner config for built-in partitioner
      */

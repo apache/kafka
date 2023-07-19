@@ -447,7 +447,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
                         clusterResourceListeners,
-                        Time.SYSTEM);
+                        Time.SYSTEM,
+                        this.accumulator);
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");

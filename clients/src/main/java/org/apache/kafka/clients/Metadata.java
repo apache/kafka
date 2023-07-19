@@ -413,6 +413,12 @@ public class Metadata implements Closeable {
                 // If the received leader epoch is at least the same as the previous one, update the metadata
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
+
+                if (newEpoch > currentEpoch) {
+                    log.debug("Signalling newer leader-epoch received for tp {}, old epoch {}, new epoch {}", tp, currentEpoch, newEpoch);
+                    onLeaderEpochBump(tp);
+                }
+
                 return Optional.of(partitionMetadata);
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
@@ -424,6 +430,15 @@ public class Metadata implements Closeable {
             lastSeenLeaderEpochs.remove(tp);
             return Optional.of(partitionMetadata.withoutLeaderEpoch());
         }
+    }
+
+    /**
+     * Override this to get notified/signalled when newer leader epoch is available in the Metadata
+     * for the topic-partition.
+     * @param topicPartition
+     */
+    protected void onLeaderEpochBump(TopicPartition topicPartition) {
+
     }
 
     /**

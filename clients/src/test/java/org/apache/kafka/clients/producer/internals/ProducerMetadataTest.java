@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.function.Function;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -34,6 +36,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import org.mockito.Mockito;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 
 public class ProducerMetadataTest {
     private static final long METADATA_IDLE_MS = 60 * 1000;
@@ -279,6 +284,31 @@ public class ProducerMetadataTest {
         assertFalse(metadata.updateRequested());
     }
 
+    @Test
+    void testOnLeaderEpochBump() {
+        RecordAccumulator mockAccumulator = Mockito.mock(RecordAccumulator.class);
+        metadata = new ProducerMetadata(refreshBackoffMs, metadataExpireMs, METADATA_IDLE_MS,
+            new LogContext(), new ClusterResourceListeners(), Time.SYSTEM, mockAccumulator);
+        long now = 10000;
+        String topic1 = "my-topic";
+        metadata.add(topic1, now);
+
+        assertTrue(metadata.updateRequested());
+
+        // Update leader-epoch for the topic-partition{"my-topic", 100} to 100
+        now += 1000;
+        metadata.updateWithCurrentRequestVersion(
+            responseWithTopics(Collections.singleton(topic1), _tp -> 100), true, now);
+
+        //  Update leader-epoch for the topic-partition{"my-topic", 100} to 101
+        now += 1000;
+        metadata.updateWithCurrentRequestVersion(
+            responseWithTopics(Collections.singleton(topic1), _tp -> 101), true, now);
+
+        // It would be called once, when leader epoch bumped from 100 -> 101.
+        Mockito.verify(mockAccumulator, times(1)).onLeaderEpochBump(any(TopicPartition.class));
+    }
+
     private MetadataResponse responseWithCurrentTopics() {
         return responseWithTopics(metadata.topics());
     }
@@ -288,6 +318,13 @@ public class ProducerMetadataTest {
         for (String topic : topics)
             partitionCounts.put(topic, 1);
         return RequestTestUtils.metadataUpdateWith(1, partitionCounts);
+    }
+
+    private MetadataResponse responseWithTopics(Set<String> topics, final Function<TopicPartition, Integer> epochSupplier) {
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        for (String topic : topics)
+            partitionCounts.put(topic, 1);
+        return RequestTestUtils.metadataUpdateWith(1, partitionCounts, epochSupplier);
     }
 
     private void clearBackgroundError() {

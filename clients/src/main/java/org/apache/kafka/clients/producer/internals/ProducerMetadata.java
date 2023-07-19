@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -42,16 +43,35 @@ public class ProducerMetadata extends Metadata {
     private final Logger log;
     private final Time time;
 
+    private final RecordAccumulator accumulator;
+
     public ProducerMetadata(long refreshBackoffMs,
                             long metadataExpireMs,
                             long metadataIdleMs,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
                             Time time) {
+        this(refreshBackoffMs, metadataExpireMs, metadataIdleMs, logContext, clusterResourceListeners, time, null);
+    }
+
+    public ProducerMetadata(long refreshBackoffMs,
+        long metadataExpireMs,
+        long metadataIdleMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        Time time,
+        RecordAccumulator accumulator) {
         super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
+        this.accumulator = accumulator;
+    }
+
+    protected void onLeaderEpochBump(TopicPartition topicPartition) {
+        if (this.accumulator != null) {
+            accumulator.onLeaderEpochBump(topicPartition);
+        }
     }
 
     @Override

@@ -517,4 +517,8 @@ public final class ProducerBatch {
     public boolean sequenceHasBeenReset() {
         return reopened;
     }
+
+    public void resetRetryBackoff() {
+        lastAttemptMs = 0;
+    }
 }
