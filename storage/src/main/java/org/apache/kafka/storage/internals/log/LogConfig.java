@@ -235,10 +235,16 @@ public class LogConfig extends AbstractConfig {
         FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
 
-    static String LogDirDoc = "The directory in which the log data is kept (supplemental for " + "log.dir" + " property)";
+    private static final String defaultLogDir = "/tmp/kafka-logs";
+    private static final String LogConfigPrefix = "log.";
+    private static final String LogDirProp = LogConfigPrefix + "dir";
+    private static final String LogDirsProp = LogConfigPrefix + "dirs";
+
+    private static final String MetadataLogDir = "metadata.log.dir";
+    static String LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirProp + " property)";
     static String MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
         "If it is not set, the metadata log is placed in the first log directory from log.dirs.";
-    static String LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + "log.dirs" + " is used.";
+    static String LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LogDirsProp + " is used.";
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
         "the leader side. The list should describe a set of replicas in the form " +
@@ -311,9 +317,9 @@ public class LogConfig extends AbstractConfig {
                 MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
             .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
-            .define("log.dirs", STRING, null, HIGH, LogDirsDoc)
-            .define("log.dir", STRING, null, HIGH, LogDirDoc)
-            .define("metadata.log.dir", STRING, null, HIGH, MetadataLogDirDoc)
+            .define(LogDirsProp, STRING, null, HIGH, LogDirsDoc)
+            .define(LogDirProp, STRING, defaultLogDir, HIGH, LogDirDoc)
+            .define(MetadataLogDir, STRING, null, HIGH, MetadataLogDirDoc)
             .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
     }
@@ -355,12 +361,6 @@ public class LogConfig extends AbstractConfig {
     public final List<String> followerReplicationThrottledReplicas;
     public final boolean messageDownConversionEnable;
     public final RemoteLogConfig remoteLogConfig;
-    private static final String LogConfigPrefix = "log.";
-
-    private static final String LogDirProp = LogConfigPrefix + "dir";
-
-    private static final String LogDirsProp = LogConfigPrefix + "dirs";
-
     private final int maxMessageSize;
     private final Map<?, ?> props;
 
