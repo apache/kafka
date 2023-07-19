@@ -51,7 +51,7 @@ public class InternalSinkRecord extends SinkRecord {
                                 Schema valueSchema, Object value, Long timestamp,
                                 Iterable<Header> headers) {
         return new InternalSinkRecord(originalRecord, topic, kafkaPartition, keySchema, key,
-            valueSchema, value, kafkaOffset, timestamp, timestampType, headers);
+            valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers);
     }
 
     @Override
