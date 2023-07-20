@@ -1002,6 +1002,7 @@ class Partition(val topicPartition: TopicPartition,
         // The topic is already deleted and we don't have any replica information. In this case, we can return false
         // so as to avoid NPE
         if (mayBeReplica.isEmpty) {
+          warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
           return false
         }
         val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
