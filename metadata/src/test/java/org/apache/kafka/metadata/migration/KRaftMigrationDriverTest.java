@@ -114,6 +114,22 @@ public class KRaftMigrationDriverTest {
         }
     };
 
+    /**
+     * Return a {@link org.apache.kafka.metadata.migration.KRaftMigrationDriver.Builder} that uses the mocks
+     * defined in this class.
+     */
+    KRaftMigrationDriver.Builder defaultTestBuilder() {
+        return KRaftMigrationDriver.newBuilder()
+            .setNodeId(3000)
+            .setZkRecordConsumer(new NoOpRecordConsumer())
+            .setInitialZkLoadHandler(metadataPublisher -> { })
+            .setFaultHandler(new MockFaultHandler("test"))
+            .setQuorumFeatures(quorumFeatures)
+            .setConfigSchema(KafkaConfigSchema.EMPTY)
+            .setControllerMetrics(metrics)
+            .setTime(mockTime);
+    }
+
     @BeforeEach
     public void setup() {
         apiVersions.update("4", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
@@ -226,18 +242,12 @@ public class KRaftMigrationDriverTest {
             .setBrokersInZk(1, 2, 3)
             .setConfigMigrationClient(configClient)
             .build();
-        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
-            3000,
-            new NoOpRecordConsumer(),
-            migrationClient,
-            metadataPropagator,
-            metadataPublisher -> { },
-            new MockFaultHandler("test"),
-            quorumFeatures,
-            KafkaConfigSchema.EMPTY,
-            metrics,
-            mockTime
-        )) {
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setPropagator(metadataPropagator)
+            .setInitialZkLoadHandler(metadataPublisher -> { });
+
+        try (KRaftMigrationDriver driver = builder.build()) {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
@@ -312,18 +322,11 @@ public class KRaftMigrationDriverTest {
             }
         };
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
-        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
-            3000,
-            new NoOpRecordConsumer(),
-            migrationClient,
-            metadataPropagator,
-            metadataPublisher -> { },
-            faultHandler,
-            quorumFeatures,
-            KafkaConfigSchema.EMPTY,
-            metrics,
-            mockTime
-        )) {
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setFaultHandler(faultHandler)
+            .setPropagator(metadataPropagator);
+        try (KRaftMigrationDriver driver = builder.build()) {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
@@ -358,19 +361,10 @@ public class KRaftMigrationDriverTest {
         CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder().setBrokersInZk(1).build();
         apiVersions.remove("6");
 
-        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
-            3000,
-            new NoOpRecordConsumer(),
-            migrationClient,
-            metadataPropagator,
-            metadataPublisher -> {
-            },
-            new MockFaultHandler("test"),
-            quorumFeatures,
-            KafkaConfigSchema.EMPTY,
-            metrics,
-            mockTime
-        )) {
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setPropagator(metadataPropagator);
+        try (KRaftMigrationDriver driver = builder.build()) {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
@@ -406,18 +400,11 @@ public class KRaftMigrationDriverTest {
         CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(),
             new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient());
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
-        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
-            3000,
-            new NoOpRecordConsumer(),
-            migrationClient,
-            metadataPropagator,
-            metadataPublisher -> { },
-            faultHandler,
-            quorumFeatures,
-            KafkaConfigSchema.EMPTY,
-            metrics,
-            mockTime
-        )) {
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setPropagator(metadataPropagator)
+            .setFaultHandler(faultHandler);
+        try (KRaftMigrationDriver driver = builder.build()) {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
@@ -478,19 +465,10 @@ public class KRaftMigrationDriverTest {
             .setTopicMigrationClient(topicClient)
             .setConfigMigrationClient(configClient)
             .build();
-
-        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
-            3000,
-            new NoOpRecordConsumer(),
-            migrationClient,
-            metadataPropagator,
-            metadataPublisher -> { },
-            new MockFaultHandler("test"),
-            quorumFeatures,
-            KafkaConfigSchema.EMPTY,
-            metrics,
-            mockTime
-        )) {
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setPropagator(metadataPropagator);
+        try (KRaftMigrationDriver driver = builder.build()) {
             verifier.verify(driver, migrationClient, topicClient, configClient);
         }
     }
