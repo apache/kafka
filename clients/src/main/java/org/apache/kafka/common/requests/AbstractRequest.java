@@ -37,8 +37,15 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         /**
          * Construct a new builder which allows any supported version
          */
+        public Builder(ApiKeys apiKey, boolean enableUnstableLastVersion) {
+            this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion(enableUnstableLastVersion));
+        }
+
+        /**
+         * Construct a new builder which allows any supported and released version
+         */
         public Builder(ApiKeys apiKey) {
-            this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
+            this(apiKey, false);
         }
 
         /**
