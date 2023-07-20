@@ -3059,9 +3059,6 @@ project(':connect:test-plugins') {
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
-    testImplementation libs.junitJupiter
-
-    testRuntimeOnly libs.slf4jlog4j
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
