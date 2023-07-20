@@ -2020,7 +2020,6 @@ public class GroupMetadataManager {
      * @param group The group.
      */
     private void schedulePendingSync(GenericGroup group) {
-        group.setPendingSyncGenerationId(group.generationId());
         timer.schedule(genericGroupSyncKey(group.groupId()),
             group.rebalanceTimeoutMs(),
             TimeUnit.MILLISECONDS,
@@ -2854,27 +2853,21 @@ public class GroupMetadataManager {
         String memberId
     ) {
         group.removePendingSyncMember(memberId);
-
         String syncKey = genericGroupSyncKey(group.groupId());
-
-        if (group.generationId() != group.pendingSyncGenerationId()) {
-            timer.cancel(syncKey);
-        } else {
-            switch (group.currentState()) {
-                case DEAD:
-                case EMPTY:
-                case PREPARING_REBALANCE:
+        switch (group.currentState()) {
+            case DEAD:
+            case EMPTY:
+            case PREPARING_REBALANCE:
+                timer.cancel(syncKey);
+                break;
+            case COMPLETING_REBALANCE:
+            case STABLE:
+                if (group.hasReceivedSyncFromAllMembers()) {
                     timer.cancel(syncKey);
-                    break;
-                case COMPLETING_REBALANCE:
-                case STABLE:
-                    if (group.hasReceivedSyncFromAllMembers()) {
-                        timer.cancel(syncKey);
-                    }
-                    break;
-                default:
-                    throw new IllegalStateException("Unknown group state: " + group.stateAsString());
-            }
+                }
+                break;
+            default:
+                throw new IllegalStateException("Unknown group state: " + group.stateAsString());
         }
     }
 
