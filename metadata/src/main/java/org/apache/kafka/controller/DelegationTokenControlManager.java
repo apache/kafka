@@ -26,9 +26,8 @@ import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
-// import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-// XXX import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
@@ -37,20 +36,17 @@ import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
-// import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.common.utils.Time;
 
 import java.security.NoSuchAlgorithmException;
 import java.security.InvalidKeyException;
 import java.nio.charset.StandardCharsets;
 import javax.crypto.spec.SecretKeySpec;
-// import javax.crypto.SecretKey;
 import javax.crypto.Mac;
 
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-// import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
@@ -60,7 +56,6 @@ import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_NOT_FOUND
 import static org.apache.kafka.common.protocol.Errors.INVALID_PRINCIPAL_TYPE;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
-
 
 /**
  * Manages DelegationTokens.
@@ -158,19 +153,12 @@ public class DelegationTokenControlManager {
         return str.getBytes(StandardCharsets.UTF_8);
     }
 
-    private byte[] createHmac(String tokenId) {
-        byte[] result = {};
+    private byte[] createHmac(String tokenId) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA512");
+        SecretKeySpec secretKey = new SecretKeySpec(toBytes(secretKeyString), mac.getAlgorithm());
 
-        try {
-            Mac mac = Mac.getInstance("HmacSHA512");
-            SecretKeySpec secretKey = new SecretKeySpec(toBytes(secretKeyString), mac.getAlgorithm());
-            mac.init(secretKey);
-            result = mac.doFinal(toBytes(tokenId));
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            // XXX
-            System.out.println("Caught an exception 2");
-        }
-        return result;
+        mac.init(secretKey);
+        return mac.doFinal(toBytes(tokenId));
     }
 
     private TokenInformation getToken(byte[] hmac) {
@@ -232,6 +220,13 @@ public class DelegationTokenControlManager {
             }
         }
 
+        byte[] hmac;
+        try {
+            hmac = createHmac(tokenId);
+        } catch (Throwable e) {
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(ApiError.fromThrowable(e).error().code()));
+        }
+
         TokenInformation newTokenInformation = new TokenInformation(tokenId, owner,
             context.principal(), renewers, now, maxTimestamp, expiryTimestamp);
 
@@ -243,7 +238,7 @@ public class DelegationTokenControlManager {
                 .setExpiryTimestampMs(expiryTimestamp)
                 .setMaxTimestampMs(maxTimestamp)
                 .setTokenId(tokenId)
-                .setHmac(createHmac(tokenId));
+                .setHmac(hmac);
 
         records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
         return ControllerResult.atomicOf(records, responseData);
