@@ -17,6 +17,7 @@
 
 package unit.kafka.server
 
+import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.server.{AddPartitionsToTxnManager, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -28,11 +29,16 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractResponse, AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.mockito.Mockito.mock
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.{any, anyLong, anyString}
+import org.mockito.MockedConstruction.Context
+import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
+import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -145,7 +151,7 @@ class AddPartitionsToTxnManagerTest {
     addPartitionsToTxnManager.addTxnData(node2, transactionData(transactionalId3, producerId3), setErrors(transactionErrors))
 
     // Test creationTimeMs increases too.
-    time.sleep(1000)
+    time.sleep(10)
 
     val requestsAndHandlers2 = addPartitionsToTxnManager.generateRequests().asScala
     // The request for node1 should not be added because one request is already inflight.
@@ -220,6 +226,75 @@ class AddPartitionsToTxnManagerTest {
     receiveResponse(mixedErrorsResponse)
     assertEquals(expectedTransaction1Errors, transaction1Errors)
     assertEquals(expectedTransaction2Errors, transaction2Errors)
+  }
+
+  @Test
+  def testAddPartitionsToTxnManagerMetrics(): Unit = {
+    val startTime = time.milliseconds()
+    val transactionErrors = mutable.Map[TopicPartition, Errors]()
+
+    var maxVerificationTime: Long = 0
+    val mockVerificationFailureMeter = mock(classOf[Meter])
+    val mockVerificationTime = mock(classOf[Histogram])
+
+    // Update max verification time when we see a higher verification time.
+    when(mockVerificationTime.update(anyLong())).thenAnswer(
+      {
+        invocation =>
+          val newTime = invocation.getArgument(0).asInstanceOf[Long]
+          if (newTime > maxVerificationTime)
+            maxVerificationTime = newTime
+      }
+    )
+
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup], (mock: KafkaMetricsGroup, context: Context) => {
+        when(mock.newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))).thenReturn(mockVerificationFailureMeter)
+        when(mock.newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationTimeMsMetricName))).thenReturn(mockVerificationTime)
+      })
+
+    val addPartitionsManagerWithMockedMetrics = new AddPartitionsToTxnManager(
+      KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+      networkClient,
+      time)
+
+    try {
+      addPartitionsManagerWithMockedMetrics.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transactionErrors))
+      addPartitionsManagerWithMockedMetrics.addTxnData(node1, transactionData(transactionalId2, producerId2), setErrors(transactionErrors))
+
+      time.sleep(100)
+
+      val requestsAndHandlers = addPartitionsManagerWithMockedMetrics.generateRequests()
+      var requestsHandled = 0
+
+      requestsAndHandlers.forEach { requestAndCompletionHandler =>
+        time.sleep(100)
+        requestAndCompletionHandler.handler.onComplete(authenticationErrorResponse)
+        requestsHandled += 1
+        verify(mockVerificationTime, times(requestsHandled)).update(anyLong())
+        assertEquals(maxVerificationTime, time.milliseconds() - startTime)
+        verify(mockVerificationFailureMeter, times(requestsHandled)).mark(3) // since there are 3 partitions
+      }
+
+      // shutdown the manager so that metrics are removed.
+      addPartitionsManagerWithMockedMetrics.shutdown()
+
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+
+      verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))
+      verify(mockMetricsGroup).newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.VerificationTimeMsMetricName))
+      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.VerificationFailureRateMetricName)
+      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.VerificationTimeMsMetricName)
+
+      // assert that we have verified all invocations on the metrics group.
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      if (mockMetricsGroupCtor != null) {
+        mockMetricsGroupCtor.close()
+      }
+      if (addPartitionsManagerWithMockedMetrics.isRunning) {
+        addPartitionsManagerWithMockedMetrics.shutdown()
+      }
+    }
   }
 
   private def clientResponse(response: AbstractResponse, authException: AuthenticationException = null, mismatchException: UnsupportedVersionException = null, disconnected: Boolean = false): ClientResponse = {

@@ -477,7 +477,7 @@ public class PluginsTest {
     }
 
     private void assertClassLoaderReadsVersionFromResource(
-            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws MalformedURLException {
+            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) {
         URL[] systemPath = TestPlugins.pluginPath(parentResource)
                 .stream()
                 .map(Path::toFile)
@@ -498,7 +498,12 @@ public class PluginsTest {
                 WorkerConfig.PLUGIN_PATH_CONFIG,
                 TestPlugins.pluginPathJoined(childResource)
         );
-        plugins = new Plugins(pluginProps, parent);
+        plugins = new Plugins(pluginProps, parent, new ClassLoaderFactory());
+
+        assertTrue("Should find plugin in plugin classloader",
+                plugins.converters().stream().anyMatch(desc -> desc.loader() instanceof PluginClassLoader));
+        assertTrue("Should find plugin in parent classloader",
+                plugins.converters().stream().anyMatch(desc -> parent.equals(desc.loader())));
 
         Converter converter = plugins.newPlugin(
                 className,

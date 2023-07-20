@@ -26,7 +26,7 @@ abstract public class ApplicationEvent {
         this.type = type;
     }
     /**
-     * process the application event. Return true upon succesful execution,
+     * process the application event. Return true upon successful execution,
      * false otherwise.
      * @return true if the event was successfully executed; false otherwise.
      */

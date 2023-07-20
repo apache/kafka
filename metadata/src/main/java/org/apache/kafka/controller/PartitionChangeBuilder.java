@@ -81,7 +81,7 @@ public class PartitionChangeBuilder {
     private List<Integer> targetAdding;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
-    private boolean bumpLeaderEpochOnIsrShrink;
+    private boolean zkMigrationEnabled;
 
 
     public PartitionChangeBuilder(
@@ -96,7 +96,7 @@ public class PartitionChangeBuilder {
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
-        this.bumpLeaderEpochOnIsrShrink = !metadataVersion.isSkipLeaderEpochBumpSupported();
+        this.zkMigrationEnabled = false;
 
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
@@ -144,8 +144,8 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    public PartitionChangeBuilder setBumpLeaderEpochOnIsrShrink(boolean bumpLeaderEpochOnIsrShrink) {
-        this.bumpLeaderEpochOnIsrShrink = bumpLeaderEpochOnIsrShrink;
+    public PartitionChangeBuilder setZkMigrationEnabled(boolean zkMigrationEnabled) {
+        this.zkMigrationEnabled = zkMigrationEnabled;
         return this;
     }
 
@@ -288,9 +288,13 @@ public class PartitionChangeBuilder {
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {
+            boolean bumpLeaderEpochOnIsrShrink = metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled;
+
             if (!Replicas.contains(targetReplicas, partition.replicas)) {
+                // Reassignment
                 record.setLeader(partition.leader);
             } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
+                // ISR shrink
                 record.setLeader(partition.leader);
             }
         }

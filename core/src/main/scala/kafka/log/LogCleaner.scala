@@ -179,6 +179,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    */
   def removeMetrics(): Unit = {
     LogCleaner.MetricNames.foreach(metricsGroup.removeMetric)
+    cleanerManager.removeMetrics()
   }
 
   /**

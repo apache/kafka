@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.tasks;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,4 +105,18 @@ public class DefaultTaskExecutorTest {
         assertTrue(future.isDone(), "Unassign is not completed");
         assertEquals(task, future.get(), "Unexpected task was unassigned");
     }
+
+    @Test
+    public void shouldSetUncaughtStreamsException() {
+        final StreamsException exception = mock(StreamsException.class);
+        when(task.process(anyLong())).thenThrow(exception);
+
+        taskExecutor.start();
+
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).setUncaughtException(exception, task.id());
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
+        assertNull(taskExecutor.currentTask());
+    }
+
 }

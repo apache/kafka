@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata, VerificationStateEntry}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
@@ -1085,6 +1085,41 @@ class ProducerStateManagerTest {
     Files.delete(file.toPath)
     assertTrue(!manager.removeAndMarkSnapshotForDeletion(5).isPresent)
     assertTrue(!manager.latestSnapshotOffset.isPresent)
+  }
+
+  @Test
+  def testEntryForVerification(): Unit = {
+    val originalEntry = stateManager.verificationStateEntry(producerId, true)
+    val originalEntryVerificationGuard = originalEntry.verificationGuard()
+
+    def verifyEntry(producerId: Long, newEntry: VerificationStateEntry): Unit = {
+      val entry = stateManager.verificationStateEntry(producerId, false)
+      assertEquals(originalEntryVerificationGuard, entry.verificationGuard)
+      assertEquals(entry.verificationGuard, newEntry.verificationGuard)
+    }
+
+    // If we already have an entry, reuse it.
+    val updatedEntry = stateManager.verificationStateEntry(producerId, true)
+    verifyEntry(producerId, updatedEntry)
+
+    // Add the transactional data and clear the entry.
+    append(stateManager, producerId, 0, 0, offset = 0, isTransactional = true)
+    stateManager.clearVerificationStateEntry(producerId)
+    assertNull(stateManager.verificationStateEntry(producerId, false))
+  }
+
+  @Test
+  def testVerificationStateEntryExpiration(): Unit = {
+    val originalEntry = stateManager.verificationStateEntry(producerId, true)
+
+    // Before timeout we do not remove. Note: Accessing the verification entry does not update the time.
+    time.sleep(producerStateManagerConfig.producerIdExpirationMs / 2)
+    stateManager.removeExpiredProducers(time.milliseconds())
+    assertEquals(originalEntry, stateManager.verificationStateEntry(producerId, false))
+
+    time.sleep((producerStateManagerConfig.producerIdExpirationMs / 2) + 1)
+    stateManager.removeExpiredProducers(time.milliseconds())
+    assertNull(stateManager.verificationStateEntry(producerId, false))
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
