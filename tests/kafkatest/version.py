@@ -120,7 +120,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("3.5.1-SNAPSHOT")
+DEV_VERSION = KafkaVersion("3.5.2-SNAPSHOT")
 
 LATEST_METADATA_VERSION = "3.3"
 
@@ -250,4 +250,5 @@ LATEST_3_4 = V_3_4_0
 # 3.5.x versions
 V_3_5_0 = KafkaVersion("3.5.0")
 V_3_5_1 = KafkaVersion("3.5.1")
-LATEST_3_5 = V_3_5_1
+V_3_5_2 = KafkaVersion("3.5.2")
+LATEST_3_5 = V_3_5_2
