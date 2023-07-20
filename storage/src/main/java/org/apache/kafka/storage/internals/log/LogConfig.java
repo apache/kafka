@@ -240,11 +240,30 @@ public class LogConfig extends AbstractConfig {
     private static final String LogDirProp = LogConfigPrefix + "dir";
     private static final String LogDirsProp = LogConfigPrefix + "dirs";
 
-    private static final String MetadataLogDir = "metadata.log.dir";
+    private static final String NodeIdProp = "node.id";
+
+    private static final int defaultEmptyNodeId = -1;
+
+    private static final String MetadataLogDirProp = "metadata.log.dir";
+
+    private static final String ProcessRolesProp = "process.roles";
+
+    private static final String InterBrokerProtocolVersionProp = "inter.broker.protocol.version";
+
+    private static final String InterBrokerProtocolVersionPropDefaultValue = MetadataVersion.latest().version();
     private static final String LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirProp + " property)";
     private static final String MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
         "If it is not set, the metadata log is placed in the first log directory from log.dirs.";
+    private static final String InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
+        " This is typically bumped after all brokers were upgraded to a new version.\n" +
+        " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check MetadataVersion for the full list.";
+
     private static final String LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LogDirsProp + " is used.";
+
+    private static final String NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
+        "This is required configuration when running in KRaft mode.";
+    private static final String ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
+        "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters.";
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
         "the leader side. The list should describe a set of replicas in the form " +
@@ -319,7 +338,10 @@ public class LogConfig extends AbstractConfig {
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
             .define(LogDirsProp, STRING, null, HIGH, LogDirsDoc)
             .define(LogDirProp, STRING, defaultLogDir, HIGH, LogDirDoc)
-            .define(MetadataLogDir, STRING, null, HIGH, MetadataLogDirDoc)
+            .define(MetadataLogDirProp, STRING, null, HIGH, MetadataLogDirDoc)
+            .define(InterBrokerProtocolVersionProp, STRING, InterBrokerProtocolVersionPropDefaultValue, new MetadataVersionValidator(), MEDIUM, InterBrokerProtocolVersionDoc)
+            .define(NodeIdProp, INT, defaultEmptyNodeId, null, HIGH, NodeIdDoc)
+            .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
             .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
     }
@@ -350,6 +372,9 @@ public class LogConfig extends AbstractConfig {
     public final int minInSyncReplicas;
     public final String compressionType;
     public final boolean preallocate;
+    public final String interBrokerProtocolVersion;
+    public final int nodeId;
+    public final Set<String> processRoles;
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details regarding the deprecation */
     @Deprecated
@@ -407,7 +432,9 @@ public class LogConfig extends AbstractConfig {
         this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
-
+        this.interBrokerProtocolVersion = getString(InterBrokerProtocolVersionProp);
+        this.nodeId = getNodeId();
+        this.processRoles = parseProcessRoles();
         remoteLogConfig = new RemoteLogConfig(this, retentionMs, retentionSize);
     }
 
@@ -518,10 +545,7 @@ public class LogConfig extends AbstractConfig {
 
 
 
-    private static final String MetadataLogDirProp = "metadata.log.dir";
-    private static final String ProcessRolesProp = "process.roles";
-    private static final String NodeIdProp = "node.id";
-    private static final String InterBrokerProtocolVersionProp = "inter.broker.protocol.version";
+
     private static final String QUORUM_PREFIX = "controller.quorum.";
     private static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     private static final String ControllerListenerNamesProp = "controller.listener.names";
@@ -539,6 +563,10 @@ public class LogConfig extends AbstractConfig {
 
     public static String getLogDirsProp(){
         return LogDirsProp;
+    }
+
+    public static String getLogDirProp(){
+        return LogDirProp;
     }
 
     public static String getProcessRolesProp(){

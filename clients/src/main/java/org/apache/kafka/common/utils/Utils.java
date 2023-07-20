@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.nio.BufferUnderflowException;
-import java.nio.file.StandardOpenOption;
-import java.util.AbstractMap;
-import java.util.EnumSet;
-import java.util.Map.Entry;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
@@ -40,7 +33,9 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -50,16 +45,22 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -67,9 +68,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
@@ -81,9 +85,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public final class Utils {
 
@@ -743,6 +744,36 @@ public final class Utils {
     }
 
     /**
+     * Reads bytes from a source buffer and returns a new buffer.
+     * <p> The content of the new buffer will start at this buffer's current
+     * position.  Changes to this buffer's content will be visible in the new
+     * buffer, and vice versa; the two buffers' position, limit, and mark
+     * values will be independent.
+     *
+     * <p> The new buffer's position will be zero, its limit will be the number of bytes
+     * read i.e. <code>bytesToRead</code>, it's capacity will be the number of bytes remaining in
+     * source buffer , its mark will be undefined, and its byte order will be {@link ByteOrder#BIG_ENDIAN BIG_ENDIAN}.
+     *
+     * <p>Since JDK 13, this method could be replaced with slice(int index, int length).
+     *
+     * @param srcBuf Source buffer where data is read from
+     * @param bytesToRead Number of bytes to read
+     * @return Destination buffer or null if bytesToRead is < 0
+     *
+     * @see ByteBuffer#slice()
+     */
+    public static ByteBuffer readBytes(ByteBuffer srcBuf, int bytesToRead) {
+        if (bytesToRead < 0)
+            return null;
+
+        final ByteBuffer dstBuf = srcBuf.slice();
+        dstBuf.limit(bytesToRead);
+        srcBuf.position(srcBuf.position() + bytesToRead);
+
+        return dstBuf;
+    }
+
+    /**
      * Read a file as string and return the content. The file is treated as a stream and no seek is performed.
      * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
@@ -947,9 +978,9 @@ public final class Utils {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException outer) {
             try {
+                log.warn("Failed atomic move of {} to {} retrying with a non-atomic move", source, target, outer);
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
-                        outer.getMessage());
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed", source, target);
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -1192,12 +1223,12 @@ public final class Utils {
      * Read data from the input stream to the given byte buffer until there are no bytes remaining in the buffer or the
      * end of the stream has been reached.
      *
-     * @param inputStream Input stream to read from
+     * @param inputStream       Input stream to read from
      * @param destinationBuffer The buffer into which bytes are to be transferred (it must be backed by an array)
-     *
+     * @return number of byte read from the input stream
      * @throws IOException If an I/O error occurs
      */
-    public static void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+    public static int readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
         if (!destinationBuffer.hasArray())
             throw new IllegalArgumentException("destinationBuffer must be backed by an array");
         int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
@@ -1211,6 +1242,7 @@ public final class Utils {
             totalBytesRead += bytesRead;
         } while (length > totalBytesRead);
         destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
+        return totalBytesRead;
     }
 
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
@@ -1230,7 +1262,7 @@ public final class Utils {
      * @return The length of the actual written data
      * @throws IOException If an I/O error occurs
      */
-    public static long tryWriteTo(TransferableChannel destChannel,
+    public static int tryWriteTo(TransferableChannel destChannel,
                                   int position,
                                   int length,
                                   ByteBuffer sourceBuffer) throws IOException {

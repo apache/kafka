@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
@@ -96,8 +96,7 @@ public class SmokeTestDriverIntegrationTest {
 
     private static Stream<Boolean> parameters() {
         return Stream.of(
-            // TODO KAFKA-14533: debug and re-enable both parameters
-            //Boolean.TRUE
+            Boolean.TRUE,
             Boolean.FALSE
           );
     }

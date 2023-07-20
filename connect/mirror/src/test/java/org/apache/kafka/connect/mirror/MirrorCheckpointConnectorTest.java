@@ -17,12 +17,14 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +48,7 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(
             makeProps("emit.checkpoints.enabled", "false"));
 
-        List<String> knownConsumerGroups = new ArrayList<>();
+        Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
@@ -62,7 +64,7 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(
                 makeProps("emit.checkpoints.enabled", "true"));
 
-        List<String> knownConsumerGroups = new ArrayList<>();
+        Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
@@ -78,7 +80,7 @@ public class MirrorCheckpointConnectorTest {
     @Test
     public void testNoConsumerGroup() {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(new ArrayList<>(), config);
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(new HashSet<>(), config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
         assertEquals(0, output.size(), "ConsumerGroup shouldn't exist");
@@ -89,7 +91,7 @@ public class MirrorCheckpointConnectorTest {
         // disable the replication
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps("enabled", "false"));
 
-        List<String> knownConsumerGroups = new ArrayList<>();
+        Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups, config);
@@ -103,7 +105,7 @@ public class MirrorCheckpointConnectorTest {
         // enable the replication
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps("enabled", "true"));
 
-        List<String> knownConsumerGroups = new ArrayList<>();
+        Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups, config);
@@ -117,19 +119,68 @@ public class MirrorCheckpointConnectorTest {
     @Test
     public void testFindConsumerGroups() throws Exception {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptyList(), config);
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptySet(), config);
         connector = spy(connector);
 
         Collection<ConsumerGroupListing> groups = Arrays.asList(
                 new ConsumerGroupListing("g1", true),
                 new ConsumerGroupListing("g2", false));
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         doReturn(groups).when(connector).listConsumerGroups();
-        doReturn(true).when(connector).shouldReplicate(anyString());
-        List<String> groupFound = connector.findConsumerGroups();
+        doReturn(true).when(connector).shouldReplicateByTopicFilter(anyString());
+        doReturn(true).when(connector).shouldReplicateByGroupFilter(anyString());
+        doReturn(offsets).when(connector).listConsumerGroupOffsets(anyString());
+        Set<String> groupFound = connector.findConsumerGroups();
 
         Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
-        assertEquals(expectedGroups, new HashSet<>(groupFound),
+        assertEquals(expectedGroups, groupFound,
                 "Expected groups are not the same as findConsumerGroups");
+
+        doReturn(false).when(connector).shouldReplicateByTopicFilter(anyString());
+        Set<String> topicFilterGroupFound = connector.findConsumerGroups();
+        assertEquals(Collections.emptySet(), topicFilterGroupFound);
+    }
+
+    @Test
+    public void testFindConsumerGroupsInCommonScenarios() throws Exception {
+        MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptySet(), config);
+        connector = spy(connector);
+
+        Collection<ConsumerGroupListing> groups = Arrays.asList(
+                new ConsumerGroupListing("g1", true),
+                new ConsumerGroupListing("g2", false),
+                new ConsumerGroupListing("g3", false),
+                new ConsumerGroupListing("g4", false));
+        Map<TopicPartition, OffsetAndMetadata> offsetsForGroup1 = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> offsetsForGroup2 = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> offsetsForGroup3 = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> offsetsForGroup4 = new HashMap<>();
+        offsetsForGroup1.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
+        offsetsForGroup1.put(new TopicPartition("t2", 0), new OffsetAndMetadata(0));
+        offsetsForGroup2.put(new TopicPartition("t2", 0), new OffsetAndMetadata(0));
+        offsetsForGroup2.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
+        offsetsForGroup3.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
+        offsetsForGroup4.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
+        doReturn(groups).when(connector).listConsumerGroups();
+        doReturn(false).when(connector).shouldReplicateByTopicFilter("t1");
+        doReturn(true).when(connector).shouldReplicateByTopicFilter("t2");
+        doReturn(false).when(connector).shouldReplicateByTopicFilter("t3");
+        doReturn(true).when(connector).shouldReplicateByGroupFilter("g1");
+        doReturn(true).when(connector).shouldReplicateByGroupFilter("g2");
+        doReturn(true).when(connector).shouldReplicateByGroupFilter("g3");
+        doReturn(false).when(connector).shouldReplicateByGroupFilter("g4");
+        doReturn(offsetsForGroup1).when(connector).listConsumerGroupOffsets("g1");
+        doReturn(offsetsForGroup2).when(connector).listConsumerGroupOffsets("g2");
+        doReturn(offsetsForGroup3).when(connector).listConsumerGroupOffsets("g3");
+        doReturn(offsetsForGroup4).when(connector).listConsumerGroupOffsets("g4");
+
+        Set<String> groupFound = connector.findConsumerGroups();
+        Set<String> verifiedSet = new HashSet<>();
+        verifiedSet.add("g1");
+        verifiedSet.add("g2");
+        assertEquals(groupFound, verifiedSet);
     }
 
 }

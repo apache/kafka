@@ -203,7 +203,7 @@ class ConnectRestApiTest(KafkaTest):
 
         self.cc.delete_connector("local-file-source")
         self.cc.delete_connector("local-file-sink")
-        wait_until(lambda: len(self.cc.list_connectors()) == 0, timeout_sec=10, err_msg="Deleted connectors did not disappear from REST listing")
+        wait_until(lambda: not self.cc.list_connectors(), timeout_sec=10, err_msg="Deleted connectors did not disappear from REST listing")
 
     def validate_output(self, input):
         input_set = set(input)

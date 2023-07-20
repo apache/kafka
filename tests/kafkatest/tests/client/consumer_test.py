@@ -334,7 +334,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
-        wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) != None,
+        wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) is not None,
                    timeout_sec=self.session_timeout_sec*2+5,
                    err_msg="Timed out waiting for consumer to close")
 

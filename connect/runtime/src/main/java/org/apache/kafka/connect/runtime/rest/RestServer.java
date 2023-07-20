@@ -334,7 +334,7 @@ public abstract class RestServer {
      * <p>
      * <em>N.B.: Classes do <b>not</b> need to register the resources provided in {@link #adminResources()} with
      * the {@link ResourceConfig} parameter in this method; they are automatically registered by the parent class.</em>
-     * @param adminResourceConfig the {@link ResourceConfig} that the server's regular listeners are registered with; never null
+     * @param adminResourceConfig the {@link ResourceConfig} that the server's admin listeners are registered with; never null
      */
     protected void configureAdminResources(ResourceConfig adminResourceConfig) {
         // No-op by default

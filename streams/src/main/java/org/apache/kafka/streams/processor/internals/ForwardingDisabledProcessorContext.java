@@ -43,7 +43,7 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     private static final String EXPLANATION = "ProcessorContext#forward() is not supported from this context, "
         + "as the framework must ensure the key is not changed (#forward allows changing the key on "
         + "messages which are sent). Try another function, which doesn't allow the key to be changed "
-        + "(for example - #tranformValues).";
+        + "(for example - #transformValues).";
 
     public ForwardingDisabledProcessorContext(final ProcessorContext delegate) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");

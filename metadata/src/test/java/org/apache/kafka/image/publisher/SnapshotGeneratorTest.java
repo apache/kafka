@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -46,8 +47,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class SnapshotGeneratorTest {
     static class MockEmitter implements SnapshotGenerator.Emitter {
         private final CountDownLatch latch = new CountDownLatch(1);
-        private final List<MetadataImage> images = new ArrayList<>();
-        private RuntimeException problem = null;
+        private final List<MetadataImage> images = new CopyOnWriteArrayList<>();
+        private volatile RuntimeException problem = null;
 
         MockEmitter setReady() {
             latch.countDown();
@@ -66,14 +67,14 @@ public class SnapshotGeneratorTest {
                 throw currentProblem;
             }
             try {
-                latch.await();
+                latch.await(30, TimeUnit.SECONDS);
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }
             images.add(image);
         }
 
-        synchronized List<MetadataImage> images() {
+        List<MetadataImage> images() {
             return new ArrayList<>(images);
         }
     }

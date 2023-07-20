@@ -135,7 +135,7 @@ public class ConnectRestServerTest {
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
         server.stop();
 
-        // Listener is overriden by advertised values
+        // Listener is overridden by advertised values
         configMap = new HashMap<>(baseServerProps());
         configMap.put(RestServerConfig.LISTENERS_CONFIG, "https://localhost:8443");
         configMap.put(RestServerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");

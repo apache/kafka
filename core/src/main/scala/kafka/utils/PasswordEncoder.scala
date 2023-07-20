@@ -36,7 +36,7 @@ object PasswordEncoder {
   val KeyLengthProp = "keyLength"
   val SaltProp = "salt"
   val IterationsProp = "iterations"
-  val EncyrptedPasswordProp = "encryptedPassword"
+  val EncryptedPasswordProp = "encryptedPassword"
   val PasswordLengthProp = "passwordLength"
 
   def encrypting(secret: Password,
@@ -107,7 +107,7 @@ class EncryptingPasswordEncoder(
       KeyLengthProp -> keyLength,
       SaltProp -> base64Encode(salt),
       IterationsProp -> iterations.toString,
-      EncyrptedPasswordProp -> base64Encode(encryptedPassword),
+      EncryptedPasswordProp -> base64Encode(encryptedPassword),
       PasswordLengthProp -> password.value.length
     ) ++ cipherParamsEncoder.toMap(cipher.getParameters)
     encryptedMap.map { case (k, v) => s"$k:$v" }.mkString(",")
@@ -120,7 +120,7 @@ class EncryptingPasswordEncoder(
     val keyLength = params(KeyLengthProp).toInt
     val salt = base64Decode(params(SaltProp))
     val iterations = params(IterationsProp).toInt
-    val encryptedPassword = base64Decode(params(EncyrptedPasswordProp))
+    val encryptedPassword = base64Decode(params(EncryptedPasswordProp))
     val passwordLengthProp = params(PasswordLengthProp).toInt
     val cipher = Cipher.getInstance(cipherAlg)
     val keyFactory = secretKeyFactory(Some(keyFactoryAlg))

@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 import org.ajoberstar.grgit.Grgit
+import org.gradle.api.JavaVersion
 
 import java.nio.charset.StandardCharsets
 
@@ -34,14 +34,13 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.46.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '8.1.2'
+  id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.0"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
 
   id "com.github.spotbugs" version '5.0.13' apply false
-  id 'org.gradle.test-retry' version '1.5.2' apply false
   id 'org.scoverage' version '7.0.1' apply false
-  id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
+  id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
 }
 
@@ -147,7 +146,9 @@ allprojects {
           // be explicit about the Netty dependency version instead of relying on the version set by
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
-          libs.nettyTransportNativeEpoll
+          libs.nettyTransportNativeEpoll,
+	  // be explicit about the reload4j version instead of relying on the transitive versions
+	  libs.log4j
         )
       }
     }
@@ -178,6 +179,12 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
+    dependsOn subprojects.collect {
+      it.tasks.matching {
+        it.name == "processMessages" || it.name == "processTestMessages"
+      }
+    }
+
     verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
@@ -195,7 +202,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'TROGDOR.md',
+        'trogdor/README.md',
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
@@ -225,7 +232,6 @@ subprojects {
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
-  apply plugin: 'org.gradle.test-retry'
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -268,8 +274,11 @@ subprojects {
     // set --source and --target via `sourceCompatibility` and `targetCompatibility` a couple of lines below
     if (JavaVersion.current().isJava9Compatible())
       options.release = minJavaVersion
+    // --source/--target 8 is deprecated in Java 20, suppress warning until Java 8 support is dropped in Kafka 4.0
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
+      options.compilerArgs << "-Xlint:-options"
   }
-  
+
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
   sourceCompatibility = minJavaVersion
@@ -408,8 +417,7 @@ subprojects {
       "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
-      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*"
+      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*"
     ])
   }
 
@@ -560,6 +568,7 @@ subprojects {
     options.charSet = 'UTF-8'
     options.docEncoding = 'UTF-8'
     options.encoding = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
     options.addStringOption('Xdoclint:none', '-quiet')
 
@@ -858,11 +867,13 @@ project(':core') {
     implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':storage:api')
+    implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
 
 
     implementation libs.argparse4j
+    implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
@@ -896,6 +907,7 @@ project(':core') {
     testImplementation project(':storage:api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -915,6 +927,7 @@ project(':core') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
+    testImplementation libs.caffeine
 
     generator project(':generator')
   }
@@ -1106,6 +1119,8 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':tools:tools-api').jar) { into("libs/") }
+    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -1219,6 +1234,10 @@ project(':metadata') {
   javadoc {
     enabled = false
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-metadata.xml")
+  }
 }
 
 project(':group-coordinator') {
@@ -1285,7 +1304,6 @@ project(':examples') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':server-common')
   }
 
   javadoc {
@@ -1551,11 +1569,13 @@ project(':server-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.joptSimple
+    implementation libs.pcollections
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
@@ -1601,6 +1621,10 @@ project(':server-common') {
 
   clean.doFirst {
     delete "$buildDir/kafka/"
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-server-common.xml")
   }
 }
 
@@ -1677,6 +1701,7 @@ project(':storage') {
     implementation project(':storage:api')
     implementation project(':server-common')
     implementation project(':clients')
+    implementation libs.caffeine
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
@@ -1763,6 +1788,61 @@ project(':storage') {
 
   javadoc {
     enabled = false
+  }
+}
+
+project(':tools:tools-api') {
+  archivesBaseName = "kafka-tools-api"
+
+  dependencies {
+    implementation project(':clients')
+    testImplementation libs.junitJupiter
+  }
+
+  task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/tools/api/*"
   }
 }
 
@@ -1936,6 +2016,7 @@ project(':streams') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
@@ -1947,6 +2028,7 @@ project(':streams') {
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
@@ -2464,8 +2546,11 @@ project(':jmh-benchmarks') {
     implementation project(':storage')
     implementation project(':streams')
     implementation project(':core')
+    implementation project(':connect:api')
+    implementation project(':connect:transforms')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
+    implementation project(':server-common').sourceSets.test.output
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess

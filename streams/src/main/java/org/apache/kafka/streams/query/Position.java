@@ -57,7 +57,7 @@ public class Position {
     }
 
     /**
-     * Create a new Position and populate it with a mapping of topic -> partition -> offset.
+     * Create a new Position and populate it with a mapping of topic -&gt; partition -&gt; offset.
      * <p>
      * Note, the resulting Position does not share any structure with the provided map, so
      * subsequent changes to the map or Position will not affect the other.
@@ -95,7 +95,7 @@ public class Position {
     /**
      * Merges the provided Position into the current instance.
      * <p>
-     * If both Positions contain the same topic -> partition -> offset mapping, the resulting
+     * If both Positions contain the same topic -&gt; partition -&gt; offset mapping, the resulting
      * Position will contain a mapping with the larger of the two offsets.
      */
     public Position merge(final Position other) {
@@ -127,7 +127,7 @@ public class Position {
     }
 
     /**
-     * Return the partition -> offset mapping for a specific topic.
+     * Return the partition -&gt; offset mapping for a specific topic.
      */
     public Map<Integer, Long> getPartitionPositions(final String topic) {
         final ConcurrentHashMap<Integer, Long> bound = position.get(topic);

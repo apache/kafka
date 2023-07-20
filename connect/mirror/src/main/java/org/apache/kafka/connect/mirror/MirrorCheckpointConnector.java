@@ -18,6 +18,8 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
@@ -27,6 +29,7 @@ import org.apache.kafka.connect.util.ConnectorUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -35,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
@@ -46,18 +50,19 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private Scheduler scheduler;
     private MirrorCheckpointConfig config;
+    private TopicFilter topicFilter;
     private GroupFilter groupFilter;
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
-    private List<String> knownConsumerGroups = Collections.emptyList();
+    private Set<String> knownConsumerGroups = Collections.emptySet();
 
     public MirrorCheckpointConnector() {
         // nop
     }
 
     // visible for testing
-    MirrorCheckpointConnector(List<String> knownConsumerGroups, MirrorCheckpointConfig config) {
+    MirrorCheckpointConnector(Set<String> knownConsumerGroups, MirrorCheckpointConfig config) {
         this.knownConsumerGroups = knownConsumerGroups;
         this.config = config;
     }
@@ -70,10 +75,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
         }
         String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
+        topicFilter = config.topicFilter();
         groupFilter = config.groupFilter();
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
-        scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("checkpoint-source-admin"));
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
@@ -88,6 +94,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             return;
         }
         Utils.closeQuietly(scheduler, "scheduler");
+        Utils.closeQuietly(topicFilter, "topic filter");
         Utils.closeQuietly(groupFilter, "group filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
@@ -103,14 +110,15 @@ public class MirrorCheckpointConnector extends SourceConnector {
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         // if the replication is disabled, known consumer group is empty, or checkpoint emission is
         // disabled by setting 'emit.checkpoints.enabled' to false, the interval of checkpoint emission
-        // will be negative and no 'MirrorHeartbeatTask' will be created
+        // will be negative and no 'MirrorCheckpointTask' will be created
         if (!config.enabled() || knownConsumerGroups.isEmpty()
                 || config.emitCheckpointsInterval().isNegative()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
-        return ConnectorUtils.groupPartitions(knownConsumerGroups, numTasks).stream()
-                .map(config::taskConfigForConsumerGroups)
+        List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(new ArrayList<>(knownConsumerGroups), numTasks);
+        return IntStream.range(0, numTasks)
+                .mapToObj(i -> config.taskConfigForConsumerGroups(groupsPartitioned.get(i), i))
                 .collect(Collectors.toList());
     }
 
@@ -126,12 +134,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private void refreshConsumerGroups()
             throws InterruptedException, ExecutionException {
-        List<String> consumerGroups = findConsumerGroups();
-        Set<String> newConsumerGroups = new HashSet<>();
-        newConsumerGroups.addAll(consumerGroups);
+        Set<String> consumerGroups = findConsumerGroups();
+        Set<String> newConsumerGroups = new HashSet<>(consumerGroups);
         newConsumerGroups.removeAll(knownConsumerGroups);
-        Set<String> deadConsumerGroups = new HashSet<>();
-        deadConsumerGroups.addAll(knownConsumerGroups);
+        Set<String> deadConsumerGroups = new HashSet<>(knownConsumerGroups);
         deadConsumerGroups.removeAll(consumerGroups);
         if (!newConsumerGroups.isEmpty() || !deadConsumerGroups.isEmpty()) {
             log.info("Found {} consumer groups for {}. {} are new. {} were removed. Previously had {}.",
@@ -148,12 +154,33 @@ public class MirrorCheckpointConnector extends SourceConnector {
         knownConsumerGroups = findConsumerGroups();
     }
 
-    List<String> findConsumerGroups()
+    Set<String> findConsumerGroups()
             throws InterruptedException, ExecutionException {
-        return listConsumerGroups().stream()
+        List<String> filteredGroups = listConsumerGroups().stream()
                 .map(ConsumerGroupListing::groupId)
-                .filter(this::shouldReplicate)
+                .filter(this::shouldReplicateByGroupFilter)
                 .collect(Collectors.toList());
+
+        Set<String> checkpointGroups = new HashSet<>();
+        Set<String> irrelevantGroups = new HashSet<>();
+
+        for (String group : filteredGroups) {
+            Set<String> consumedTopics = listConsumerGroupOffsets(group).keySet().stream()
+                    .map(TopicPartition::topic)
+                    .filter(this::shouldReplicateByTopicFilter)
+                    .collect(Collectors.toSet());
+            // Only perform checkpoints for groups that have offsets for at least one topic that's accepted
+            // by the topic filter.
+            if (consumedTopics.size() > 0) {
+                checkpointGroups.add(group);
+            } else {
+                irrelevantGroups.add(group);
+            }
+        }
+
+        log.debug("Ignoring the following groups which do not have any offsets for topics that are accepted by " +
+                        "the topic filter: {}", irrelevantGroups);
+        return checkpointGroups;
     }
 
     Collection<ConsumerGroupListing> listConsumerGroups()
@@ -167,9 +194,18 @@ public class MirrorCheckpointConnector extends SourceConnector {
                 config.checkpointsTopicReplicationFactor(),
                 targetAdminClient
         );
-    } 
+    }
 
-    boolean shouldReplicate(String group) {
+    Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
+            throws InterruptedException, ExecutionException {
+        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
+    }
+
+    boolean shouldReplicateByGroupFilter(String group) {
         return groupFilter.shouldReplicateGroup(group);
+    }
+
+    boolean shouldReplicateByTopicFilter(String topic) {
+        return topicFilter.shouldReplicateTopic(topic);
     }
 }

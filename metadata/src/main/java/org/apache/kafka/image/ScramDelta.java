@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.metadata.ScramCredentialData;
 
 import java.util.HashMap;
 import java.util.Map.Entry;

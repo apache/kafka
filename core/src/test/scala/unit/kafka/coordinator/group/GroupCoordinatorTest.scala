@@ -21,7 +21,6 @@ import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
 import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils._
-import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
@@ -37,7 +36,8 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -2263,13 +2263,13 @@ class GroupCoordinatorTest {
 
     assertEquals(Errors.NONE, await(leaderResult, 1).error)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.NONE)
 
     // Advance part the rebalance timeout to trigger the delayed operation.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.REBALANCE_IN_PROGRESS)
 
     // Followers should have been removed.
@@ -2347,7 +2347,7 @@ class GroupCoordinatorTest {
     val followerErrors = followerResults.map(await(_, 1).error)
     assertEquals(Set(Errors.NONE), followerErrors.toSet)
 
-    // Advance past the rebalance timeout to expire the Sync timout. All
+    // Advance past the rebalance timeout to expire the Sync timeout. All
     // members should remain and the group should not rebalance.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
@@ -3863,6 +3863,9 @@ class GroupCoordinatorTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
+      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3896,6 +3899,9 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(), 
+      any(),
       any(),
       any())).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4041,6 +4047,9 @@ class GroupCoordinatorTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
+      any(),
       any())
     ).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -4073,6 +4082,9 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
+      any(),
       any(),
       any())
     ).thenAnswer(_ => {

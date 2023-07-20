@@ -49,6 +49,7 @@ public class ImageReWriter implements ImageWriter {
         if (closed) return;
         closed = true;
         if (complete) {
+            delta.finishSnapshot();
             image = delta.apply(delta.image().provenance());
         }
     }

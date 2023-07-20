@@ -147,7 +147,7 @@ class KafkaServerTest extends QuorumTestHarness {
       "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
-    server.remoteLogManager match {
+    server.remoteLogManagerOpt match {
       case Some(_) =>
       case None => fail("RemoteLogManager should be initialized")
     }
