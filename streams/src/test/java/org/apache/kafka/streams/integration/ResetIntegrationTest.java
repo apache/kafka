@@ -117,7 +117,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.start();
 
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
 
         streams.close();
@@ -135,7 +135,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
     }
 
@@ -151,7 +151,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
     }
 
@@ -167,7 +167,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
     }
 
@@ -183,7 +183,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
     }
 

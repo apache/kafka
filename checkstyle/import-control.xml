@@ -378,10 +378,6 @@
       <allow pkg="kafka.admin" />
     </subpackage>
 
-    <subpackage name="tools">
-      <allow pkg="org.apache.kafka.tools" />
-    </subpackage>
-
     <subpackage name="state">
       <allow pkg="org.rocksdb" />
     </subpackage>
