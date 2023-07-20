@@ -289,7 +289,7 @@ public class MirrorSourceConnector extends SourceConnector {
             MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
             MirrorUtils.validateSourcePartitionPartition(sourcePartition);
 
-            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, true);
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, false);
         }
 
         // We never commit offsets with our source consumer, so no additional effort is required beyond just validating

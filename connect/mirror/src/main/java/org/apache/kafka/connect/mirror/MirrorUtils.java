@@ -104,12 +104,13 @@ public final class MirrorUtils {
      * @see SourceRecord#sourcePartition()
      *
      * @param sourcePartition the to-be-validated source partition; may not be null
-     * @param key the key to check for in the source partition; may be null
+     * @param key the key to check for in the source partition; may not be null
      *
      * @throws ConnectException if the offset is invalid
      */
     static void validateSourcePartitionString(Map<String, ?> sourcePartition, String key) {
         Objects.requireNonNull(sourcePartition, "Source partition may not be null");
+        Objects.requireNonNull(key, "Key may not be null");
 
         if (!sourcePartition.containsKey(key))
             throw new ConnectException(String.format(
@@ -143,7 +144,7 @@ public final class MirrorUtils {
      *
      * @param sourcePartition the to-be-validated source partition; may not be null
      *
-     * @throws ConnectException if the offset is invalid
+     * @throws ConnectException if the partition is invalid
      */
     static void validateSourcePartitionPartition(Map<String, ?> sourcePartition) {
         Objects.requireNonNull(sourcePartition, "Source partition may not be null");
@@ -185,13 +186,13 @@ public final class MirrorUtils {
      * @param sourcePartition the corresponding {@link SourceRecord#sourcePartition() source partition} for the offset;
      *                        may not be null
      * @param sourceOffset the to-be-validated source offset; may be null (which is considered valid)
-     * @param permitPositiveValues whether positive values for the "offset" value in the source offset map
-     *                             should be permitted; if {@code true}, then all non-negative values are permitted; if
-     *                             {@code false}, only the value zero is permitted
+     * @param onlyOffsetZero whether the "offset" value in the source offset map must be zero;
+     *                       if {@code true}, then only zero is permitted; if {@code false}, then any non-negative
+     *                       value is permitted
      *
      * @throws ConnectException if the offset is invalid
      */
-    static void validateSourceOffset(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset, boolean permitPositiveValues) {
+    static void validateSourceOffset(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset, boolean onlyOffsetZero) {
         Objects.requireNonNull(sourcePartition, "Source partition may not be null");
 
         if (sourceOffset == null) {
@@ -219,17 +220,17 @@ public final class MirrorUtils {
         }
 
         long offsetValue = ((Number) offset).longValue();
-        if (permitPositiveValues && offsetValue < 0) {
+        if (onlyOffsetZero && offsetValue != 0) {
             throw new ConnectException(String.format(
-                    "Source offset %s for source partition %s has an invalid value %s for the '%s' key, which cannot be negative",
+                    "Source offset %s for source partition %s has an invalid value %s for the '%s' key; the only accepted value is 0",
                     sourceOffset,
                     sourcePartition,
                     offset,
                     OFFSET_KEY
             ));
-        } else if (!permitPositiveValues && offsetValue != 0) {
+        } else if (!onlyOffsetZero && offsetValue < 0) {
             throw new ConnectException(String.format(
-                    "Source offset %s for source partition %s has an invalid value %s for the '%s' key; the only accepted value is 0",
+                    "Source offset %s for source partition %s has an invalid value %s for the '%s' key, which cannot be negative",
                     sourceOffset,
                     sourcePartition,
                     offset,

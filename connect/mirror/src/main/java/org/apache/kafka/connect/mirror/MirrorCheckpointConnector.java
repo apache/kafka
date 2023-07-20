@@ -155,7 +155,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
             MirrorUtils.validateSourcePartitionPartition(sourcePartition);
 
-            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, false);
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, true);
         }
 
         // We don't actually use these offsets in the task class, so no additional effort is required beyond just validating

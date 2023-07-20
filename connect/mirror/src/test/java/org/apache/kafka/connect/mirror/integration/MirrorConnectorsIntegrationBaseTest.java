@@ -959,11 +959,23 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
+    @SafeVarargs
+    protected static void stopMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) throws InterruptedException {
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            connectCluster.stopConnector(connectorClass.getSimpleName());
+        }
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            String connectorName = connectorClass.getSimpleName();
+            connectCluster.assertions().assertConnectorIsStopped(
+                    connectorName,
+                    "Connector did not stop in time"
+            );
+        }
+    }
+
     protected static void alterMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, LongUnaryOperator alterOffset, String... topics) {
         Set<String> topicsSet = new HashSet<>(Arrays.asList(topics));
-
         String connectorName = MirrorSourceConnector.class.getSimpleName();
-        connectCluster.stopConnector(connectorName);
 
         ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);
         List<ConnectorOffset> alteredOffsetContents = currentOffsets.offsets().stream()
@@ -993,9 +1005,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
     protected static void resetSomeMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, String... topics) {
         Set<String> topicsSet = new HashSet<>(Arrays.asList(topics));
-
         String connectorName = MirrorSourceConnector.class.getSimpleName();
-        connectCluster.stopConnector(connectorName);
 
         ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);
         List<ConnectorOffset> alteredOffsetContents = currentOffsets.offsets().stream()
@@ -1016,7 +1026,6 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected static void resetAllMirrorMakerConnectorOffsets(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) {
         for (Class<? extends Connector> connectorClass : connectorClasses) {
             String connectorName = connectorClass.getSimpleName();
-            connectCluster.stopConnector(connectorName);
             connectCluster.resetConnectorOffsets(connectorName);
             assertEquals(
                     Collections.emptyList(),

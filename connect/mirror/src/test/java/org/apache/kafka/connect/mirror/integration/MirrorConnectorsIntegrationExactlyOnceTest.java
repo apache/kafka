@@ -64,6 +64,7 @@ public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectors
         String backupTopic1 = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
         String backupTopic2 = remoteTopicName("test-topic-2", PRIMARY_CLUSTER_ALIAS);
 
+        stopMirrorMakerConnectors(backup, MirrorSourceConnector.class);
         // Explicitly move back to offset 0
         // Note that the connector treats the offset as the last-consumed offset,
         // so it will start reading the topic partition from offset 1 when it resumes
@@ -81,6 +82,7 @@ public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectors
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         Class<? extends Connector>[] connectorsToReset = CONNECTOR_LIST.toArray(new Class[0]);
+        stopMirrorMakerConnectors(backup, connectorsToReset);
         // Resetting the offsets for the heartbeat and checkpoint connectors doesn't have any effect
         // on their behavior, but users may want to wipe offsets from them to prevent the offsets topic
         // from growing infinitely. So, we include them in the list of connectors to reset as a sanity check

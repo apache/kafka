@@ -107,7 +107,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
             MirrorUtils.validateSourcePartitionString(sourcePartition, SOURCE_CLUSTER_ALIAS_KEY);
             MirrorUtils.validateSourcePartitionString(sourcePartition, TARGET_CLUSTER_ALIAS_KEY);
 
-            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, false);
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, true);
         }
 
         // We don't actually use these offsets in the task class, so no additional effort is required beyond just validating
