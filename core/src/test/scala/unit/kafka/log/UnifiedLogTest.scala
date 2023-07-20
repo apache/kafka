@@ -36,12 +36,12 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.anyLong
-import org.mockito.Mockito.{mock, when}
+import org.mockito.ArgumentMatchers.{any, anyLong}
+import org.mockito.Mockito.{doNothing, doReturn, mock, mockConstruction, verify, verifyNoMoreInteractions, when}
 
 import java.io._
 import java.nio.ByteBuffer
@@ -78,6 +78,57 @@ class UnifiedLogTest {
     for(offset <- offsets) {
       Files.createFile(UnifiedLog.logFile(dir, offset).toPath)
       Files.createFile(UnifiedLog.offsetIndexFile(dir, offset).toPath)
+    }
+  }
+
+  @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[CompatibilityMetricsGroup])
+    val tmpRelativeDir = TestUtils.tempRelativeDir("parent")
+    try {
+      val topicPartition = new TopicPartition("test-topic", 0)
+      val segments = new LogSegments(topicPartition)
+      val scheduler = new KafkaScheduler(1)
+      val localLog = mock(classOf[LocalLog])
+      val producerStateManager = mock(classOf[ProducerStateManager])
+      doReturn(tmpRelativeDir).when(localLog).dir
+      doReturn(mock(classOf[LogDirFailureChannel])).when(localLog).logDirFailureChannel
+      doReturn(0L).when(localLog).recoveryPoint
+      doReturn(topicPartition).when(localLog).topicPartition
+      doReturn(false).when(localLog).isFuture
+      doReturn(segments).when(localLog).segments
+      doReturn(0L).when(localLog).logEndOffset
+      doReturn(scheduler).when(localLog).scheduler
+      doNothing().when(localLog).checkIfMemoryMappedBufferClosed()
+      doReturn(Optional.empty()).when(producerStateManager).firstUnstableOffset()
+      doNothing().when(producerStateManager).removeExpiredProducers(any())
+      val log = new UnifiedLog(0L,
+        localLog,
+        brokerTopicStats,
+        5000,
+        None,
+        producerStateManager,
+        None,
+        false
+      )
+
+      val metricNamesToVerify = new java.util.HashMap[String, java.util.Map[String, String]]
+      log.metricNames.foreach(metricNameAndTags => metricNamesToVerify.put(metricNameAndTags._1, metricNameAndTags._2))
+      // close log so that metrics are removed
+      log.close()
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      metricNamesToVerify.asScala.foreach { metricNameAndTags =>
+        verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameAndTags._1), any(), ArgumentMatchers.eq(metricNameAndTags._2))
+      }
+      metricNamesToVerify.asScala.foreach { metricNameAndTags =>
+        verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameAndTags._1), ArgumentMatchers.eq(metricNameAndTags._2))
+      }
+
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+      Utils.delete(tmpRelativeDir)
     }
   }
 

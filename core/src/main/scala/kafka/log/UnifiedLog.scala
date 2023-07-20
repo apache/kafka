@@ -108,12 +108,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   import kafka.log.UnifiedLog._
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass) {
-    // For compatibility, metrics are defined to be under `Log` class
-    override def metricName(name: String, tags: util.Map[String, String]): MetricName = {
-      KafkaMetricsGroup.explicitMetricName(getClass.getPackage.getName, "Log", name, tags)
-    }
-  }
+  private val metricsGroup = new CompatibilityMetricsGroup
 
   this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
 
@@ -427,8 +422,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     )
   }
 
-
-  private var metricNames: Map[String, java.util.Map[String, String]] = Map.empty
+  // Visible for testing
+  private[log] var metricNames: Map[String, java.util.Map[String, String]] = Map.empty
 
   newMetrics()
   private[log] def newMetrics(): Unit = {
@@ -616,18 +611,22 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def close(): Unit = {
     debug("Closing log")
-    lock synchronized {
-      logOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER
-      maybeFlushMetadataFile()
-      localLog.checkIfMemoryMappedBufferClosed()
-      producerExpireCheck.cancel(true)
-      maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
-        // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
-        // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
-        // (the clean shutdown file is written after the logs are all closed).
-        producerStateManager.takeSnapshot()
+    try {
+      lock synchronized {
+        logOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER
+        maybeFlushMetadataFile()
+        localLog.checkIfMemoryMappedBufferClosed()
+        producerExpireCheck.cancel(true)
+        maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
+          // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
+          // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
+          // (the clean shutdown file is written after the logs are all closed).
+          producerStateManager.takeSnapshot()
+        }
+        localLog.close()
       }
-      localLog.close()
+    } finally {
+      removeLogMetrics()
     }
   }
 
@@ -2163,6 +2162,14 @@ object UnifiedLog extends Logging {
     }
   }
 
+}
+
+// Visible for testing
+private[log] class CompatibilityMetricsGroup extends KafkaMetricsGroup(classOf[UnifiedLog]) {
+  // For compatibility, metrics are defined to be under `Log` class
+  override def metricName(name: String, tags: util.Map[String, String]): MetricName = {
+    KafkaMetricsGroup.explicitMetricName(getClass.getPackage.getName, "Log", name, tags)
+  }
 }
 
 object LogMetricNames {

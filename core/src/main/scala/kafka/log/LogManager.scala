@@ -636,6 +636,7 @@ class LogManager(logDirs: Seq[File],
       threadPools.foreach(_.shutdown())
       // regardless of whether the close succeeded, we need to unlock the data directories
       dirLocks.foreach(_.destroy())
+      LogFlushStats.removeMetrics()
     }
 
     info("Shutdown complete.")

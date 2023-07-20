@@ -688,6 +688,17 @@ object LogSegment {
 }
 
 object LogFlushStats {
-  private val metricsGroup = new KafkaMetricsGroup(LogFlushStats.getClass)
-  val logFlushTimer: Timer = metricsGroup.newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+  // Visible for testing
+  private[log] val metricsGroup = new KafkaMetricsGroup(LogFlushStats.getClass)
+  private val LogFlushRateAndTimeMsMetricName = "LogFlushRateAndTimeMs"
+  // Visible for testing
+  private[log] val MetricNames = Set(
+    LogFlushRateAndTimeMsMetricName
+  )
+
+  val logFlushTimer: Timer = metricsGroup.newTimer(LogFlushRateAndTimeMsMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+
+  def removeMetrics(): Unit = {
+    MetricNames.foreach(metricsGroup.removeMetric(_))
+  }
 }
