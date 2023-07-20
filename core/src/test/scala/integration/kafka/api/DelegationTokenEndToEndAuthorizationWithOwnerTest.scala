@@ -25,7 +25,8 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Collections
 import scala.concurrent.ExecutionException
@@ -91,16 +92,18 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     createScramAdminClient(kafkaClientSaslMechanism, tokenRequesterPrincipal.getName, tokenRequesterPassword)
   }
 
-  @Test
-  def testCreateTokenForOtherUserFails(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testCreateTokenForOtherUserFails(quorum: String): Unit = {
     val thrown = assertThrows(classOf[ExecutionException], () => {
       createDelegationTokens(() => new CreateDelegationTokenOptions().owner(otherClientPrincipal), assert = false)
     })
     assertTrue(thrown.getMessage.contains("Delegation Token authorization failed"))
   }
 
-  @Test
-  def testDescribeTokenForOtherUserFails(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testDescribeTokenForOtherUserFails(quorum: String): Unit = {
     val describeTokenFailAdminClient = createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)
     val otherClientAdminClient = createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)
     try {
@@ -115,8 +118,9 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     }
   }
 
-  @Test
-  def testDescribeTokenForOtherUserPasses(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testDescribeTokenForOtherUserPasses(quorum: String): Unit = {
     val adminClient = createTokenRequesterAdminClient()
     try {
       val tokens = adminClient.describeDelegationToken(
