@@ -3594,12 +3594,10 @@ class ReplicaManagerTest {
 
       // wait until at least 2 task submitted to use all the available threads
       queueLatch.await()
-      // make sure tasks are all submitted
-      Thread.sleep(100)
       // RemoteLogReader should not be all idle
       assertTrue(yammerMetricValue("RemoteLogReaderAvgIdlePercent").asInstanceOf[Double] < 1.0)
       // RemoteLogReader should queue some tasks
-      assertTrue(yammerMetricValue("RemoteLogReaderTaskQueueSize").asInstanceOf[Int] > 0)
+      assertEquals(3, yammerMetricValue("RemoteLogReaderTaskQueueSize").asInstanceOf[Int])
       // unlock all tasks
       doneLatch.countDown()
     } finally {

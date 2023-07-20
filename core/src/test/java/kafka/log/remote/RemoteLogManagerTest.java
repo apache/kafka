@@ -439,6 +439,7 @@ public class RemoteLogManagerTest {
         // unlock copyLogSegmentData
         latch.countDown();
     }
+
     private double yammerMetricValue(String name) {
         Gauge<Double> guage = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
                 .filter(e -> e.getKey().getMBeanName().contains(name))
