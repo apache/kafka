@@ -674,7 +674,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                     // No exception occurred this time. The certificate is invalid due to being expired, but otherwise valid.
                     String commonName = wrappedChain[0].getSubjectX500Principal().toString();
                     String notValidAfter = wrappedChain[0].getNotAfter().toString();
-                    log.info("Certificate with common name \""+commonName+"\" expired on "+notValidAfter);
+                    log.info("Certificate with common name \"" + commonName + "\" expired on " + notValidAfter);
                 } catch (CertificateException innerException) {
                     // Ignore this exception as we throw the original one below
                 } catch (NoSuchAlgorithmException innerException) {
@@ -709,7 +709,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                 }
             }
             // There should be exactly one leaf certificate
-            if (leafCertificates.size()!=1) {
+            if (leafCertificates.size() != 1) {
                 throw new CertificateException("Multiple leaf certificates in chain");
             }
             X509Certificate leafCertificate = leafCertificates.iterator().next();
@@ -718,7 +718,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             wrappedChain[0] = new NeverExpiringX509Certificate(leafCertificate);
             // Add all other (potential) certificates in order of dependencies (result will be sorted from leaf certificate to last intermediate/root certificate)
             for (int i = 1; i < origChain.length; i++) {
-                X500Principal siblingCertificateIssuer = wrappedChain[i-1].getIssuerX500Principal();
+                X500Principal siblingCertificateIssuer = wrappedChain[i - 1].getIssuerX500Principal();
                 if (usedCertificatesMap.containsKey(siblingCertificateIssuer)) {
                     wrappedChain[i] = usedCertificatesMap.get(siblingCertificateIssuer);
                 } else {
