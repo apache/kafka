@@ -2836,7 +2836,6 @@ public class GroupMetadataManager {
             } else {
                 if (request.generationId() != group.generationId()) {
                     return Optional.of(Errors.ILLEGAL_GENERATION);
-
                 } else if (isProtocolInconsistent(request.protocolType(), group.protocolType().orElse(null)) ||
                     isProtocolInconsistent(request.protocolName(), group.protocolName().orElse(null))) {
 
