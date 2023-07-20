@@ -359,9 +359,7 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
-    public Set<TopicPartition> metadataPartitionsAssigned() {
-        return assignedMetaPartitions.stream()
-                .map(partitionNum -> new TopicPartition(metadataTopicName, partitionNum))
-                .collect(Collectors.toSet());
+    public Set<Integer> metadataPartitionsAssigned() {
+        return Collections.unmodifiableSet(assignedMetaPartitions);
     }
 }
