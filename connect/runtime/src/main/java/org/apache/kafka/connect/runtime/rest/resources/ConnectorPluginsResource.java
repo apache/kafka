@@ -64,17 +64,16 @@ public class ConnectorPluginsResource implements ConnectResource {
         this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
-        addConnectorPlugins(herder.plugins().sinkConnectors(), Collections.emptySet());
-        addConnectorPlugins(herder.plugins().sourceConnectors(), Collections.emptySet());
-        addConnectorPlugins(herder.plugins().transformations(), Collections.emptySet());
-        addConnectorPlugins(herder.plugins().predicates(), Collections.emptySet());
-        addConnectorPlugins(herder.plugins().converters(), Collections.emptySet());
-        addConnectorPlugins(herder.plugins().headerConverters(), Collections.emptySet());
+        addConnectorPlugins(herder.plugins().sinkConnectors());
+        addConnectorPlugins(herder.plugins().sourceConnectors());
+        addConnectorPlugins(herder.plugins().transformations());
+        addConnectorPlugins(herder.plugins().predicates());
+        addConnectorPlugins(herder.plugins().converters());
+        addConnectorPlugins(herder.plugins().headerConverters());
     }
 
-    private <T> void addConnectorPlugins(Collection<PluginDesc<T>> plugins, Collection<Class<? extends T>> excludes) {
+    private <T> void addConnectorPlugins(Collection<PluginDesc<T>> plugins) {
         plugins.stream()
-                .filter(p -> !excludes.contains(p.pluginClass()))
                 .map(PluginInfo::new)
                 .forEach(connectorPlugins::add);
     }
