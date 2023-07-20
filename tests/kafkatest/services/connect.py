@@ -305,7 +305,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
                 if file.endswith(".jar"):
                     # Use the expected directory on the node instead of the path in the driver node
                     file_path = lib_dir + file
-                    self.logger.debug("Appending %s to Connect worker's CLASSPATH" % file_path)
+                    self.logger.info("Appending %s to Connect worker's CLASSPATH" % file_path)
                     return "export CLASSPATH=${CLASSPATH}:%s; " % file_path
 
         self.logger.info("Jar not found within %s" % local_dir)
