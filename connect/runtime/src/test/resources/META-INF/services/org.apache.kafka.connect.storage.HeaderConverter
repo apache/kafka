@@ -16,3 +16,4 @@
 org.apache.kafka.connect.runtime.SampleHeaderConverter
 org.apache.kafka.connect.runtime.isolation.PluginsTest$TestHeaderConverter
 org.apache.kafka.connect.runtime.isolation.PluginsTest$TestInternalConverter
+org.apache.kafka.connect.runtime.isolation.PluginUtilsTest$CollidingHeaderConverter

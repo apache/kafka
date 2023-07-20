@@ -20,3 +20,4 @@ org.apache.kafka.connect.runtime.ConnectorConfigTest$HasDuplicateConfigTransform
 org.apache.kafka.connect.runtime.ConnectorConfigTest$AbstractKeyValueTransformation$Key
 org.apache.kafka.connect.runtime.ConnectorConfigTest$AbstractKeyValueTransformation$Value
 org.apache.kafka.connect.runtime.SampleTransformation
+org.apache.kafka.connect.runtime.isolation.PluginUtilsTest$Colliding
