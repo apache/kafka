@@ -33,6 +33,16 @@
   // the same as version 8 but can return STALE_MEMBER_EPOCH when the new consumer group protocol is used.
   "validVersions": "0-9",
   "flexibleVersions": "8+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED (version 0+)
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - ILLEGAL_GENERATION (version 1+)
+  // - UNKNOWN_MEMBER_ID (version 1+)
+  // - INVALID_COMMIT_OFFSET_SIZE (version 0+)
+  // - FENCED_MEMBER_EPOCH (version 7+)
+  // - STALE_MEMBER_EPOCH (version 9+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
