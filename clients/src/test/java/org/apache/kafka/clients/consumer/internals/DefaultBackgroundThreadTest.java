@@ -71,6 +71,7 @@ public class DefaultBackgroundThreadTest {
     private ApplicationEventProcessor processor;
     private CoordinatorRequestManager coordinatorManager;
     private ErrorEventHandler errorEventHandler;
+    private SubscriptionState subscriptionState;
     private int requestTimeoutMs = 500;
     private GroupState groupState;
     private CommitRequestManager commitManager;
@@ -86,6 +87,7 @@ public class DefaultBackgroundThreadTest {
         this.processor = mock(ApplicationEventProcessor.class);
         this.coordinatorManager = mock(CoordinatorRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
+        this.subscriptionState = mock(SubscriptionState.class);
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
                 100,
                 100,
@@ -245,6 +247,7 @@ public class DefaultBackgroundThreadTest {
                 new LogContext(),
                 applicationEventsQueue,
                 backgroundEventsQueue,
+                subscriptionState,
                 this.errorEventHandler,
                 processor,
                 this.metadata,
