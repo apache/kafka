@@ -1541,7 +1541,6 @@ public class TaskManagerTest {
     @Test
     public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws Exception {
         expectLockObtainedFor(taskId00, taskId01, taskId02);
-        expectUnlockFor(taskId02);
 
         makeTaskFolders(
             taskId00.toString(),  // active task
@@ -1559,6 +1558,7 @@ public class TaskManagerTest {
 
         taskManager.handleRebalanceComplete();
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
+        expectUnlockFor(taskId02);
     }
 
     @Test
@@ -3407,7 +3407,6 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
         expectLastCall();
-        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(new ArrayList<>());
         replay(consumer);
         assertThat(taskManager.rebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
@@ -3522,7 +3521,8 @@ public class TaskManagerTest {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
-        makeTaskFolders(taskId00.toString(), task01.toString());
+        makeTaskFolders(taskId00.toString(), taskId01.toString());
+        expectLockObtainedFor(taskId00, taskId01);
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
             .thenReturn(singletonList(task00));
@@ -4297,7 +4297,6 @@ public class TaskManagerTest {
 
     private void expectUnlockFor(final TaskId... tasks) {
         for (final TaskId task : tasks) {
-            stateDirectory.unlock(task);
             Mockito.verify(stateDirectory, Mockito.atLeastOnce()).unlock(task);
         }
     }
