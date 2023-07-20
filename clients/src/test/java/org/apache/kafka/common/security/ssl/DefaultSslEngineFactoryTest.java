@@ -1,16 +1,18 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements. See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License. You may obtain a
- * copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.security.ssl;
 
@@ -20,13 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,16 +34,18 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.NeverExpiringX509Certificate;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
-import org.bouncycastle.cert.X509v1CertificateBuilder;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestInstance.Lifecycle;
 
+@TestInstance(Lifecycle.PER_CLASS)
 public class DefaultSslEngineFactoryTest {
 
     /*
@@ -194,11 +196,20 @@ public class DefaultSslEngineFactoryTest {
     private static final Password KEY_PASSWORD = new Password("key-password");
 
     private DefaultSslEngineFactory factory = new DefaultSslEngineFactory();
-    Map<String, Object> configs = new HashMap<>();
+    Map<String, Object> configs;
+    X509Certificate[] chainWithValidEndCertificate;
+    X509Certificate[] chainWithExpiredEndCertificate;
+
+    @BeforeAll
+    public void setUpOnce() throws CertificateException, NoSuchAlgorithmException {
+        chainWithValidEndCertificate = generateKeyChainIncludingCA(false);
+        chainWithExpiredEndCertificate = generateKeyChainIncludingCA(true);
+    }
 
     @BeforeEach
     public void setUp() {
         factory = new DefaultSslEngineFactory();
+        configs = new HashMap<>();
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
     }
 
@@ -320,79 +331,44 @@ public class DefaultSslEngineFactoryTest {
     @Test
     void testNeverExpiringX509CertificateUnchangedBehaviorWithValidCertificate() throws Exception {
         final KeyPair keyPair = TestSslUtils.generateKeyPair("RSA");
-        final String dn="CN=Test, L=London, C=GB";
+        final String dn = "CN=Test, L=London, C=GB";
         // Create and initialize data structures
-        int nrOfCerts = 3;
+        int nrOfCerts = 4;
         X509Certificate[] testCerts = new X509Certificate[nrOfCerts];
         PublicKey[] signedWith = new PublicKey[nrOfCerts];
-        boolean[] expectExpired = new boolean[nrOfCerts];
         final int days = 1;
         // Generate valid certificate
         testCerts[0] = TestSslUtils.generateCertificate(dn, keyPair, days, "SHA512withRSA");
         // Self-signed
         signedWith[0] = testCerts[0].getPublicKey();
-        // Expect this to be valid
-        expectExpired[0] = false;
         // Generate expired, but valid certificate
         testCerts[1] = TestSslUtils.generateCertificate(dn, keyPair, -days, "SHA512withRSA");
         // Self-signed
         signedWith[1] = testCerts[1].getPublicKey();
-        // Expect this to be expired
-        expectExpired[1] = true;
-        // Create real certificate chain
-        X509Certificate[] certChain = generateKeyChainIncludingCA();
-        testCerts[2] = certChain[0];
+        // Use existing real certificate chain, where the end certificate (the first on in the
+        // chain) is valid
+        testCerts[2] = chainWithValidEndCertificate[0];
         // The end certificate must be signed by the intermediate CA public key
-        signedWith[2] = certChain[1].getPublicKey();
-        // Certificate is not expired
-        expectExpired[2] = false;
-        
+        signedWith[2] = chainWithValidEndCertificate[1].getPublicKey();
+        // Use existing real certificate chain, where the end certificate (the first on in the
+        // chain) is expired
+        testCerts[3] = chainWithExpiredEndCertificate[0];
+        // The end certificate must be signed by the intermediate CA public key
+        signedWith[3] = chainWithExpiredEndCertificate[1].getPublicKey();
+
         for (int i = 0; i < nrOfCerts; i++) {
             X509Certificate cert = testCerts[i];
-            final NeverExpiringX509Certificate wrappedCert = new DefaultSslEngineFactory.NeverExpiringX509Certificate(cert);
+            final NeverExpiringX509Certificate wrappedCert =
+                    new DefaultSslEngineFactory.NeverExpiringX509Certificate(cert);
+            // All results must be identically for original as well as wrapped certificate class
             assertEquals(cert.getCriticalExtensionOIDs(), wrappedCert.getCriticalExtensionOIDs());
             final String testOid = "2.5.29.14"; // Should not be in test certificate
             assertEquals(cert.getExtensionValue(testOid), wrappedCert.getExtensionValue(testOid));
-            assertEquals(cert.getNonCriticalExtensionOIDs(), wrappedCert.getNonCriticalExtensionOIDs());
-            assertEquals(cert.hasUnsupportedCriticalExtension(), wrappedCert.hasUnsupportedCriticalExtension());
+            assertEquals(cert.getNonCriticalExtensionOIDs(),
+                    wrappedCert.getNonCriticalExtensionOIDs());
+            assertEquals(cert.hasUnsupportedCriticalExtension(),
+                    wrappedCert.hasUnsupportedCriticalExtension());
             // We have just generated a valid test certificate, it should still be valid now
-            if (expectExpired[i]) {
-                assertThrows(CertificateException.class, () -> cert.checkValidity());
-            } else {
-                assertDoesNotThrow(() -> cert.checkValidity());
-            }
-            // The wrappedCert must never throw due to being expired
-            assertDoesNotThrow(() -> wrappedCert.checkValidity());
-            // Test with "now"
-            Date dateNow = new Date();
-            if (expectExpired[i]) {
-                assertThrows(CertificateException.class, () -> cert.checkValidity(dateNow));
-            } else {
-                assertDoesNotThrow(() -> cert.checkValidity(dateNow));
-            }
-            assertDoesNotThrow(() -> wrappedCert.checkValidity(dateNow));
-            // Test with (days/2) before now.
-            Date dateRecentPast = new Date(System.currentTimeMillis()-(days)*12*60*60*1000);
-            // If certificate is expired now, it must have been valid at dataRecentPast, already
-            if (expectExpired[i]) {
-                assertDoesNotThrow(() -> cert.checkValidity(dateRecentPast));
-                assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
-            } else {
-                // Cert was not valid yet. Both the original and the wrapped class throw
-                assertThrows(CertificateException.class,() -> cert.checkValidity(dateRecentPast));
-                assertThrows(CertificateException.class,() -> wrappedCert.checkValidity(dateRecentPast));
-            }
-            // Test with (days+1) before now
-            Date datePast = new Date(System.currentTimeMillis()-(days+1)*24*60*60*1000);
-            assertThrows(CertificateException.class, () -> cert.checkValidity(datePast));
-            assertThrows(CertificateException.class, () -> wrappedCert.checkValidity(datePast));
-            // Test with "days+2" after now. 
-            // Cert is not valid anymore. The original class must throw
-            Date dateFuture = new Date(System.currentTimeMillis()+(days+2)*24*60*60*1000);
-            assertThrows(CertificateException.class, () -> cert.checkValidity(dateFuture));
-            // This checks the only deviation in behavior of the NeverExpiringX509Certificate compared to the standard Certificate:
-            // The NeverExpiringX509Certificate will report any expired certificate as still valid
-            assertDoesNotThrow(() -> wrappedCert.checkValidity(dateFuture));
             assertEquals(cert.getBasicConstraints(), wrappedCert.getBasicConstraints());
             assertEquals(cert.getIssuerDN(), wrappedCert.getIssuerDN());
             assertEquals(cert.getIssuerUniqueID(), wrappedCert.getIssuerUniqueID());
@@ -411,30 +387,82 @@ public class DefaultSslEngineFactoryTest {
             assertArrayEquals(cert.getEncoded(), wrappedCert.getEncoded());
             assertEquals(cert.getPublicKey(), wrappedCert.getPublicKey());
             assertEquals(cert.toString(), wrappedCert.toString());
-            // Here, we use a self-signed certificate, thus it is supposed to be signed by itself
             final PublicKey signingKey = signedWith[i];
             assertDoesNotThrow(() -> cert.verify(signingKey));
             assertDoesNotThrow(() -> wrappedCert.verify(signingKey));
+            // Test timing now, starting with "now"
+            Date dateNow = new Date();
+            if (cert.getNotBefore().before(dateNow) && cert.getNotAfter().after(dateNow)) {
+                assertDoesNotThrow(() -> cert.checkValidity());
+            } else {
+                assertThrows(CertificateException.class, () -> cert.checkValidity());
+            }
+            // The wrappedCert must never throw due to being expired
+            assertDoesNotThrow(() -> wrappedCert.checkValidity());
+            if (cert.getNotBefore().before(dateNow) && cert.getNotAfter().after(dateNow)) {
+                assertDoesNotThrow(() -> cert.checkValidity(dateNow));
+            } else {
+                assertThrows(CertificateException.class, () -> cert.checkValidity(dateNow));
+            }
+            // wrapped cert must not throw even if it is expired
+            assertDoesNotThrow(() -> wrappedCert.checkValidity(dateNow));
+            // Test with (days/2) before now.
+            Date dateRecentPast =
+                    new Date(System.currentTimeMillis() - days * 12 * 60 * 60 * 1000);
+            if (cert.getNotBefore().before(dateRecentPast)
+                    && cert.getNotAfter().after(dateRecentPast)) {
+                assertDoesNotThrow(() -> cert.checkValidity(dateRecentPast));
+                assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
+            } else {
+                // Cert was already valid
+                assertThrows(CertificateException.class, () -> cert.checkValidity(dateRecentPast));
+                assertThrows(CertificateException.class,
+                        () -> wrappedCert.checkValidity(dateRecentPast));
+            }
+            // Test with (days+1) before now. Both certificates were not yet valid, thus both checks
+            // must throw
+            Date datePast = new Date(System.currentTimeMillis() - (days + 2) * 24 * 60 * 60 * 1000);
+            assertThrows(CertificateException.class, () -> cert.checkValidity(datePast));
+            assertThrows(CertificateException.class, () -> wrappedCert.checkValidity(datePast));
+            // Test with "days+2" after now.
+            // Cert is not valid anymore. The original class must throw
+            Date dateFuture =
+                    new Date(System.currentTimeMillis() + (days + 2) * 24 * 60 * 60 * 1000);
+            assertThrows(CertificateException.class, () -> cert.checkValidity(dateFuture));
+            // This checks the only deviation in behavior of the NeverExpiringX509Certificate
+            // compared to the standard Certificate:
+            // The NeverExpiringX509Certificate will report any expired certificate as still valid
+            assertDoesNotThrow(() -> wrappedCert.checkValidity(dateFuture));
         }
-
     }
 
     /**
-     * This helper method generates a valid key chain with one end entity (client/server cert), one intermediate certificate authority and one root certificate authority (self-signed)
+     * This helper method generates a valid key chain with one end entity (client/server cert), one
+     * intermediate certificate authority and one root certificate authority (self-signed)
+     * 
      * @return
      * @throws CertificateException
      * @throws NoSuchAlgorithmException
      */
-    private X509Certificate[] generateKeyChainIncludingCA() throws CertificateException, NoSuchAlgorithmException {
+    private X509Certificate[] generateKeyChainIncludingCA(boolean expired)
+            throws CertificateException, NoSuchAlgorithmException {
         KeyPair[] keyPairs = new KeyPair[3];
         for (int i = 0; i < 3; i++) {
             keyPairs[i] = TestSslUtils.generateKeyPair("RSA");
         }
         X509Certificate[] certs = new X509Certificate[3];
+        int endCertDaysValidBeforeNow = 1;
+        // If using 0 or a negative value, the generated certificate will be expired
+        int endCertDaysValidAfterNow = expired ? 0 : +1;
         // Generate root CA
-        certs[2] = TestSslUtils.generateSignedCertificate("CN=CA, L=London, C=GB", keyPairs[2], null, null, 365, "SHA512withRSA");
-        certs[1] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA, L=London, C=GB", keyPairs[1], certs[2].getIssuerX500Principal().getName(), keyPairs[2], 365, "SHA512withRSA");
-        certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0], certs[1].getIssuerX500Principal().getName(), keyPairs[1], 1, "SHA512withRSA");
+        certs[2] = TestSslUtils.generateSignedCertificate("CN=CA, L=London, C=GB", keyPairs[2], 365,
+                365, null, null, "SHA512withRSA");
+        certs[1] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA, L=London, C=GB",
+                keyPairs[1], 365, 365, certs[2].getIssuerX500Principal().getName(), keyPairs[2],
+                "SHA512withRSA");
+        certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0],
+                endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
+                certs[1].getIssuerX500Principal().getName(), keyPairs[1], "SHA512withRSA");
         return certs;
     }
 
