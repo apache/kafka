@@ -266,6 +266,7 @@
   </subpackage>
 
   <subpackage name="storage.internals">
+    <allow pkg="com.yammer.metrics.core" />
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage.internals"/>
     <allow pkg="org.apache.kafka.common" />
@@ -375,10 +376,6 @@
 
     <subpackage name="test">
       <allow pkg="kafka.admin" />
-    </subpackage>
-
-    <subpackage name="tools">
-      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="state">
@@ -564,7 +561,6 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.apache.kafka.tools" />
       <allow pkg="javax.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
@@ -587,7 +583,6 @@
 
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.apache.kafka.tools" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 

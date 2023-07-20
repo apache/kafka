@@ -38,6 +38,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -433,6 +434,36 @@ public class RecordHelpers {
                 (short) 2
             ),
             null // Tombstone
+        );
+    }
+
+    /**
+     * Creates an empty GroupMetadata record.
+     *
+     * @param group              The generic group.
+     * @param metadataVersion    The metadata version.
+     * @return The record.
+     */
+    public static Record newEmptyGroupMetadataRecord(
+        GenericGroup group,
+        MetadataVersion metadataVersion
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup(group.groupId()),
+                (short) 2
+            ),
+            new ApiMessageAndVersion(
+                new GroupMetadataValue()
+                    .setProtocol(null)
+                    .setProtocolType("")
+                    .setGeneration(0)
+                    .setLeader(null)
+                    .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
+                    .setMembers(Collections.emptyList()),
+                metadataVersion.groupMetadataValueVersion()
+            )
         );
     }
 

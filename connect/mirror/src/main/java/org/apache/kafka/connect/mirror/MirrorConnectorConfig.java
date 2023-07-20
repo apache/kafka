@@ -306,4 +306,8 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             )
             .withClientSslSupport()
             .withClientSaslSupport();
+
+    public static void main(String[] args) {
+        System.out.println(BASE_CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_connector_" + config));
+    }
 }
