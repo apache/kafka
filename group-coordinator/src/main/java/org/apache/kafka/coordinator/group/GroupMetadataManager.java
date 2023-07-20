@@ -102,6 +102,7 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupSubscript
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
@@ -2381,8 +2382,26 @@ public class GroupMetadataManager {
                 " state but is in " + group.currentState() + ".");
         }
 
-        group.allMembers().forEach(member -> member.setAssignment(GenericGroupMember.EMPTY_ASSIGNMENT));
+        group.allMembers().forEach(member -> member.setAssignment(EMPTY_ASSIGNMENT));
         propagateAssignment(group, error);
+    }
+
+    /**
+     * Sets assignment for group and propagate assignment and error to all members.
+     *
+     * @param group      The group.
+     * @param assignment The assignment for all members.
+     */
+    private void setAndPropagateAssignment(GenericGroup group, Map<String, byte[]> assignment) {
+        if (!group.isInState(COMPLETING_REBALANCE)) {
+            throw new IllegalStateException("The group must be in CompletingRebalance state " +
+                "to set and propagate assignment.");
+        }
+
+        group.allMembers().forEach(member ->
+            member.setAssignment(assignment.getOrDefault(member.memberId(), EMPTY_ASSIGNMENT)));
+
+        propagateAssignment(group, Errors.NONE);
     }
 
     /**
@@ -2714,23 +2733,20 @@ public class GroupMetadataManager {
                     "The group has {} members, {} of which are static.",
                     memberId, groupId, group.generationId(), group.size(), group.allStaticMemberIds().size());
 
-                // Fill all members with corresponding assignment. Reset members not specified in
-                // the assignment to empty assignments.
-                Map<String, byte[]> assignments = new HashMap<>();
-                request.assignments().forEach(assignment ->
-                    assignments.put(assignment.memberId(), assignment.assignment())
+                // Fill all members with corresponding member assignment. If the member assignment
+                // does not exist, fill with an empty assignment.
+                Map<String, byte[]> assignment = new HashMap<>();
+                request.assignments().forEach(memberAssignment ->
+                    assignment.put(memberAssignment.memberId(), memberAssignment.assignment())
                 );
 
-                Set<String> membersWithMissingAssignment = new HashSet<>();
+                Map<String, byte[]> membersWithMissingAssignment = new HashMap<>();
                 group.allMembers().forEach(member -> {
-                    byte[] assignment = assignments.get(member.memberId());
-                    if (assignment != null) {
-                        member.setAssignment(assignment);
-                    } else {
-                        membersWithMissingAssignment.add(member.memberId());
-                        member.setAssignment(new byte[0]);
+                    if (!assignment.containsKey(member.memberId())) {
+                        membersWithMissingAssignment.put(member.memberId(), EMPTY_ASSIGNMENT);
                     }
                 });
+                assignment.putAll(membersWithMissingAssignment);
 
                 if (!membersWithMissingAssignment.isEmpty()) {
                     log.warn("Setting empty assignments for members {} of {} for generation {}.",
@@ -2749,8 +2765,8 @@ public class GroupMetadataManager {
                             maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment" +
                                 "during SyncGroup (member: " + memberId + ").");
                         } else {
-                            // Members' assignments were already updated. Propagate and transition to Stable.
-                            propagateAssignment(group, Errors.NONE);
+                            // Update group's assignment and propagate to all members.
+                            setAndPropagateAssignment(group, assignment);
                             group.transitionTo(STABLE);
                         }
                     }

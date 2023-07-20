@@ -48,7 +48,6 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
@@ -7566,7 +7565,7 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().isEmpty());
         assertTrue(syncFuture.isDone());
         assertEquals(Errors.UNKNOWN_MEMBER_ID.code(), syncFuture.get().errorCode());
-        assertEquals(Bytes.EMPTY, syncFuture.get().assignment());
+        assertEquals(GenericGroupMember.EMPTY_ASSIGNMENT, syncFuture.get().assignment());
     }
 
     @Test

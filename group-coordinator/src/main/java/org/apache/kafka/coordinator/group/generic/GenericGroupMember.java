@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.utils.Bytes;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -55,7 +56,7 @@ public class GenericGroupMember {
     /**
      * An empty assignment.
      */
-    public static final byte[] EMPTY_ASSIGNMENT = new byte[0];
+    public static final byte[] EMPTY_ASSIGNMENT = Bytes.EMPTY;
 
     /**
      * The member id.
