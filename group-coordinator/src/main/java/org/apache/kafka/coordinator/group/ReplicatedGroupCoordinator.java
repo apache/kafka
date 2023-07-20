@@ -183,6 +183,15 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
     }
 
+    /**
+     * Handles a JoinGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual JoinGroup request.
+     *
+     * @return A Result containing the JoinGroup response and
+     *         a list of records to update the state machine.
+     */
     public CoordinatorResult<Void, Record> genericGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
@@ -195,6 +204,15 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         );
     }
 
+    /**
+     * Handles a SyncGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual SyncGroup request.
+     *
+     * @return A Result containing the SyncGroup response and
+     *         a list of records to update the state machine.
+     */
     public CoordinatorResult<Void, Record> genericGroupSync(
         RequestContext context,
         SyncGroupRequestData request,

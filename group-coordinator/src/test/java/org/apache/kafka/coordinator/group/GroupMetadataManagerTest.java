@@ -7754,7 +7754,7 @@ public class GroupMetadataManagerTest {
         int nextGenerationId = leaderJoinFuture.get().generationId();
         String followerId = followerJoinFuture.get().memberId();
 
-        // With no leader SyncGroup, the follower's request should fail with an error indicating
+        // With no leader SyncGroup, the follower's sync request should fail with an error indicating
         // that it should rejoin
         CompletableFuture<SyncGroupResponseData> followerSyncFuture = new CompletableFuture<>();
         result = context.sendGenericGroupSync(
@@ -7765,12 +7765,18 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().isEmpty());
         assertFalse(followerSyncFuture.isDone());
 
-        // Advance clock by session timeout to expire follower heartbeat and prepare rebalance.
-        // This should complete all pending syncs.
-        assertNoOrEmptyResult(context.sleep(5000));
+        // Advance clock by session timeout to expire leader heartbeat and prepare rebalance.
+        // This should complete follower's sync response. The follower's heartbeat expiration will not kick
+        // the follower out because it is awaiting sync.
+        List<ExpiredTimeout<Void, Record>> timeouts = context.sleep(10000);
+        assertTrue(timeouts.size() <= 2);
+        timeouts.forEach(timeout -> assertTrue(timeout.result.records().isEmpty()));
 
         assertTrue(followerSyncFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), followerSyncFuture.get().errorCode());
+        assertEquals(1, group.size());
+        assertTrue(group.hasMemberId(followerId));
+        assertTrue(group.isInState(PREPARING_REBALANCE));
     }
 
     @Test

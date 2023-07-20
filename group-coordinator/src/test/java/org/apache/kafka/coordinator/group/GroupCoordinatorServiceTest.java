@@ -31,6 +31,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -395,6 +397,100 @@ public class GroupCoordinatorServiceTest {
         JoinGroupResponseData expectedResponse = new JoinGroupResponseData()
             .setErrorCode(Errors.INVALID_GROUP_ID.code())
             .setMemberId(UNKNOWN_MEMBER_ID);
+
+        assertEquals(expectedResponse, response.get());
+    }
+
+    @Test
+    public void testSyncGroup() {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        SyncGroupRequestData request = new SyncGroupRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("generic-group-sync"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new SyncGroupResponseData()
+        ));
+
+        CompletableFuture<SyncGroupResponseData> responseFuture = service.syncGroup(
+            requestContext(ApiKeys.SYNC_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertFalse(responseFuture.isDone());
+    }
+
+    @Test
+    public void testSyncGroupWithException() throws Exception {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        SyncGroupRequestData request = new SyncGroupRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("generic-group-sync"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
+
+        CompletableFuture<SyncGroupResponseData> future = service.syncGroup(
+            requestContext(ApiKeys.SYNC_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(
+            new SyncGroupResponseData()
+                .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()),
+            future.get()
+        );
+    }
+
+    @Test
+    public void testSyncGroupInvalidGroupId() throws Exception {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        service.startup(() -> 1);
+
+        SyncGroupRequestData request = new SyncGroupRequestData()
+            .setGroupId(null)
+            .setMemberId(UNKNOWN_MEMBER_ID);
+
+
+        CompletableFuture<SyncGroupResponseData> response = service.syncGroup(
+            requestContext(ApiKeys.SYNC_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertTrue(response.isDone());
+        SyncGroupResponseData expectedResponse = new SyncGroupResponseData()
+            .setErrorCode(Errors.INVALID_GROUP_ID.code());
 
         assertEquals(expectedResponse, response.get());
     }
