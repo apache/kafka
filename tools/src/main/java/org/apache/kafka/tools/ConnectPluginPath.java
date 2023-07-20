@@ -130,7 +130,7 @@ public class ConnectPluginPath {
         Set<Path> locations = parseLocations(parser, namespace);
         switch (namespace.getString("subcommand")) {
             case "list":
-                return new Config(Command.LIST, locations, false, false, out, err);
+                return new Config(Command.LIST, locations, out, err);
             default:
                 throw new ArgumentParserException("No subcommand specified", parser);
         }
@@ -176,16 +176,12 @@ public class ConnectPluginPath {
     private static class Config {
         private final Command command;
         private final Set<Path> locations;
-        private final boolean dryRun;
-        private final boolean keepNotFound;
         private final PrintStream out;
         private final PrintStream err;
 
-        private Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out, PrintStream err) {
+        private Config(Command command, Set<Path> locations, PrintStream out, PrintStream err) {
             this.command = command;
             this.locations = locations;
-            this.dryRun = dryRun;
-            this.keepNotFound = keepNotFound;
             this.out = out;
             this.err = err;
         }
@@ -195,8 +191,6 @@ public class ConnectPluginPath {
             return "Config{" +
                 "command=" + command +
                 ", locations=" + locations +
-                ", dryRun=" + dryRun +
-                ", keepNotFound=" + keepNotFound +
                 '}';
         }
     }
