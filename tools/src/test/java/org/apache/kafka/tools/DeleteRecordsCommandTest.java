@@ -38,9 +38,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -154,7 +155,7 @@ class DeleteRecordsCommandUnitTest {
 
     @Test
     public void testParse() throws Exception {
-        Collection<DeleteRecordsCommand.Tuple<TopicPartition, Long>> res = DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(
+        Map<TopicPartition, List<Long>> res = DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(
             "{\"partitions\":[" +
                 "{\"topic\":\"t\", \"partition\":0, \"offset\":0}," +
                 "{\"topic\":\"t\", \"partition\":1, \"offset\":1, \"ignored\":\"field\"}," +
@@ -163,25 +164,9 @@ class DeleteRecordsCommandUnitTest {
             "]}"
         );
 
-        assertEquals(4, res.size());
-
-        Iterator<DeleteRecordsCommand.Tuple<TopicPartition, Long>> iter = res.iterator();
-
-        DeleteRecordsCommand.Tuple<TopicPartition, Long> t1 = iter.next();
-        DeleteRecordsCommand.Tuple<TopicPartition, Long> t2 = iter.next();
-        DeleteRecordsCommand.Tuple<TopicPartition, Long> t3 = iter.next();
-        DeleteRecordsCommand.Tuple<TopicPartition, Long> t4 = iter.next();
-
-        assertEquals(new TopicPartition("t", 0), t1.v1());
-        assertEquals(0L, t1.v2());
-
-        assertEquals(new TopicPartition("t", 1), t2.v1());
-        assertEquals(1L, t2.v2());
-
-        assertEquals(t1.v1(), t3.v1());
-        assertEquals(2L, t3.v2());
-
-        assertEquals(t1, t4);
+        assertEquals(2, res.size());
+        assertEquals(Arrays.asList(0L, 2L, 0L), res.get(new TopicPartition("t", 0)));
+        assertEquals(Collections.singletonList(1L), res.get(new TopicPartition("t", 1)));
     }
 
     /**

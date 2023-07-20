@@ -37,10 +37,10 @@ import org.apache.kafka.server.util.json.JsonValue;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -64,7 +64,7 @@ public class DeleteRecordsCommand {
         execute(args, System.out);
     }
 
-    static Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) throws JsonProcessingException {
+    static Map<TopicPartition, List<Long>> parseOffsetJsonStringWithoutDedup(String jsonData) throws JsonProcessingException {
         JsonValue js = Json.parseFull(jsonData)
             .orElseThrow(() -> new AdminOperationException("The input string is not a valid JSON"));
 
@@ -73,12 +73,12 @@ public class DeleteRecordsCommand {
         return parseJsonData(version.isPresent() ? version.get().to(INT) : EARLIEST_VERSION, js);
     }
 
-    private static Collection<Tuple<TopicPartition, Long>> parseJsonData(int version, JsonValue js) throws JsonMappingException {
+    private static Map<TopicPartition, List<Long>> parseJsonData(int version, JsonValue js) throws JsonMappingException {
         if (version == 1) {
             JsonValue partitions = js.asJsonObject().get("partitions")
                 .orElseThrow(() -> new AdminOperationException("Missing partitions field"));
 
-            Collection<Tuple<TopicPartition, Long>> res = new ArrayList<>();
+            Map<TopicPartition, List<Long>> res = new HashMap<>();
 
             Iterator<JsonValue> iterator = partitions.asJsonArray().iterator();
 
@@ -89,7 +89,7 @@ public class DeleteRecordsCommand {
                 int partition = partitionJs.apply("partition").to(INT);
                 long offset = partitionJs.apply("offset").to(LONG);
 
-                res.add(new Tuple<>(new TopicPartition(topic, partition), offset));
+                res.computeIfAbsent(new TopicPartition(topic, partition), k -> new ArrayList<>()).add(offset);
             }
 
             return res;
@@ -107,10 +107,12 @@ public class DeleteRecordsCommand {
     }
 
     static void execute(Admin adminClient, String offsetJsonString, PrintStream out) throws JsonProcessingException {
-        Collection<Tuple<TopicPartition, Long>> offsetSeq = parseOffsetJsonStringWithoutDedup(offsetJsonString);
+        Map<TopicPartition, List<Long>> offsetSeq = parseOffsetJsonStringWithoutDedup(offsetJsonString);
 
-        Set<TopicPartition> duplicatePartitions =
-            ToolsUtils.duplicates(offsetSeq.stream().map(Tuple::v1).collect(Collectors.toList()));
+        Set<TopicPartition> duplicatePartitions = offsetSeq.entrySet().stream()
+            .filter(e -> e.getValue().size() > 1)
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet());
 
         if (!duplicatePartitions.isEmpty()) {
             StringJoiner duplicates = new StringJoiner(",");
@@ -120,9 +122,10 @@ public class DeleteRecordsCommand {
             );
         }
 
-        Map<TopicPartition, RecordsToDelete> recordsToDelete = offsetSeq.stream()
-            .map(tuple -> new Tuple<>(tuple.v1, RecordsToDelete.beforeOffset(tuple.v2)))
-            .collect(Collectors.toMap(Tuple::v1, Tuple::v2));
+        Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
+
+        for (Map.Entry<TopicPartition, List<Long>> e : offsetSeq.entrySet())
+            recordsToDelete.put(e.getKey(), RecordsToDelete.beforeOffset(e.getValue().get(0)));
 
         out.println("Executing records delete operation");
         DeleteRecordsResult deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
@@ -175,43 +178,6 @@ public class DeleteRecordsCommand {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to delete records of the given partitions down to the specified offset.");
 
             CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, offsetJsonFileOpt);
-        }
-    }
-
-    public static final class Tuple<V1, V2> {
-        private final V1 v1;
-
-        private final V2 v2;
-
-        public Tuple(V1 v1, V2 v2) {
-            this.v1 = v1;
-            this.v2 = v2;
-        }
-
-        public V1 v1() {
-            return v1;
-        }
-
-        public V2 v2() {
-            return v2;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Tuple<?, ?> tuple = (Tuple<?, ?>) o;
-            return Objects.equals(v1, tuple.v1) && Objects.equals(v2, tuple.v2);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(v1, v2);
-        }
-
-        @Override
-        public String toString() {
-            return "Tuple{v1=" + v1 + ", v2=" + v2 + '}';
         }
     }
 }
