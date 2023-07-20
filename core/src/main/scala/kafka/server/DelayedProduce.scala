@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
-
+import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.utils.Implicits._
 import kafka.utils.Pool
@@ -47,6 +47,10 @@ case class ProduceMetadata(produceRequiredAcks: Short,
   override def toString = s"[requiredAcks: $produceRequiredAcks, partitionStatus: $produceStatus]"
 }
 
+object DelayedProduce {
+  private final val logger = Logger(classOf[DelayedProduce])
+}
+
 /**
  * A delayed produce operation that can be created by the replica manager and watched
  * in the produce operation purgatory
@@ -57,6 +61,8 @@ class DelayedProduce(delayMs: Long,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                      lockOpt: Option[Lock] = None)
   extends DelayedOperation(delayMs, lockOpt) {
+
+  override lazy val logger = DelayedProduce.logger
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
@@ -147,4 +153,3 @@ object DelayedProduceMetrics {
     partitionExpirationMeters.getAndMaybePut(partition).mark()
   }
 }
-
