@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -32,6 +33,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_1_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_2;
@@ -43,11 +45,13 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_NAME;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
@@ -62,6 +66,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,11 +88,16 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
+@RunWith(Parameterized.class)
 public class RackAwareTaskAssignorTest {
     private static final String USER_END_POINT = "localhost:8080";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
@@ -95,6 +105,17 @@ public class RackAwareTaskAssignorTest {
     private final MockTime time = new MockTime();
     private final StreamsConfig streamsConfig = new StreamsConfig(configProps());
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+
+    @Parameter
+    public boolean stateful;
+
+    @Parameterized.Parameters(name = "stateful={0}")
+    public static Collection<Object[]> getParamStoreType() {
+        return asList(new Object[][] {
+            {true},
+            {false}
+        });
+    }
 
     private final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
@@ -251,7 +272,7 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldOptimizeEmptyStatefulActiveTasks() {
+    public void shouldOptimizeEmptyActiveTasks() {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
@@ -268,13 +289,13 @@ public class RackAwareTaskAssignorTest {
         final SortedMap<UUID, ClientState> clientStateMap = new TreeMap<>(mkMap(
             mkEntry(UUID_1, clientState0)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet();
+        final SortedSet<TaskId> taskIds = mkSortedSet();
 
         if (assignor.canEnableRackAwareAssignor()) {
-            final long originalCost = assignor.activeStatefulTasksCost(clientStateMap, statefulTasks);
+            final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, stateful);
             assertEquals(0, originalCost);
 
-            final long cost = assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks);
+            final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful);
             assertEquals(0, cost);
         }
 
@@ -282,7 +303,7 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldOptimizeStatefulActiveTasks() {
+    public void shouldOptimizeActiveTasks() {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
@@ -310,14 +331,16 @@ public class RackAwareTaskAssignorTest {
             mkEntry(UUID_2, clientState1),
             mkEntry(UUID_3, clientState2)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
 
         if (assignor.canEnableRackAwareAssignor()) {
-            final long originalCost = assignor.activeStatefulTasksCost(clientStateMap, statefulTasks);
-            assertEquals(40, originalCost);
+            int expected = stateful ? 40 : 4;
+            final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, stateful);
+            assertEquals(expected, originalCost);
 
-            final long cost = assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks);
-            assertEquals(4, cost);
+            expected = stateful ? 4 : 0;
+            final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful);
+            assertEquals(expected, cost);
         }
 
         assertEquals(mkSet(TASK_0_0, TASK_1_0), clientState0.activeTasks());
@@ -326,7 +349,48 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldOptimizeStatefulActiveTasksWithMoreClients() {
+    public void shouldOptimizeActiveTasksWithWeightOverride() {
+        final AssignmentConfigs assignmentConfigs = new AssignmentConfigs(1L, 2, 2, 60000L, Collections.emptyList(), 1, 10);
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+            getClusterForTopic0And1(),
+            getTaskTopicPartitionMapForAllTasks(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForAllProcess(),
+            mockInternalTopicManager,
+            assignmentConfigs
+        );
+
+        final ClientState clientState0 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+
+        clientState0.assignActiveTasks(mkSet(TASK_0_1, TASK_1_1));
+        clientState1.assignActive(TASK_1_0);
+        clientState2.assignActive(TASK_0_0);
+
+        final SortedMap<UUID, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(UUID_1, clientState0),
+            mkEntry(UUID_2, clientState1),
+            mkEntry(UUID_3, clientState2)
+        ));
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+
+        // Because non_overlap_cost is very high, this basically will stick to original assignment
+        if (assignor.canEnableRackAwareAssignor()) {
+            final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, stateful);
+            assertEquals(4, originalCost);
+
+            final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful);
+            assertEquals(4, cost);
+        }
+
+        assertEquals(mkSet(TASK_0_1, TASK_1_1), clientState0.activeTasks());
+        assertEquals(mkSet(TASK_1_0), clientState1.activeTasks());
+        assertEquals(mkSet(TASK_0_0), clientState2.activeTasks());
+    }
+
+    @Test
+    public void shouldOptimizeActiveTasksWithMoreClients() {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
@@ -345,30 +409,33 @@ public class RackAwareTaskAssignorTest {
 
         // task_0_0 has same rack as UUID_1 and UUID_2
         // task_1_0 has same rack as UUID_1 and UUID_3
-        // Optimal assignment is UUID_1: {1_0}, UUID_2: {0_0}, UUID_3: {} which result in no cross rack traffic
+        // Optimal assignment is UUID_1: {}, UUID_2: {0_0}, UUID_3: {1_0} which result in no cross rack traffic
+        // and keeps UUID_1 empty since it was originally empty
         final SortedMap<UUID, ClientState> clientStateMap = new TreeMap<>(mkMap(
             mkEntry(UUID_1, clientState0),
             mkEntry(UUID_2, clientState1),
             mkEntry(UUID_3, clientState2)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet(TASK_0_0, TASK_1_0);
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_1_0);
 
         if (assignor.canEnableRackAwareAssignor()) {
-            final long originalCost = assignor.activeStatefulTasksCost(clientStateMap, statefulTasks);
-            assertEquals(20, originalCost);
+            final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, stateful);
+            int expected = stateful ? 20 : 2;
+            assertEquals(expected, originalCost);
 
-            final long cost = assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks);
-            assertEquals(2, cost);
+            expected = stateful ? 2 : 0;
+            final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful);
+            assertEquals(expected, cost);
         }
 
-        // UUID_3 becomes empty even though it has one task before
-        assertEquals(mkSet(TASK_1_0), clientState0.activeTasks());
+        // UUID_1 remains empty
+        assertEquals(mkSet(), clientState0.activeTasks());
         assertEquals(mkSet(TASK_0_0), clientState1.activeTasks());
-        assertEquals(mkSet(), clientState2.activeTasks());
+        assertEquals(mkSet(TASK_1_0), clientState2.activeTasks());
     }
 
     @Test
-    public void shouldOptimizeStatefulActiveTasksWithMoreClientsWithMoreThanOneTask() {
+    public void shouldOptimizeActiveTasksWithMoreClientsWithMoreThanOneTask() {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
@@ -394,14 +461,16 @@ public class RackAwareTaskAssignorTest {
             mkEntry(UUID_2, clientState1),
             mkEntry(UUID_3, clientState2)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0);
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0);
 
         if (assignor.canEnableRackAwareAssignor()) {
-            final long originalCost = assignor.activeStatefulTasksCost(clientStateMap, statefulTasks);
-            assertEquals(20, originalCost);
+            final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, stateful);
+            int expected = stateful ? 20 : 2;
+            assertEquals(expected, originalCost);
 
-            final long cost = assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks);
-            assertEquals(2, cost);
+            expected = stateful ? 2 : 0;
+            final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful);
+            assertEquals(expected, cost);
         }
 
         // Because original assignment is not balanced (3 tasks but client 0 has no task), we maintain it
@@ -435,14 +504,15 @@ public class RackAwareTaskAssignorTest {
             mkEntry(UUID_2, clientState0),
             mkEntry(UUID_5, clientState1)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
 
         if (assignor.canEnableRackAwareAssignor()) {
-            final long originalCost = assignor.activeStatefulTasksCost(clientStateMap, statefulTasks);
-            assertEquals(10, originalCost);
+            final int expectedCost = stateful ? 10 : 1;
+            final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, stateful);
+            assertEquals(expectedCost, originalCost);
 
-            final long cost = assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks);
-            assertEquals(10, cost);
+            final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful);
+            assertEquals(expectedCost, cost);
         }
 
         // Even though assigning all tasks to UUID_2 will result in min cost, but it's not balanced
@@ -472,9 +542,9 @@ public class RackAwareTaskAssignorTest {
             mkEntry(UUID_2, clientState0),
             mkEntry(UUID_5, clientState1)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         final Exception exception = assertThrows(IllegalStateException.class,
-            () -> assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks));
+            () -> assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful));
         Assertions.assertEquals("TopicPartition topic0-0 has no rack information. Maybe forgot to call "
             + "canEnableRackAwareAssignor first", exception.getMessage());
     }
@@ -500,10 +570,10 @@ public class RackAwareTaskAssignorTest {
             mkEntry(UUID_2, clientState0),
             mkEntry(UUID_5, clientState1)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         if (assignor.canEnableRackAwareAssignor()) {
             final Exception exception = assertThrows(IllegalArgumentException.class,
-                () -> assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks));
+                () -> assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful));
             Assertions.assertEquals(
                 "Task 1_1 assigned to multiple clients 00000000-0000-0000-0000-000000000005, "
                     + "00000000-0000-0000-0000-000000000002", exception.getMessage());
@@ -531,10 +601,10 @@ public class RackAwareTaskAssignorTest {
             mkEntry(UUID_2, clientState0),
             mkEntry(UUID_5, clientState1)
         ));
-        final SortedSet<TaskId> statefulTasks = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
         if (assignor.canEnableRackAwareAssignor()) {
             final Exception exception = assertThrows(IllegalArgumentException.class,
-                () -> assignor.optimizeActiveStatefulTasks(clientStateMap, statefulTasks));
+                () -> assignor.optimizeActiveTasks(clientStateMap, taskIds, stateful));
             Assertions.assertEquals(
                 "Task 1_0 not assigned to any client", exception.getMessage());
         }
@@ -544,7 +614,7 @@ public class RackAwareTaskAssignorTest {
         return new Cluster(
             "cluster",
             mkSet(NODE_0, NODE_1, NODE_2, NODE_3),
-            mkSet(PI_0_0, PI_0_1, PI_1_0, PI_1_1),
+            mkSet(PI_0_0, PI_0_1, PI_1_0, PI_1_1, PI_1_2),
             Collections.emptySet(),
             Collections.emptySet()
         );
@@ -623,7 +693,8 @@ public class RackAwareTaskAssignorTest {
             mkEntry(TASK_0_0, mkSet(TP_0_0)),
             mkEntry(TASK_0_1, mkSet(TP_0_1)),
             mkEntry(TASK_1_0, mkSet(TP_1_0)),
-            mkEntry(TASK_1_1, mkSet(TP_1_1))
+            mkEntry(TASK_1_1, mkSet(TP_1_1)),
+            mkEntry(TASK_1_2, mkSet(TP_1_2))
         );
     }
 

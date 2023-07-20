@@ -43,8 +43,11 @@ import org.slf4j.LoggerFactory;
 
 public class RackAwareTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(RackAwareTaskAssignor.class);
-    private static final int DEFAULT_TRAFFIC_COST = 10;
-    private static final int DEFAULT_NON_OVERLAP_COST = 1;
+    private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 10;
+    private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 1;
+
+    private static final int DEFAULT_STATELESS_TRAFFIC_COST = 1;
+    private static final int DEFAULT_STATELESS_NON_OVERLAP_COST = 0;
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
@@ -189,7 +192,7 @@ public class RackAwareTaskAssignor {
         return true;
     }
 
-    private int getCost(final TaskId taskId, final UUID clientId, final boolean inCurrentAssignment) {
+    private int getCost(final TaskId taskId, final UUID clientId, final boolean inCurrentAssignment, final boolean isStateful) {
         final Map<String, Optional<String>> clientRacks = racksForProcess.get(clientId);
         if (clientRacks == null) {
             throw new IllegalStateException("Client " + clientId + " doesn't exist in processRacks");
@@ -205,8 +208,10 @@ public class RackAwareTaskAssignor {
             throw new IllegalStateException("Task " + taskId + " has no TopicPartitions");
         }
 
-        final int trafficCost = assignmentConfigs.trafficCost == null ? DEFAULT_TRAFFIC_COST : assignmentConfigs.trafficCost;
-        final int nonOverlapCost = assignmentConfigs.nonOverlapCost == null ? DEFAULT_NON_OVERLAP_COST : assignmentConfigs.nonOverlapCost;
+        final int trafficCost = assignmentConfigs.trafficCost == null ? (isStateful ? DEFAULT_STATEFUL_TRAFFIC_COST : DEFAULT_STATELESS_TRAFFIC_COST)
+            : assignmentConfigs.trafficCost;
+        final int nonOverlapCost = assignmentConfigs.nonOverlapCost == null ? (isStateful ? DEFAULT_STATEFUL_NON_OVERLAP_COST : DEFAULT_STATELESS_NON_OVERLAP_COST)
+            : assignmentConfigs.nonOverlapCost;
 
         int cost = 0;
         for (final TopicPartition tp : topicPartitions) {
@@ -227,7 +232,7 @@ public class RackAwareTaskAssignor {
     }
 
     // For testing. canEnableRackAwareAssignor must be called first
-    long activeStatefulTasksCost(final SortedMap<UUID, ClientState> clientStates, final SortedSet<TaskId> statefulTasks) {
+    long activeTasksCost(final SortedMap<UUID, ClientState> clientStates, final SortedSet<TaskId> statefulTasks, final boolean isStateful) {
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(statefulTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
@@ -235,7 +240,7 @@ public class RackAwareTaskAssignor {
         final Graph<Integer> graph = new Graph<>();
 
         constructStatefulActiveTaskGraph(graph, statefulTasks, clientList, taskIdList,
-            clientStates, taskClientMap, clientCapacity);
+            clientStates, taskClientMap, clientCapacity, isStateful);
 
         final int sourceId = taskIdList.size() + clientList.size();
         final int sinkId = sourceId + 1;
@@ -255,40 +260,43 @@ public class RackAwareTaskAssignor {
     /**
      * Optimize active stateful task assignment for rack awareness. canEnableRackAwareAssignor must be called first
      * @param clientStates Client states
-     * @param statefulTasks Stateful tasks to reassign if needed. They must be assigned already in clientStates
+     * @param taskIds Tasks to reassign if needed. They must be assigned already in clientStates
+     * @param isStateful Whether the tasks are stateful
      * @return Total cost after optimization
      */
-    public long optimizeActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates, final
-        SortedSet<TaskId> statefulTasks) {
-        if (statefulTasks.isEmpty()) {
+    public long optimizeActiveTasks(final SortedMap<UUID, ClientState> clientStates,
+                                    final SortedSet<TaskId> taskIds,
+                                    final boolean isStateful) {
+        if (taskIds.isEmpty()) {
             return 0;
         }
 
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
-        final List<TaskId> taskIdList = new ArrayList<>(statefulTasks);
+        final List<TaskId> taskIdList = new ArrayList<>(taskIds);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         final Map<UUID, Integer> clientCapacity = new HashMap<>();
         final Graph<Integer> graph = new Graph<>();
 
-        final boolean allUnitCapacity = constructStatefulActiveTaskGraph(graph, statefulTasks, clientList,
-            taskIdList, clientStates, taskClientMap, clientCapacity);
+        constructStatefulActiveTaskGraph(graph, taskIds, clientList, taskIdList,
+            clientStates, taskClientMap, clientCapacity, isStateful);
 
         graph.solveMinCostFlow();
         final long cost = graph.totalCost();
 
-        assignStatefulActiveTaskFromMinCostFlow(graph, statefulTasks, clientList,
-            taskIdList, clientStates, clientCapacity, taskClientMap, allUnitCapacity);
+        assignStatefulActiveTaskFromMinCostFlow(graph, taskIds, clientList, taskIdList,
+            clientStates, clientCapacity, taskClientMap);
 
         return cost;
     }
 
-    private boolean constructStatefulActiveTaskGraph(final Graph<Integer> graph,
+    private void constructStatefulActiveTaskGraph(final Graph<Integer> graph,
                                                   final SortedSet<TaskId> statefulTasks,
                                                   final List<UUID> clientList,
                                                   final List<TaskId> taskIdList,
                                                   final Map<UUID, ClientState> clientStates,
                                                   final Map<TaskId, UUID> taskClientMap,
-                                                  final Map<UUID, Integer> clientCapacity) {
+                                                  final Map<UUID, Integer> clientCapacity,
+                                                  final boolean isStateful) {
         for (final TaskId taskId : statefulTasks) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
                 if (clientState.getValue().hasAssignedTask(taskId)) {
@@ -305,7 +313,7 @@ public class RackAwareTaskAssignor {
                 final UUID clientId = clientList.get(j);
 
                 final int flow = clientStates.get(clientId).hasAssignedTask(taskId) ? 1 : 0;
-                final int cost = getCost(taskId, clientId, flow == 1);
+                final int cost = getCost(taskId, clientId, flow == 1, isStateful);
                 if (flow == 1) {
                     if (taskClientMap.containsKey(taskId)) {
                         throw new IllegalArgumentException("Task " + taskId + " assigned to multiple clients "
@@ -328,33 +336,17 @@ public class RackAwareTaskAssignor {
             graph.addEdge(sourceId, taskNodeId, 1, 0, 1);
         }
 
-        int maxCapacity = 0;
-        int minCapacity = Integer.MAX_VALUE;
-        for (final UUID client : clientList) {
-            final int capacity = clientCapacity.getOrDefault(client, 0);
-            maxCapacity = Integer.max(maxCapacity, capacity);
-            minCapacity = Integer.min(minCapacity, capacity);
-        }
-
-        // Special case: if we have more clients than tasks. Each client can have 1 task assigned potentially
-        // So in this case, all clients should have capacity 1
-        final boolean allUnitCapacity = maxCapacity == 1 && minCapacity == 0;
-        if (minCapacity == 0 && maxCapacity > 1) {
-            log.warn("Unbalanced assignment to compute. Some clients have 0 tasks while other "
-                + "clients have more than 1 tasks assigned");
-        }
-
+        // It's possible that some clients have 0 task assign. These clients will have 0 tasks assigned
+        // even though it may have lower traffic cost. This is to maintain the balance requirement.
         for (int i = 0; i < clientList.size(); i++) {
             final int clientNodeId = taskIdList.size() + i;
-            final int flow = clientCapacity.getOrDefault(clientList.get(i), 0);
-            final int capacity = allUnitCapacity ? 1 : clientCapacity.getOrDefault(clientList.get(i), 0);
-            graph.addEdge(clientNodeId, sinkId, capacity, 0, flow);
+            final int capacity = clientCapacity.getOrDefault(clientList.get(i), 0);
+            // Flow equals to capacity for edges to sink
+            graph.addEdge(clientNodeId, sinkId, capacity, 0, capacity);
         }
 
         graph.setSourceNode(sourceId);
         graph.setSinkNode(sinkId);
-
-        return allUnitCapacity;
     }
 
     private void assignStatefulActiveTaskFromMinCostFlow(final Graph<Integer> graph,
@@ -363,8 +355,7 @@ public class RackAwareTaskAssignor {
                                                          final List<TaskId> taskIdList,
                                                          final Map<UUID, ClientState> clientStates,
                                                          final Map<UUID, Integer> originalClientCapacity,
-                                                         final Map<TaskId, UUID> taskClientMap,
-                                                         final boolean allUnitCapacity) {
+                                                         final Map<TaskId, UUID> taskClientMap) {
         int taskAssigned = 0;
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
             final TaskId taskId = taskIdList.get(taskNodeId);
@@ -413,8 +404,7 @@ public class RackAwareTaskAssignor {
 
         for (final Entry<UUID, Integer> originalCapacity : originalClientCapacity.entrySet()) {
             final int capacity = clientCapacity.getOrDefault(originalCapacity.getKey(), 0);
-            // If allUnitCapacity is true, some client can have 0 task assigned after optimization
-            if (!allUnitCapacity && !Objects.equals(originalCapacity.getValue(), capacity)) {
+            if (!Objects.equals(originalCapacity.getValue(), capacity)) {
                 throw new IllegalStateException("There are " + originalCapacity.getValue() + " tasks assigned to"
                     + " client " + originalCapacity.getKey() + " before assignment, but " + capacity + " tasks "
                     + " are assigned to it after assignment");
