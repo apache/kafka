@@ -488,8 +488,7 @@ public class RecordHelpers {
         OffsetAndMetadata offsetAndMetadata,
         MetadataVersion metadataVersion
     ) {
-        short version = offsetAndMetadata.expireTimestampMs.isPresent() ?
-            (short) 1 : metadataVersion.offsetCommitValueVersion();
+        short version = metadataVersion.offsetCommitValueVersion(offsetAndMetadata.expireTimestampMs.isPresent());
 
         return new Record(
             new ApiMessageAndVersion(

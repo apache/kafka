@@ -340,6 +340,12 @@ class MetadataVersionTest {
         } else {
             expectedVersion = 1;
         }
-        assertEquals(expectedVersion, metadataVersion.offsetCommitValueVersion());
+        assertEquals(expectedVersion, metadataVersion.offsetCommitValueVersion(false));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testOffsetCommitValueVersionWithExpiredTimestamp(MetadataVersion metadataVersion) {
+        assertEquals((short) 1, metadataVersion.offsetCommitValueVersion(true));
     }
 }

@@ -386,8 +386,8 @@ public enum MetadataVersion {
         }
     }
 
-    public short offsetCommitValueVersion() {
-        if (isLessThan(MetadataVersion.IBP_2_1_IV0)) {
+    public short offsetCommitValueVersion(boolean expireTimestampMs) {
+        if (isLessThan(MetadataVersion.IBP_2_1_IV0) || expireTimestampMs) {
             return 1;
         } else if (isLessThan(MetadataVersion.IBP_2_1_IV1)) {
             return 2;

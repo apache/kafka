@@ -674,7 +674,7 @@ public class RecordHelpersTest {
                 (short) 1),
             new ApiMessageAndVersion(
                 value,
-                metadataVersion.offsetCommitValueVersion()
+                metadataVersion.offsetCommitValueVersion(false)
             )
         );
 
