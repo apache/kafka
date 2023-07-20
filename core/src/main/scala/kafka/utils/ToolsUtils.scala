@@ -19,15 +19,23 @@ package kafka.utils
 import joptsimple.OptionParser
 import kafka.server.{BrokerMetadataCheckpoint, MetaProperties}
 import kafka.tools.TerseFailure
+import net.sourceforge.argparse4j.ArgumentParsers
+import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
+import net.sourceforge.argparse4j.inf.Namespace
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, UserScramCredentialRecord}
+import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.{Metric, MetricName}
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.util.CommandLineUtils
 
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
-import java.util.Optional
+import java.util
+import java.util.{Base64, Optional}
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 object ToolsUtils {
 
@@ -87,14 +95,185 @@ object ToolsUtils {
     throw new AssertionError("printUsageAndExit should not return, but it did.")
   }
 
-  def formatCommand(stream: PrintStream,
-                    directories: Seq[String],
-                    metaProperties: MetaProperties,
-                    metadataVersion: MetadataVersion,
-                    ignoreFormatted: Boolean): Int = {
+  def buildBootstrapMetadata(metadataVersion: MetadataVersion,
+                             metadataOptionalArguments: Option[ArrayBuffer[ApiMessageAndVersion]],
+                             source: String): BootstrapMetadata = {
+
+    val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
+    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+      setName(MetadataVersion.FEATURE_NAME).
+      setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
+
+    metadataOptionalArguments.foreach { metadataArguments =>
+      for (record <- metadataArguments) metadataRecords.add(record)
+    }
+
+    BootstrapMetadata.fromRecords(metadataRecords, source)
+  }
+
+  def parseArguments(args: Array[String]): Namespace = {
+    val parser = ArgumentParsers.
+      newArgumentParser("kafka-storage", /* defaultHelp */ true, /* prefixChars */ "-", /* fromFilePrefix */ "@").
+      description("The Kafka storage tool.")
+
+    val subparsers = parser.addSubparsers().dest("command")
+
+    val infoParser = subparsers.addParser("info").
+      help("Get information about the Kafka log directories on this node.")
+    val formatParser = subparsers.addParser("format").
+      help("Format the Kafka log directories on this node.")
+    subparsers.addParser("random-uuid").help("Print a random UUID.")
+    List(infoParser, formatParser).foreach(parser => {
+      parser.addArgument("--config", "-c").
+        action(store()).
+        required(true).
+        help("The Kafka configuration file to use.")
+    })
+    formatParser.addArgument("--cluster-id", "-t").
+      action(store()).
+      required(true).
+      help("The cluster ID to use.")
+    formatParser.addArgument("--add-scram", "-S").
+      action(append()).
+      help(
+        """A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
+          |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
+          |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
+    formatParser.addArgument("--ignore-formatted", "-g").
+      action(storeTrue())
+    formatParser.addArgument("--release-version", "-r").
+      action(store()).
+      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.latest().version()}")
+
+    parser.parseArgsOrFail(args)
+  }
+
+  def getUserScramCredentialRecords(namespace: Namespace): Option[ArrayBuffer[UserScramCredentialRecord]] = {
+    if (namespace.getList("add_scram") != null) {
+      val listofAddConfig: List[String] = namespace.getList("add_scram").asScala.toList
+      val userScramCredentialRecords: ArrayBuffer[UserScramCredentialRecord] = ArrayBuffer()
+      for (singleAddConfig <- listofAddConfig) {
+        val singleAddConfigList = singleAddConfig.split("\\s+")
+
+        // The first subarg must be of the form key=value
+        val nameValueRecord = singleAddConfigList(0).split("=", 2)
+        nameValueRecord(0) match {
+          case "SCRAM-SHA-256" =>
+            userScramCredentialRecords.append(getUserScramCredentialRecord(nameValueRecord(0), nameValueRecord(1)))
+          case "SCRAM-SHA-512" =>
+            userScramCredentialRecords.append(getUserScramCredentialRecord(nameValueRecord(0), nameValueRecord(1)))
+          case _ => throw new TerseFailure(s"The add-scram mechanism ${nameValueRecord(0)} is not supported.")
+        }
+      }
+      Some(userScramCredentialRecords)
+    } else {
+      None
+    }
+  }
+
+  def getUserScramCredentialRecord(
+                                    mechanism: String,
+                                    config: String
+                                  ): UserScramCredentialRecord = {
+    /*
+     * Remove  '[' amd ']'
+     * Split K->V pairs on ',' and no K or V should contain ','
+     * Split K and V on '=' but V could contain '=' if inside ""
+     * Create Map of K to V and replace all " in V
+     */
+    val argMap = config.substring(1, config.length - 1)
+      .split(",")
+      .map(_.split("=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"))
+      .map(args => args(0) -> args(1).replaceAll("\"", "")).toMap
+
+    val scramMechanism = ScramMechanism.forMechanismName(mechanism)
+
+    def getName(argMap: Map[String, String]): String = {
+      if (!argMap.contains("name")) {
+        throw new TerseFailure(s"You must supply 'name' to add-scram")
+      }
+      argMap("name")
+    }
+
+    def getSalt(argMap: Map[String, String], scramMechanism: ScramMechanism): Array[Byte] = {
+      if (argMap.contains("salt")) {
+        Base64.getDecoder.decode(argMap("salt"))
+      } else {
+        new ScramFormatter(scramMechanism).secureRandomBytes()
+      }
+    }
+
+    def getIterations(argMap: Map[String, String], scramMechanism: ScramMechanism): Int = {
+      if (argMap.contains("salt")) {
+        val iterations = argMap("iterations").toInt
+        if (iterations < scramMechanism.minIterations()) {
+          throw new TerseFailure(s"The 'iterations' value must be >= ${scramMechanism.minIterations()} for add-scram")
+        }
+        if (iterations > scramMechanism.maxIterations()) {
+          throw new TerseFailure(s"The 'iterations' value must be <= ${scramMechanism.maxIterations()} for add-scram")
+        }
+        iterations
+      } else {
+        4096
+      }
+    }
+
+    def getSaltedPassword(
+                           argMap: Map[String, String],
+                           scramMechanism: ScramMechanism,
+                           salt: Array[Byte],
+                           iterations: Int
+                         ): Array[Byte] = {
+      if (argMap.contains("password")) {
+        if (argMap.contains("saltedpassword")) {
+          throw new TerseFailure(s"You must only supply one of 'password' or 'saltedpassword' to add-scram")
+        }
+        new ScramFormatter(scramMechanism).saltedPassword(argMap("password"), salt, iterations)
+      } else {
+        if (!argMap.contains("saltedpassword")) {
+          throw new TerseFailure(s"You must supply one of 'password' or 'saltedpassword' to add-scram")
+        }
+        if (!argMap.contains("salt")) {
+          throw new TerseFailure(s"You must supply 'salt' with 'saltedpassword' to add-scram")
+        }
+        Base64.getDecoder.decode(argMap("saltedpassword"))
+      }
+    }
+
+    val name = getName(argMap)
+    val salt = getSalt(argMap, scramMechanism)
+    val iterations = getIterations(argMap, scramMechanism)
+    val saltedPassword = getSaltedPassword(argMap, scramMechanism, salt, iterations)
+
+    val myrecord = try {
+      val formatter = new ScramFormatter(scramMechanism);
+
+      new UserScramCredentialRecord()
+        .setName(name)
+        .setMechanism(scramMechanism.`type`)
+        .setSalt(salt)
+        .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
+        .setServerKey(formatter.serverKey(saltedPassword))
+        .setIterations(iterations)
+    } catch {
+      case e: Throwable =>
+        throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
+    }
+    myrecord
+  }
+
+  def formatCommand(
+                     stream: PrintStream,
+                     directories: Seq[String],
+                     metaProperties: MetaProperties,
+                     bootstrapMetadata: BootstrapMetadata,
+                     metadataVersion: MetadataVersion,
+                     ignoreFormatted: Boolean
+                   ): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
     }
+
     val unformattedDirectories = directories.filter(directory => {
       if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
         true
@@ -119,7 +298,6 @@ object ToolsUtils {
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
       checkpoint.write(metaProperties.toProperties)
 
-      val bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "format command")
       val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
       bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
 

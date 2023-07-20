@@ -19,7 +19,6 @@ package kafka.api
 import java.util.Properties
 
 import kafka.utils._
-import kafka.tools.StorageTool
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -58,9 +57,9 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = {
     val args = Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "-S",
                    s"SCRAM-SHA-256=[name=${JaasTestUtils.KafkaScramAdmin},password=${JaasTestUtils.KafkaScramAdminPassword}]")
-    val namespace = StorageTool.parseArguments(args.toArray)
+    val namespace = ToolsUtils.parseArguments(args.toArray)
     val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
-    StorageTool.getUserScramCredentialRecords(namespace).foreach {
+    ToolsUtils.getUserScramCredentialRecords(namespace).foreach {
       userScramCredentialRecords => for (record <- userScramCredentialRecords) {
         metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
       }

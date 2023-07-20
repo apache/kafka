@@ -228,7 +228,7 @@ public class StorageTool {
     }
 
 
-    static Namespace parseArguments(String... args) {
+    public static Namespace parseArguments(String... args) {
         ArgumentParser parser = ArgumentParsers.newArgumentParser("kafka-storage").defaultHelp(true).description("The Kafka storage tool.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
         Subparser infoParser = subparsers.addParser("info").help("Get information about the Kafka log directories on this node.");
