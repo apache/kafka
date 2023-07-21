@@ -38,8 +38,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.common.utils.Time;
 
-import java.security.NoSuchAlgorithmException;
-import java.security.InvalidKeyException;
 import java.nio.charset.StandardCharsets;
 import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.Mac;
