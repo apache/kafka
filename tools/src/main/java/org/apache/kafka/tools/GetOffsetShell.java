@@ -38,7 +38,7 @@ import org.apache.kafka.server.util.PartitionFilter;
 import org.apache.kafka.server.util.PartitionFilter.PartitionRangeFilter;
 import org.apache.kafka.server.util.PartitionFilter.PartitionsSetFilter;
 import org.apache.kafka.server.util.PartitionFilter.UniquePartitionFilter;
-import org.apache.kafka.server.util.TopicFilter;
+import org.apache.kafka.server.util.TopicFilter.IncludeList;
 import org.apache.kafka.server.util.TopicPartitionFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter.CompositeTopicPartitionFilter;
 import org.apache.kafka.server.util.TopicPartitionFilter.TopicFilterAndPartitionFilter;
@@ -70,10 +70,10 @@ public class GetOffsetShell {
             execute(args);
             return 0;
         } catch (TerseException e) {
-            System.err.println(e.getMessage());
+            System.err.println("Error occurred: " + e.getMessage());
             return 1;
         } catch (Throwable e) {
-            System.err.println(e.getMessage());
+            System.err.println("Error occurred: " + e.getMessage());
             System.err.println(Utils.stackTrace(e));
             return 1;
         }
@@ -104,7 +104,7 @@ public class GetOffsetShell {
         private final OptionSpec<String> effectiveBrokerListOpt;
         private final OptionSpecBuilder excludeInternalTopicsOpt;
 
-        public GetOffsetShellOptions(String[] args) {
+        public GetOffsetShellOptions(String[] args) throws TerseException {
             super(args);
 
             brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
@@ -148,15 +148,13 @@ public class GetOffsetShell {
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                throw new TerseException(e.getMessage());
             }
 
             if (options.has(bootstrapServerOpt)) {
                 effectiveBrokerListOpt = bootstrapServerOpt;
             } else {
                 effectiveBrokerListOpt = brokerListOpt;
-
-                System.out.println("WARNING: The 'broker-list' option is deprecated and will be removed in the next major release. Use the `bootstrap-server` option with the same syntax.");
             }
 
             CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
@@ -335,7 +333,7 @@ public class GetOffsetShell {
      */
     public TopicPartitionFilter createTopicPartitionFilterWithTopicAndPartitionPattern(String topicOpt, String partitionIds) throws TerseException {
         return new TopicFilterAndPartitionFilter(
-                new TopicFilter.IncludeList(topicOpt != null ? topicOpt : ".*"),
+                new IncludeList(topicOpt != null ? topicOpt : ".*"),
                 new PartitionsSetFilter(createPartitionSet(partitionIds))
         );
     }
@@ -384,7 +382,7 @@ public class GetOffsetShell {
 
         IntFunction<String> group = (int g) -> (matcher.group(g) != null && !matcher.group(g).isEmpty()) ? matcher.group(g) : null;
 
-        TopicFilter.IncludeList topicFilter = group.apply(1) != null ? new TopicFilter.IncludeList(group.apply(1)) : new TopicFilter.IncludeList(".*");
+        IncludeList topicFilter = group.apply(1) != null ? new IncludeList(group.apply(1)) : new IncludeList(".*");
 
         PartitionFilter partitionFilter;
 
