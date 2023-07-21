@@ -2742,8 +2742,6 @@ project(':connect:runtime') {
     api project(':connect:json')
     api project(':connect:transforms')
 
-    implementation project(':tools')
-
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation

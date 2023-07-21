@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -52,7 +51,7 @@ public class InternalSinkRecord extends SinkRecord {
                                 Schema valueSchema, Object value, Long timestamp,
                                 Iterable<Header> headers) {
         return new InternalSinkRecord(originalRecord, topic, kafkaPartition, keySchema, key,
-            valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers());
+            valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers);
     }
 
     @Override
