@@ -25,7 +25,7 @@ import java.util.{Optional, Properties}
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.consumeRecords
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGroupMetadata, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
@@ -51,8 +51,8 @@ class TransactionsTest extends IntegrationTestHarness {
   val numPartitions = 4
 
   val transactionalProducers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
-  val transactionalConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-  val nonTransactionalConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+  val transactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
+  val nonTransactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
 
   serverConfig.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
   // Set a smaller value for the number of partitions for the __consumer_offsets topic
@@ -255,7 +255,7 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit) = {
+    String, Consumer[Array[Byte], Array[Byte]]) => Unit) = {
 
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 500 unique, numbered, messages.

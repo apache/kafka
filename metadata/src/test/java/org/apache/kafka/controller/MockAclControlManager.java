@@ -33,7 +33,7 @@ import java.util.Optional;
 public class MockAclControlManager extends AclControlManager {
     public MockAclControlManager(LogContext logContext,
                                  Optional<ClusterMetadataAuthorizer> authorizer) {
-        super(new SnapshotRegistry(logContext), authorizer);
+        super(new LogContext(), new SnapshotRegistry(logContext), authorizer);
     }
 
     public List<AclCreateResult> createAndReplayAcls(List<AclBinding> acls) {

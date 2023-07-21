@@ -28,11 +28,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 /**
  * Superclass for plugin discovery implementations.
@@ -118,33 +120,77 @@ public abstract class PluginScanner {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    protected <T> PluginDesc<T> pluginDesc(Class<? extends T> plugin, String version, ClassLoader loader) {
-        return new PluginDesc(plugin, version, loader);
+    protected <T> PluginDesc<T> pluginDesc(Class<? extends T> plugin, String version, PluginSource source) {
+        return new PluginDesc(plugin, version, source.loader());
     }
 
     @SuppressWarnings("unchecked")
-    protected <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
+    protected <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, PluginSource source) {
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
-        for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
-            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
+        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, source.loader());
+        Iterator<T> iterator = serviceLoader.iterator();
+        while (handleLinkageError(klass, source, iterator::hasNext)) {
+            try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
                 T pluginImpl;
                 try {
-                    pluginImpl = iterator.next();
+                    pluginImpl = handleLinkageError(klass, source, iterator::next);
                 } catch (ServiceConfigurationError t) {
-                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
+                    log.error("Failed to discover {} in {}{}",
+                            klass.getSimpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
                     continue;
                 }
                 Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
-                if (pluginKlass.getClassLoader() != loader) {
+                if (pluginKlass.getClassLoader() != source.loader()) {
                     log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                            pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
+                            pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), source.location());
                     continue;
                 }
-                result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), loader));
+                result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), source));
             }
         }
         return result;
+    }
+
+    /**
+     * Helper to evaluate a {@link ServiceLoader} operation while handling {@link LinkageError}s.
+     *
+     * @param klass The plugin superclass which is being loaded
+     * @param function A function on a {@link ServiceLoader}'s {@link Iterator} which may throw {@link LinkageError}
+     * @return the return value of function
+     * @throws Error errors thrown by the passed-in function
+     * @param <T> Type being iterated over by the ServiceLoader
+     * @param <U> Return value of the passed-in function
+     */
+    private <T, U> U handleLinkageError(Class<T> klass, PluginSource source, Supplier<U> function) {
+        // It's difficult to know for sure if the iterator was able to advance past the first broken
+        // plugin class, or if it will continue to fail on that broken class for any subsequent calls
+        // to Iterator::hasNext or Iterator::next
+        // For reference, see https://bugs.openjdk.org/browse/JDK-8196182, which describes
+        // the behavior we are trying to mitigate with this logic as buggy, but indicates that a fix
+        // in the JDK standard library ServiceLoader implementation is unlikely to land
+        LinkageError lastError = null;
+        // Try a fixed maximum number of times in case the ServiceLoader cannot move past a faulty plugin,
+        // but the LinkageError varies between calls. This limit is chosen to be higher than the typical number
+        // of plugins in a single plugin location, and to limit the amount of log-spam on startup.
+        for (int i = 0; i < 100; i++) {
+            try {
+                return function.get();
+            } catch (LinkageError t) {
+                // As an optimization, hide subsequent error logs if two consecutive errors look similar.
+                // This reduces log-spam for iterators which cannot advance and rethrow the same exception.
+                if (lastError == null
+                        || !Objects.equals(lastError.getClass(), t.getClass())
+                        || !Objects.equals(lastError.getMessage(), t.getMessage())) {
+                    log.error("Failed to discover {} in {}{}",
+                            klass.getSimpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
+                }
+                lastError = t;
+            }
+        }
+        log.error("Received excessive ServiceLoader errors: assuming the runtime ServiceLoader implementation cannot " +
+                        "skip faulty implementations. Use a different JRE, or resolve LinkageErrors for plugins in {}",
+                source.location(), lastError);
+        throw lastError;
     }
 
     protected static <T> String versionFor(T pluginImpl) {
@@ -169,6 +215,8 @@ public abstract class PluginScanner {
             return ": Failed to statically initialize plugin class";
         } else if (t instanceof InvocationTargetException) {
             return ": Failed to invoke plugin constructor";
+        } else if (t instanceof LinkageError) {
+            return ": Plugin class has a dependency which is missing or invalid";
         } else {
             return "";
         }

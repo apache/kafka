@@ -28,10 +28,9 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public class OffsetCommitRequest extends AbstractRequest {
     // default values for the current version
@@ -89,33 +88,29 @@ public class OffsetCommitRequest extends AbstractRequest {
         return offsets;
     }
 
-    public static List<OffsetCommitResponseTopic> getErrorResponseTopics(
-            List<OffsetCommitRequestTopic> requestTopics,
-            Errors e) {
-        List<OffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
-        for (OffsetCommitRequestTopic entry : requestTopics) {
-            List<OffsetCommitResponsePartition> responsePartitions =
-                    new ArrayList<>();
-            for (OffsetCommitRequestData.OffsetCommitRequestPartition requestPartition : entry.partitions()) {
-                responsePartitions.add(new OffsetCommitResponsePartition()
-                                           .setPartitionIndex(requestPartition.partitionIndex())
-                                           .setErrorCode(e.code()));
-            }
-            responseTopicData.add(new OffsetCommitResponseTopic()
-                    .setName(entry.name())
-                    .setPartitions(responsePartitions)
-            );
-        }
-        return responseTopicData;
+    public static OffsetCommitResponseData getErrorResponse(
+        OffsetCommitRequestData request,
+        Errors error
+    ) {
+        OffsetCommitResponseData response = new OffsetCommitResponseData();
+        request.topics().forEach(topic -> {
+            OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic()
+                .setName(topic.name());
+            response.topics().add(responseTopic);
+
+            topic.partitions().forEach(partition -> {
+                responseTopic.partitions().add(new OffsetCommitResponsePartition()
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(error.code()));
+            });
+        });
+        return response;
     }
 
     @Override
     public OffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<OffsetCommitResponseTopic>
-                responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e));
-        return new OffsetCommitResponse(new OffsetCommitResponseData()
-                .setTopics(responseTopicData)
-                .setThrottleTimeMs(throttleTimeMs));
+        return new OffsetCommitResponse(getErrorResponse(data, Errors.forException(e))
+            .setThrottleTimeMs(throttleTimeMs));
     }
 
     @Override
@@ -125,5 +120,9 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new OffsetCommitRequest(new OffsetCommitRequestData(new ByteBufferAccessor(buffer), version), version);
+    }
+
+    public static Optional<String> groupInstanceId(OffsetCommitRequestData request) {
+        return Optional.ofNullable(request.groupInstanceId());
     }
 }
