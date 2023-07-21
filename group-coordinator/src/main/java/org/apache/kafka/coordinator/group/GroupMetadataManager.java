@@ -1973,9 +1973,8 @@ public class GroupMetadataManager {
                     }
                 });
 
-                List<Record> records = Collections.singletonList(
-                    RecordHelpers.newGroupMetadataRecord(group, metadataImage.features().metadataVersion())
-                );
+                List<Record> records = Collections.singletonList(RecordHelpers.newGroupMetadataRecord(
+                    group, Collections.emptyMap(), metadataImage.features().metadataVersion()));
 
                 return new CoordinatorResult<>(records, appendFuture);
 
@@ -2607,6 +2606,7 @@ public class GroupMetadataManager {
                 log.info("Static member which joins during Stable stage and doesn't affect " +
                     "the selected protocol will not trigger a rebalance.");
 
+                Map<String, byte[]> groupAssignment = group.groupAssignment();
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
                 appendFuture.whenComplete((__, t) -> {
                     if (t != null) {
@@ -2656,7 +2656,7 @@ public class GroupMetadataManager {
                 });
 
                 List<Record> records = Collections.singletonList(
-                    RecordHelpers.newGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+                    RecordHelpers.newGroupMetadataRecord(group, groupAssignment, metadataImage.features().metadataVersion())
                 );
 
                 return new CoordinatorResult<>(records, appendFuture);
@@ -2772,7 +2772,7 @@ public class GroupMetadataManager {
                 });
 
                 List<Record> records = Collections.singletonList(
-                    RecordHelpers.newGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+                    RecordHelpers.newGroupMetadataRecord(group, assignment, metadataImage.features().metadataVersion())
                 );
                 return new CoordinatorResult<>(records, appendFuture);
             }

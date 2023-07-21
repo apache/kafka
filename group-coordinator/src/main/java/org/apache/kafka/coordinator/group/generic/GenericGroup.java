@@ -1076,6 +1076,15 @@ public class GenericGroup implements Group {
     }
 
     /**
+     * @return All member assignments keyed by member id.
+     */
+    public Map<String, byte[]> groupAssignment() {
+        return allMembers().stream().collect(Collectors.toMap(
+            GenericGroupMember::memberId, GenericGroupMember::assignment
+        ));
+    }
+
+    /**
      * Checks whether the transition to the target state is valid.
      *
      * @param targetState the target state to transition to.

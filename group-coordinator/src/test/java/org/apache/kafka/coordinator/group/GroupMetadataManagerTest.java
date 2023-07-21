@@ -4531,20 +4531,12 @@ public class GroupMetadataManagerTest {
         // A group that transitions to Empty after completing join phase will generate records.
         List<ExpiredTimeout<Void, Record>> timeouts = context.sleep(context.genericGroupNewMemberJoinTimeoutMs);
 
-        List<Record> expectedRecords = Collections.singletonList(newGroupMetadataRecord("group-id",
-            new GroupMetadataValue()
-                .setMembers(Collections.emptyList())
-                .setGeneration(1)
-                .setLeader(null)
-                .setProtocolType("consumer")
-                .setProtocol(null)
-                .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latest()));
-
         assertEquals(1, timeouts.size());
         timeouts.forEach(timeout -> {
             assertEquals(genericGroupHeartbeatKey("group-id", memberId), timeout.key);
-            assertEquals(expectedRecords, timeout.result.records());
+            assertEquals(Collections.singletonList(
+                RecordHelpers.newGroupMetadataRecord(group, Collections.emptyMap(), MetadataVersion.latest())),
+                timeout.result.records());
         });
 
         assertTrue(responseFuture.isDone());
@@ -5075,7 +5067,7 @@ public class GroupMetadataManagerTest {
             supportSkippingAssignment);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         assertFalse(responseFuture.isDone());
@@ -5230,7 +5222,7 @@ public class GroupMetadataManagerTest {
             false);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         assertFalse(responseFuture.isDone());
@@ -5321,7 +5313,7 @@ public class GroupMetadataManagerTest {
             supportSkippingAssignment);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         assertFalse(responseFuture.isDone());
@@ -5714,7 +5706,7 @@ public class GroupMetadataManagerTest {
         result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate a successful write to the log.
@@ -5786,7 +5778,7 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncResponseFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate a successful write to the log.
@@ -6150,7 +6142,7 @@ public class GroupMetadataManagerTest {
         result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Successful write to the log.
@@ -6194,7 +6186,7 @@ public class GroupMetadataManagerTest {
             supportSkippingAssignment);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate a successful write to the log.
@@ -6514,7 +6506,7 @@ public class GroupMetadataManagerTest {
             true);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate a failed write to the log.
@@ -6571,13 +6563,13 @@ public class GroupMetadataManagerTest {
         CompletableFuture<SyncGroupResponseData> leaderSyncFuture = new CompletableFuture<>();
         result = context.sendGenericGroupSync(syncRequest, leaderSyncFuture);
 
+        // Simulate a successful write to the log. This will update the group with the new (empty) assignment.
+        result.appendFuture().complete(null);
+
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
-
-        // Simulate a successful write to the log.
-        result.appendFuture().complete(null);
 
         assertTrue(leaderSyncFuture.isDone());
         assertTrue(group.isInState(STABLE));
@@ -6637,7 +6629,7 @@ public class GroupMetadataManagerTest {
             true);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
 
@@ -6679,7 +6671,7 @@ public class GroupMetadataManagerTest {
             .withGroupInstanceId("follower-instance-id")
             .withGenerationId(rebalanceResult.generationId)
             .withMemberId(rebalanceResult.followerId)
-            .withAssignments(Collections.emptyList())
+            .withAssignment(Collections.emptyList())
             .build();
 
         CoordinatorResult<Void, Record> syncResult = context.sendGenericGroupSync(syncRequest, syncFuture);
@@ -6870,11 +6862,12 @@ public class GroupMetadataManagerTest {
             true);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
         result.appendFuture().complete(null);
+
         assertTrue(followerJoinFuture.isDone());
 
         // Old leader shouldn't be timed out.
@@ -7093,7 +7086,7 @@ public class GroupMetadataManagerTest {
                 true);
 
             assertEquals(
-                Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+                Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
                 result.records()
             );
             // Simulate successful write to log.
@@ -7458,15 +7451,15 @@ public class GroupMetadataManagerTest {
         int generationId = leaderJoinFuture.get().generationId();
 
         // SyncGroup with the provided Protocol Type and Name
-        List<SyncGroupRequestAssignment> assignments = new ArrayList<>();
-        assignments.add(new SyncGroupRequestAssignment().setMemberId(leaderId));
+        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
+        assignment.add(new SyncGroupRequestAssignment().setMemberId(leaderId));
         SyncGroupRequestData syncRequest = new SyncGroupRequestBuilder()
             .withGroupId("group-id")
             .withMemberId(leaderId)
             .withProtocolType(protocolType.orElse(null))
             .withProtocolName(protocolName.orElse(null))
             .withGenerationId(generationId)
-            .withAssignments(assignments)
+            .withAssignment(assignment)
             .build();
 
         CompletableFuture<SyncGroupResponseData> leaderSyncFuture = new CompletableFuture<>();
@@ -7474,7 +7467,7 @@ public class GroupMetadataManagerTest {
 
         if (expectedError == Errors.NONE) {
             assertEquals(
-                Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+                Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
                 result.records()
             );
             // Simulate successful write to log.
@@ -7536,20 +7529,20 @@ public class GroupMetadataManagerTest {
         String memberId = joinResponse.memberId();
         int generationId = joinResponse.generationId();
 
-        List<SyncGroupRequestAssignment> assignments = new ArrayList<>();
-        assignments.add(new SyncGroupRequestAssignment().setMemberId(memberId));
+        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
+        assignment.add(new SyncGroupRequestAssignment().setMemberId(memberId));
         SyncGroupRequestData syncRequest = new SyncGroupRequestBuilder()
             .withGroupId("group-id")
             .withMemberId(memberId)
             .withGenerationId(generationId)
-            .withAssignments(assignments)
+            .withAssignment(assignment)
             .build();
 
         CompletableFuture<SyncGroupResponseData> syncFuture = new CompletableFuture<>();
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -7557,7 +7550,7 @@ public class GroupMetadataManagerTest {
 
         assertTrue(syncFuture.isDone());
         assertEquals(Errors.NONE.code(), syncFuture.get().errorCode());
-        assertEquals(assignments.get(0).assignment(), syncFuture.get().assignment());
+        assertEquals(assignment.get(0).assignment(), syncFuture.get().assignment());
 
         syncFuture = new CompletableFuture<>();
         result = context.sendGenericGroupSync(syncRequest.setMemberId("unknown-member-id"), syncFuture);
@@ -7633,7 +7626,7 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -7716,7 +7709,7 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -7812,7 +7805,7 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -7852,12 +7845,12 @@ public class GroupMetadataManagerTest {
         byte[] followerAssignment = new byte[]{1};
 
         // Sync group with leader to get new assignment.
-        List<SyncGroupRequestAssignment> assignments = new ArrayList<>();
-        assignments.add(new SyncGroupRequestAssignment()
+        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
+        assignment.add(new SyncGroupRequestAssignment()
             .setMemberId(leaderId)
             .setAssignment(leaderAssignment)
         );
-        assignments.add(new SyncGroupRequestAssignment()
+        assignment.add(new SyncGroupRequestAssignment()
             .setMemberId(followerId)
             .setAssignment(followerAssignment)
         );
@@ -7865,16 +7858,17 @@ public class GroupMetadataManagerTest {
         syncFuture = new CompletableFuture<>();
         result = context.sendGenericGroupSync(
             syncRequest.setGenerationId(nextGenerationId)
-                .setAssignments(assignments),
+                .setAssignments(assignment),
             syncFuture
         );
 
+        // Simulate successful write to log. This will update the group's assignment with the new assignment.
+        result.appendFuture().complete(null);
+
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
-        // Simulate successful write to log.
-        result.appendFuture().complete(null);
 
         assertTrue(syncFuture.isDone());
         assertEquals(Errors.NONE.code(), syncFuture.get().errorCode());
@@ -7928,7 +7922,7 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -7978,12 +7972,12 @@ public class GroupMetadataManagerTest {
         assertFalse(followerSyncFuture.isDone());
 
         // Sync group with leader to get new assignment.
-        List<SyncGroupRequestAssignment> assignments = new ArrayList<>();
-        assignments.add(new SyncGroupRequestAssignment()
+        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
+        assignment.add(new SyncGroupRequestAssignment()
             .setMemberId(leaderId)
             .setAssignment(leaderAssignment)
         );
-        assignments.add(new SyncGroupRequestAssignment()
+        assignment.add(new SyncGroupRequestAssignment()
             .setMemberId(followerId)
             .setAssignment(followerAssignment)
         );
@@ -7992,16 +7986,22 @@ public class GroupMetadataManagerTest {
         result = context.sendGenericGroupSync(
             syncRequest.setMemberId(leaderId)
                 .setGenerationId(nextGenerationId)
-                .setAssignments(assignments),
+                .setAssignments(assignment),
             syncFuture
         );
 
+        // Simulate successful write to log. This will update the group assignment with the new assignment.
+        result.appendFuture().complete(null);
+
+        Map<String, byte[]> updatedAssignment = assignment.stream().collect(Collectors.toMap(
+            SyncGroupRequestAssignment::memberId, SyncGroupRequestAssignment::assignment
+        ));
+
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(
+                RecordHelpers.newGroupMetadataRecord(group, updatedAssignment, MetadataVersion.latest())),
             result.records()
         );
-        // Simulate successful write to log.
-        result.appendFuture().complete(null);
 
         assertTrue(syncFuture.isDone());
         assertEquals(Errors.NONE.code(), syncFuture.get().errorCode());
@@ -8041,7 +8041,7 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -8051,7 +8051,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), syncFuture.get().errorCode());
 
         // Join group from the leader should force the group to rebalance, which allows the
-        // leader to push new assignments when local metadata changes
+        // leader to push new assignment when local metadata changes
         CompletableFuture<JoinGroupResponseData> leaderJoinFuture = new CompletableFuture<>();
         result = context.sendGenericGroupJoin(
             joinRequest.setMemberId(leaderId),
@@ -8130,8 +8130,8 @@ public class GroupMetadataManagerTest {
         String leaderId = leaderJoinResponse.memberId();
         int generationId = leaderJoinResponse.generationId();
 
-        List<SyncGroupRequestAssignment> assignments = new ArrayList<>();
-        assignments.add(new SyncGroupRequestAssignment().setMemberId(leaderId));
+        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
+        assignment.add(new SyncGroupRequestAssignment().setMemberId(leaderId));
         SyncGroupRequestData syncRequest = new SyncGroupRequestBuilder()
             .withGroupId("group-id")
             .withMemberId(leaderId)
@@ -8143,7 +8143,7 @@ public class GroupMetadataManagerTest {
 
         // Now the group is stable, with the one member that joined above
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -8186,7 +8186,7 @@ public class GroupMetadataManagerTest {
         result = context.sendGenericGroupSync(syncRequest.setGenerationId(nextGenerationId), syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -8265,7 +8265,7 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<Void, Record> result = context.sendGenericGroupSync(syncRequest, syncFuture);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecord(group, MetadataVersion.latest())),
             result.records()
         );
         // Simulate successful write to log.
@@ -8354,7 +8354,7 @@ public class GroupMetadataManagerTest {
         String protocolType = "consumer";
         String protocolName = "range";
         int generationId = 0;
-        List<SyncGroupRequestAssignment> assignments = Collections.emptyList();
+        List<SyncGroupRequestAssignment> assignment = Collections.emptyList();
         JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
 
         SyncGroupRequestBuilder withGroupId(String groupId) {
@@ -8387,8 +8387,8 @@ public class GroupMetadataManagerTest {
             return this;
         }
 
-        SyncGroupRequestBuilder withAssignments(List<SyncGroupRequestAssignment> assignments) {
-            this.assignments = assignments;
+        SyncGroupRequestBuilder withAssignment(List<SyncGroupRequestAssignment> assignment) {
+            this.assignment = assignment;
             return this;
         }
 
@@ -8401,7 +8401,7 @@ public class GroupMetadataManagerTest {
                 .setGenerationId(generationId)
                 .setProtocolType(protocolType)
                 .setProtocolName(protocolName)
-                .setAssignments(assignments);
+                .setAssignments(assignment);
         }
     }
 
@@ -8472,14 +8472,19 @@ public class GroupMetadataManagerTest {
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         String leaderId = leaderJoinResponseFuture.get().memberId();
-        List<SyncGroupRequestAssignment> assignments = new ArrayList<>();
-        assignments.add(new SyncGroupRequestAssignment().setMemberId(leaderId));
+        String followerId = followerJoinResponseFuture.get().memberId();
+        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
+        assignment.add(new SyncGroupRequestAssignment().setMemberId(leaderId)
+            .setAssignment(new byte[]{1}));
+        assignment.add(new SyncGroupRequestAssignment().setMemberId(followerId)
+            .setAssignment(new byte[]{2}));
+
         SyncGroupRequestData syncRequest = new SyncGroupRequestBuilder()
             .withGroupId(groupId)
             .withGroupInstanceId(leaderInstanceId)
             .withMemberId(leaderId)
             .withGenerationId(1)
-            .withAssignments(assignments)
+            .withAssignment(assignment)
             .build();
 
         CompletableFuture<SyncGroupResponseData> leaderSyncResponseFuture = new CompletableFuture<>();
@@ -8487,18 +8492,23 @@ public class GroupMetadataManagerTest {
                 syncRequest,
                 leaderSyncResponseFuture);
 
-        // Simulate a successful write to the log.
+        // The generated record should contain the new assignment.
+        Map<String, byte[]> groupAssignment = assignment.stream().collect(Collectors.toMap(
+            SyncGroupRequestAssignment::memberId, SyncGroupRequestAssignment::assignment
+        ));
         assertEquals(
-            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(
+                RecordHelpers.newGroupMetadataRecord(group, groupAssignment, MetadataVersion.latest())),
             result.records()
         );
+
+        // Simulate a successful write to the log.
         result.appendFuture().complete(null);
 
         assertTrue(leaderSyncResponseFuture.isDone());
         assertEquals(Errors.NONE.code(), leaderSyncResponseFuture.get().errorCode());
         assertTrue(group.isInState(STABLE));
 
-        String followerId = followerJoinResponseFuture.get().memberId();
         CompletableFuture<SyncGroupResponseData> followerSyncResponseFuture = new CompletableFuture<>();
         result = context.sendGenericGroupSync(
                 syncRequest.setGroupInstanceId(followerInstanceId)
@@ -8522,6 +8532,13 @@ public class GroupMetadataManagerTest {
             followerId,
             followerSyncResponseFuture.get().assignment()
         );
+    }
+
+    private static Record newGroupMetadataRecord(
+        GenericGroup group,
+        MetadataVersion metadataVersion
+    ) {
+        return RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), metadataVersion);
     }
 
     private static class RebalanceResult {
