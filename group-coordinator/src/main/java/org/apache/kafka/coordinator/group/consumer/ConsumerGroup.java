@@ -58,6 +58,18 @@ public class ConsumerGroup implements Group {
         }
     }
 
+    public static class DeadlineAndEpoch {
+        static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
+
+        public final long deadlineMs;
+        public final int epoch;
+
+        DeadlineAndEpoch(long deadlineMs, int epoch) {
+            this.deadlineMs = deadlineMs;
+            this.epoch = epoch;
+        }
+    }
+
     /**
      * The snapshot registry.
      */
@@ -118,6 +130,18 @@ public class ConsumerGroup implements Group {
      * its epochs from this map. When a member gets a partition, it adds its epochs to this map.
      */
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
+
+    /**
+     * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
+     * the group epoch at the time of setting it. The metadata refresh time is considered as a
+     * soft state (read that it is not stored in a timeline data structure). It is like this
+     * because it is not persisted to the log. The group epoch is here to ensure that the
+     * metadata refresh deadline is invalidated if the group epoch does not correspond to
+     * the current group epoch. This can happen if the metadata refresh deadline is updated
+     * after having refreshed the metadata but the write operation failed. In this case, the
+     * time is not automatically rolled back.
+     */
+    private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
@@ -249,8 +273,10 @@ public class ConsumerGroup implements Group {
      * @param memberId The member id to remove.
      */
     public void removeMember(String memberId) {
-        ConsumerGroupMember member = members.remove(memberId);
-        maybeRemovePartitionEpoch(member);
+        ConsumerGroupMember oldMember = members.remove(memberId);
+        maybeUpdateSubscribedTopicNames(oldMember, null);
+        maybeUpdateServerAssignors(oldMember, null);
+        maybeRemovePartitionEpoch(oldMember);
         maybeUpdateGroupState();
     }
 
@@ -277,6 +303,13 @@ public class ConsumerGroup implements Group {
      */
     public Map<String, ConsumerGroupMember> members() {
         return Collections.unmodifiableMap(members);
+    }
+
+    /**
+     * @return An immutable Set containing all the subscribed topic names.
+     */
+    public Set<String> subscribedTopicNames() {
+        return Collections.unmodifiableSet(subscribedTopicNames.keySet());
     }
 
     /**
@@ -421,6 +454,47 @@ public class ConsumerGroup implements Group {
         });
 
         return Collections.unmodifiableMap(newSubscriptionMetadata);
+    }
+
+    /**
+     * Updates the metadata refresh deadline.
+     *
+     * @param deadlineMs The deadline in milliseconds.
+     * @param groupEpoch The associated group epoch.
+     */
+    public void setMetadataRefreshDeadline(
+        long deadlineMs,
+        int groupEpoch
+    ) {
+        this.metadataRefreshDeadline = new DeadlineAndEpoch(deadlineMs, groupEpoch);
+    }
+
+    /**
+     * Requests a metadata refresh.
+     */
+    public void requestMetadataRefresh() {
+        this.metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
+    }
+
+    /**
+     * Checks if a metadata refresh is required. A refresh is required in two cases:
+     * 1) The deadline is smaller or equal to the current time;
+     * 2) The group epoch associated with the deadline is larger than
+     *    the current group epoch. This means that the operations which updated
+     *    the deadline failed.
+     *
+     * @param currentTimeMs The current time in milliseconds.
+     * @return A boolean indicating whether a refresh is required or not.
+     */
+    public boolean hasMetadataExpired(long currentTimeMs) {
+        return currentTimeMs >= metadataRefreshDeadline.deadlineMs || groupEpoch() < metadataRefreshDeadline.epoch;
+    }
+
+    /**
+     * @return The metadata refresh deadline.
+     */
+    public DeadlineAndEpoch metadataRefreshDeadline() {
+        return metadataRefreshDeadline;
     }
 
     /**

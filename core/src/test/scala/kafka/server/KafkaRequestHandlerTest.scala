@@ -53,7 +53,7 @@ class KafkaRequestHandlerTest {
     val context = new RequestContext(requestHeader, "0", mock(classOf[InetAddress]), new KafkaPrincipal("", ""),
       new ListenerName(""), SecurityProtocol.PLAINTEXT, mock(classOf[ClientInformation]), false)
     val request = new RequestChannel.Request(0, context, time.nanoseconds(),
-      mock(classOf[MemoryPool]), mock(classOf[ByteBuffer]), metrics)
+      mock(classOf[MemoryPool]), ByteBuffer.allocate(0), metrics)
 
     val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
 

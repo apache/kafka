@@ -21,6 +21,7 @@ import java.util.Properties
 
 import kafka.server.Defaults
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
@@ -181,7 +182,7 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
     new KafkaProducer(config)
   }
 
-  private def createConsumer(config: Properties = new Properties()): KafkaConsumer[Array[Byte], Array[Byte]] = {
+  private def createConsumer(config: Properties = new Properties()): Consumer[Array[Byte], Array[Byte]] = {
     config.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     config.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, group)

@@ -112,7 +112,7 @@ public class JoinStoreIntegrationTest {
     }
 
     @Test
-    public void providingAJoinStoreNameShouldNotMakeTheJoinResultQueriable() throws InterruptedException {
+    public void providingAJoinStoreNameShouldNotMakeTheJoinResultQueryable() throws InterruptedException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-no-store-access");
         final StreamsBuilder builder = new StreamsBuilder();
 

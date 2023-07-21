@@ -22,6 +22,7 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import java.util.Objects;
 
 public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
+    public static final String UNDEFINED_VERSION = "undefined";
     private final Class<? extends T> klass;
     private final String name;
     private final String version;
@@ -29,6 +30,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
     private final PluginType type;
     private final String typeName;
     private final String location;
+    private final ClassLoader loader;
 
     public PluginDesc(Class<? extends T> klass, String version, ClassLoader loader) {
         this.klass = klass;
@@ -40,6 +42,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         this.location = loader instanceof PluginClassLoader
                 ? ((PluginClassLoader) loader).location()
                 : "classpath";
+        this.loader = loader;
     }
 
     @Override
@@ -83,6 +86,10 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         return location;
     }
 
+    public ClassLoader loader() {
+        return loader;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -105,6 +112,9 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
     @Override
     public int compareTo(PluginDesc<T> other) {
         int nameComp = name.compareTo(other.name);
-        return nameComp != 0 ? nameComp : encodedVersion.compareTo(other.encodedVersion);
+        int versionComp = encodedVersion.compareTo(other.encodedVersion);
+        // isolated plugins appear after classpath plugins when they have identical versions.
+        int isolatedComp = Boolean.compare(other.loader instanceof PluginClassLoader, loader instanceof PluginClassLoader);
+        return nameComp != 0 ? nameComp : (versionComp != 0 ? versionComp : isolatedComp);
     }
 }

@@ -2321,7 +2321,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testListOffsetShouldUpateSubscriptions() {
+    public void testListOffsetShouldUpdateSubscriptions() {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 

@@ -14,112 +14,101 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.junit.Rule;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Collections;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class DelegatingClassLoaderTest {
 
-    @Rule
-    public TemporaryFolder pluginDir = new TemporaryFolder();
+    public PluginClassLoader parent;
+    public PluginClassLoader pluginLoader;
+    public DelegatingClassLoader classLoader;
+    public PluginDesc<SinkConnector> pluginDesc;
+    public PluginScanResult scanResult;
 
-    @Test
-    public void testLoadingUnloadedPluginClass() {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.emptyList(),
-                DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
+    // Arbitrary values, their contents is not meaningful.
+    public static final String ARBITRARY = "arbitrary";
+    public static final Class<?> ARBITRARY_CLASS = org.mockito.Mockito.class;
+    public static final URL ARBITRARY_URL;
+
+    static {
+        try {
+            ARBITRARY_URL = new URL("jar:file://" + ARBITRARY + "!/" + ARBITRARY);
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
         }
     }
 
-    @Test
-    public void testLoadingPluginClass() throws ClassNotFoundException {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                TestPlugins.pluginPath(),
-                DelegatingClassLoader.class.getClassLoader()
+    @Before
+    @SuppressWarnings({"unchecked"})
+    public void setUp() {
+        parent = mock(PluginClassLoader.class);
+        pluginLoader = mock(PluginClassLoader.class);
+        classLoader = new DelegatingClassLoader(parent);
+        SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
+        // Lie to the DCL that this arbitrary class is a connector, since all real connector classes we have access to
+        // are forced to be non-isolated by PluginUtils.shouldLoadInIsolation.
+        pluginDesc = new PluginDesc<>((Class<? extends SinkConnector>) ARBITRARY_CLASS, null, pluginLoader);
+        assertTrue(PluginUtils.shouldLoadInIsolation(pluginDesc.className()));
+        sinkConnectors.add(pluginDesc);
+        scanResult = new PluginScanResult(
+                sinkConnectors,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
         );
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertNotNull(classLoader.loadClass(pluginClassName));
-            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
-        }
     }
 
     @Test
-    public void testLoadingInvalidUberJar() throws Exception {
-        pluginDir.newFile("invalid.jar");
-
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+    public void testEmptyConnectorLoader() {
+        assertSame(classLoader, classLoader.connectorLoader(ARBITRARY));
     }
 
     @Test
-    public void testLoadingPluginDirContainsInvalidJarsOnly() throws Exception {
-        pluginDir.newFolder("my-plugin");
-        pluginDir.newFile("my-plugin/invalid.jar");
-
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void testEmptyLoadClass() throws ClassNotFoundException {
+        when(parent.loadClass(ARBITRARY, false)).thenReturn((Class) ARBITRARY_CLASS);
+        assertSame(ARBITRARY_CLASS, classLoader.loadClass(ARBITRARY, false));
     }
 
     @Test
-    public void testLoadingNoPlugins() {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+    public void testEmptyGetResource() {
+        when(parent.getResource(ARBITRARY)).thenReturn(ARBITRARY_URL);
+        assertSame(ARBITRARY_URL, classLoader.getResource(ARBITRARY));
     }
 
     @Test
-    public void testLoadingPluginDirEmpty() throws Exception {
-        pluginDir.newFolder("my-plugin");
-
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+    public void testInitializedConnectorLoader() {
+        classLoader.installDiscoveredPlugins(scanResult);
+        assertSame(pluginLoader, classLoader.connectorLoader(PluginUtils.prunedName(pluginDesc)));
+        assertSame(pluginLoader, classLoader.connectorLoader(PluginUtils.simpleName(pluginDesc)));
+        assertSame(pluginLoader, classLoader.connectorLoader(pluginDesc.className()));
     }
 
     @Test
-    public void testLoadingMixOfValidAndInvalidPlugins() throws Exception {
-        pluginDir.newFile("invalid.jar");
-        pluginDir.newFolder("my-plugin");
-        pluginDir.newFile("my-plugin/invalid.jar");
-        Path pluginPath = this.pluginDir.getRoot().toPath();
-
-        for (Path source : TestPlugins.pluginPath()) {
-            Files.copy(source, pluginPath.resolve(source.getFileName()));
-        }
-
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertNotNull(classLoader.loadClass(pluginClassName));
-            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
-        }
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void testInitializedLoadClass() throws ClassNotFoundException {
+        classLoader.installDiscoveredPlugins(scanResult);
+        String className = pluginDesc.className();
+        when(pluginLoader.loadClass(className, false)).thenReturn((Class) ARBITRARY_CLASS);
+        assertSame(ARBITRARY_CLASS, classLoader.loadClass(className, false));
     }
 }

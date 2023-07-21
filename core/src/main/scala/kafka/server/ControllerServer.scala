@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.Broker.ServerInfo
 import kafka.metrics.LinuxIoMetricsCollector
 import kafka.migration.MigrationPropagator
 import kafka.network.{DataPlaneAcceptor, SocketServer}
@@ -43,10 +42,12 @@ import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagator}
+import org.apache.kafka.metadata.publisher.FeaturesPublisher
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.util.{Deadline, FutureUtils}
 
@@ -115,6 +116,7 @@ class ControllerServer(
   var migrationSupport: Option[ControllerMigrationSupport] = None
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
+  val featuresPublisher = new FeaturesPublisher()
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -153,30 +155,22 @@ class ControllerServer(
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
-      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
-        case Some(authZ) =>
-          // It would be nice to remove some of the broker-specific assumptions from
-          // AuthorizerServerInfo, such as the assumption that there is an inter-broker
-          // listener, or that ID is named brokerId.
-          val controllerAuthorizerInfo = ServerInfo(
+      val endpointReadyFutures = {
+        val builder = new EndpointReadyFutures.Builder()
+        builder.build(authorizer.asJava,
+          new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
             javaListeners,
             javaListeners.get(0),
-            config.earlyStartListeners.map(_.value()).asJava)
-          authZ.start(controllerAuthorizerInfo).asScala.map { case (ep, cs) =>
-            ep -> cs.toCompletableFuture
-          }.toMap
-        case None =>
-          javaListeners.asScala.map {
-            ep => ep -> CompletableFuture.completedFuture[Void](null)
-          }.toMap
+            config.earlyStartListeners.map(_.value()).asJava))
       }
 
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         config.unstableApiVersionsEnabled,
-        config.migrationEnabled
+        config.migrationEnabled,
+        () => featuresPublisher.features()
       )
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -220,7 +214,7 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time)
+        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
 
         new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
           setTime(time).
@@ -273,7 +267,9 @@ class ControllerServer(
             fatal = false,
             () => {}
           ),
-          quorumFeatures
+          quorumFeatures,
+          configSchema,
+          quorumControllerMetrics
         )
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
@@ -302,6 +298,8 @@ class ControllerServer(
         s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
 
+      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
+
       /**
        * Enable the controller endpoint(s). If we are using an authorizer which stores
        * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
@@ -325,6 +323,9 @@ class ControllerServer(
 
       // register this instance for dynamic config changes to the KafkaConfig
       config.dynamicConfig.addReconfigurables(this)
+
+      // Set up the metadata features publisher.
+      metadataPublishers.add(featuresPublisher)
 
       // Set up the dynamic config publisher. This runs even in combined mode, since the broker
       // has its own separate dynamic configuration object.

@@ -799,7 +799,7 @@ class GroupMetadataTest {
     assertTrue(group.has(memberId))
     assertTrue(group.hasStaticMember(groupInstanceId))
 
-    // We aren ot permitted to add the member again if it is already present
+    // We are not permitted to add the member again if it is already present
     assertThrows(classOf[IllegalStateException], () => group.add(member))
   }
 

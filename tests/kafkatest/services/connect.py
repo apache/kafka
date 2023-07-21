@@ -367,7 +367,7 @@ class ConnectStandaloneService(ConnectServiceBase):
             # The default mode is to wait until the complete startup of the worker
             self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
 
-        if len(self.pids(node)) == 0:
+        if not self.pids(node):
             raise RuntimeError("No process ids recorded")
 
 
@@ -421,7 +421,7 @@ class ConnectDistributedService(ConnectServiceBase):
             # The default mode is to wait until the complete startup of the worker
             self.start_and_wait_to_join_group(node, 'distributed', '')
 
-        if len(self.pids(node)) == 0:
+        if not self.pids(node):
             raise RuntimeError("No process ids recorded")
 
 

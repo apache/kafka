@@ -18,6 +18,8 @@
 package org.apache.kafka.server.common;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Holds a range of Producer IDs used for Transactional and EOS producers.
@@ -32,11 +34,25 @@ public class ProducerIdsBlock {
     private final int assignedBrokerId;
     private final long firstProducerId;
     private final int blockSize;
+    private final AtomicLong producerIdCounter;
 
     public ProducerIdsBlock(int assignedBrokerId, long firstProducerId, int blockSize) {
         this.assignedBrokerId = assignedBrokerId;
         this.firstProducerId = firstProducerId;
         this.blockSize = blockSize;
+        producerIdCounter = new AtomicLong(firstProducerId);
+    }
+
+    /**
+     * Claim the next available producer id from the block.
+     * Returns an empty result if there are no more available producer ids in the block.
+     */
+    public Optional<Long> claimNextId() {
+        long nextId = producerIdCounter.getAndIncrement();
+        if (nextId > lastProducerId()) {
+            return Optional.empty();
+        }
+        return Optional.of(nextId);
     }
 
     /**

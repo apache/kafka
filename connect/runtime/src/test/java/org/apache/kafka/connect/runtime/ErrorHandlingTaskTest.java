@@ -399,7 +399,7 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
-    public void testErrorHandlingInSourceTasksWthBadConverter() throws Exception {
+    public void testErrorHandlingInSourceTasksWithBadConverter() throws Exception {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
@@ -554,7 +554,8 @@ public class ErrorHandlingTaskTest {
     private abstract static class TestSinkTask extends SinkTask {
     }
 
-    static class FaultyConverter extends JsonConverter {
+    // Public to allow plugin discovery to complete without errors
+    public static class FaultyConverter extends JsonConverter {
         private static final Logger log = LoggerFactory.getLogger(FaultyConverter.class);
         private int invocations = 0;
 
@@ -573,7 +574,8 @@ public class ErrorHandlingTaskTest {
         }
     }
 
-    static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
+    // Public to allow plugin discovery to complete without errors
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
 
         private static final Logger log = LoggerFactory.getLogger(FaultyPassthrough.class);
 

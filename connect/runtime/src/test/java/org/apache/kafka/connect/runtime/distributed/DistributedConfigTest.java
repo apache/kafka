@@ -19,10 +19,12 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
+import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -47,6 +50,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class DistributedConfigTest {
 
@@ -192,10 +196,15 @@ public class DistributedConfigTest {
     }
 
     @Test
-    public void shouldFailWithInvalidKeySize() {
+    public void shouldFailWithInvalidKeySize() throws NoSuchAlgorithmException {
         Map<String, String> configs = configs();
+        Crypto crypto = mock(Crypto.class);
+        KeyGenerator keygen = mock(KeyGenerator.class);
+        when(crypto.keyGenerator(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT)).thenReturn(keygen);
+        // Some implementations of KeyGenerator don't fail with 0 keysize, so mock the error
+        doThrow(InvalidParameterException.class).when(keygen).init(0);
         configs.put(DistributedConfig.INTER_WORKER_KEY_SIZE_CONFIG, "0");
-        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+        assertThrows(ConfigException.class, () -> new DistributedConfig(crypto, configs));
     }
 
     @Test
@@ -406,6 +415,16 @@ public class DistributedConfigTest {
         ConfigException ce = assertThrows(ConfigException.class,
                 () -> new DistributedConfig(configs));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testCaseInsensitiveSecurityProtocol() {
+        final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
+        final Map<String, String> configs = configs();
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
+        final DistributedConfig distributedConfig = new DistributedConfig(configs);
+        assertEquals(saslSslLowerCase, distributedConfig.originalsStrings()
+                .get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test

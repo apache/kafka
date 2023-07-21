@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.{assertTrue, assertEquals}
 

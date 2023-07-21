@@ -431,7 +431,7 @@ public class DefaultRecord implements Record {
 
         // Starting JDK 12, this implementation could be replaced by InputStream#skipNBytes
         while (bytesToSkip > 0) {
-            long ns = in.skip(bytesToSkip);
+            int ns = (int) in.skip(bytesToSkip);
             if (ns > 0 && ns <= bytesToSkip) {
                 // adjust number to skip
                 bytesToSkip -= ns;

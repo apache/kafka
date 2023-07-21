@@ -1246,8 +1246,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void doFenceZombieSourceTasks(String connName, Callback<Void> callback) {
         log.trace("Performing zombie fencing request for connector {}", connName);
 
-        if (checkRebalanceNeeded(callback))
-            return;
+        // We don't have to check for a pending rebalance here
 
         if (!isLeader())
             callback.onCompletion(new NotLeaderException("Only the leader may perform zombie fencing.", leaderUrl()), null);
@@ -1523,60 +1522,59 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
-        log.trace("Submitting alter offsets request for connector '{}'", connName);
+    protected void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
+        log.trace("Submitting {} offsets request for connector '{}'", offsets == null ? "reset" : "alter", connName);
 
         addRequest(() -> {
-            if (!alterConnectorOffsetsChecks(connName, callback)) {
+            if (!modifyConnectorOffsetsChecks(connName, callback)) {
                 return null;
             }
-            // At this point, we should be the leader (the call to alterConnectorOffsetsChecks makes sure of that) and can safely run
+            // At this point, we should be the leader (the call to modifyConnectorOffsetsChecks makes sure of that) and can safely run
             // a zombie fencing request
             if (isSourceConnector(connName) && config.exactlyOnceSourceEnabled()) {
-                log.debug("Performing a round of zombie fencing before altering offsets for source connector {} with exactly-once support enabled.", connName);
+                log.debug("Performing a round of zombie fencing before modifying offsets for source connector {} with exactly-once support enabled.", connName);
                 doFenceZombieSourceTasks(connName, (error, ignored) -> {
                     if (error != null) {
-                        log.error("Failed to perform zombie fencing for source connector prior to altering offsets", error);
-                        callback.onCompletion(new ConnectException("Failed to perform zombie fencing for source connector prior to altering offsets",
-                                error), null);
+                        log.error("Failed to perform zombie fencing for source connector prior to modifying offsets", error);
+                        callback.onCompletion(new ConnectException("Failed to perform zombie fencing for source connector prior to modifying offsets", error), null);
                     } else {
-                        log.debug("Successfully completed zombie fencing for source connector {}; proceeding to alter offsets.", connName);
-                        // We need to ensure that we perform the necessary checks again before proceeding to actually altering the connector offsets since
+                        log.debug("Successfully completed zombie fencing for source connector {}; proceeding to modify offsets.", connName);
+                        // We need to ensure that we perform the necessary checks again before proceeding to actually altering / resetting the connector offsets since
                         // zombie fencing is done asynchronously and the conditions could have changed since the previous check
                         addRequest(() -> {
-                            if (alterConnectorOffsetsChecks(connName, callback)) {
-                                worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
+                            if (modifyConnectorOffsetsChecks(connName, callback)) {
+                                worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
                             }
                             return null;
                         }, forwardErrorCallback(callback));
                     }
                 });
             } else {
-                worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
+                worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
             }
             return null;
         }, forwardErrorCallback(callback));
     }
 
     /**
-     * This method performs a few checks for alter connector offsets request and completes the callback exceptionally
-     * if any check fails.
-     * @param connName the name of the connector whose offsets are to be altered
+     * This method performs a few checks for external requests to modify (alter or reset) connector offsets and
+     * completes the callback exceptionally if any check fails.
+     * @param connName the name of the connector whose offsets are to be modified
      * @param callback callback to invoke upon completion
      * @return true if all the checks passed, false otherwise
      */
-    private boolean alterConnectorOffsetsChecks(String connName, Callback<Message> callback) {
+    private boolean modifyConnectorOffsetsChecks(String connName, Callback<Message> callback) {
         if (checkRebalanceNeeded(callback)) {
             return false;
         }
 
         if (!isLeader()) {
-            callback.onCompletion(new NotLeaderException("Only the leader can process alter offsets requests", leaderUrl()), null);
+            callback.onCompletion(new NotLeaderException("Only the leader can process external offsets modification requests", leaderUrl()), null);
             return false;
         }
 
         if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
-            throw new ConnectException("Failed to read to end of config topic before altering connector offsets");
+            throw new ConnectException("Failed to read to end of config topic before modifying connector offsets");
         }
 
         if (!configState.contains(connName)) {
@@ -1587,10 +1585,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // If the target state for the connector is stopped, its task count is 0, and there is no rebalance pending (checked above),
         // we can be sure that the tasks have at least been attempted to be stopped (or cancelled if they took too long to stop).
         // Zombie tasks are handled by a round of zombie fencing for exactly once source connectors. Zombie sink tasks are handled
-        // naturally because requests to alter consumer group offsets will fail if there are still active members in the group.
+        // naturally because requests to alter consumer group offsets / delete consumer groups will fail if there are still active members
+        // in the group.
         if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
-            callback.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be altered. This " +
-                    "can be done for the specified connector by issuing a PUT request to the /connectors/" + connName + "/stop endpoint"), null);
+            callback.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be modified. This can be done " +
+                    "for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
             return false;
         }
         return true;
@@ -1661,7 +1660,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 log.warn("Join group completed, but assignment failed and we are the leader. Reading to end of config and retrying.");
                 needsReadToEnd = true;
             } else if (configState.offset() < assignment.offset()) {
-                log.warn("Join group completed, but assignment failed and we lagging. Reading to end of config and retrying.");
+                log.warn("Join group completed, but assignment failed and we are lagging. Reading to end of config and retrying.");
                 needsReadToEnd = true;
             } else {
                 log.warn("Join group completed, but assignment failed. We were up to date, so just retrying.");
@@ -2214,6 +2213,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     DistributedHerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
         DistributedHerderRequest req = new DistributedHerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
+        // We don't need to synchronize here
+        // If the condition evaluates to true, we can and should trigger a wakeup
+        // If it evaluates to false because our request has suddenly been popped off of the queue, then
+        // the herder is already running the request and no wakeup is necessary
+        // If it evaluates to false because our request was not at the head of the queue, then a wakeup
+        // should already have been triggered when the request that is currently at the head of the
+        // queue was added
         if (peekWithoutException() == req)
             member.wakeup();
         return req;

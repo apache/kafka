@@ -29,7 +29,7 @@ public abstract class ShutdownableThread extends Thread {
 
     public final String logPrefix;
 
-    private final Logger log;
+    protected final Logger log;
 
     private final boolean isInterruptible;
 
@@ -76,6 +76,9 @@ public abstract class ShutdownableThread extends Thread {
         return isShutdownComplete() && !isShutdownInitiated();
     }
 
+    /**
+     * @return true if the thread hasn't initiated shutdown already
+     */
     public boolean initiateShutdown() {
         synchronized (this) {
             if (isRunning()) {

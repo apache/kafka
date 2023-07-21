@@ -73,7 +73,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       val value = message.value
 
       assertTrue(props.containsKey(name))
-      // If the config is senstive, compare it to the decoded value.
+      // If the config is sensitive, compare it to the decoded value.
       if (name == KafkaConfig.SslKeystorePasswordProp) {
         assertEquals(SECRET, value)
       } else {

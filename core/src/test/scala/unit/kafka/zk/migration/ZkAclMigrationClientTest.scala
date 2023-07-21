@@ -47,14 +47,14 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     authorizer: AclAuthorizer,
     resourcePattern: ResourcePattern,
     aces: Seq[AccessControlEntry],
-    pred: Seq[AclBinding] => Boolean
-  ): Seq[AclBinding] = {
+    pred: Set[AclBinding] => Boolean
+  ): Set[AclBinding] = {
     val resourceFilter = new AclBindingFilter(
       new ResourcePatternFilter(resourcePattern.resourceType(), resourcePattern.name(), resourcePattern.patternType()),
       AclBindingFilter.ANY.entryFilter()
     )
     migrationState = migrationClient.aclClient().writeResourceAcls(resourcePattern, aces.asJava, migrationState)
-    val (acls, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSeq)(pred)
+    val (acls, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSet)(pred)
     assertTrue(ok)
     acls
   }
@@ -68,7 +68,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
       AclBindingFilter.ANY.entryFilter()
     )
     migrationState = migrationClient.aclClient().deleteResource(resourcePattern, migrationState)
-    val (_, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSeq)(_.isEmpty)
+    val (_, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSet)(_.isEmpty)
     assertTrue(ok)
   }
 
@@ -98,7 +98,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
 
       // Remove one of resource1's ACLs
       var resource1Acls = replaceAclsAndReadWithAuthorizer(authorizer, resource1, Seq(ace1), acls => acls.size == 1)
-      assertEquals(acl1, resource1Acls.head)
+      assertTrue(resource1Acls.contains(acl1))
 
       // Delete the other ACL from resource1
       deleteResourceAndReadWithAuthorizer(authorizer, resource1)
@@ -106,13 +106,12 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
       // Add a new ACL for resource1
       val newAce1 = new AccessControlEntry(principal.toString, "10.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
       resource1Acls = replaceAclsAndReadWithAuthorizer(authorizer, resource1, Seq(newAce1), acls => acls.size == 1)
-      assertEquals(newAce1, resource1Acls.head.entry())
+      assertTrue(resource1Acls.map(_.entry()).contains(newAce1))
 
       // Add a new ACL for resource2
       val newAce2 = new AccessControlEntry(principal.toString, "10.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
       val resource2Acls = replaceAclsAndReadWithAuthorizer(authorizer, resource2, Seq(acl3.entry(), newAce2), acls => acls.size == 2)
-      assertEquals(acl3, resource2Acls.head)
-      assertEquals(newAce2, resource2Acls.last.entry())
+      assertTrue(resource2Acls.map(_.entry()).subsetOf(Set(acl3.entry(), newAce2)))
     } finally {
       authorizer.close()
     }
