@@ -165,6 +165,76 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
+    public void shouldFailIfTableIsNotVersionedButMaterializationIsInherited() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.inMemoryKeyValueStore("tableB")));
+        final KTable<String, String> tableB = source.filter((k, v) -> true);
+        // the filter operation forces the table materialization to be inherited
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
+
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertThat(
+            exception.getMessage(),
+            is("KTable must be versioned to use a grace period in a stream table join.")
+        );
+    }
+
+    @Test
+    public void shouldNotFailIfTableIsVersionedButMaterializationIsInherited() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
+        final KTable<String, String> tableB = source.filter((k, v) -> true);
+        // the filter operation forces the table materialization to be inherited
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
+
+        //should not throw an error
+        builder.build();
+    }
+
+    @Test
+    public void shouldFailIfGracePeriodIsLongerThanHistoryRetention() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMinutes(6))).to("out-one");
+
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> builder.build(props));
+        assertThat(exception.getMessage(), is("History retention must be at least grace period."));
+    }
+
+    @Test
+    public void shouldFailIfGracePeriodIsLongerThanHistoryRetentionAndInheritedStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(0))));
+        final KTable<String, String> tableB = source.filter((k, v) -> true);
+        // the filter operation forces the table materialization to be inherited
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
+
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> builder.build(props));
+        assertThat(exception.getMessage(), is("History retention must be at least grace period."));
+    }
+
+
+    @Test
     public void shouldDelayJoinByGracePeriod() {
         makeJoin(Duration.ofMillis(2));
 

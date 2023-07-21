@@ -27,7 +27,7 @@ import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.tools.ThroughputThrottler;
+import org.apache.kafka.common.utils.ThroughputThrottler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

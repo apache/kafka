@@ -29,8 +29,17 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.network.ClientInformation;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
@@ -43,6 +52,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentMatchers;
 
+import java.net.InetAddress;
 import java.util.Collections;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -52,10 +62,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -75,7 +88,12 @@ public class GroupCoordinatorServiceTest {
             5,
             Integer.MAX_VALUE,
             Collections.singletonList(new RangeAssignor()),
-            1000
+            1000,
+            Integer.MAX_VALUE,
+            3000,
+            5 * 60 * 1000,
+            120,
+            10 * 5 * 1000
         );
     }
 
@@ -270,5 +288,114 @@ public class GroupCoordinatorServiceTest {
             new TopicPartition("__consumer_offsets", 5),
             10
         );
+    }
+
+    @Test
+    public void testJoinGroup() {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        JoinGroupRequestData request = new JoinGroupRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("generic-group-join"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new JoinGroupResponseData()
+        ));
+
+        CompletableFuture<JoinGroupResponseData> responseFuture = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertFalse(responseFuture.isDone());
+    }
+
+    @Test
+    public void testJoinGroupWithException() throws Exception {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        JoinGroupRequestData request = new JoinGroupRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("generic-group-join"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
+
+        CompletableFuture<JoinGroupResponseData> future = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()),
+            future.get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testJoinGroupInvalidGroupId() throws Exception {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        service.startup(() -> 1);
+
+        JoinGroupRequestData request = new JoinGroupRequestData()
+            .setGroupId(null)
+            .setMemberId(UNKNOWN_MEMBER_ID);
+
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.JOIN_GROUP,
+                ApiKeys.JOIN_GROUP.latestVersion(),
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        CompletableFuture<JoinGroupResponseData> response = service.joinGroup(
+            context,
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertTrue(response.isDone());
+        JoinGroupResponseData expectedResponse = new JoinGroupResponseData()
+            .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            .setMemberId(UNKNOWN_MEMBER_ID);
+
+        assertEquals(expectedResponse, response.get());
     }
 }

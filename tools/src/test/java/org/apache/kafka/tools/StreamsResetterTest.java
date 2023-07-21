@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.tools;
+package org.apache.kafka.tools;
 
-import org.apache.kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -28,10 +27,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -41,24 +39,22 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 600, unit = TimeUnit.SECONDS)
 public class StreamsResetterTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     private static final String TOPIC = "topic1";
     private final StreamsResetter streamsResetter = new StreamsResetter();
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final TopicPartition topicPartition = new TopicPartition(TOPIC, 0);
     private final Set<TopicPartition> inputTopicPartitions = new HashSet<>(Collections.singletonList(topicPartition));
 
-    @Before
-    public void setUp() {
+    @BeforeEach
+    public void beforeEach() {
         consumer.assign(Collections.singletonList(topicPartition));
-
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0L, new byte[] {}, new byte[] {}));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1L, new byte[] {}, new byte[] {}));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 2L, new byte[] {}, new byte[] {}));
@@ -309,7 +305,6 @@ public class StreamsResetterTest {
     }
 
     private static class EmptyPartitionConsumer<K, V> extends MockConsumer<K, V> {
-
         public EmptyPartitionConsumer(final OffsetResetStrategy offsetResetStrategy) {
             super(offsetResetStrategy);
         }
@@ -321,5 +316,4 @@ public class StreamsResetterTest {
             return topicPartitionToOffsetAndTimestamp;
         }
     }
-
 }

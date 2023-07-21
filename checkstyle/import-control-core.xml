@@ -76,6 +76,7 @@
   <subpackage name="log.remote">
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.log.remote" />
+    <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="kafka.log" />
     <allow pkg="kafka.cluster" />

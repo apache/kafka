@@ -42,6 +42,7 @@ import java.util.regex.{Pattern, PatternSyntaxException}
 import java.util.{Date, Optional, Properties}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
+import org.apache.kafka.server.util.TopicFilter.IncludeList
 
 /**
  * For verifying the consistency among replicas.
@@ -154,7 +155,7 @@ object ReplicaVerificationTool extends Logging {
     val topicIds = topicsMetadata.map( metadata => metadata.name() -> metadata.topicId()).toMap
 
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
-      topicsIncludeFilter.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
+      topicsIncludeFilter.isTopicAllowed(topicMetaData.name, false)
     }
 
     if (filteredTopicMetadata.isEmpty) {
