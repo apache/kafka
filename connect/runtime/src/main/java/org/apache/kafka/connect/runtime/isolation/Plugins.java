@@ -94,7 +94,8 @@ public class Plugins {
         return scanResult;
     }
 
-    private static void maybeReportHybridDiscoveryIssue(PluginDiscoveryMode discoveryMode, PluginScanResult serviceLoadingScanResult, PluginScanResult mergedResult) {
+    // visible for testing
+    static void maybeReportHybridDiscoveryIssue(PluginDiscoveryMode discoveryMode, PluginScanResult serviceLoadingScanResult, PluginScanResult mergedResult) {
         SortedSet<PluginDesc<?>> missingPlugins = new TreeSet<>();
         mergedResult.forEach(missingPlugins::add);
         serviceLoadingScanResult.forEach(missingPlugins::remove);
@@ -105,7 +106,7 @@ public class Plugins {
             }
         } else {
             String message = String.format(
-                "One or more plugins are missing ServiceLoader manifests and will not be visible with %s=%s: %s\n" +
+                "One or more plugins are missing ServiceLoader manifests and will not be visible with %s=%s: %s%n" +
                         "Read the documentation at %s for instructions on migrating your plugins " +
                         "to take advantage of the performance improvements of %s mode.",
                             WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
