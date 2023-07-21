@@ -409,7 +409,7 @@ public final class LocalTieredStorageTest {
             final String topicPartitionSubpath = format("%s-%d-%s", tp.topic(), tp.partition(),
                     topicIdPartition.topicId());
             final String uuid = metadata.remoteLogSegmentId().id().toString();
-            final long startOffset = metadata.startOffset();
+            final String startOffset = LogFileUtils.filenamePrefixFromOffset(metadata.startOffset());
 
             return Arrays.asList(
                     Paths.get(rootPath, topicPartitionSubpath, startOffset + "-" + uuid + LogFileUtils.LOG_FILE_SUFFIX),

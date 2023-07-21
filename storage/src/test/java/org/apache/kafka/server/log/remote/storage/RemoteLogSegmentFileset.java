@@ -59,9 +59,9 @@ import static org.slf4j.LoggerFactory.getLogger;
  * the local tiered storage:
  *
  * <code>
- * / storage-directory / topic-partition-uuidBase64 / startOffset-oAtiIQ95REujbuzNd_lkLQ.log
- *                                                  . startOffset-oAtiIQ95REujbuzNd_lkLQ.index
- *                                                  . startOffset-oAtiIQ95REujbuzNd_lkLQ.timeindex
+ * / storage-directory / topic-partition-uuidBase64 / 00000000000000000011-oAtiIQ95REujbuzNd_lkLQ.log
+ *                                                  . 00000000000000000011-oAtiIQ95REujbuzNd_lkLQ.index
+ *                                                  . 00000000000000000011-oAtiIQ95REujbuzNd_lkLQ.timeindex
  * </code>
  */
 public final class RemoteLogSegmentFileset {
@@ -100,7 +100,7 @@ public final class RemoteLogSegmentFileset {
          * Provides the name of the file of this type for the given UUID in the local tiered storage,
          * e.g. 0-uuid.log.
          */
-        public String toFilename(final long startOffset, final Uuid uuid) {
+        public String toFilename(final String startOffset, final Uuid uuid) {
             return startOffset + "-" + uuid.toString() + suffix;
         }
 
@@ -164,7 +164,7 @@ public final class RemoteLogSegmentFileset {
                 metadata.remoteLogSegmentId().topicIdPartition(), storageDir);
         final File partitionDirectory = tpDir.getDirectory();
         final Uuid uuid = metadata.remoteLogSegmentId().id();
-        final long startOffset = metadata.startOffset();
+        final String startOffset = LogFileUtils.filenamePrefixFromOffset(metadata.startOffset());
 
         final Map<RemoteLogSegmentFileType, File> files = stream(RemoteLogSegmentFileType.values())
                 .collect(toMap(identity(), type -> new File(partitionDirectory, type.toFilename(startOffset, uuid))));

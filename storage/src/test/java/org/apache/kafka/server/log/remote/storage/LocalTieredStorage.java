@@ -86,20 +86,20 @@ import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDir
  * Given the root directory of the storage, segments and associated files are organized as represented below.
  * </p>
  * <code>
- * / storage-directory  / topic-0-LWgrMmVrT0a__7a4SasuPA / 0-bCqX9U--S-6U8XUM9II25Q.log
- * .                                                     . 0-bCqX9U--S-6U8XUM9II25Q.index
- * .                                                     . 0-bCqX9U--S-6U8XUM9II25Q.timeindex
- * .                                                     . 0-h956soEzTzi9a-NOQ-DvKA.log
- * .                                                     . 0-h956soEzTzi9a-NOQ-DvKA.index
- * .                                                     . 0-h956soEzTzi9a-NOQ-DvKA.timeindex
+ * / storage-directory  / topic-0-LWgrMmVrT0a__7a4SasuPA / 00000000000000000011-bCqX9U--S-6U8XUM9II25Q.log
+ * .                                                     . 00000000000000000011-bCqX9U--S-6U8XUM9II25Q.index
+ * .                                                     . 00000000000000000011-bCqX9U--S-6U8XUM9II25Q.timeindex
+ * .                                                     . 00000000000000000011-h956soEzTzi9a-NOQ-DvKA.log
+ * .                                                     . 00000000000000000011-h956soEzTzi9a-NOQ-DvKA.index
+ * .                                                     . 00000000000000000011-h956soEzTzi9a-NOQ-DvKA.timeindex
  * .
- * / topic-1-LWgrMmVrT0a__7a4SasuPA / 0-o8CQPT86QQmbFmi3xRmiHA.log
- * .                                . 0-o8CQPT86QQmbFmi3xRmiHA.index
- * .                                . 0-o8CQPT86QQmbFmi3xRmiHA.timeindex
+ * / topic-1-LWgrMmVrT0a__7a4SasuPA / 00000000000000000011-o8CQPT86QQmbFmi3xRmiHA.log
+ * .                                . 00000000000000000011-o8CQPT86QQmbFmi3xRmiHA.index
+ * .                                . 00000000000000000011-o8CQPT86QQmbFmi3xRmiHA.timeindex
  * .
- * / topic-3-DRagLm_PS9Wl8fz1X43zVg / 0-jvj3vhliTGeU90sIosmp_g.log
- * .                                . 0-jvj3vhliTGeU90sIosmp_g.index
- * .                                . 0-jvj3vhliTGeU90sIosmp_g.timeindex
+ * / topic-3-DRagLm_PS9Wl8fz1X43zVg / 00000000000000000011-jvj3vhliTGeU90sIosmp_g.log
+ * .                                . 00000000000000000011-jvj3vhliTGeU90sIosmp_g.index
+ * .                                . 00000000000000000011-jvj3vhliTGeU90sIosmp_g.timeindex
  * </code>
  */
 public final class LocalTieredStorage implements RemoteStorageManager {
