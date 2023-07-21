@@ -20,6 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
+import kafka.cluster.ReplicaState
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -959,15 +960,19 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica): Unit = {
-    val needsIsrUpdate = !partitionState.isInflight && canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
-      needsExpandIsr(followerReplica)
+    val needsIsrUpdate = !partitionState.isInflight &&
+      canAddReplicaToIsr(followerReplica.brokerId, followerReplica.stateSnapshot) && inReadLock(leaderIsrUpdateLock) {
+      val followerReplicaState = followerReplica.stateSnapshot
+      needsExpandIsr(followerReplica.brokerId, followerReplicaState)
     }
     if (needsIsrUpdate) {
       val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
         // check if this replica needs to be added to the ISR
+        val followerReplicaState = followerReplica.stateSnapshot
         partitionState match {
-          case currentState: CommittedPartitionState if needsExpandIsr(followerReplica) =>
-            Some(prepareIsrExpand(currentState, followerReplica.brokerId))
+          case currentState: CommittedPartitionState if needsExpandIsr(followerReplica.brokerId, followerReplicaState) =>
+            val brokerEpoch = if (metadataCache.isInstanceOf[KRaftMetadataCache]) followerReplicaState.brokerEpoch.getOrElse(-1L) else -1
+            Some(prepareIsrExpand(currentState, followerReplica.brokerId, brokerEpoch))
           case _ =>
             None
         }
@@ -978,25 +983,28 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def needsExpandIsr(followerReplica: Replica): Boolean = {
-    canAddReplicaToIsr(followerReplica.brokerId) && isFollowerInSync(followerReplica)
+  // Make sure using the same replica state for the ISR eligibility check and the caught-up check. Otherwise, there
+  // can be a race between the fetch requests from a rebooted follower. Then we could perform two checks on different
+  // replica states.
+  private def needsExpandIsr(followerReplicaId: Int, followerReplicaState: ReplicaState): Boolean = {
+    canAddReplicaToIsr(followerReplicaId, followerReplicaState) && isFollowerInSync(followerReplicaState)
   }
 
-  private def canAddReplicaToIsr(followerReplicaId: Int): Boolean = {
+  private def canAddReplicaToIsr(followerReplicaId: Int, followerReplicaState: ReplicaState): Boolean = {
     val current = partitionState
     !current.isInflight &&
       !current.isr.contains(followerReplicaId) &&
-      isReplicaIsrEligible(followerReplicaId)
+      isReplicaIsrEligible(followerReplicaId, followerReplicaState)
   }
 
-  private def isFollowerInSync(followerReplica: Replica): Boolean = {
+  private def isFollowerInSync(followerReplicaState: ReplicaState): Boolean = {
     leaderLogIfLocal.exists { leaderLog =>
-      val followerEndOffset = followerReplica.stateSnapshot.logEndOffset
+      val followerEndOffset = followerReplicaState.logEndOffset
       followerEndOffset >= leaderLog.highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
     }
   }
 
-  private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
+  private def isReplicaIsrEligible(followerReplicaId: Int, followerReplicaState: ReplicaState): Boolean = {
     metadataCache match {
       // In KRaft mode, only a replica which meets all of the following requirements is allowed to join the ISR.
       // 1. It is not fenced.
@@ -1011,7 +1019,8 @@ class Partition(val topicPartition: TopicPartition,
           warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
           return false
         }
-        val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
+
+        val storedBrokerEpoch = followerReplicaState.brokerEpoch
         val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
@@ -1110,7 +1119,7 @@ class Partition(val topicPartition: TopicPartition,
 
       def shouldWaitForReplicaToJoinIsr: Boolean = {
         replicaState.isCaughtUp(leaderLogEndOffset.messageOffset, currentTimeMs, replicaLagTimeMaxMs) &&
-        isReplicaIsrEligible(replica.brokerId)
+        isReplicaIsrEligible(replica.brokerId, replicaState)
       }
 
       // Note here we are using the "maximal", see explanation above
@@ -1697,20 +1706,20 @@ class Partition(val topicPartition: TopicPartition,
 
   private def prepareIsrExpand(
     currentState: CommittedPartitionState,
-    newInSyncReplicaId: Int
+    newInSyncReplicaId: Int,
+    newInSyncReplicaEpoch: Long
   ): PendingExpandIsr = {
     // When expanding the ISR, we assume that the new replica will make it into the ISR
     // before we receive confirmation that it has. This ensures that the HW will already
     // reflect the updated ISR even if there is a delay before we receive the confirmation.
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
-    val isrToSend = partitionState.isr + newInSyncReplicaId
-    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList)
+    val isrWithBrokerEpoch = addBrokerEpochToIsr(partitionState.isr.toList)
     val newLeaderAndIsr = LeaderAndIsr(
       localBrokerId,
       leaderEpoch,
       partitionState.leaderRecoveryState,
-      isrWithBrokerEpoch,
+      isrWithBrokerEpoch :+ new BrokerState().setBrokerId(newInSyncReplicaId).setBrokerEpoch(newInSyncReplicaEpoch),
       partitionEpoch
     )
     val updatedState = PendingExpandIsr(
