@@ -20,7 +20,6 @@ package kafka.admin
 import java.util
 import java.util.{Collections, Optional, Properties}
 import joptsimple._
-import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.CreatePartitionsOptions
@@ -33,6 +32,7 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.server.util.TopicFilter.IncludeList

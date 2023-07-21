@@ -19,7 +19,6 @@ package kafka.admin
 import java.util
 import java.util.Optional
 import java.util.concurrent.ExecutionException
-import kafka.common.AdminCommandFailedException
 import kafka.server.DynamicConfig
 import kafka.utils.{CoreUtils, Exit, Json, Logging}
 import kafka.utils.Implicits._
@@ -30,6 +29,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 

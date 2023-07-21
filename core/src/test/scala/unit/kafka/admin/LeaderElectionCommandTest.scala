@@ -18,8 +18,6 @@ package kafka.admin
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-
-import kafka.common.AdminCommandFailedException
 import kafka.server.IntegrationTestUtils.createTopic
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
@@ -29,6 +27,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.apache.kafka.server.common.AdminCommandFailedException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Tag}
