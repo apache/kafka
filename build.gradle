@@ -3060,23 +3060,6 @@ project(':connect:test-plugins') {
     implementation libs.jacksonDatabind
 
   }
-
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
-    from (configurations.runtimeClasspath) {
-      exclude('kafka-clients*')
-      exclude('connect-*')
-    }
-    into "$buildDir/dependant-libs"
-    duplicatesStrategy 'exclude'
-  }
-
-  jar {
-    dependsOn copyDependantLibs
-  }
 }
 
 task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
