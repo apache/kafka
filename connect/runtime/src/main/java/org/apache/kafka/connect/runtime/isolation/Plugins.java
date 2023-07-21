@@ -78,15 +78,15 @@ public class Plugins {
         PluginScanResult empty = new PluginScanResult(Collections.emptyList());
         PluginScanResult serviceLoadingScanResult;
         try {
-            serviceLoadingScanResult = PluginDiscoveryMode.serviceLoad(discoveryMode) ?
+            serviceLoadingScanResult = discoveryMode.serviceLoad() ?
                     new ServiceLoaderScanner().discoverPlugins(pluginSources) : empty;
         } catch (Throwable t) {
-            log.error("Unable to perform ServiceLoader scanning as requested by {}={}, this error may be avoided by reconfiguring {}={}",
+            throw new ConnectException(String.format(
+                    "Unable to perform ServiceLoader scanning as requested by %s=%s. It may be possible to fix this issue by reconfiguring %s=%s",
                     WorkerConfig.PLUGIN_DISCOVERY_CONFIG, discoveryMode,
-                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.ONLY_SCAN, t);
-            throw t;
+                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.ONLY_SCAN), t);
         }
-        PluginScanResult reflectiveScanResult = PluginDiscoveryMode.reflectivelyScan(discoveryMode) ?
+        PluginScanResult reflectiveScanResult = discoveryMode.reflectivelyScan() ?
                 new ReflectionScanner().discoverPlugins(pluginSources) : empty;
         PluginScanResult scanResult = new PluginScanResult(Arrays.asList(reflectiveScanResult, serviceLoadingScanResult));
         maybeReportHybridDiscoveryIssue(discoveryMode, serviceLoadingScanResult, scanResult);
@@ -99,38 +99,29 @@ public class Plugins {
         mergedResult.forEach(missingPlugins::add);
         serviceLoadingScanResult.forEach(missingPlugins::remove);
         if (missingPlugins.isEmpty()) {
-            switch (discoveryMode) {
-                case ONLY_SCAN:
-                    log.debug("Service loading of plugins disabled, consider reconfiguring {}={}",
-                            WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.HYBRID_WARN);
-                    break;
-                case HYBRID_WARN:
-                case HYBRID_FAIL:
-                    log.warn("All plugins have ServiceLoader manifests, consider reconfiguring {}={}",
-                            WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.SERVICE_LOAD);
-                    break;
-                case SERVICE_LOAD:
-                    log.debug("Reflective loading of plugins disabled, plugins without manifests will not be visible");
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown discovery mode");
+            if (discoveryMode == PluginDiscoveryMode.HYBRID_WARN || discoveryMode == PluginDiscoveryMode.HYBRID_FAIL) {
+                log.warn("All plugins have ServiceLoader manifests, consider reconfiguring {}={}",
+                        WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.SERVICE_LOAD);
             }
         } else {
             String message = String.format(
-                    "Plugins are missing ServiceLoader manifests, these plugins will not be visible with %s=%s: %s",
-                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
+                "One or more plugins are missing ServiceLoader manifests and will not be visible with %s=%s: %s\n" +
+                        "Read the documentation at %s for instructions on migrating your plugins " +
+                        "to take advantage of the performance improvements of %s mode.",
+                            WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
                     PluginDiscoveryMode.SERVICE_LOAD,
                     missingPlugins.stream()
                             .map(pluginDesc -> pluginDesc.location() + "\t" + pluginDesc.className() + "\t" + pluginDesc.version())
-                            .collect(Collectors.joining("\n", "[\n", "\n]")));
-            switch (discoveryMode) {
-                case HYBRID_WARN:
-                    log.warn(message);
-                    break;
-                case HYBRID_FAIL:
-                    throw new ConnectException(message);
-                default:
-                    throw new IllegalArgumentException("Unknown discovery mode");
+                            .collect(Collectors.joining("\n", "[\n", "\n]")),
+                    "https://kafka.apache.org/documentation.html#connect_plugindiscovery",
+                    PluginDiscoveryMode.SERVICE_LOAD
+            );
+            if (discoveryMode == PluginDiscoveryMode.HYBRID_WARN) {
+                log.warn("{} To silence this warning, set {}={} in the worker config.",
+                        message, WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.ONLY_SCAN);
+            } else if (discoveryMode == PluginDiscoveryMode.HYBRID_FAIL) {
+                throw new ConnectException(String.format("%s To silence this error, set %s=%s in the worker config.",
+                        message, WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.HYBRID_WARN));
             }
         }
     }
