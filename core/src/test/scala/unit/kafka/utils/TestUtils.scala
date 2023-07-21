@@ -78,6 +78,8 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
+import org.mockito.ArgumentMatchers.{any, anyBoolean}
+import org.mockito.Mockito
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1408,8 +1410,9 @@ object TestUtils extends Logging {
                        time: MockTime = new MockTime(),
                        interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                        recoveryThreadsPerDataDir: Int = 4,
-                       transactionVerificationEnabled: Boolean = false): LogManager = {
-    new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
+                       transactionVerificationEnabled: Boolean = false,
+                       log: Option[UnifiedLog] = None): LogManager = {
+    val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    configRepository = configRepository,
                    initialDefaultConfig = defaultConfig,
@@ -1429,6 +1432,13 @@ object TestUtils extends Logging {
                    keepPartitionMetadataFile = true,
                    interBrokerProtocolVersion = interBrokerProtocolVersion,
                    remoteStorageSystemEnable = false)
+
+    if (log.isDefined) {
+      val spyLogManager = Mockito.spy(logManager)
+      Mockito.doReturn(log.get).when(spyLogManager).getOrCreateLog(any(), anyBoolean(), anyBoolean(), any)
+      spyLogManager
+    } else
+      logManager
   }
 
   class MockAlterPartitionManager extends AlterPartitionManager {
