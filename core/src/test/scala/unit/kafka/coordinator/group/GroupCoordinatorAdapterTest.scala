@@ -644,7 +644,7 @@ class GroupCoordinatorAdapterTest {
     val data = new OffsetCommitRequestData()
       .setGroupId("group")
       .setMemberId("member")
-      .setGenerationId(10)
+      .setGenerationIdOrMemberEpoch(10)
       .setRetentionTimeMs(1000)
       .setTopics(List(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
@@ -669,7 +669,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(data.groupId),
       ArgumentMatchers.eq(data.memberId),
       ArgumentMatchers.eq(None),
-      ArgumentMatchers.eq(data.generationId),
+      ArgumentMatchers.eq(data.generationIdOrMemberEpoch),
       ArgumentMatchers.eq(Map(
         new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
           offset = 100,
