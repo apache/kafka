@@ -29,9 +29,11 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -58,6 +60,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -497,7 +500,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Set<TopicPartition> assignment() {
-        throw new KafkaException("method not implemented");
+        return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
     }
 
     /**
@@ -522,7 +525,33 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
+        if (partitions == null) {
+            throw new IllegalArgumentException("Topic partitions collection to assign to cannot be null");
+        }
+
+        if (partitions.isEmpty()) {
+            // TODO: implementation of unsubscribe() will be included in forthcoming commits.
+            // this.unsubscribe();
+            return;
+        }
+
+        for (TopicPartition tp : partitions) {
+            String topic = (tp != null) ? tp.topic() : null;
+            if (Utils.isBlank(topic))
+                throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
+        }
+
+        // TODO: implementation of refactored Fetcher will be included in forthcoming commits.
+        // fetcher.clearBufferedDataForUnassignedPartitions(partitions);
+
+        // assignment change event will trigger autocommit if it is configured and the group id is specified. This is
+        // to make sure offsets of topic partitions the consumer is unsubscribing from are committed since there will
+        // be no following rebalance
+        eventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed(), time.milliseconds()));
+
+        log.info("Assigned to partition(s): {}", Utils.join(partitions, ", "));
+        if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
+            eventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
     }
 
     @Override
