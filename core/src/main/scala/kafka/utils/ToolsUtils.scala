@@ -266,6 +266,17 @@ object ToolsUtils {
                      stream: PrintStream,
                      directories: Seq[String],
                      metaProperties: MetaProperties,
+                     metadataVersion: MetadataVersion,
+                     ignoreFormatted: Boolean
+                   ): Int = {
+    val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
+    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted)
+  }
+
+  def formatCommand(
+                     stream: PrintStream,
+                     directories: Seq[String],
+                     metaProperties: MetaProperties,
                      bootstrapMetadata: BootstrapMetadata,
                      metadataVersion: MetadataVersion,
                      ignoreFormatted: Boolean
