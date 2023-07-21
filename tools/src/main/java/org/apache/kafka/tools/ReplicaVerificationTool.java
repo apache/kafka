@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import joptsimple.OptionParser;
 import joptsimple.OptionSpec;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
@@ -55,13 +56,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
-import org.apache.kafka.server.util.ToolsUtils;
 import org.apache.kafka.server.util.TopicFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.SocketTimeoutException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
@@ -113,9 +114,9 @@ public class ReplicaVerificationTool {
             ReplicaVerificationToolOptions options = new ReplicaVerificationToolOptions(args);
             // getting topic metadata
             LOG.info("Getting topic metadata...");
-            String bootstrapServer = options.brokerHostsAndPorts();
+            String brokerList = options.brokerHostsAndPorts();
 
-            try (Admin adminClient = createAdminClient(bootstrapServer)) {
+            try (Admin adminClient = createAdminClient(brokerList)) {
                 Collection<TopicDescription> topicsMetadata = listTopicsMetadata(adminClient);
                 Map<Integer, Node> brokerInfo = brokerDetails(adminClient);
 
@@ -165,7 +166,7 @@ public class ReplicaVerificationTool {
                     )
                     .collect(Collectors.toList());
 
-                Properties consumerProps = consumerConfig(bootstrapServer);
+                Properties consumerProps = consumerConfig(brokerList);
 
                 ReplicaBuffer replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicPartition,
                     initialOffsets(topicPartitions, consumerProps, options.initialOffsetTime()),
@@ -250,15 +251,14 @@ public class ReplicaVerificationTool {
         return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
 
-    private static Admin createAdminClient(String bootstrapServer) {
+    private static Admin createAdminClient(String brokerList) {
         Properties props = new Properties();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList);
         return Admin.create(props);
     }
 
     private static class ReplicaVerificationToolOptions extends CommandDefaultOptions {
         private final OptionSpec<String> brokerListOpt;
-        private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Integer> maxWaitMsOpt;
         private final OptionSpec<String> topicWhiteListOpt;
@@ -268,14 +268,8 @@ public class ReplicaVerificationTool {
 
         ReplicaVerificationToolOptions(String[] args) {
             super(args);
-            bootstrapServerOpt = parser.accepts("bootstrap-server",
-                    "REQUIRED. The list of hostname and port of the server to connect to.")
+            brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
                 .withRequiredArg()
-                .describedAs("hostname:port,...,hostname:port")
-                .ofType(String.class);
-            brokerListOpt = parser.accepts("broker-list", "DEPRECATED. Use --bootstrap-server. " +
-                    "The list of hostname and port of the server to connect to.")
-                .withOptionalArg()
                 .describedAs("hostname:port,...,hostname:port")
                 .ofType(String.class);
             fetchSizeOpt = parser.accepts("fetch-size", "The fetch size of each request.")
@@ -288,8 +282,8 @@ public class ReplicaVerificationTool {
                 .describedAs("ms")
                 .ofType(Integer.class)
                 .defaultsTo(1_000);
-            topicWhiteListOpt = parser.accepts("topic-white-list", "DEPRECATED. Use --topics-include. " +
-                    "List of topics to verify replica consistency.")
+            topicWhiteListOpt = parser.accepts("topic-white-list", "DEPRECATED use --topics-include instead; " +
+                    "ignored if --topics-include specified. List of topics to verify replica consistency.")
                 .withRequiredArg()
                 .describedAs("Java regex (String)")
                 .ofType(String.class)
@@ -316,25 +310,35 @@ public class ReplicaVerificationTool {
             if (options.has(versionOpt)) {
                 CommandLineUtils.printVersionAndExit();
             }
-            CommandLineUtils.checkInvalidArgs(parser, options, bootstrapServerOpt, brokerListOpt);
+            CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
             CommandLineUtils.checkInvalidArgs(parser, options, topicsIncludeOpt, topicWhiteListOpt);
-            if (!options.has(bootstrapServerOpt) && !options.has(brokerListOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, format("The %s option is required", bootstrapServerOpt));
-            }
-            if (options.has(brokerListOpt)) {
-                System.out.printf("WARNING: The %s option is deprecated and will be removed. " +
-                    "Use the %s option with the same syntax.%n", brokerListOpt, bootstrapServerOpt);
-            }
-            if (options.has(topicWhiteListOpt)) {
-                System.out.printf("WARNING: The %s option is deprecated and will be removed. " +
-                    "Use the %s option with the same syntax.%n", topicWhiteListOpt, topicsIncludeOpt);
-            }
         }
 
         String brokerHostsAndPorts() {
-            String brokerList = options.valueOf(options.has(bootstrapServerOpt) ? bootstrapServerOpt : brokerListOpt);
-            ToolsUtils.validateBootstrapServer(parser, brokerList);
+            String brokerList = options.valueOf(brokerListOpt);
+            validateBrokerList(parser, brokerList);
             return brokerList;
+        }
+
+        void validateBrokerList(OptionParser parser, String brokerList) {
+            if (parser == null || brokerList == null) {
+                throw new RuntimeException("No option parser or broker list found");
+            }
+            if (brokerList.isEmpty()) {
+                CommandLineUtils.printUsageAndExit(parser, "Empty broker list option");
+            }
+
+            String[] hostPorts;
+            if (brokerList.contains(",")) hostPorts = brokerList.split(",");
+            else hostPorts = new String[]{brokerList};
+
+            String[] validHostPort = Arrays.stream(hostPorts)
+                .filter(hostPortData -> Utils.getPort(hostPortData) != null)
+                .toArray(String[]::new);
+
+            if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
+                CommandLineUtils.printUsageAndExit(parser, "Invalid broker list option");
+            }
         }
 
         TopicFilter.IncludeList topicsIncludeFilter() {
