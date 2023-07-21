@@ -41,7 +41,10 @@ public class OffsetAndMetadata {
     public final OptionalInt leaderEpoch;
 
     /**
-     * The committed metadata.
+     * The committed metadata. The Kafka offset commit API allows users to provide additional
+     * metadata (in the form of a string) when an offset is committed. This can be useful
+     * (for example) to store information about which node made the commit, what time the
+     * commit was made, etc.
      */
     public final String metadata;
 
