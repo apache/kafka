@@ -46,7 +46,7 @@ import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.assignor.AssignmentTopicDescriber;
+import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -118,7 +118,7 @@ public class GroupMetadataManagerTest {
         }
 
         @Override
-        public GroupAssignment assign(AssignmentTopicDescriber assignmentTopicDescriber, AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+        public GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
             return prepareGroupAssignment;
         }
     }
@@ -774,8 +774,8 @@ public class GroupMetadataManagerTest {
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {{
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, Collections.emptyMap()));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
                 }}),
             RecordHelpers.newGroupEpochRecord(groupId, 1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
@@ -872,8 +872,8 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, Collections.emptyMap()));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
@@ -1112,8 +1112,8 @@ public class GroupMetadataManagerTest {
             // Subscription metadata is recomputed because zar is no longer there.
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, Collections.emptyMap()));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11)
@@ -2008,7 +2008,7 @@ public class GroupMetadataManagerTest {
                     {
                         // foo only has 3 partitions stored in the metadata but foo has
                         // 6 partitions the metadata image.
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, Collections.emptyMap()));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, mkMapOfPartitionRacks(3)));
                     }
                 }))
             .build();
@@ -2062,7 +2062,7 @@ public class GroupMetadataManagerTest {
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
@@ -2118,7 +2118,7 @@ public class GroupMetadataManagerTest {
                     {
                         // foo only has 3 partitions stored in the metadata but foo has
                         // 6 partitions the metadata image.
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, Collections.emptyMap()));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, mkMapOfPartitionRacks(3)));
                     }
                 }))
             .build();
@@ -2190,7 +2190,7 @@ public class GroupMetadataManagerTest {
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, Collections.emptyMap()));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
@@ -2538,5 +2538,13 @@ public class GroupMetadataManagerTest {
             assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
         });
         return assignmentMap;
+    }
+
+    private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
+        for(int i = 0; i < numPartitions ; i++) {
+            partitionRacks.put(i, Collections.emptySet());
+        }
+        return partitionRacks;
     }
 }

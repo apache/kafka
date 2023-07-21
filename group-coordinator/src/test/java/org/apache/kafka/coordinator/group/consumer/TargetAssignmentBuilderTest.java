@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentTopicMetadata;
+import org.apache.kafka.coordinator.group.assignor.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -174,7 +174,7 @@ public class TargetAssignmentBuilderTest {
             // Prepare the expected topic metadata.
             Map<Uuid, PartitionMetadata> topicMetadataMap = new HashMap<>();
             subscriptionMetadata.forEach((topicName, topicMetadata) ->  {
-                topicMetadataMap.put(topicMetadata.id(), new PartitionMetadata(topicMetadata.partitionRackInfo()));
+                topicMetadataMap.put(topicMetadata.id(), new PartitionMetadata(topicMetadata.partitionRacks()));
             });
 
             // Prepare the expected assignment spec.
@@ -182,15 +182,14 @@ public class TargetAssignmentBuilderTest {
                 memberSpecs
             );
 
-            AssignmentTopicMetadata assignmentTopicMetadata = new AssignmentTopicMetadata(
+            SubscribedTopicMetadata assignmentTopicMetadata = new SubscribedTopicMetadata(
                 topicMetadataMap
             );
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
             when(assignor.assign(
-                any(),
-                any()
+                any(), any()
             )).thenReturn(new GroupAssignment(memberAssignments));
 
 
@@ -216,8 +215,7 @@ public class TargetAssignmentBuilderTest {
             // assignment spec.
             verify(assignor, times(1))
                 .assign(
-                    assignmentTopicMetadata,
-                    assignmentSpec
+                    assignmentSpec, assignmentTopicMetadata
                 );
 
             return result;

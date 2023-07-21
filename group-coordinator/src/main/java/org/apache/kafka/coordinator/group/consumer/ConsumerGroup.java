@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.assignor.PartitionMetadata;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;

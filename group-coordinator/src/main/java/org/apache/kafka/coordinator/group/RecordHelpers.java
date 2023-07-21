@@ -126,13 +126,21 @@ public class RecordHelpers {
         Map<String, TopicMetadata> newSubscriptionMetadata
     ) {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
+        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
+            ArrayList<ConsumerGroupPartitionMetadataValue.PartitionRacks> partitionRacks = new ArrayList<>();
+            topicMetadata.partitionRacks().forEach((partition, racks) -> {
+                partitionRacks.add(new ConsumerGroupPartitionMetadataValue.PartitionRacks()
+                    .setPartition(partition)
+                    .setRacks(new ArrayList<>(racks))
+                );
+            });
             value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-            )
-        );
+                .setPartitionRacks(partitionRacks)
+            );
+        });
 
         return new Record(
             new ApiMessageAndVersion(

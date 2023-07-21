@@ -20,29 +20,36 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
-public class AssignmentTopicMetadata implements AssignmentTopicDescriber {
+/**
+ * The subscribed topic metadata class is used by the {@link PartitionAssignor}
+ * to obtain topic and partition metadata of subscribed topics.
+ */
+public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
 
-    Map<Uuid, PartitionMetadata> TopicPartitionMetadata;
+    /**
+     * The topic IDs are mapped to their corresponding {@link PartitionMetadata}
+     * object, which contains metadata such as the rack information for the partition replicas.
+     */
+    Map<Uuid, PartitionMetadata> topicPartitionMetadata;
 
-    public AssignmentTopicMetadata(Map<Uuid, PartitionMetadata> TopicPartitionMetadata) {
-        this.TopicPartitionMetadata = TopicPartitionMetadata;
+    public SubscribedTopicMetadata(Map<Uuid, PartitionMetadata> TopicPartitionMetadata) {
+        this.topicPartitionMetadata = TopicPartitionMetadata;
     }
 
     /**
-     * Returns a set of subscribed topicIds.
+     * A set of topic Ids that the consumer group is subscribed to.
      *
-     * @return Set of topicIds corresponding to the subscribed topics.
+     * @return Set of topic Ids corresponding to the subscribed topics.
      */
     @Override
     public Set<Uuid> subscribedTopicIds() {
-        return TopicPartitionMetadata.keySet();
+        return topicPartitionMetadata.keySet();
     }
 
     /**
-     * Number of partitions for the given topicId.
+     * Number of partitions available for the given topic Id.
      *
      * @param topicId   Uuid corresponding to the topic.
      * @return The number of partitions corresponding to the given topicId.
@@ -50,7 +57,7 @@ public class AssignmentTopicMetadata implements AssignmentTopicDescriber {
      */
     @Override
     public int numPartitions(Uuid topicId) {
-        PartitionMetadata partitionMetadata = TopicPartitionMetadata.get(topicId);
+        PartitionMetadata partitionMetadata = topicPartitionMetadata.get(topicId);
         if (partitionMetadata == null) {
             return 0;
         }
@@ -68,7 +75,7 @@ public class AssignmentTopicMetadata implements AssignmentTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        PartitionMetadata partitionMetadata = TopicPartitionMetadata.get(topicId);
+        PartitionMetadata partitionMetadata = topicPartitionMetadata.get(topicId);
         if (partitionMetadata == null) {
             return Collections.emptySet();
         }
@@ -79,20 +86,20 @@ public class AssignmentTopicMetadata implements AssignmentTopicDescriber {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof AssignmentTopicMetadata)) return false;
-        AssignmentTopicMetadata that = (AssignmentTopicMetadata) o;
-        return TopicPartitionMetadata.equals(that.TopicPartitionMetadata);
+        if (o == null || getClass() != o.getClass()) return false;
+        SubscribedTopicMetadata that = (SubscribedTopicMetadata) o;
+        return topicPartitionMetadata.equals(that.topicPartitionMetadata);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(TopicPartitionMetadata);
+        return topicPartitionMetadata.hashCode();
     }
 
     @Override
     public String toString() {
-        return "AssignmentTopicMetadata{" +
-            "TopicPartitionMetadata=" + TopicPartitionMetadata +
-            '}';
+        return "SubscribedTopicMetadata(" +
+            "topicPartitionMetadata=" + topicPartitionMetadata +
+            ')';
     }
 }

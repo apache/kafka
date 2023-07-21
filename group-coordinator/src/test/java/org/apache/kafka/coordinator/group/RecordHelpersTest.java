@@ -155,17 +155,17 @@ public class RecordHelpersTest {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
-        Map<Integer, Set<String>> partitionRackInfo = new HashMap<>();
+
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
             10,
-            partitionRackInfo));
+            mkMapOfPartitionRacks(10)));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
             20,
-            partitionRackInfo));
+            mkMapOfPartitionRacks(20)));
 
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
@@ -179,11 +179,13 @@ public class RecordHelpersTest {
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
-                            .setNumPartitions(10),
+                            .setNumPartitions(10)
+                            .setPartitionRacks(mkListOfPartitionRacks(10)),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
-                            .setNumPartitions(20))),
+                            .setNumPartitions(20)
+                            .setPartitionRacks(mkListOfPartitionRacks(20)))),
                 (short) 0));
 
         assertEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
@@ -601,5 +603,25 @@ public class RecordHelpersTest {
                 group,
                 MetadataVersion.IBP_3_5_IV2
             ));
+    }
+
+    private List<ConsumerGroupPartitionMetadataValue.PartitionRacks> mkListOfPartitionRacks(int numPartitions) {
+        List<ConsumerGroupPartitionMetadataValue.PartitionRacks> partitionRacks = new ArrayList<>(numPartitions);
+        for(int i = 0; i < numPartitions ; i++) {
+            partitionRacks.add(
+                new ConsumerGroupPartitionMetadataValue.PartitionRacks()
+                    .setPartition(i)
+                    .setRacks(new ArrayList<>())
+            );
+        }
+        return partitionRacks;
+    }
+
+    private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
+        for(int i = 0; i < numPartitions ; i++) {
+            partitionRacks.put(i, Collections.emptySet());
+        }
+        return partitionRacks;
     }
 }

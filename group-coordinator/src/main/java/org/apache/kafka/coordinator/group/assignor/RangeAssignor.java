@@ -78,7 +78,7 @@ public class RangeAssignor implements PartitionAssignor {
     /**
      * @return Map of topic ids to a list of members subscribed to them.
      */
-    private Map<Uuid, List<String>> membersPerTopic(AssignmentTopicDescriber assignmentTopicDescriber, final AssignmentSpec assignmentSpec) {
+    private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) {
         Map<Uuid, List<String>> membersPerTopic = new HashMap<>();
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
@@ -87,7 +87,7 @@ public class RangeAssignor implements PartitionAssignor {
             for (Uuid topicId : topics) {
                 // Only topics that are present in both the subscribed topics list and the topic metadata should be
                 // considered for assignment.
-                if (assignmentTopicDescriber.subscribedTopicIds().contains(topicId)) {
+                if (subscribedTopicDescriber.subscribedTopicIds().contains(topicId)) {
                     membersPerTopic
                         .computeIfAbsent(topicId, k -> new ArrayList<>())
                         .add(memberId);
@@ -118,14 +118,14 @@ public class RangeAssignor implements PartitionAssignor {
      * </ol>
      */
     @Override
-    public GroupAssignment assign(AssignmentTopicDescriber assignmentTopicDescriber, final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+    public GroupAssignment assign(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
         Map<String, MemberAssignment> newAssignment = new HashMap<>();
 
         // Step 1
-        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentTopicDescriber, assignmentSpec);
+        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentSpec, subscribedTopicDescriber);
 
         membersPerTopic.forEach((topicId, membersForTopic) -> {
-            int numPartitionsForTopic = assignmentTopicDescriber.numPartitions(topicId);
+            int numPartitionsForTopic = subscribedTopicDescriber.numPartitions(topicId);
             int minRequiredQuota = numPartitionsForTopic / membersForTopic.size();
             // Each member can get only ONE extra partition per topic after receiving the minimum quota.
             int numMembersWithExtraPartition = numPartitionsForTopic % membersForTopic.size();

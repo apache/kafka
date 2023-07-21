@@ -20,16 +20,25 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * The PartitionMetadata object is used by the group coordinators assignor.
+ *
+ * It provides methods for accessing the partition metadata,
+ * including the number of partitions associated with the topic and the rack information
+ * for the replicas of a given partition.
+ */
 public class PartitionMetadata {
 
     /**
      * Partition number mapped to a set of racks where
      * its replicas are located.
      */
-    Map<Integer, Set<String>> partitionsWithRacks;
+    private final Map<Integer, Set<String>> partitionsWithRacks;
 
-    //If rack information isn't available pass an empty set.
-    public PartitionMetadata (Map<Integer, Set<String>> partitionsWithRacks) {
+    /**
+     * If rack information isn't available pass an empty set.
+     */
+    public PartitionMetadata(Map<Integer, Set<String>> partitionsWithRacks) {
         Objects.requireNonNull(partitionsWithRacks);
         this.partitionsWithRacks = partitionsWithRacks;
     }
@@ -37,7 +46,7 @@ public class PartitionMetadata {
     /**
      * Returns the number of partitions.
      *
-     * @return number of partitions associated with the topic.
+     * @return Number of partitions associated with the topic.
      */
     public int numPartitions() {
         return partitionsWithRacks.size();
@@ -46,7 +55,7 @@ public class PartitionMetadata {
     /**
      * Returns the rack information for the replicas of the given partition.
      *
-     * @param partition partition number.
+     * @param partition partition Id.
      * @return Set of racks associated with the replicas of the given partition.
      *         If no rack information is available, an empty set is returned.
      */
@@ -57,14 +66,14 @@ public class PartitionMetadata {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof PartitionMetadata)) return false;
+        if (o == null || getClass() != o.getClass()) return false;
         PartitionMetadata that = (PartitionMetadata) o;
         return Objects.equals(partitionsWithRacks, that.partitionsWithRacks);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(partitionsWithRacks);
+        return partitionsWithRacks.hashCode();
     }
 
     @Override

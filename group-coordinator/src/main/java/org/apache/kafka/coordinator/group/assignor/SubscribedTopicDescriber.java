@@ -22,14 +22,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Set;
 
 /**
- * The assignment topic describer is used by the {@link PartitionAssignor}
+ * The subscribed topic describer is used by the {@link PartitionAssignor}
  * to obtain topic and partition metadata of subscribed topics.
  *
  * The interface is kept in an internal module until KIP-848 is fully
  * implemented and ready to be released.
  */
 @InterfaceStability.Unstable
-public interface AssignmentTopicDescriber {
+public interface SubscribedTopicDescriber {
 
     /**
      * Returns a set of subscribed topicIds.

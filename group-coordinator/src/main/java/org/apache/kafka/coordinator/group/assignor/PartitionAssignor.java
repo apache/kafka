@@ -36,9 +36,9 @@ public interface PartitionAssignor {
      * Perform the group assignment given the current members and
      * topic metadata.
      *
-     * @param assignmentTopicDescriber The topic and cluster metadata describer {@link AssignmentTopicDescriber}.
-     * @param assignmentSpec The member assignment spec.
+     * @param assignmentSpec           The member assignment spec.
+     * @param subscribedTopicDescriber The topic and cluster metadata describer {@link SubscribedTopicDescriber}.
      * @return The new assignment for the group.
      */
-    GroupAssignment assign(AssignmentTopicDescriber assignmentTopicDescriber, AssignmentSpec assignmentSpec) throws PartitionAssignorException;
+    GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException;
 }

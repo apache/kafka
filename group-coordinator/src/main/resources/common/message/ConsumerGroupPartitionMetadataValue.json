@@ -30,10 +30,9 @@
         "about": "The topic name." },
       { "name": "NumPartitions", "versions": "0+", "type": "int32",
         "about": "The number of partitions of the topic." },
-      {
-        "name": "PartitionRackInfo",
+      { "name": "PartitionRacks",
         "versions": "0+",
-        "type": "[]PartitionRackInfo",
+        "type": "[]PartitionRacks",
         "about": "Partitions mapped to a set of racks.",
         "fields": [
           {

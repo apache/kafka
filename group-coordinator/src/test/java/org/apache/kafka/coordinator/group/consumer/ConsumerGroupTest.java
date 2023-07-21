@@ -427,7 +427,7 @@ public class ConsumerGroupTest {
         assertEquals(
             mkMap(
                 mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1,mkMap(
+                    new TopicMetadata(fooTopicId, "foo", 1, mkMap(
                         mkEntry(0, new HashSet<>()))
                     )
                 )

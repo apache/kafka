@@ -24,7 +24,7 @@ import java.util.Objects;
  */
 public class AssignmentSpec {
     /**
-     * The members keyed by member id.
+     * The members keyed by member Id.
      */
     private final Map<String, AssignmentMemberSpec> members;
 
@@ -36,7 +36,7 @@ public class AssignmentSpec {
     }
 
     /**
-     * @return Member metadata keyed by member Ids.
+     * @return Member metadata keyed by member Id.
      */
     public Map<String, AssignmentMemberSpec> members() {
         return members;
@@ -45,19 +45,18 @@ public class AssignmentSpec {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof AssignmentSpec)) return false;
+        if (o == null || getClass() != o.getClass()) return false;
         AssignmentSpec that = (AssignmentSpec) o;
         return members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members);
+        return members.hashCode();
     }
 
     @Override
     public String toString() {
-        return "AssignmentSpec(members=" + members +
-            ')';
+        return "AssignmentSpec(members=" + members + ')';
     }
 }
