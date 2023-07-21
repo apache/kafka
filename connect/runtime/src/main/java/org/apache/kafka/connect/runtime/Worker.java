@@ -1806,9 +1806,14 @@ public class Worker {
                     connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
+            Map<String, Object> adminOverrides = adminConfigs(id.connector(), "connector-worker-adminclient-" + id.connector(),
+                    config, connectorConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
+
+            TopicAdmin admin = new TopicAdmin(adminOverrides);
+
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                     valueConverter, errorHandlingMetrics, headerConverter, transformationChain, consumer, classLoader, time,
-                    retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore());
+                    retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(), admin);
         }
     }
 

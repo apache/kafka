@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -24,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -52,6 +54,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +64,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -99,6 +104,8 @@ class WorkerSinkTask extends WorkerTask {
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
 
+    private final TopicAdmin topicAdmin;
+
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
                           TaskStatus.Listener statusListener,
@@ -116,7 +123,8 @@ class WorkerSinkTask extends WorkerTask {
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
-                          StatusBackingStore statusBackingStore) {
+                          StatusBackingStore statusBackingStore,
+                          TopicAdmin topicAdmin) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
 
@@ -145,6 +153,7 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        this.topicAdmin = topicAdmin;
     }
 
     @Override
@@ -179,6 +188,7 @@ class WorkerSinkTask extends WorkerTask {
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(headerConverter, "header converter");
+        Utils.closeQuietly(() -> topicAdmin.close(Duration.ofSeconds(30)), "sink task admin");
     }
 
     @Override
@@ -695,9 +705,28 @@ class WorkerSinkTask extends WorkerTask {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             log.debug("{} Partitions assigned {}", WorkerSinkTask.this, partitions);
-
+            Set<String> deletedTopics = new HashSet<>();
             for (TopicPartition tp : partitions) {
-                long pos = consumer.position(tp);
+                if (deletedTopics.contains(tp.topic())) {
+                    log.debug("Not assigning offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
+                    continue;
+                }
+                long pos;
+                try {
+                    pos = consumer.position(tp);
+                } catch (TimeoutException e) {
+                    log.error("TimeoutException occurred when fetching position for topic partition {}. " +
+                            "Checking if the topic {} exists", tp, tp.topic());
+                    Map<String, TopicDescription> topic = topicAdmin.describeTopics(tp.topic());
+                    if (topic.isEmpty()) {
+                        log.debug("Not assigning offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
+                        deletedTopics.add(tp.topic());
+                        continue;
+                    } else {
+                        // Topic exists but fetchPosition threw TimeoutException.
+                        throw e;
+                    }
+                }
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
                 log.debug("{} Assigned topic partition {} with offset {}", WorkerSinkTask.this, tp, pos);
