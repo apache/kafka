@@ -43,13 +43,13 @@ class DynamicConfigTest extends QuorumTestHarness {
   @Test
   def shouldFailLeaderConfigsWithInvalidValues(): Unit = {
     assertThrows(classOf[ConfigException], () => adminZkClient.changeBrokerConfig(Seq(0),
-      propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "-100")))
+      propsWith(KafkaConfig.LeaderReplicationThrottledRateProp, "-100")))
   }
 
   @Test
   def shouldFailFollowerConfigsWithInvalidValues(): Unit = {
     assertThrows(classOf[ConfigException], () => adminZkClient.changeBrokerConfig(Seq(0),
-      propsWith(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "-100")))
+      propsWith(KafkaConfig.FollowerReplicationThrottledRateProp, "-100")))
   }
 
   @Test

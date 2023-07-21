@@ -100,8 +100,8 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     (100 to 107).foreach { brokerId =>
       adminZkClient.changeBrokerConfig(Seq(brokerId),
         propsWith(
-          (DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString),
-          (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.toString)
+          (KafkaConfig.LeaderReplicationThrottledRateProp, throttle.toString),
+          (KafkaConfig.FollowerReplicationThrottledRateProp, throttle.toString)
         ))
     }
 
@@ -186,7 +186,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val throttle: Long = msg.length * msgCount / expectedDuration
 
     //Set the throttle to only limit leader
-    adminZkClient.changeBrokerConfig(Seq(100), propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString))
+    adminZkClient.changeBrokerConfig(Seq(100), propsWith(KafkaConfig.LeaderReplicationThrottledRateProp, throttle.toString))
     adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"))
 
     //Add data

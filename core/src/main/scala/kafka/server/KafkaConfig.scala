@@ -152,6 +152,7 @@ object Defaults {
   val LeaderImbalanceCheckIntervalSeconds = 300
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
   val InterBrokerProtocolVersion = MetadataVersion.latest.version
+  var ReplicationThrottledRate = Long.MaxValue
 
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetries = 3
@@ -496,6 +497,8 @@ object KafkaConfig {
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
   val InterBrokerListenerNameProp = "inter.broker.listener.name"
   val ReplicaSelectorClassProp = "replica.selector.class"
+  val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
+  val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
   val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
@@ -962,6 +965,12 @@ object KafkaConfig {
   val InterBrokerListenerNameDoc = s"Name of listener used for communication between brokers. If this is unset, the listener name is defined by $InterBrokerSecurityProtocolProp. " +
     s"It is an error to set this and $InterBrokerSecurityProtocolProp properties at the same time."
   val ReplicaSelectorClassDoc = "The fully qualified class name that implements ReplicaSelector. This is used by the broker to find the preferred read replica. By default, we use an implementation that returns the leader."
+  val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
+  s"property ${LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG} (for each topic). It is suggested that the " +
+  s"limit be kept above 1MB/s for accurate behaviour."
+  val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
+  s"property ${LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG} (for each topic). It is suggested that the " +
+  s"limit be kept above 1MB/s for accurate behaviour."
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
   val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
@@ -1017,7 +1026,7 @@ object KafkaConfig {
   val TransactionsTopicSegmentBytesDoc = "The transaction topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads."
   val TransactionsAbortTimedOutTransactionsIntervalMsDoc = "The interval at which to rollback transactions that have timed out."
   val TransactionsRemoveExpiredTransactionsIntervalMsDoc = "The interval at which to remove transactions that have expired due to <code>transactional.id.expiration.ms</code> passing."
-  
+
   val TransactionPartitionVerificationEnableDoc = "Enable verification that checks that the partition has been added to the transaction before writing transactional records to the partition."
 
   val ProducerIdExpirationMsDoc = "The time in ms that a topic partition leader will wait before expiring producer IDs. Producer IDs will not expire while a transaction associated to them is still ongoing. " +
@@ -1312,6 +1321,8 @@ object KafkaConfig {
       .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, new MetadataVersionValidator(), MEDIUM, InterBrokerProtocolVersionDoc)
       .define(InterBrokerListenerNameProp, STRING, null, MEDIUM, InterBrokerListenerNameDoc)
       .define(ReplicaSelectorClassProp, STRING, null, MEDIUM, ReplicaSelectorClassDoc)
+      .define(LeaderReplicationThrottledRateProp, LONG, Defaults.ReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
+      .define(FollowerReplicationThrottledRateProp, LONG, Defaults.ReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
 
       /** ********* Controlled shutdown configuration ***********/
       .define(ControlledShutdownMaxRetriesProp, INT, Defaults.ControlledShutdownMaxRetries, MEDIUM, ControlledShutdownMaxRetriesDoc)
@@ -1957,7 +1968,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val transactionTopicSegmentBytes = getInt(KafkaConfig.TransactionsTopicSegmentBytesProp)
   val transactionAbortTimedOutTransactionCleanupIntervalMs = getInt(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp)
   val transactionRemoveExpiredTransactionalIdCleanupIntervalMs = getInt(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp)
-  
+
   val transactionPartitionVerificationEnable = getBoolean(KafkaConfig.TransactionPartitionVerificationEnableProp)
 
   val producerIdExpirationMs = getInt(KafkaConfig.ProducerIdExpirationMsProp)

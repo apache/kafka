@@ -948,7 +948,11 @@ object DynamicListenerConfig {
     KafkaConfig.MaxConnectionCreationRateProp,
 
     // Network threads
-    KafkaConfig.NumNetworkThreadsProp
+    KafkaConfig.NumNetworkThreadsProp,
+
+    // Replication configs
+    KafkaConfig.LeaderReplicationThrottledRateProp,
+    KafkaConfig.FollowerReplicationThrottledRateProp
   )
 }
 
