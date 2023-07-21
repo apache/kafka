@@ -35,7 +35,7 @@ import java.util
 import java.util.{Base64, Optional}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.jdk.CollectionConverters.ListHasAsScala
+import scala.jdk.CollectionConverters._
 
 object ToolsUtils {
 
