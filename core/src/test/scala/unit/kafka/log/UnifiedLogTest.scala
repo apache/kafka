@@ -91,16 +91,21 @@ class UnifiedLogTest {
       val scheduler = new KafkaScheduler(1)
       val localLog = mock(classOf[LocalLog])
       val producerStateManager = mock(classOf[ProducerStateManager])
-      doReturn(tmpRelativeDir).when(localLog).dir
-      doReturn(mock(classOf[LogDirFailureChannel])).when(localLog).logDirFailureChannel
-      doReturn(0L).when(localLog).recoveryPoint
-      doReturn(topicPartition).when(localLog).topicPartition
-      doReturn(false).when(localLog).isFuture
-      doReturn(segments).when(localLog).segments
-      doReturn(0L).when(localLog).logEndOffset
-      doReturn(scheduler).when(localLog).scheduler
+      // Passing two same parameters here to help the compiler disambiguate the `doReturn` methods,
+      // compilation for scala 2.12 fails otherwise.
+      val recoveryPoint = 0L
+      val isFuture = false
+      val logEndOffset = 0L
+      doReturn(tmpRelativeDir, tmpRelativeDir).when(localLog).dir
+      doReturn(mock(classOf[LogDirFailureChannel]), mock(classOf[LogDirFailureChannel])).when(localLog).logDirFailureChannel
+      doReturn(recoveryPoint, recoveryPoint).when(localLog).recoveryPoint
+      doReturn(topicPartition, topicPartition).when(localLog).topicPartition
+      doReturn(isFuture, isFuture).when(localLog).isFuture
+      doReturn(segments, segments).when(localLog).segments
+      doReturn(logEndOffset, logEndOffset).when(localLog).logEndOffset
+      doReturn(scheduler, scheduler).when(localLog).scheduler
       doNothing().when(localLog).checkIfMemoryMappedBufferClosed()
-      doReturn(Optional.empty()).when(producerStateManager).firstUnstableOffset()
+      doReturn(Optional.empty(), Optional.empty()).when(producerStateManager).firstUnstableOffset()
       doNothing().when(producerStateManager).removeExpiredProducers(any())
       val log = new UnifiedLog(0L,
         localLog,
