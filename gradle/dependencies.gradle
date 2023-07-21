@@ -147,7 +147,7 @@ versions += [
   // New version of Swagger 2.2.14 requires minimum JDK 11.
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",
-  zinc: "1.8.0",
+  zinc: "1.9.2",
   zookeeper: "3.6.4",
   zstd: "1.5.5-1"
 ]
