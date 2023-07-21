@@ -224,7 +224,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
 
-    info(s"Initializing dynamic configs for ${kafkaConfig.brokerId}")
     zkClientOpt.foreach { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
       updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default), false)
