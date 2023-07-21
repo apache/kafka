@@ -101,7 +101,7 @@ import static java.lang.String.format;
  * until the broker is up again.
  * <p>
  * Caveats:
- * 1. The tools needs all brokers to be up at startup time.
+ * 1. The tool needs all brokers to be up at startup time.
  * 2. The tool doesn't handle out of range offsets.
  */
 public class ReplicaVerificationTool {
@@ -365,10 +365,10 @@ public class ReplicaVerificationTool {
     }
 
     private static class MessageInfo {
-        private final int replicaId;
-        private final long offset;
-        private final long nextOffset;
-        private final long checksum;
+        final int replicaId;
+        final long offset;
+        final long nextOffset;
+        final long checksum;
 
         MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
             this.replicaId = replicaId;
