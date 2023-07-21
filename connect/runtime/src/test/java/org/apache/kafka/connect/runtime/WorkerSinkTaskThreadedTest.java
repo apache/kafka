@@ -189,7 +189,7 @@ public class WorkerSinkTaskThreadedTest {
                 SinkRecord referenceSinkRecord
                         = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE);
                 InternalSinkRecord referenceInternalSinkRecord =
-                    new InternalSinkRecord(null, referenceSinkRecord);
+                    new InternalSinkRecord(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + offset, null, null), referenceSinkRecord);
                 assertEquals(referenceInternalSinkRecord, rec);
                 offset++;
             }
