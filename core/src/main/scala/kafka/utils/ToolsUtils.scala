@@ -35,7 +35,7 @@ import java.util
 import java.util.{Base64, Optional}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters.ListHasAsScala
 
 object ToolsUtils {
 
@@ -150,7 +150,7 @@ object ToolsUtils {
 
   def getUserScramCredentialRecords(namespace: Namespace): Option[ArrayBuffer[UserScramCredentialRecord]] = {
     if (namespace.getList("add_scram") != null) {
-      val listofAddConfig: List[String] = namespace.getList("add_scram").asScala.toList
+      val listofAddConfig : List[String] = namespace.getList("add_scram").asScala.toList
       val userScramCredentialRecords: ArrayBuffer[UserScramCredentialRecord] = ArrayBuffer()
       for (singleAddConfig <- listofAddConfig) {
         val singleAddConfigList = singleAddConfig.split("\\s+")
