@@ -20,7 +20,7 @@ package org.apache.kafka.tools.reassign;
 /**
  * The state of a replica log directory movement.
  */
-public interface LogDirMoveState {
+interface LogDirMoveState {
     /**
      * True if the move is done without errors.
      */

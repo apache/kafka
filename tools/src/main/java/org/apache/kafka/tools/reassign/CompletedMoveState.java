@@ -17,13 +17,11 @@
 
 package org.apache.kafka.tools.reassign;
 
-import java.util.Objects;
-
 /**
  * The completed replica log directory move state.
  */
-public final class CompletedMoveState implements LogDirMoveState {
-    private final String targetLogDir;
+final class CompletedMoveState implements LogDirMoveState {
+    public final String targetLogDir;
 
     /**
      * @param targetLogDir        The log directory that we wanted the replica to move to.
@@ -32,32 +30,8 @@ public final class CompletedMoveState implements LogDirMoveState {
         this.targetLogDir = targetLogDir;
     }
 
-    public String targetLogDir() {
-        return targetLogDir;
-    }
-
     @Override
     public boolean done() {
         return true;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CompletedMoveState that = (CompletedMoveState) o;
-        return Objects.equals(targetLogDir, that.targetLogDir);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(targetLogDir);
-    }
-
-    @Override
-    public String toString() {
-        return "CompletedMoveState{" +
-            "targetLogDir='" + targetLogDir + '\'' +
-            '}';
     }
 }

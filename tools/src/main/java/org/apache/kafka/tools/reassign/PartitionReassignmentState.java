@@ -18,18 +18,17 @@
 package org.apache.kafka.tools.reassign;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * The state of a partition reassignment.  The current replicas and target replicas
  * may overlap.
  */
-public final class PartitionReassignmentState {
-    private final List<Integer> currentReplicas;
+final class PartitionReassignmentState {
+    public final List<Integer> currentReplicas;
 
-    private final List<Integer> targetReplicas;
+    public final List<Integer> targetReplicas;
 
-    private final boolean done;
+    public final boolean done;
 
     /**
      * @param currentReplicas The current replicas.
@@ -40,39 +39,5 @@ public final class PartitionReassignmentState {
         this.currentReplicas = currentReplicas;
         this.targetReplicas = targetReplicas;
         this.done = done;
-    }
-
-    public List<Integer> currentReplicas() {
-        return currentReplicas;
-    }
-
-    public List<Integer> targetReplicas() {
-        return targetReplicas;
-    }
-
-    public boolean done() {
-        return done;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        PartitionReassignmentState that = (PartitionReassignmentState) o;
-        return done == that.done && Objects.equals(currentReplicas, that.currentReplicas) && Objects.equals(targetReplicas, that.targetReplicas);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(currentReplicas, targetReplicas, done);
-    }
-
-    @Override
-    public String toString() {
-        return "PartitionReassignmentState{" +
-            "currentReplicas=" + currentReplicas +
-            ", targetReplicas=" + targetReplicas +
-            ", done=" + done +
-            '}';
     }
 }

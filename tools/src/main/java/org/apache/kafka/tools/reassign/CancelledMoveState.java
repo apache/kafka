@@ -17,16 +17,14 @@
 
 package org.apache.kafka.tools.reassign;
 
-import java.util.Objects;
-
 /**
  * A replica log directory move state where there is no move in progress, but we did not
  * reach the target log directory.
  */
-public final class CancelledMoveState implements LogDirMoveState {
-    private final String currentLogDir;
+final class CancelledMoveState implements LogDirMoveState {
+    public final String currentLogDir;
 
-    private final String targetLogDir;
+    public final String targetLogDir;
 
     /**
      * @param currentLogDir       The current log directory.
@@ -37,37 +35,8 @@ public final class CancelledMoveState implements LogDirMoveState {
         this.targetLogDir = targetLogDir;
     }
 
-    public String currentLogDir() {
-        return currentLogDir;
-    }
-
-    public String targetLogDir() {
-        return targetLogDir;
-    }
-
     @Override
     public boolean done() {
         return true;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CancelledMoveState that = (CancelledMoveState) o;
-        return Objects.equals(currentLogDir, that.currentLogDir) && Objects.equals(targetLogDir, that.targetLogDir);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(currentLogDir, targetLogDir);
-    }
-
-    @Override
-    public String toString() {
-        return "CancelledMoveState{" +
-            "currentLogDir='" + currentLogDir + '\'' +
-            ", targetLogDir='" + targetLogDir + '\'' +
-            '}';
     }
 }

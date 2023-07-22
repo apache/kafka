@@ -17,16 +17,15 @@
 
 package org.apache.kafka.tools.reassign;
 
-import java.util.Objects;
 import java.util.Set;
 
 /**
  * A partition movement.  The source and destination brokers may overlap.
  */
-public final class PartitionMove {
-    private final Set<Integer> sources;
+final class PartitionMove {
+    public final Set<Integer> sources;
 
-    private final Set<Integer> destinations;
+    public final Set<Integer> destinations;
 
     /**
      * @param sources         The source brokers.
@@ -35,34 +34,5 @@ public final class PartitionMove {
     public PartitionMove(Set<Integer> sources, Set<Integer> destinations) {
         this.sources = sources;
         this.destinations = destinations;
-    }
-
-    public Set<Integer> sources() {
-        return sources;
-    }
-
-    public Set<Integer> destinations() {
-        return destinations;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        PartitionMove that = (PartitionMove) o;
-        return Objects.equals(sources, that.sources) && Objects.equals(destinations, that.destinations);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(sources, destinations);
-    }
-
-    @Override
-    public String toString() {
-        return "PartitionMove{" +
-            "sources=" + sources +
-            ", destinations=" + destinations +
-            '}';
     }
 }

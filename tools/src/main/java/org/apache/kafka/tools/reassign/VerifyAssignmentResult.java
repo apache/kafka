@@ -22,16 +22,15 @@ import org.apache.kafka.common.TopicPartitionReplica;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * A result returned from verifyAssignment.
  */
 public final class VerifyAssignmentResult {
-    private final Map<TopicPartition, PartitionReassignmentState> partStates;
-    private final boolean partsOngoing;
-    private final Map<TopicPartitionReplica, LogDirMoveState> moveStates;
-    private final boolean movesOngoing;
+    public final Map<TopicPartition, PartitionReassignmentState> partStates;
+    public final boolean partsOngoing;
+    public final Map<TopicPartitionReplica, LogDirMoveState> moveStates;
+    public final boolean movesOngoing;
 
     public VerifyAssignmentResult(Map<TopicPartition, PartitionReassignmentState> partStates) {
         this(partStates, false, Collections.emptyMap(), false);
@@ -53,44 +52,5 @@ public final class VerifyAssignmentResult {
         this.partsOngoing = partsOngoing;
         this.moveStates = moveStates;
         this.movesOngoing = movesOngoing;
-    }
-
-    public Map<TopicPartition, PartitionReassignmentState> partStates() {
-        return partStates;
-    }
-
-    public boolean partsOngoing() {
-        return partsOngoing;
-    }
-
-    public Map<TopicPartitionReplica, LogDirMoveState> moveStates() {
-        return moveStates;
-    }
-
-    public boolean movesOngoing() {
-        return movesOngoing;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        VerifyAssignmentResult that = (VerifyAssignmentResult) o;
-        return partsOngoing == that.partsOngoing && movesOngoing == that.movesOngoing && Objects.equals(partStates, that.partStates) && Objects.equals(moveStates, that.moveStates);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(partStates, partsOngoing, moveStates, movesOngoing);
-    }
-
-    @Override
-    public String toString() {
-        return "VerifyAssignmentResult{" +
-            "partStates=" + partStates +
-            ", partsOngoing=" + partsOngoing +
-            ", moveStates=" + moveStates +
-            ", movesOngoing=" + movesOngoing +
-            '}';
     }
 }
