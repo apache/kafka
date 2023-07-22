@@ -21,6 +21,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.stubbing.OngoingStubbing;
 
 import java.io.Closeable;
@@ -61,6 +64,7 @@ import java.util.stream.Stream;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.diff;
@@ -101,46 +105,68 @@ public class UtilsTest {
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
         cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
+        final byte[] bytes = "ByteBuffer".getBytes(UTF_8);
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             final byte[] key = c.getKey();
             final int expected = c.getValue();
             assertEquals(expected, murmur2(key));
             assertEquals(expected, murmur2(ByteBuffer.wrap(key)));
 
-            final ByteBuffer heapBuffer = ByteBuffer.allocate(key.length << 1).put(key);
-            heapBuffer.flip();
-            assertEquals(expected, murmur2(heapBuffer));
-
-            final ByteBuffer directBuffer = ByteBuffer.allocateDirect(key.length << 1).put(key);
-            directBuffer.flip();
-            assertEquals(expected, murmur2(directBuffer));
+            final ByteBuffer heapBuffer0 = ByteBuffer.allocate(key.length << 6).put(key);
+            final ByteBuffer heapBuffer1 = ByteBuffer.allocate(key.length << 6).put(bytes).slice().put(key);
+            final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(key.length << 6).put(key);
+            final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(key.length << 6).put(bytes).slice().put(key);
+            heapBuffer0.flip();
+            heapBuffer1.flip();
+            directBuffer0.flip();
+            directBuffer1.flip();
+            assertEquals(expected, murmur2(heapBuffer0));
+            assertEquals(expected, murmur2(heapBuffer1));
+            assertEquals(expected, murmur2(directBuffer0));
+            assertEquals(expected, murmur2(directBuffer1));
         }
     }
 
-    @Test
-    public void testByteBufferMurmur2() {
-        final int capacity = 256;
+    @ParameterizedTest
+    @MethodSource("byteBufferProvider")
+    public void testByteBufferMurmur2(int longCnt, int intCnt, int shortCnt, ByteBuffer buffer) {
         final Random random = new Random();
-        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(capacity).order(LITTLE_ENDIAN);
-        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(capacity).order(BIG_ENDIAN);
-        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(capacity).order(LITTLE_ENDIAN);
-        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(capacity).order(BIG_ENDIAN);
-        for (int i = 0; i < capacity / 4; i++) {
-            final int randomInt = random.nextInt();
-            heapBuffer0.putInt(randomInt);
-            heapBuffer1.putInt(randomInt);
-            directBuffer0.putInt(randomInt);
-            directBuffer1.putInt(randomInt);
+        for (int i = 0; i < longCnt; i++) {
+            buffer.putLong(random.nextLong());
         }
 
-        heapBuffer0.flip();
-        heapBuffer1.flip();
-        directBuffer0.flip();
-        directBuffer1.flip();
-        assertEquals(murmur2(Utils.toArray(heapBuffer0)), murmur2(heapBuffer0));
-        assertEquals(murmur2(Utils.toArray(heapBuffer1)), murmur2(heapBuffer1));
-        assertEquals(murmur2(Utils.toArray(directBuffer0)), murmur2(directBuffer0));
-        assertEquals(murmur2(Utils.toArray(directBuffer1)), murmur2(directBuffer1));
+        for (int i = 0; i < intCnt; i++) {
+            buffer.putInt(random.nextInt());
+        }
+
+        for (int i = 0; i < shortCnt; i++) {
+            buffer.putShort((short) random.nextInt());
+        }
+
+        buffer.flip();
+        assertEquals(murmur2(Utils.toArray(buffer)), murmur2(buffer));
+    }
+
+    private static Arguments[] byteBufferProvider() {
+        final Random random = new Random();
+        final int longCnt = random.nextInt(16);
+        final int intCnt = random.nextInt(16);
+        final int shortCnt = random.nextInt(16);
+        final int capacity = longCnt * 8 + intCnt * 4 + shortCnt * 2;
+        final byte[] bytes = "ByteBuffer1".getBytes(UTF_8);
+        return new Arguments[]{
+                //HeapByteBuffer
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity).order(LITTLE_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity).order(BIG_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity << 1).order(LITTLE_ENDIAN).put(bytes).slice()),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity << 1).order(BIG_ENDIAN).put(bytes).slice()),
+
+                //DirectByteBuffer
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity).order(LITTLE_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity).order(BIG_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity << 1).order(LITTLE_ENDIAN).put(bytes).slice()),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity << 1).order(BIG_ENDIAN).put(bytes).slice()),
+        };
     }
 
     @Test
