@@ -124,7 +124,7 @@ versions += [
   kafka_32: "3.2.3",
   kafka_33: "3.3.1",
   kafka_34: "3.4.1",
-  kafka_35: "3.5.0",
+  kafka_35: "3.5.1",
   lz4: "1.8.0",
   mavenArtifact: "3.8.8",
   metrics: "2.2.0",
