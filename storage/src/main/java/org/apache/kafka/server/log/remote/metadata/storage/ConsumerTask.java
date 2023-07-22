@@ -68,12 +68,13 @@ class ConsumerTask implements Runnable, Closeable {
 
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
     private final KafkaConsumer<byte[], byte[]> consumer;
+    private final String metadataTopicName;
     private final RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler;
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final Time time;
 
     // It indicates whether the closing process has been started or not. If it is set as true,
-    // consumer will stop consuming messages and it will not allow partition assignments to be updated.
+    // consumer will stop consuming messages, and it will not allow partition assignments to be updated.
     private volatile boolean closing = false;
 
     // It indicates whether the consumer needs to assign the partitions or not. This is set when it is
@@ -101,12 +102,14 @@ class ConsumerTask implements Runnable, Closeable {
     private long lastSyncedTimeMs;
 
     public ConsumerTask(KafkaConsumer<byte[], byte[]> consumer,
+                        String metadataTopicName,
                         RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
                         RemoteLogMetadataTopicPartitioner topicPartitioner,
                         Path committedOffsetsPath,
                         Time time,
                         long committedOffsetSyncIntervalMs) {
         this.consumer = Objects.requireNonNull(consumer);
+        this.metadataTopicName = Objects.requireNonNull(metadataTopicName);
         this.remotePartitionMetadataEventHandler = Objects.requireNonNull(remotePartitionMetadataEventHandler);
         this.topicPartitioner = Objects.requireNonNull(topicPartitioner);
         this.time = Objects.requireNonNull(time);
@@ -143,6 +146,7 @@ class ConsumerTask implements Runnable, Closeable {
 
             // Seek to the committed offsets
             for (Map.Entry<Integer, Long> entry : committedOffsets.entrySet()) {
+                log.debug("Updating consumed offset: [{}] for partition [{}]", entry.getValue(), entry.getKey());
                 partitionToConsumedOffsets.put(entry.getKey(), entry.getValue());
                 consumer.seek(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, entry.getKey()), entry.getValue());
             }
@@ -187,6 +191,7 @@ class ConsumerTask implements Runnable, Closeable {
             } else {
                 log.debug("This event {} is skipped as the topic partition is not assigned for this instance.", remoteLogMetadata);
             }
+            log.debug("Updating consumed offset: [{}] for partition [{}]", record.offset(), record.partition());
             partitionToConsumedOffsets.put(record.partition(), record.offset());
         }
     }
@@ -209,7 +214,7 @@ class ConsumerTask implements Runnable, Closeable {
                     if (offset != null) {
                         remotePartitionMetadataEventHandler.syncLogMetadataSnapshot(topicIdPartition, metadataPartition, offset);
                     } else {
-                        log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{}, and no offset",
+                        log.debug("Skipping sync-up of the remote-log-metadata-file for partition: [{}] , with remote log metadata partition{}, and no offset",
                                 topicIdPartition, metadataPartition);
                     }
                 }
@@ -313,7 +318,7 @@ class ConsumerTask implements Runnable, Closeable {
                 updatedAssignedMetaPartitions.add(topicPartitioner.metadataPartition(tp));
             }
 
-            // Clear removed topic partitions from inmemory cache.
+            // Clear removed topic partitions from in-memory cache.
             for (TopicIdPartition removedPartition : removedPartitions) {
                 remotePartitionMetadataEventHandler.clearTopicPartition(removedPartition);
             }
@@ -352,5 +357,9 @@ class ConsumerTask implements Runnable, Closeable {
                 assignPartitionsLock.notifyAll();
             }
         }
+    }
+
+    public Set<Integer> metadataPartitionsAssigned() {
+        return Collections.unmodifiableSet(assignedMetaPartitions);
     }
 }
