@@ -19,7 +19,6 @@ package kafka.controller
 import com.yammer.metrics.core.Timer
 
 import java.util.concurrent.TimeUnit
-import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
 import kafka.cluster.Broker
@@ -45,7 +44,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.common.ProducerIdsBlock
+import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException

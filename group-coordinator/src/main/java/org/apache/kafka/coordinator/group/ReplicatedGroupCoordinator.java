@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -34,6 +37,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.Coordinator;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilder;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
@@ -42,6 +47,8 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * The group coordinator replicated state machine that manages the metadata of all generic and
@@ -59,8 +66,9 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         private final GroupCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
+        private TopicPartition topicPartition;
         private Time time;
-        private CoordinatorTimer<Record> timer;
+        private CoordinatorTimer<Void, Record> timer;
 
         public Builder(
             GroupCoordinatorConfig config
@@ -86,7 +94,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
 
         @Override
         public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withTimer(
-            CoordinatorTimer<Record> timer
+            CoordinatorTimer<Void, Record> timer
         ) {
             this.timer = timer;
             return this;
@@ -101,6 +109,14 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         }
 
         @Override
+        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withTopicPartition(
+            TopicPartition topicPartition
+        ) {
+            this.topicPartition = topicPartition;
+            return this;
+        }
+
+        @Override
         public ReplicatedGroupCoordinator build() {
             if (logContext == null) logContext = new LogContext();
             if (config == null)
@@ -111,6 +127,8 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
+            if (topicPartition == null)
+                throw new IllegalArgumentException("TopicPartition must be set.");
 
             return new ReplicatedGroupCoordinator(
                 new GroupMetadataManager.Builder()
@@ -121,6 +139,11 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
                     .withAssignors(config.consumerGroupAssignors)
                     .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
                     .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
+                    .withTopicPartition(topicPartition)
+                    .withGenericGroupInitialRebalanceDelayMs(config.genericGroupInitialRebalanceDelayMs)
+                    .withGenericGroupNewMemberJoinTimeoutMs(config.genericGroupNewMemberJoinTimeoutMs)
+                    .withGenericGroupMinSessionTimeoutMs(config.genericGroupMinSessionTimeoutMs)
+                    .withGenericGroupMaxSessionTimeoutMs(config.genericGroupMaxSessionTimeoutMs)
                     .build()
             );
         }
@@ -156,6 +179,18 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         ConsumerGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
+    }
+
+    public CoordinatorResult<Void, Record> genericGroupJoin(
+        RequestContext context,
+        JoinGroupRequestData request,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        return groupMetadataManager.genericGroupJoin(
+            context,
+            request,
+            responseFuture
+        );
     }
 
     /**
@@ -204,6 +239,13 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         ApiMessageAndVersion value = record.value();
 
         switch (key.version()) {
+            case 2:
+                groupMetadataManager.replay(
+                    (GroupMetadataKey) key.message(),
+                    (GroupMetadataValue) messageOrNull(value)
+                );
+                break;
+
             case 3:
                 groupMetadataManager.replay(
                     (ConsumerGroupMetadataKey) key.message(),

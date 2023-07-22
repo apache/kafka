@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
@@ -123,10 +124,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Writer must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
-            if (timer == null)
-                throw new IllegalArgumentException("Timer must be set.");
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
+            if (timer == null)
+                throw new IllegalArgumentException("Timer must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -150,6 +151,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withPartitionWriter(writer)
                     .withLoader(loader)
                     .withCoordinatorBuilderSupplier(supplier)
+                    .withTime(time)
                     .build();
 
             return new GroupCoordinatorService(
@@ -286,9 +288,33 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
+
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+
+            return responseFuture;
+        }
+
+        runtime.scheduleWriteOperation("generic-group-join",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
+        ).exceptionally(exception -> {
+            if (!(exception instanceof KafkaException)) {
+                log.error("JoinGroup request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+            }
+            
+            if (!responseFuture.isDone()) {
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setErrorCode(Errors.forException(exception).code()));
+            }
+            return null;
+        });
+
+        return responseFuture;
     }
 
     /**
@@ -598,5 +624,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
         log.info("Shutdown complete.");
+    }
+
+    private static boolean isGroupIdNotEmpty(String groupId) {
+        return groupId != null && !groupId.isEmpty();
     }
 }
