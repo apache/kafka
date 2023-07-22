@@ -124,6 +124,7 @@ public class RemoteLogManager implements Closeable {
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
     public static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
+    public static final String REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX = "RemoteIndexCache";
     public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
@@ -181,7 +182,7 @@ public class RemoteLogManager implements Closeable {
 
         remoteLogStorageManager = createRemoteStorageManager();
         remoteLogMetadataManager = createRemoteLogMetadataManager();
-        indexCache = new RemoteIndexCache(1024, remoteLogStorageManager, logDir);
+        indexCache = new RemoteIndexCache(1024, remoteLogStorageManager, logDir, REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 

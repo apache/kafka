@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CorruptRecordException;
@@ -28,6 +29,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.util.ShutdownableThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,8 +46,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -72,6 +77,26 @@ import static org.apache.kafka.storage.internals.log.LogFileUtils.TXN_INDEX_FILE
  * This class is thread safe.
  */
 public class RemoteIndexCache implements Closeable {
+    public static final String HIT_COUNT = "HitCount";
+    public static final String MISS_COUNT = "MissCount";
+    public static final String EVICTION_COUNT = "EvictionCount";
+    public static final String LOAD_SUCCESS_COUNT = "LoadSuccessCount";
+    public static final String LOAD_FAILURE_COUNT = "LoadFailureCount";
+    public static final String TOTAL_LOAD_TIME = "TotalLoadTime";
+    public static final String EVICTION_WEIGHT = "EvictionWeight";
+    public static final String CACHE_SIZE = "CacheSize";
+
+    private static final Map<String, Function<Cache<Uuid, Entry>, Long>> METRIC_PROVIDER_BY_METRIC =
+        new HashMap<String, Function<Cache<Uuid, Entry>, Long>>() {{
+            put(HIT_COUNT, cache -> cache.stats().hitCount());
+            put(MISS_COUNT, cache -> cache.stats().missCount());
+            put(EVICTION_COUNT, cache -> cache.stats().evictionCount());
+            put(LOAD_SUCCESS_COUNT, cache -> cache.stats().loadSuccessCount());
+            put(LOAD_FAILURE_COUNT, cache -> cache.stats().loadFailureCount());
+            put(TOTAL_LOAD_TIME, cache -> cache.stats().totalLoadTime());
+            put(EVICTION_WEIGHT, cache -> cache.stats().evictionWeight());
+            put(CACHE_SIZE, Cache::estimatedSize);
+        }};
 
     private static final Logger log = LoggerFactory.getLogger(RemoteIndexCache.class);
     private static final String TMP_FILE_SUFFIX = ".tmp";
@@ -115,8 +140,15 @@ public class RemoteIndexCache implements Closeable {
     private final RemoteStorageManager remoteStorageManager;
     private final ShutdownableThread cleanerThread;
 
-    public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
-        this(1024, remoteStorageManager, logDir);
+    private final String metricsNamePrefix;
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
+
+    public static Set<String> metricNames() {
+        return METRIC_PROVIDER_BY_METRIC.keySet();
+    }
+
+    public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir, String metricsNamePrefix) throws IOException {
+        this(1024, remoteStorageManager, logDir, metricsNamePrefix);
     }
 
     /**
@@ -126,7 +158,7 @@ public class RemoteIndexCache implements Closeable {
      * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
      * @param logDir               log directory
      */
-    public RemoteIndexCache(int maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
+    public RemoteIndexCache(int maxSize, RemoteStorageManager remoteStorageManager, String logDir, String metricsNamePrefix) throws IOException {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 
@@ -148,7 +180,18 @@ public class RemoteIndexCache implements Closeable {
                     } else {
                         log.error("Received entry as null for key {} when the it is removed from the cache.", key);
                     }
-                }).build();
+                })
+                .recordStats()
+                .build();
+
+        this.metricsNamePrefix = metricsNamePrefix;
+        METRIC_PROVIDER_BY_METRIC.forEach((metric, func) -> metricsGroup.newGauge(metricsNamePrefix.concat(metric),
+            new Gauge<Long>() {
+                @Override
+                public Long value() {
+                    return func.apply(internalCache);
+                }
+            }));
 
         init();
 
@@ -409,6 +452,10 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
+    private void removeMetrics() {
+        metricNames().forEach(metricName -> metricsGroup.removeMetric(metricsNamePrefix.concat(metricName)));
+    }
+
     @Override
     public void close() {
         // Make close idempotent and ensure no more reads allowed from henceforth. The in-progress reads will continue to
@@ -422,6 +469,8 @@ public class RemoteIndexCache implements Closeable {
                 boolean shutdownRequired = cleanerThread.initiateShutdown();
                 // Close all the opened indexes to force unload mmap memory. This does not delete the index files from disk.
                 internalCache.asMap().forEach((uuid, entry) -> entry.close());
+                // Remove all the metrics
+                removeMetrics();
                 // wait for cleaner thread to shutdown
                 if (shutdownRequired) cleanerThread.awaitShutdown();
 
