@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.TestUtils;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
@@ -26,6 +25,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.broker.MetaProperties;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +49,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -84,10 +85,10 @@ public class StorageToolTest {
     @Test
     public void testInfoCommandOnEmptyDirectory() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        File tempDir = TestUtils.tempDir();
+        File tempDir = tempDir();
         try {
             assertEquals(1, StorageTool.infoCommand(new PrintStream(stream), true, new ArrayList<>(Collections.singletonList(tempDir.toString()))));
-            assertEquals("Found log directory:\n" + tempDir + "\n\nFound problem:\n" + tempDir + " is not formatted.\n\n", stream.toString());
+            assertEquals("Found log directory:\n  " + tempDir + "\n\nFound problem:\n  " + tempDir + " is not formatted.\n\n", stream.toString());
         } finally {
             Utils.delete(tempDir);
         }
@@ -96,23 +97,54 @@ public class StorageToolTest {
     @Test
     public void testInfoCommandOnMissingDirectory() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        File tempDir = TestUtils.tempDir();
+        File tempDir = tempDir();
         tempDir.delete();
         try {
             assertEquals(1, StorageTool.infoCommand(new PrintStream(stream), true, new ArrayList<>(Collections.singletonList(tempDir.toString()))));
-            assertEquals("Found problem:\n" + tempDir + " does not exist\n\n", stream.toString());
+            assertEquals("Found problem:\n  " + tempDir + " does not exist\n\n", stream.toString());
         } finally {
             Utils.delete(tempDir);
         }
     }
 
     @Test
+    public void testInfoCommandOnMissingZookeeperConnectConfig() throws IOException {
+        AtomicReference<String> exitString = new AtomicReference<>("");
+        AtomicInteger exitStatus = new AtomicInteger(1);
+
+        Exit.Procedure exitProcedure = (code, message) -> {
+            exitStatus.set(code);
+            if (message == null) {
+                message = "";
+            }
+            exitString.set(message);
+
+            throw new StorageToolTestException(exitString.get());
+        };
+
+        Exit.setExitProcedure(exitProcedure);
+
+        File tempFile = tempFile();
+        String[] arguments = new String[] {"info", "-c",
+            tempFile.getAbsolutePath()};
+        try {
+            StorageTool.main(arguments);
+        } catch (StorageToolTestException e) {
+            assertEquals("Missing required configuration `zookeeper.connect` which has no default value.", exitString.get());
+            assertEquals(1, exitStatus.get());
+        } finally {
+            tempFile.delete();
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
     public void testInfoCommandOnDirectoryAsFile() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        File tempFile = TestUtils.tempFile();
+        File tempFile = tempFile();
         try {
             assertEquals(1, StorageTool.infoCommand(new PrintStream(stream), true, new ArrayList<>(Collections.singletonList(tempFile.toString()))));
-            assertEquals("Found problem:\n" + tempFile + " is not a directory\n\n", stream.toString());
+            assertEquals("Found problem:\n  " + tempFile + " is not a directory\n\n", stream.toString());
         } finally {
             tempFile.delete();
         }
@@ -121,11 +153,11 @@ public class StorageToolTest {
     @Test
     public void testInfoWithMismatchedLegacyKafkaConfig() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        File tempDir = TestUtils.tempDir();
+        File tempDir = tempDir();
         try {
             Files.write(tempDir.toPath().resolve("meta.properties"), String.join("\n", Arrays.asList("version=1", "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).getBytes(StandardCharsets.UTF_8));
             assertEquals(1, StorageTool.infoCommand(new PrintStream(stream), false, new ArrayList<>(Collections.singletonList(tempDir.toString()))));
-            assertEquals("Found log directory:\n" + tempDir + "\n\nFound metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, version=1}\n\n" + "Found problem:\n" + "The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for a cluster in KRaft mode.\n\n", stream.toString());
+            assertEquals("Found log directory:\n  " + tempDir + "\n\nFound metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, version=1}\n\n" + "Found problem:\n  " + "The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for a cluster in KRaft mode.\n\n", stream.toString());
         } finally {
             Utils.delete(tempDir);
         }
@@ -134,11 +166,11 @@ public class StorageToolTest {
     @Test
     public void testInfoWithMismatchedSelfManagedKafkaConfig() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        File tempDir = TestUtils.tempDir();
+        File tempDir = tempDir();
         try {
             Files.write(tempDir.toPath().resolve("meta.properties"), String.join("\n", Arrays.asList("version=0", "broker.id=1", "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).getBytes(StandardCharsets.UTF_8));
             assertEquals(1, StorageTool.infoCommand(new PrintStream(stream), true, new ArrayList<>(Collections.singletonList(tempDir.toString()))));
-            assertEquals("Found log directory:\n" + tempDir + "\n\nFound metadata: {broker.id=1, cluster.id=26c36907-4158-4a35-919d-6534229f5241, version=0}" + "\n\nFound problem:\n" + "The kafka configuration file appears to be for a cluster in KRaft mode, but the directories are formatted for legacy mode.\n\n", stream.toString());
+            assertEquals("Found log directory:\n  " + tempDir + "\n\nFound metadata: {broker.id=1, cluster.id=26c36907-4158-4a35-919d-6534229f5241, version=0}" + "\n\nFound problem:\n  " + "The kafka configuration file appears to be for a cluster in KRaft mode, but the directories are formatted for legacy mode.\n\n", stream.toString());
         } finally {
             Utils.delete(tempDir);
         }
@@ -146,7 +178,7 @@ public class StorageToolTest {
 
     @Test
     public void testFormatEmptyDirectory() throws IOException, TerseException {
-        File tempDir = TestUtils.tempDir();
+        File tempDir = tempDir();
         try {
             MetaProperties metaProperties = new MetaProperties("XcZZOzUqS4yHOjhMQB6JLQ", 2);
             ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -306,7 +338,7 @@ public class StorageToolTest {
     }
 
     @Test
-    public void testScramWithBadMetadataVersion() {
+    public void testScramWithBadMetadataVersion() throws IOException {
         AtomicReference<String> exitString = new AtomicReference<>("");
         AtomicInteger exitStatus = new AtomicInteger(1);
 
@@ -323,7 +355,7 @@ public class StorageToolTest {
         Exit.setExitProcedure(exitProcedure);
 
         Properties properties = newSelfManagedProperties();
-        File propsFile = TestUtils.tempFile();
+        File propsFile = tempFile();
         try (FileOutputStream propsStream = new FileOutputStream(propsFile)) {
             properties.store(propsStream, "config.props");
         } catch (Exception e) {
@@ -345,7 +377,7 @@ public class StorageToolTest {
     }
 
     @Test
-    public void testNoScramWithMetadataVersion() {
+    public void testNoScramWithMetadataVersion() throws IOException {
         AtomicReference<String> exitString = new AtomicReference<>("");
         AtomicInteger exitStatus = new AtomicInteger(1);
 
@@ -362,10 +394,10 @@ public class StorageToolTest {
         Exit.setExitProcedure(exitProcedure);
 
         Properties properties = newSelfManagedProperties();
-        File propsFile = TestUtils.tempFile();
+        File propsFile = tempFile();
         try (FileOutputStream propsStream = new FileOutputStream(propsFile)) {
             // This test does format the directory specified so use a tempdir
-            properties.setProperty(LogConfig.getLogDirsProp(), TestUtils.tempDir().toString());
+            properties.setProperty(LogConfig.getLogDirsProp(), tempDir().toString());
             properties.store(propsStream, "config.props");
         } catch (Exception e) {
             // ignore the error
@@ -385,4 +417,7 @@ public class StorageToolTest {
         }
     }
 
+    public static File tempDir() throws IOException {
+        return TestUtils.tempDirectory();
+    }
 }

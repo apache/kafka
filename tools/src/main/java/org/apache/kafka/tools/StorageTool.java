@@ -48,6 +48,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -67,7 +68,7 @@ public class StorageTool {
             String command = namespace.getString("command");
             Optional<LogConfig> config = Optional.ofNullable(namespace.getString("config")).map(p -> {
                 try {
-                    return new LogConfig(Utils.loadProps(p));
+                    return new LogConfig(Utils.loadProps(p), Collections.emptySet(), true);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -202,7 +203,7 @@ public class StorageTool {
                 } else {
                     stream.println("Found log directories:");
                 }
-                foundDirectories.forEach(d -> stream.printf(d + "%n"));
+                foundDirectories.forEach(d -> stream.println("  " + d));
                 stream.println("");
             }
 
@@ -218,7 +219,7 @@ public class StorageTool {
                 } else {
                     stream.println("Found problems:");
                 }
-                problems.forEach(d -> stream.printf(d + "%n"));
+                problems.forEach(d -> stream.println("  " + d));
                 stream.println("");
                 return 1;
             } else {
