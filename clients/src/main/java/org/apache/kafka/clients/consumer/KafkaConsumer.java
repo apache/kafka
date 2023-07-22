@@ -2540,6 +2540,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Acquire the light lock protecting this consumer from multi-threaded access. Instead of blocking
      * when the lock is not available, however, we just throw an exception (since multi-threaded usage is not
      * supported).
+     * <p>
+     * Subclasses need to uphold the following rules when they override {@code acquire} and {@code release}:
+     * <ul>
+     * <li>Methods acquire and release ensure that only 1 thread can invoke the consumer at a time. Similarly, they
+     * ensure that only 1 thread can invoke the consumer at a time from code that is running in a consumer callback.
+     * </li>
+     * <li>Consumer invocations may be nested several times. For example, when invoking the consumer, it may call a
+     * callback that invokes the consumer which in turn may again call a callback, that again calls the consumer.</li>
+     * <li>Methods acquire and release need to make sure that memory writes from all threads involved are visible for
+     * each other.</li>
+     * </ul>
+     * <p>
+     * It is guaranteed that when acquire completes without throwing an exception, release will be invoked eventually.
+     *
      * @throws ConcurrentModificationException if another thread already has the lock
      */
     protected void acquire() {
@@ -2555,6 +2569,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Release the light lock protecting the consumer from multi-threaded access.
+     * <p>
+     * See {@link #acquire()} for more information about overriding this method.
      */
     protected void release() {
         if (refcount.decrementAndGet() == 0)
