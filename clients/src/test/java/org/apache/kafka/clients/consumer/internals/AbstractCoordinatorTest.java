@@ -57,10 +57,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1011,18 +1013,15 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         mockClient.prepareResponse(heartbeatResponse(Errors.FENCED_INSTANCE_ID));
 
-        try {
-            coordinator.ensureActiveGroup();
-            mockTime.sleep(HEARTBEAT_INTERVAL_MS);
-            long startMs = System.currentTimeMillis();
-            while (System.currentTimeMillis() - startMs < 1000) {
-                Thread.sleep(10);
-                coordinator.pollHeartbeat(mockTime.milliseconds());
-            }
-            fail("Expected pollHeartbeat to raise fenced instance id exception in 1 second");
-        } catch (RuntimeException exception) {
-            assertTrue(exception instanceof FencedInstanceIdException);
-        }
+        coordinator.ensureActiveGroup();
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        Awaitility.await()
+                .atMost(Duration.ofMillis(1000))
+                .untilAsserted(() -> assertThrows(
+                        FencedInstanceIdException.class, () -> coordinator.pollHeartbeat(mockTime.milliseconds()),
+                        "Expected pollHeartbeat to raise fenced instance id exception in 1 second")
+                );
     }
 
     @Test
@@ -1209,27 +1208,19 @@ public class AbstractCoordinatorTest {
         coordinator.ensureActiveGroup();
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
-        try {
-            long startMs = System.currentTimeMillis();
-            while (System.currentTimeMillis() - startMs < 1000) {
-                Thread.sleep(10);
-                coordinator.timeToNextHeartbeat(0);
-            }
-            fail("Expected timeToNextHeartbeat to raise an error in 1 second");
-        } catch (RuntimeException exception) {
-            assertEquals(exception, e);
-        }
+        Awaitility.await()
+                .atMost(Duration.ofMillis(1000))
+                .untilAsserted(() -> assertThrows(
+                        e.getClass(), () -> coordinator.timeToNextHeartbeat(0),
+                        "Expected timeToNextHeartbeat to raise an error in 1 second")
+                );
 
-        try {
-            long startMs = System.currentTimeMillis();
-            while (System.currentTimeMillis() - startMs < 1000) {
-                Thread.sleep(10);
-                coordinator.pollHeartbeat(mockTime.milliseconds());
-            }
-            fail("Expected pollHeartbeat to raise an error in 1 second");
-        } catch (RuntimeException exception) {
-            assertEquals(exception, e);
-        }
+        Awaitility.await()
+                .atMost(Duration.ofMillis(1000))
+                .untilAsserted(() -> assertThrows(
+                        e.getClass(), () -> coordinator.pollHeartbeat(mockTime.milliseconds()),
+                        "Expected pollHeartbeat to raise an error in 1 second")
+                );
     }
 
     @Test
