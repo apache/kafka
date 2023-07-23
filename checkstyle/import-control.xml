@@ -133,6 +133,7 @@
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
         <allow pkg="org.jose4j" />
+        <allow pkg="org.awaitility" />
       </subpackage>
     </subpackage>
 
@@ -202,10 +203,10 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.awaitility" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
-      <allow pkg="org.awaitility" />
     </subpackage>
 
     <subpackage name="producer">

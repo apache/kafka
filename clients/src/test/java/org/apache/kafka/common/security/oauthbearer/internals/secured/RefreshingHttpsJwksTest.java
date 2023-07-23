@@ -29,9 +29,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.awaitility.Awaitility;
 import org.jose4j.http.SimpleResponse;
 import org.jose4j.jwk.HttpsJwks;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,8 @@ import org.mockito.Mockito;
 public class RefreshingHttpsJwksTest extends OAuthBearerTest {
 
     private static final int REFRESH_MS = 5000;
+
+    private static final int AWAITILITY_POLL_INTERVAL_MS = 100;
 
     private static final int RETRY_BACKOFF_MS = 50;
 
@@ -130,8 +134,10 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             refreshingHttpsJwks.init();
             verify(httpsJwks, times(1)).refresh();
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-            time.sleep(REFRESH_MS + 1);
-            verify(httpsJwks, times(3)).refresh();
+            Awaitility.await()
+                    .atMost(REFRESH_MS + AWAITILITY_POLL_INTERVAL_MS, TimeUnit.MILLISECONDS)
+                    .untilAsserted(
+                            () -> verify(httpsJwks, times(3)).refresh());
             assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
         }
     }
