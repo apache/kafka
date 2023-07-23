@@ -49,6 +49,8 @@ public class RackAwareTaskAssignor {
     private static final int DEFAULT_STATELESS_TRAFFIC_COST = 1;
     private static final int DEFAULT_STATELESS_NON_OVERLAP_COST = 0;
 
+    private static final int SOURCE_ID = -1;
+
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
     private final Map<UUID, Map<String, Optional<String>>> racksForProcess;
@@ -204,7 +206,7 @@ public class RackAwareTaskAssignor {
 
         final String clientRack = clientRackOpt.get().get();
         final Set<TopicPartition> topicPartitions = partitionsForTask.get(taskId);
-        if (topicPartitions == null) {
+        if (topicPartitions == null || topicPartitions.isEmpty()) {
             throw new IllegalStateException("Task " + taskId + " has no TopicPartitions");
         }
 
@@ -231,76 +233,64 @@ public class RackAwareTaskAssignor {
         return cost;
     }
 
+    private static int getSinkID(final List<UUID> clientList, final List<TaskId> taskIdList) {
+        return clientList.size() + taskIdList.size();
+    }
+
     // For testing. canEnableRackAwareAssignor must be called first
-    long activeTasksCost(final SortedMap<UUID, ClientState> clientStates, final SortedSet<TaskId> statefulTasks, final boolean isStateful) {
+    long activeTasksCost(final SortedMap<UUID, ClientState> clientStates, final SortedSet<TaskId> activeTasks, final boolean isStateful) {
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
-        final List<TaskId> taskIdList = new ArrayList<>(statefulTasks);
+        final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
-        final Map<UUID, Integer> clientCapacity = new HashMap<>();
-        final Graph<Integer> graph = new Graph<>();
-
-        constructStatefulActiveTaskGraph(graph, statefulTasks, clientList, taskIdList,
-            clientStates, taskClientMap, clientCapacity, isStateful);
-
-        final int sourceId = taskIdList.size() + clientList.size();
-        final int sinkId = sourceId + 1;
-        for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
-            graph.addEdge(sourceId, taskNodeId, 1, 0, 1);
-        }
-        for (int i = 0; i < clientList.size(); i++) {
-            final int capacity = clientCapacity.getOrDefault(clientList.get(i), 0);
-            final int clientNodeId = taskIdList.size() + i;
-            graph.addEdge(clientNodeId, sinkId, capacity, 0, capacity);
-        }
-        graph.setSourceNode(sourceId);
-        graph.setSinkNode(sinkId);
+        final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
+        final Graph<Integer> graph = constructActiveTaskGraph(activeTasks, clientList, taskIdList,
+            clientStates, taskClientMap, originalAssignedTaskNumber, isStateful);
         return graph.totalCost();
     }
 
     /**
-     * Optimize active stateful task assignment for rack awareness. canEnableRackAwareAssignor must be called first
+     * Optimize active task assignment for rack awareness. canEnableRackAwareAssignor must be called first
      * @param clientStates Client states
-     * @param taskIds Tasks to reassign if needed. They must be assigned already in clientStates
+     * @param activeTasks Tasks to reassign if needed. They must be assigned already in clientStates
      * @param isStateful Whether the tasks are stateful
      * @return Total cost after optimization
      */
     public long optimizeActiveTasks(final SortedMap<UUID, ClientState> clientStates,
-                                    final SortedSet<TaskId> taskIds,
+                                    final SortedSet<TaskId> activeTasks,
                                     final boolean isStateful) {
-        if (taskIds.isEmpty()) {
+        if (activeTasks.isEmpty()) {
             return 0;
         }
 
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
-        final List<TaskId> taskIdList = new ArrayList<>(taskIds);
+        final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
-        final Map<UUID, Integer> clientCapacity = new HashMap<>();
-        final Graph<Integer> graph = new Graph<>();
-
-        constructStatefulActiveTaskGraph(graph, taskIds, clientList, taskIdList,
-            clientStates, taskClientMap, clientCapacity, isStateful);
+        final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
+        final Graph<Integer> graph = constructActiveTaskGraph(activeTasks, clientList, taskIdList,
+            clientStates, taskClientMap, originalAssignedTaskNumber, isStateful);
 
         graph.solveMinCostFlow();
         final long cost = graph.totalCost();
 
-        assignStatefulActiveTaskFromMinCostFlow(graph, taskIds, clientList, taskIdList,
-            clientStates, clientCapacity, taskClientMap);
+        assignActiveTaskFromMinCostFlow(graph, activeTasks, clientList, taskIdList,
+            clientStates, originalAssignedTaskNumber, taskClientMap);
 
         return cost;
     }
 
-    private void constructStatefulActiveTaskGraph(final Graph<Integer> graph,
-                                                  final SortedSet<TaskId> statefulTasks,
-                                                  final List<UUID> clientList,
-                                                  final List<TaskId> taskIdList,
-                                                  final Map<UUID, ClientState> clientStates,
-                                                  final Map<TaskId, UUID> taskClientMap,
-                                                  final Map<UUID, Integer> clientCapacity,
-                                                  final boolean isStateful) {
-        for (final TaskId taskId : statefulTasks) {
+    private Graph<Integer> constructActiveTaskGraph(final SortedSet<TaskId> activeTasks,
+                                                    final List<UUID> clientList,
+                                                    final List<TaskId> taskIdList,
+                                                    final Map<UUID, ClientState> clientStates,
+                                                    final Map<TaskId, UUID> taskClientMap,
+                                                    final Map<UUID, Integer> originalAssignedTaskNumber,
+                                                    final boolean isStateful) {
+        final Graph<Integer> graph = new Graph<>();
+
+        for (final TaskId taskId : activeTasks) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
                 if (clientState.getValue().hasAssignedTask(taskId)) {
-                    clientCapacity.merge(clientState.getKey(), 1, Integer::sum);
+                    originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
             }
         }
@@ -329,33 +319,33 @@ public class RackAwareTaskAssignor {
             }
         }
 
-        final int sourceId = taskIdList.size() + clientList.size();
-        final int sinkId = sourceId + 1;
-
+        final int sinkId = getSinkID(clientList, taskIdList);
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
-            graph.addEdge(sourceId, taskNodeId, 1, 0, 1);
+            graph.addEdge(SOURCE_ID, taskNodeId, 1, 0, 1);
         }
 
         // It's possible that some clients have 0 task assign. These clients will have 0 tasks assigned
         // even though it may have lower traffic cost. This is to maintain the balance requirement.
         for (int i = 0; i < clientList.size(); i++) {
             final int clientNodeId = taskIdList.size() + i;
-            final int capacity = clientCapacity.getOrDefault(clientList.get(i), 0);
+            final int capacity = originalAssignedTaskNumber.getOrDefault(clientList.get(i), 0);
             // Flow equals to capacity for edges to sink
             graph.addEdge(clientNodeId, sinkId, capacity, 0, capacity);
         }
 
-        graph.setSourceNode(sourceId);
+        graph.setSourceNode(SOURCE_ID);
         graph.setSinkNode(sinkId);
+
+        return graph;
     }
 
-    private void assignStatefulActiveTaskFromMinCostFlow(final Graph<Integer> graph,
-                                                         final SortedSet<TaskId> statefulTasks,
-                                                         final List<UUID> clientList,
-                                                         final List<TaskId> taskIdList,
-                                                         final Map<UUID, ClientState> clientStates,
-                                                         final Map<UUID, Integer> originalClientCapacity,
-                                                         final Map<TaskId, UUID> taskClientMap) {
+    private void assignActiveTaskFromMinCostFlow(final Graph<Integer> graph,
+                                                 final SortedSet<TaskId> activeTasks,
+                                                 final List<UUID> clientList,
+                                                 final List<TaskId> taskIdList,
+                                                 final Map<UUID, ClientState> clientStates,
+                                                 final Map<UUID, Integer> originalClientCapacity,
+                                                 final Map<TaskId, UUID> taskClientMap) {
         int taskAssigned = 0;
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
             final TaskId taskId = taskIdList.get(taskNodeId);
@@ -381,14 +371,14 @@ public class RackAwareTaskAssignor {
         }
 
         // Validate task assigned
-        if (taskAssigned != statefulTasks.size()) {
-            throw new IllegalStateException("Computed active stateful task assignment number "
-                + taskAssigned + " is different statefulTasks size " + statefulTasks.size());
+        if (taskAssigned != activeTasks.size()) {
+            throw new IllegalStateException("Computed active task assignment number "
+                + taskAssigned + " is different size " + activeTasks.size());
         }
 
         // Validate capacity constraint
         final Map<UUID, Integer> clientCapacity = new HashMap<>();
-        for (final TaskId taskId : statefulTasks) {
+        for (final TaskId taskId : activeTasks) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
                 if (clientState.getValue().hasAssignedTask(taskId)) {
                     clientCapacity.merge(clientState.getKey(), 1, Integer::sum);
@@ -398,8 +388,8 @@ public class RackAwareTaskAssignor {
 
         if (originalClientCapacity.size() != clientCapacity.size()) {
             throw new IllegalStateException("There are " + originalClientCapacity.size() + " clients have "
-                + " active stateful tasks before assignment, but " + clientCapacity.size() + " clients have"
-                + " active stateful tasks after assignment");
+                + " active tasks before assignment, but " + clientCapacity.size() + " clients have"
+                + " active tasks after assignment");
         }
 
         for (final Entry<UUID, Integer> originalCapacity : originalClientCapacity.entrySet()) {
