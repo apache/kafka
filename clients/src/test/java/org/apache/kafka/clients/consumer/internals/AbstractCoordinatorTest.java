@@ -1020,8 +1020,7 @@ public class AbstractCoordinatorTest {
                 .atMost(Duration.ofMillis(1000))
                 .untilAsserted(() -> assertThrows(
                         FencedInstanceIdException.class, () -> coordinator.pollHeartbeat(mockTime.milliseconds()),
-                        "Expected pollHeartbeat to raise fenced instance id exception in 1 second")
-                );
+                        "Expected pollHeartbeat to raise fenced instance id exception in 1 second"));
     }
 
     @Test
@@ -1212,15 +1211,13 @@ public class AbstractCoordinatorTest {
                 .atMost(Duration.ofMillis(1000))
                 .untilAsserted(() -> assertThrows(
                         e.getClass(), () -> coordinator.timeToNextHeartbeat(0),
-                        "Expected timeToNextHeartbeat to raise an error in 1 second")
-                );
+                        "Expected timeToNextHeartbeat to raise an error in 1 second"));
 
         Awaitility.await()
                 .atMost(Duration.ofMillis(1000))
                 .untilAsserted(() -> assertThrows(
                         e.getClass(), () -> coordinator.pollHeartbeat(mockTime.milliseconds()),
-                        "Expected pollHeartbeat to raise an error in 1 second")
-                );
+                        "Expected pollHeartbeat to raise an error in 1 second"));
     }
 
     @Test

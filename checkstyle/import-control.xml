@@ -205,6 +205,7 @@
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
+      <allow pkg="org.awaitility" />
     </subpackage>
 
     <subpackage name="producer">
