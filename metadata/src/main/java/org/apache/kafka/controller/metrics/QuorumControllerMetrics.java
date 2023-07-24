@@ -44,6 +44,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "ControllerEventManager", "EventQueueTimeMs");
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
+    private final static MetricName ZK_WRITE_BEHIND_LAG = getMetricName(
+            "KafkaController", "ZKWriteBehindLag");
     private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
@@ -58,6 +60,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
+    private final AtomicLong dualWriteOffset = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
     private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
@@ -73,7 +76,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public QuorumControllerMetrics(
         Optional<MetricsRegistry> registry,
-        Time time
+        Time time,
+        boolean zkMigrationState
     ) {
         this.registry = registry;
         this.active = false;
@@ -109,6 +113,18 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return time.milliseconds() - lastAppliedRecordTimestamp();
             }
         }));
+
+        if (zkMigrationState) {
+            registry.ifPresent(r -> r.newGauge(ZK_WRITE_BEHIND_LAG, new Gauge<Long>() {
+                @Override
+                public Long value() {
+                    // not in dual-write mode: set metric value to 0
+                    if (dualWriteOffset() == 0) return 0L;
+                    // in dual write mode
+                    else return lastCommittedRecordOffset() - dualWriteOffset();
+                }
+            }));
+        }
     }
 
     public void setActive(boolean active) {
@@ -151,6 +167,14 @@ public class QuorumControllerMetrics implements AutoCloseable {
         return lastAppliedRecordTimestamp.get();
     }
 
+    public void updateDualWriteOffset(long offset) {
+        dualWriteOffset.set(offset);
+    }
+
+    public long dualWriteOffset() {
+        return dualWriteOffset.get();
+    }
+
     public void incrementTimedOutHeartbeats() {
         timedOutHeartbeats.addAndGet(1);
     }
@@ -172,7 +196,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
             LAST_APPLIED_RECORD_OFFSET,
             LAST_COMMITTED_RECORD_OFFSET,
             LAST_APPLIED_RECORD_TIMESTAMP,
-            LAST_APPLIED_RECORD_LAG_MS
+            LAST_APPLIED_RECORD_LAG_MS,
+            ZK_WRITE_BEHIND_LAG
         ).forEach(r::removeMetric));
     }
 

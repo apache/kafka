@@ -169,7 +169,7 @@ public class JmxTool {
         long waitTimeoutMs = 10_000;
         Set<ObjectName> result = new HashSet<>();
         Set<ObjectName> querySet = new HashSet<>(queries);
-        BiPredicate<Set<ObjectName>, Set<ObjectName>> foundAllObjects = Set::containsAll;
+        BiPredicate<Set<ObjectName>, Set<ObjectName>> foundAllObjects = Set::equals;
         long start = System.currentTimeMillis();
         do {
             if (!result.isEmpty()) {

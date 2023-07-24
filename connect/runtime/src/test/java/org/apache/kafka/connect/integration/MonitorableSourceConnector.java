@@ -27,7 +27,7 @@ import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.tools.ThroughputThrottler;
+import org.apache.kafka.common.utils.ThroughputThrottler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -275,13 +275,17 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             if (context.transactionContext() == null || seqno != nextTransactionBoundary) {
                 return;
             }
+            long transactionSize = nextTransactionBoundary - priorTransactionBoundary;
+
             // If the transaction boundary ends on an even-numbered offset, abort it
             // Otherwise, commit
             boolean abort = nextTransactionBoundary % 2 == 0;
             calculateNextBoundary();
             if (abort) {
+                log.info("Aborting transaction of {} records", transactionSize);
                 context.transactionContext().abortTransaction(record);
             } else {
+                log.info("Committing transaction of {} records", transactionSize);
                 context.transactionContext().commitTransaction(record);
             }
         }

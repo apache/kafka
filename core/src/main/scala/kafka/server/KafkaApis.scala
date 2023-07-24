@@ -534,7 +534,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetCommitRequestData = new OffsetCommitRequestData()
       .setGroupId(offsetCommitRequest.data.groupId)
       .setMemberId(offsetCommitRequest.data.memberId)
-      .setGenerationId(offsetCommitRequest.data.generationId)
+      .setGenerationIdOrMemberEpoch(offsetCommitRequest.data.generationIdOrMemberEpoch)
       .setRetentionTimeMs(offsetCommitRequest.data.retentionTimeMs)
       .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
       .setTopics(authorizedTopicsRequest.asJava)

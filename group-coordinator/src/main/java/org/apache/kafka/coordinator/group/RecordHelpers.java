@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -33,11 +35,14 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -441,6 +446,101 @@ public class RecordHelpers {
                 (short) 2
             ),
             null // Tombstone
+        );
+    }
+
+    /**
+     * Creates an empty GroupMetadata record.
+     *
+     * @param group              The generic group.
+     * @param metadataVersion    The metadata version.
+     * @return The record.
+     */
+    public static Record newEmptyGroupMetadataRecord(
+        GenericGroup group,
+        MetadataVersion metadataVersion
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup(group.groupId()),
+                (short) 2
+            ),
+            new ApiMessageAndVersion(
+                new GroupMetadataValue()
+                    .setProtocol(null)
+                    .setProtocolType("")
+                    .setGeneration(0)
+                    .setLeader(null)
+                    .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
+                    .setMembers(Collections.emptyList()),
+                metadataVersion.groupMetadataValueVersion()
+            )
+        );
+    }
+
+    /**
+     * Creates an OffsetCommit record.
+     *
+     * @param groupId           The group id.
+     * @param topic             The topic name.
+     * @param partitionId       The partition id.
+     * @param offsetAndMetadata The offset and metadata.
+     * @param metadataVersion   The metadata version.
+     * @return The record.
+     */
+    public static Record newOffsetCommitRecord(
+        String groupId,
+        String topic,
+        int partitionId,
+        OffsetAndMetadata offsetAndMetadata,
+        MetadataVersion metadataVersion
+    ) {
+        short version = metadataVersion.offsetCommitValueVersion(offsetAndMetadata.expireTimestampMs.isPresent());
+
+        return new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup(groupId)
+                    .setTopic(topic)
+                    .setPartition(partitionId),
+                (short) 1
+            ),
+            new ApiMessageAndVersion(
+                new OffsetCommitValue()
+                    .setOffset(offsetAndMetadata.offset)
+                    .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setMetadata(offsetAndMetadata.metadata)
+                    .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)
+                    // Version 1 has a non-empty expireTimestamp field
+                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP)),
+                version
+            )
+        );
+    }
+
+    /**
+     * Creates an OffsetCommit tombstone record.
+     *
+     * @param groupId           The group id.
+     * @param topic             The topic name.
+     * @param partitionId       The partition id.
+     * @return The record.
+     */
+    public static Record newOffsetCommitTombstoneRecord(
+        String groupId,
+        String topic,
+        int partitionId
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup(groupId)
+                    .setTopic(topic)
+                    .setPartition(partitionId),
+                (short) 1
+            ),
+            null
         );
     }
 

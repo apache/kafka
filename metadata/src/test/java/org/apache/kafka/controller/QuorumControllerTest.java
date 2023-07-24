@@ -144,7 +144,7 @@ public class QuorumControllerTest {
         final AtomicBoolean closed = new AtomicBoolean(false);
 
         MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM);
+            super(Optional.empty(), Time.SYSTEM, false);
         }
 
         @Override

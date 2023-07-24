@@ -39,7 +39,6 @@ plugins {
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
 
   id "com.github.spotbugs" version '5.0.13' apply false
-  id 'org.gradle.test-retry' version '1.5.2' apply false
   id 'org.scoverage' version '7.0.1' apply false
   id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
@@ -203,7 +202,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'TROGDOR.md',
+        'trogdor/README.md',
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
@@ -233,7 +232,6 @@ subprojects {
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
-  apply plugin: 'org.gradle.test-retry'
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -419,8 +417,7 @@ subprojects {
       "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
-      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*"
+      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*"
     ])
   }
 
@@ -876,7 +873,6 @@ project(':core') {
 
 
     implementation libs.argparse4j
-    implementation libs.caffeine
     implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
@@ -931,7 +927,8 @@ project(':core') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-
+    testImplementation libs.caffeine
+    
     generator project(':generator')
   }
 
@@ -1073,7 +1070,7 @@ project(':core') {
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
                                ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
                                ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
-                               ':connect:mirror:genMirrorHeartbeatConfigDocs'], type: Tar) {
+                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs'], type: Tar) {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -1572,6 +1569,7 @@ project(':server-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.joptSimple
+    implementation libs.jacksonDatabind
     implementation libs.pcollections
 
     testImplementation project(':clients')
@@ -1704,8 +1702,10 @@ project(':storage') {
     implementation project(':storage:api')
     implementation project(':server-common')
     implementation project(':clients')
+    implementation libs.caffeine
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
+    implementation libs.metrics
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -2742,8 +2742,6 @@ project(':connect:runtime') {
     api project(':connect:json')
     api project(':connect:transforms')
 
-    implementation project(':tools')
-
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2996,6 +2994,13 @@ project(':connect:mirror') {
     }
     into "$buildDir/dependant-libs"
     duplicatesStrategy 'exclude'
+  }
+
+  task genMirrorConnectorConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.mirror.MirrorConnectorConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "mirror_connector_config.html").newOutputStream()
   }
 
   task genMirrorSourceConfigDocs(type: JavaExec) {

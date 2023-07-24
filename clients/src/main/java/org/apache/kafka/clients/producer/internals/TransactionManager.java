@@ -1030,6 +1030,11 @@ public class TransactionManager {
         return isTransactional() && currentState == State.READY;
     }
 
+    // visible for testing
+    synchronized boolean isInitializing() {
+        return isTransactional() && currentState == State.INITIALIZING;
+    }
+
     void handleCoordinatorReady() {
         NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
                 apiVersions.get(transactionCoordinator.idString()) :
