@@ -20,8 +20,11 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 
 import java.io.PrintStream;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -98,5 +101,15 @@ public class ToolsUtils {
 
         printRow(columnLengths, headers, out);
         rows.forEach(row -> printRow(columnLengths, row, out));
+    }
+
+    public static <T> Set<T> duplicates(Collection<T> s) {
+        Set<T> duplicates = new HashSet<>();
+        Set<T> elements = new HashSet<>();
+        for (T t : s) {
+            if (!elements.add(t))
+                duplicates.add(t);
+        }
+        return duplicates;
     }
 }
