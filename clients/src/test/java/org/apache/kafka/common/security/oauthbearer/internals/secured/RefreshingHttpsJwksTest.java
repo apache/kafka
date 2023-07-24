@@ -162,7 +162,6 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             verify(httpsJwks, times(1)).refresh();
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             verify(httpsJwks, times(2)).refresh();
-            // time.sleep -> MockTime内部的时间forward REFRESH_MS+1 毫秒，并且会调用OnTimeUpdated
             time.sleep(REFRESH_MS + 1);
             verify(httpsJwks, times(3)).refresh();
             assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
