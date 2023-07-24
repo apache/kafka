@@ -332,7 +332,7 @@ public class DefaultSslEngineFactoryTest {
     }
 
     @Test
-    void testNeverExpiringX509CertificateUnchangedBehaviorWithValidCertificate() throws Exception {
+    void testNeverExpiringX509Certificate() throws Exception {
         final KeyPair keyPair = TestSslUtils.generateKeyPair("RSA");
         final String dn = "CN=Test, L=London, C=GB";
         // Create and initialize data structures
