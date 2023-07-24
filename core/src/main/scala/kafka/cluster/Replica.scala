@@ -110,7 +110,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   ): Boolean = {
     var updateSuccess = true
     replicaState.updateAndGet { currentReplicaState =>
-      // Fence the update if it provides a stale broker epoch. +
+      // Fence the update if it provides a stale broker epoch.
       if (brokerEpoch != -1 && brokerEpoch < currentReplicaState.brokerEpoch.getOrElse(-1L)) {
         updateSuccess = false
         currentReplicaState
