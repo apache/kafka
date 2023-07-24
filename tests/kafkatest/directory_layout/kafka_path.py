@@ -16,7 +16,7 @@
 import importlib
 import os
 
-from kafkatest.version import get_version, KafkaVersion, DEV_BRANCH
+from kafkatest.version import get_version, KafkaVersion, DEV_BRANCH, LATEST_0_9
 
 
 """This module serves a few purposes:
@@ -49,6 +49,11 @@ JARS = {
         CORE_DEPENDANT_TEST_LIBS_JAR_NAME: "core/build/dependant-testlibs/*.jar",
         TOOLS_JAR_NAME: "tools/build/libs/kafka-tools*.jar",
         TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar"
+    },
+    # TODO: This is only used in 0.8.2.x system tests, remove with KAFKA-14762
+    LATEST_0_9.__str__(): {
+        TOOLS_JAR_NAME: "libs/kafka-tools*.jar",
+        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "libs/{argparse4j,jackson}*.jar"
     }
 }
 

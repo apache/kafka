@@ -17,7 +17,7 @@
 package kafka.zk
 
 import java.util.Properties
-import kafka.admin.{AdminOperationException, AdminUtils, BrokerMetadata, RackAwareMode}
+import kafka.admin.{AdminUtils, BrokerMetadata, RackAwareMode}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
@@ -26,6 +26,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
