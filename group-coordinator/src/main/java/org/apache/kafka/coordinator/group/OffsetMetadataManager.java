@@ -183,18 +183,19 @@ public class OffsetMetadataManager {
     ) throws ApiException {
         Group group;
         try {
-            // If the group does not exist and generation id is -1, the request comes from
-            // either the admin client or a consumer which does not use the group management
-            // facility. In this case, a so-called simple group is created and the request
-            // is accepted.
-            group = groupMetadataManager.getOrMaybeCreateSimpleGroup(
-                request.groupId(),
-                request.generationIdOrMemberEpoch() < 0
-            );
+            group = groupMetadataManager.group(request.groupId());
         } catch (GroupIdNotFoundException ex) {
-            // Maintain backward compatibility. This is a bit weird in the
-            // context of the new protocol though.
-            throw Errors.ILLEGAL_GENERATION.exception();
+            if (request.generationIdOrMemberEpoch() < 0) {
+                // If the group does not exist and generation id is -1, the request comes from
+                // either the admin client or a consumer which does not use the group management
+                // facility. In this case, a so-called simple group is created and the request
+                // is accepted.
+                group = groupMetadataManager.getOrMaybeCreateGenericGroup(request.groupId(), true);
+            } else {
+                // Maintain backward compatibility. This is a bit weird in the
+                // context of the new protocol though.
+                throw Errors.ILLEGAL_GENERATION.exception();
+            }
         }
 
         // Validate the request based on the group type.
@@ -262,7 +263,7 @@ public class OffsetMetadataManager {
         } else if (!group.isInState(EMPTY)) {
             // If the request does not contain the member id and the generation
             // id (version 0), offset commits are only accepted when the group
-            // is not empty.
+            // is empty.
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
 
@@ -399,8 +400,13 @@ public class OffsetMetadataManager {
         final TopicPartition tp = new TopicPartition(key.topic(), key.partition());
 
         if (value != null) {
-            // Ensures that there is a corresponding group.
-            groupMetadataManager.getOrMaybeCreateSimpleGroup(groupId, true);
+            // Ensures that there is a corresponding group for the offsets. If a group does
+            // not exist, a generic group is created as a so-called "simple group".
+            try {
+                groupMetadataManager.group(groupId);
+            } catch (GroupIdNotFoundException ex) {
+                groupMetadataManager.getOrMaybeCreateGenericGroup(groupId, true);
+            }
 
             final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRecord(value);
             TimelineHashMap<TopicPartition, OffsetAndMetadata> offsets = offsetsByGroup.get(groupId);
