@@ -33,8 +33,7 @@
       { "name": "PartitionRacks",
         "versions": "0+",
         "type": "[]PartitionMetadata",
-        "about": "Partitions mapped to a set of racks.",
-        "fields": [
+        "about": "Partitions mapped to a set of racks.", "fields": [
           { "name": "Partition",
             "versions": "0+",
             "type": "int32",
@@ -43,8 +42,7 @@
             "versions": "0+",
             "type": "[]string",
             "about": "The set of racks that the partition is mapped to." }
-        ]
-      }
+      ]}
     ]}
   ]
 }
