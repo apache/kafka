@@ -22,24 +22,24 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 
 public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     // Actions
-    private final OptionSpec<?> verifyOpt;
-    private final OptionSpec<?> generateOpt;
-    private final OptionSpec<?> executeOpt;
-    private final OptionSpec<?> cancelOpt;
-    private final OptionSpec<?> listOpt;
+    final OptionSpec<?> verifyOpt;
+    final OptionSpec<?> generateOpt;
+    final OptionSpec<?> executeOpt;
+    final OptionSpec<?> cancelOpt;
+    final OptionSpec<?> listOpt;
 
     // Arguments
-    private final OptionSpec<String> bootstrapServerOpt;
-    private final OptionSpec<String> commandConfigOpt;
-    private final OptionSpec<String> reassignmentJsonFileOpt;
-    private final OptionSpec<String> topicsToMoveJsonFileOpt;
-    private final OptionSpec<String> brokerListOpt;
-    private final OptionSpec<?> disableRackAware;
-    private final OptionSpec<Long> interBrokerThrottleOpt;
-    private final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
-    private final OptionSpec<Long> timeoutOpt;
-    private final OptionSpec<?> additionalOpt;
-    private final OptionSpec<?> preserveThrottlesOpt;
+    final OptionSpec<String> bootstrapServerOpt;
+    final OptionSpec<String> commandConfigOpt;
+    final OptionSpec<String> reassignmentJsonFileOpt;
+    final OptionSpec<String> topicsToMoveJsonFileOpt;
+    final OptionSpec<String> brokerListOpt;
+    final OptionSpec<?> disableRackAware;
+    final OptionSpec<Long> interBrokerThrottleOpt;
+    final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
+    final OptionSpec<Long> timeoutOpt;
+    final OptionSpec<?> additionalOpt;
+    final OptionSpec<?> preserveThrottlesOpt;
 
     public ReassignPartitionsCommandOptions(String[] args) {
         super(args);
