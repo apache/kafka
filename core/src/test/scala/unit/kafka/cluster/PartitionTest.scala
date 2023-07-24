@@ -1819,7 +1819,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.maximalIsr)
 
     // Fetch to let the follower catch up to the log end offset, but using a wrong broker epoch. The expansion should fail.
-    val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) + 1
+    val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
     fetchFollower(partition,
       replicaId = remoteBrokerId1,
       fetchOffset = log.logEndOffset,
@@ -1866,6 +1866,70 @@ class PartitionTest extends AbstractPartitionTest {
     }
   }
 
+  @Test
+  def testFenceFollowerFetchWithStaleBrokerEpoch(): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId1 = brokerId + 1
+    val replicas = List(brokerId, remoteBrokerId1)
+    val isr = Set(brokerId, remoteBrokerId1)
+
+    val metadataCache: MetadataCache = mock(classOf[KRaftMetadataCache])
+    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], replicas)
+
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager,
+    )
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr.toList.map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+
+    val expectedReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1)
+    fetchFollower(partition,
+      replicaId = remoteBrokerId1,
+      fetchOffset = log.logEndOffset,
+      replicaEpoch = Some(expectedReplicaEpoch)
+    )
+
+    // Fetch to let the follower catch up to the log end offset, but using a stale broker epoch. The Fetch should not
+    // be able to update the fetch state.
+    val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
+    fetchFollower(partition,
+      replicaId = remoteBrokerId1,
+      fetchOffset = log.logEndOffset,
+      replicaEpoch = Some(wrongReplicaEpoch)
+    )
+
+    assertReplicaState(partition, remoteBrokerId1,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = log.logEndOffset,
+      brokerEpoch = Some(expectedReplicaEpoch)
+    )
+  }
 
   @Test
   def testIsrNotExpandedIfReplicaIsInControlledShutdown(): Unit = {

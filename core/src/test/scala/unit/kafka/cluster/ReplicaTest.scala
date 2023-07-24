@@ -85,7 +85,7 @@ class ReplicaTest {
     leaderEndOffset: Long
   ): Long = {
     val currentTimeMs = time.milliseconds()
-    replica.updateFetchState(
+    replica.maybeUpdateFetchState(
       followerFetchOffsetMetadata = new LogOffsetMetadata(followerFetchOffset),
       followerStartOffset = followerStartOffset,
       followerFetchTimeMs = currentTimeMs,
@@ -311,5 +311,37 @@ class ReplicaTest {
     time.sleep(ReplicaLagTimeMaxMs + 1)
 
     assertFalse(isCaughtUp(leaderEndOffset = 16L))
+  }
+
+  @Test
+  def testFenceStaleUpdates(): Unit = {
+    assertTrue(replica.maybeUpdateFetchState(
+      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+      followerStartOffset = 1L,
+      followerFetchTimeMs = 1,
+      leaderEndOffset = 10L,
+      brokerEpoch = 1L
+    ))
+    assertTrue(replica.maybeUpdateFetchState(
+      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+      followerStartOffset = 2L,
+      followerFetchTimeMs = 2,
+      leaderEndOffset = 10L,
+      brokerEpoch = 2L
+    ))
+    assertFalse(replica.maybeUpdateFetchState(
+      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+      followerStartOffset = 2L,
+      followerFetchTimeMs = 3,
+      leaderEndOffset = 10L,
+      brokerEpoch = 1L
+    ))
+    assertTrue(replica.maybeUpdateFetchState(
+      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+      followerStartOffset = 2L,
+      followerFetchTimeMs = 4,
+      leaderEndOffset = 10L,
+      brokerEpoch = -1L
+    ))
   }
 }

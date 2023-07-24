@@ -87,6 +87,9 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def stateSnapshot: ReplicaState = replicaState.get
 
   /**
+   * Update the replica's fetch state only if the broker epoch is -1 or it is larger or equal to the current broker
+   * epoch. This can fence fetch state update from a stale request.
+   *
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
    * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
    *
@@ -98,31 +101,39 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
-  def updateFetchState(
+  def maybeUpdateFetchState(
     followerFetchOffsetMetadata: LogOffsetMetadata,
     followerStartOffset: Long,
     followerFetchTimeMs: Long,
     leaderEndOffset: Long,
     brokerEpoch: Long
-  ): Unit = {
+  ): Boolean = {
+    var updateSuccess = true
     replicaState.updateAndGet { currentReplicaState =>
-      val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
-        math.max(currentReplicaState.lastCaughtUpTimeMs, followerFetchTimeMs)
-      } else if (followerFetchOffsetMetadata.messageOffset >= currentReplicaState.lastFetchLeaderLogEndOffset) {
-        math.max(currentReplicaState.lastCaughtUpTimeMs, currentReplicaState.lastFetchTimeMs)
+      // Fence the update if it provides a stale broker epoch. +
+      if (brokerEpoch != -1 && brokerEpoch < currentReplicaState.brokerEpoch.getOrElse(-1L)) {
+        updateSuccess = false
+        currentReplicaState
       } else {
-        currentReplicaState.lastCaughtUpTimeMs
-      }
+        val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
+          math.max(currentReplicaState.lastCaughtUpTimeMs, followerFetchTimeMs)
+        } else if (followerFetchOffsetMetadata.messageOffset >= currentReplicaState.lastFetchLeaderLogEndOffset) {
+          math.max(currentReplicaState.lastCaughtUpTimeMs, currentReplicaState.lastFetchTimeMs)
+        } else {
+          currentReplicaState.lastCaughtUpTimeMs
+        }
 
-      ReplicaState(
-        logStartOffset = followerStartOffset,
-        logEndOffsetMetadata = followerFetchOffsetMetadata,
-        lastFetchLeaderLogEndOffset = math.max(leaderEndOffset, currentReplicaState.lastFetchLeaderLogEndOffset),
-        lastFetchTimeMs = followerFetchTimeMs,
-        lastCaughtUpTimeMs = lastCaughtUpTime,
-        brokerEpoch = Option(brokerEpoch)
-      )
+        ReplicaState(
+          logStartOffset = followerStartOffset,
+          logEndOffsetMetadata = followerFetchOffsetMetadata,
+          lastFetchLeaderLogEndOffset = math.max(leaderEndOffset, currentReplicaState.lastFetchLeaderLogEndOffset),
+          lastFetchTimeMs = followerFetchTimeMs,
+          lastCaughtUpTimeMs = lastCaughtUpTime,
+          brokerEpoch = Option(brokerEpoch)
+        )
+      }
     }
+    updateSuccess
   }
 
   /**

@@ -865,7 +865,7 @@ class Partition(val topicPartition: TopicPartition,
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
     val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     val prevFollowerEndOffset = replica.stateSnapshot.logEndOffset
-    replica.updateFetchState(
+    replica.maybeUpdateFetchState(
       followerFetchOffsetMetadata,
       followerStartOffset,
       followerFetchTimeMs,
