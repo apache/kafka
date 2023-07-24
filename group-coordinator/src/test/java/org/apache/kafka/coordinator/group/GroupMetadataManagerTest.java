@@ -5414,10 +5414,11 @@ public class GroupMetadataManagerTest {
 
     private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for(int i = 0; i < numPartitions ; i++) {
+        for (int i = 0; i < numPartitions; i++) {
             partitionRacks.put(i, Collections.emptySet());
         }
         return partitionRacks;
+    }
 
     private List<String> verifyGenericGroupJoinResponses(
         List<CompletableFuture<JoinGroupResponseData>> responseFutures,
