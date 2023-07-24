@@ -809,7 +809,7 @@ public class GroupMetadataManager {
 
             try {
                 TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
-                    new TargetAssignmentBuilder(groupId, groupEpoch,assignors.get(preferredServerAssignor))
+                    new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
                         .withMembers(group.members())
                         .withSubscriptionMetadata(subscriptionMetadata)
                         .withTargetAssignment(group.targetAssignment())

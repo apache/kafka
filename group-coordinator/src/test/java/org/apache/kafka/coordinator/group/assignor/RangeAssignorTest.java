@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class  RangeAssignorTest {
+public class RangeAssignorTest {
     private final RangeAssignor assignor = new RangeAssignor();
     private final Uuid topic1Uuid = Uuid.randomUuid();
     private final Uuid topic2Uuid = Uuid.randomUuid();
@@ -46,7 +46,7 @@ public class  RangeAssignorTest {
 
     @Test
     public void testOneConsumerNoTopic() {
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(
             Collections.singletonMap(
                 topic1Uuid,
                 createPartitionMetadata(3)
@@ -64,14 +64,14 @@ public class  RangeAssignorTest {
         );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment groupAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         assertEquals(Collections.emptyMap(), groupAssignment.members());
     }
 
     @Test
     public void testOneConsumerSubscribedToNonExistentTopic() {
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(
             Collections.singletonMap(
                 topic1Uuid,
                 createPartitionMetadata(3)
@@ -90,7 +90,7 @@ public class  RangeAssignorTest {
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
 
         assertThrows(PartitionAssignorException.class,
-            () -> assignor.assign(assignmentSpec, assignorTopicMetadata));
+            () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
     }
 
     @Test
@@ -99,7 +99,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic1Uuid, createPartitionMetadata(3));
         topicMetadata.put(topic3Uuid, createPartitionMetadata(2));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -118,7 +118,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -142,7 +142,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic2Uuid, createPartitionMetadata(3));
         topicMetadata.put(topic3Uuid, createPartitionMetadata(2));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -168,7 +168,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -195,7 +195,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic1Uuid, createPartitionMetadata(3));
         topicMetadata.put(topic3Uuid, createPartitionMetadata(2));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -221,7 +221,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         // Topic 3 has 2 partitions but three consumers subscribed to it - one of them will not get a partition.
@@ -248,7 +248,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic1Uuid, createPartitionMetadata(2));
         topicMetadata.put(topic2Uuid, createPartitionMetadata(2));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -285,7 +285,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -311,7 +311,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic1Uuid, createPartitionMetadata(4));
         topicMetadata.put(topic2Uuid, createPartitionMetadata(4));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -340,7 +340,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -363,7 +363,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic1Uuid, createPartitionMetadata(3));
         topicMetadata.put(topic2Uuid, createPartitionMetadata(3));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -400,7 +400,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -429,7 +429,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic1Uuid, createPartitionMetadata(4));
         topicMetadata.put(topic2Uuid, createPartitionMetadata(3));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -466,7 +466,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -493,7 +493,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic1Uuid, createPartitionMetadata(3));
         topicMetadata.put(topic2Uuid, createPartitionMetadata(3));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
         // Consumer A was removed
@@ -511,7 +511,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 
@@ -530,7 +530,7 @@ public class  RangeAssignorTest {
         topicMetadata.put(topic2Uuid, createPartitionMetadata(3));
         topicMetadata.put(topic3Uuid, createPartitionMetadata(2));
 
-        SubscribedTopicMetadata assignorTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
@@ -573,7 +573,7 @@ public class  RangeAssignorTest {
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, assignorTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
 

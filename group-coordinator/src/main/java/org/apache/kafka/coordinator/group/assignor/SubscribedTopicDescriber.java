@@ -32,14 +32,14 @@ import java.util.Set;
 public interface SubscribedTopicDescriber {
 
     /**
-     * Returns a set of subscribed topicIds.
+     * Returns a set of subscribed topic Ids.
      *
      * @return Set of topicIds corresponding to the subscribed topics.
      */
     Set<Uuid> subscribedTopicIds();
 
     /**
-     * Number of partitions for the given topicId.
+     * Number of partitions for the given topic Id.
      *
      * @param topicId   Uuid corresponding to the topic.
      * @return The number of partitions corresponding to the given topicId.

@@ -187,9 +187,8 @@ public class TargetAssignmentBuilderTest {
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
-            when(assignor.assign(
-                any(), any()
-            )).thenReturn(new GroupAssignment(memberAssignments));
+            when(assignor.assign(any(), any()))
+                .thenReturn(new GroupAssignment(memberAssignments));
 
 
             // Create and populate the assignment builder.
