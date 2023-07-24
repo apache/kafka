@@ -577,9 +577,9 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   // Returns a verification guard object if we need to verify. This starts or continues the verification process. Otherwise return null.
-  def maybeStartTransactionVerification(producerId: Long): Object = {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = {
     leaderLogIfLocal match {
-      case Some(log) => log.maybeStartTransactionVerification(producerId)
+      case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
       case None => throw new NotLeaderOrFollowerException();
     }
   }
