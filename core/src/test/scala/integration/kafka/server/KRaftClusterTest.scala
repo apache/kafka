@@ -1153,7 +1153,7 @@ class KRaftClusterTest {
       val controller = cluster.controllers().values().iterator().next()
       controller.controller.waitForReadyBrokers(3).get()
       TestUtils.retry(60000) {
-        val latch = QuorumControllerIntegrationTestUtils.pause(controller.asInstanceOf[QuorumController])
+        val latch = QuorumControllerIntegrationTestUtils.pause(controller.controller.asInstanceOf[QuorumController])
         Thread.sleep(1001)
         latch.countDown()
         assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
