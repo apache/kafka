@@ -51,6 +51,7 @@ import java.util.List;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_AUTH_DISABLED;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_EXPIRED;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_NOT_FOUND;
+import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_OWNER_MISMATCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PRINCIPAL_TYPE;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
@@ -165,6 +166,18 @@ public class DelegationTokenControlManager {
         return tokenCache.tokenForHmac(base64Pwd);
     }
 
+    private boolean allowedToRenew(TokenInformation tokenInfo, KafkaPrincipal renewer) {
+        if (tokenInfo.owner().equals(renewer)) {
+            return true;
+        }
+        for (KafkaPrincipal validRenewer : tokenInfo.renewers()) {
+            if (validRenewer.equals(renewer)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /*
      * Pass in the MetadataVersion so that we can return a response to the caller 
      * if the current metadataVersion is too low.
@@ -252,20 +265,18 @@ public class DelegationTokenControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         RenewDelegationTokenResponseData responseData = new RenewDelegationTokenResponseData();
 
-// XXX
-//        if (!allowedToRenew(principal, tokenInfo)
-//            renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
-//            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
-//              renewCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
-//
-//              renewCallback(Errors.DELEGATION_TOKEN_NOT_FOUND, -1)
-
-//        byte[] hmac = requestData.hmac();
-
         TokenInformation myTokenInformation = getToken(requestData.hmac());
 
         if (myTokenInformation == null) {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
+        }
+
+        if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code()));
+        }
+
+        if (!allowedToRenew(myTokenInformation, context.principal())) {
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_OWNER_MISMATCH.code()));
         }
 
         long renewLifeTime = tokenDefaultRenewLifetime;
@@ -308,10 +319,12 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
         }
 
-        // XXX if allowedToRenew
-
         if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code()));
+        }
+
+        if (!allowedToRenew(myTokenInformation, context.principal())) {
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_OWNER_MISMATCH.code()));
         }
 
         if (requestData.expiryTimePeriodMs() < 0) { // expire immediately
