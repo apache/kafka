@@ -59,12 +59,12 @@ public class VerificationStateEntry {
 
     /**
      * An OutOfOrderSequence loop can happen for any idempotent/transactional producer when a lower sequence fails with
-     * a retriable error and a higher sequence is successfully written.The lower sequence will fail with
+     * a retriable error and a higher sequence is successfully written. The lower sequence will fail with
      * OutOfOrderSequence and retry until retries run out.
      *
-     * Here, we keep the lowest sequence seen in order to prevent an OutOfOrderSequence loop when verifying. (This does
+     * Here, we keep the lowest sequence seen in order to prevent an OutOfOrderSequence loop when verifying. This does
      * not solve the error loop for idempotent producers or transactional producers that fail before verification
-     * starts.) When verification fails with a retriable error (ie. NOT_COORDINATOR), the VerificationStateEntry
+     * starts. When verification fails with a retriable error (ie. NOT_COORDINATOR), the VerificationStateEntry
      * maintains the lowest sequence number it sees and blocks higher sequences from being written to the log. However,
      * if we encounter a new and lower sequence when verifying, we want to block sequences higher than that new
      * sequence. Additionally, if the epoch is bumped, the sequence is reset and any previous sequence must be disregarded.
