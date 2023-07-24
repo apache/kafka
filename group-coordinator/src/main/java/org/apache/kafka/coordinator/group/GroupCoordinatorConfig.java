@@ -26,6 +26,11 @@ import java.util.List;
 public class GroupCoordinatorConfig {
 
     /**
+     * The timeout used to wait for a new member in milliseconds.
+     */
+    public static final int GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
+
+    /**
      * The number of threads or event loops running.
      */
     public final int numThreads;
@@ -56,13 +61,43 @@ public class GroupCoordinatorConfig {
      */
     public final int offsetsTopicSegmentBytes;
 
+    /**
+     * The generic group maximum size.
+     */
+    public final int genericGroupMaxSize;
+
+    /**
+     * The delay in milliseconds introduced for the first rebalance of a generic group.
+     */
+    public final int genericGroupInitialRebalanceDelayMs;
+
+    /**
+     * The timeout used to wait for a new member in milliseconds.
+     */
+    public final int genericGroupNewMemberJoinTimeoutMs;
+
+    /**
+     * The generic group minimum session timeout.
+     */
+    public final int genericGroupMinSessionTimeoutMs;
+
+    /**
+     * The generic group maximum session timeout.
+     */
+    public final int genericGroupMaxSessionTimeoutMs;
+
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMaxSize,
         List<PartitionAssignor> consumerGroupAssignors,
-        int offsetsTopicSegmentBytes
+        int offsetsTopicSegmentBytes,
+        int genericGroupMaxSize,
+        int genericGroupInitialRebalanceDelayMs,
+        int genericGroupNewMemberJoinTimeoutMs,
+        int genericGroupMinSessionTimeoutMs,
+        int genericGroupMaxSessionTimeoutMs
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -70,5 +105,10 @@ public class GroupCoordinatorConfig {
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupAssignors = consumerGroupAssignors;
         this.offsetsTopicSegmentBytes = offsetsTopicSegmentBytes;
+        this.genericGroupMaxSize = genericGroupMaxSize;
+        this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
+        this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
+        this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
+        this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
     }
 }
