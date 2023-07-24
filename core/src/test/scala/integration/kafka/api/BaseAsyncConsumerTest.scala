@@ -17,7 +17,10 @@
 package kafka.api
 
 import kafka.utils.TestUtils.waitUntilTrue
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+
+import scala.jdk.CollectionConverters.SeqHasAsJava
 
 
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
@@ -42,6 +45,9 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
     consumer.commitSync();
+
+    assertTrue(consumer.assignment.contains(tp))
   }
 }
