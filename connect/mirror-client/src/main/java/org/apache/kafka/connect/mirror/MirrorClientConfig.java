@@ -59,6 +59,10 @@ public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         DefaultReplicationPolicy.SEPARATOR_DEFAULT;
 
+    public static final String INTERNAL_TOPIC_SEPARATOR_ENABLED =  "replication.policy.internal.topic.separator.enabled";
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC = "whether or not to use replication.policy.separator to control internal topic names";
+    public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT =
+        DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
     public static final String FORWARDING_ADMIN_CLASS = "forwarding.admin.class";
     public static final String FORWARDING_ADMIN_CLASS_DOC = "Class which extends ForwardingAdmin to define custom cluster resource management (topics, configs, etc). " +
             "The class must have a constructor with signature <code>(Map<String, Object> config)</code> that is used to configure a KafkaAdminClient and may also be used to configure clients for external systems if necessary.";
@@ -144,6 +148,12 @@ public class MirrorClientConfig extends AbstractConfig {
             REPLICATION_POLICY_SEPARATOR_DEFAULT,
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_SEPARATOR_DOC)
+        .define(
+            INTERNAL_TOPIC_SEPARATOR_ENABLED,
+            ConfigDef.Type.BOOLEAN,
+            INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
+            ConfigDef.Importance.LOW,
+            INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
         .define(
                 FORWARDING_ADMIN_CLASS,
                 ConfigDef.Type.CLASS,
