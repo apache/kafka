@@ -127,9 +127,9 @@ public class RecordHelpers {
     ) {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
         newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
-            ArrayList<ConsumerGroupPartitionMetadataValue.PartitionRacks> partitionRacks = new ArrayList<>();
+            ArrayList<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>();
             topicMetadata.partitionRacks().forEach((partition, racks) -> {
-                partitionRacks.add(new ConsumerGroupPartitionMetadataValue.PartitionRacks()
+                partitionRacks.add(new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
                     .setPartition(partition)
                     .setRacks(new ArrayList<>(racks))
                 );

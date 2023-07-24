@@ -137,8 +137,8 @@ public class TopicMetadata {
     ) {
         // Converting the data type from a list stored in the record to a map.
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(record.partitionRacks().size());
-        for (ConsumerGroupPartitionMetadataValue.PartitionRacks info : record.partitionRacks()) {
-            partitionRacks.put(info.partition(), Collections.unmodifiableSet(new HashSet<>(info.racks())));
+        for (ConsumerGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionRacks()) {
+            partitionRacks.put(partitionMetadata.partition(), Collections.unmodifiableSet(new HashSet<>(partitionMetadata.racks())));
         }
 
         return new TopicMetadata(

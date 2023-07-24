@@ -605,11 +605,11 @@ public class RecordHelpersTest {
             ));
     }
 
-    private List<ConsumerGroupPartitionMetadataValue.PartitionRacks> mkListOfPartitionRacks(int numPartitions) {
-        List<ConsumerGroupPartitionMetadataValue.PartitionRacks> partitionRacks = new ArrayList<>(numPartitions);
+    private List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
+        List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
         for(int i = 0; i < numPartitions ; i++) {
             partitionRacks.add(
-                new ConsumerGroupPartitionMetadataValue.PartitionRacks()
+                new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
                     .setPartition(i)
                     .setRacks(new ArrayList<>())
             );

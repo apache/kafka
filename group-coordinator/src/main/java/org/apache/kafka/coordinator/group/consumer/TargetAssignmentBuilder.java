@@ -247,14 +247,18 @@ public class TargetAssignmentBuilder {
         // Prepare the topic metadata.
         Map<Uuid, PartitionMetadata> topicMetadataMap = new HashMap<>();
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topicMetadataMap.put(topicMetadata.id(), new PartitionMetadata(topicMetadata.partitionRacks()))
+            topicMetadataMap.put(
+                topicMetadata.id(),
+                new PartitionMetadata(topicMetadata.partitionRacks())
+            )
         );
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
             new AssignmentSpec(
                 Collections.unmodifiableMap(memberSpecs)
-            ), new SubscribedTopicMetadata(topicMetadataMap)
+            ),
+            new SubscribedTopicMetadata(topicMetadataMap)
         );
 
         // Compute delta from previous to new target assignment and create the

@@ -449,7 +449,7 @@ public class ConsumerGroup implements Group {
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
-                Map<Integer, Set<String>> partitionRackInfo = new HashMap<>();
+                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
 
                 topicImage.partitions().forEach((partition, partitionRegistration) -> {
                     Set<String> racks = new HashSet<>();
@@ -458,14 +458,16 @@ public class ConsumerGroup implements Group {
                         // Only add rack if it is available for the broker/replica.
                         rackOptional.ifPresent(racks::add);
                     }
-                    partitionRackInfo.put(partition, racks);
+                    // If no racks are available for any replica of this partition, store an empty map.
+                    if (!racks.isEmpty())
+                        partitionRacks.put(partition, racks);
                 });
 
                 newSubscriptionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
                     topicImage.partitions().size(),
-                    partitionRackInfo));
+                    partitionRacks));
             }
         });
 
