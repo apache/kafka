@@ -123,6 +123,11 @@ public class SnapshotEmitterTest {
         }
 
         @Override
+        public long logEndOffset() {
+            return 0;
+        }
+
+        @Override
         public void close() throws Exception {
             // nothing to do
         }

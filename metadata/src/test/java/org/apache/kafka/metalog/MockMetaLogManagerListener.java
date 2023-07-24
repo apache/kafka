@@ -90,7 +90,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public synchronized void handleLeaderChange(LeaderAndEpoch newLeaderAndEpoch, long endOffset) {
+    public synchronized void handleLeaderChange(LeaderAndEpoch newLeaderAndEpoch) {
         LeaderAndEpoch oldLeaderAndEpoch = this.leaderAndEpoch;
         this.leaderAndEpoch = newLeaderAndEpoch;
 

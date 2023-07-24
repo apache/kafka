@@ -1197,7 +1197,7 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch, long endOffset) {
+        public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
             // We record the next expected offset as the claimed epoch's start
             // offset. This is useful to verify that the `handleLeaderChange` callback
             // was not received early.

@@ -1059,7 +1059,7 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleLeaderChange(LeaderAndEpoch newLeader, long endOffset) {
+        public void handleLeaderChange(LeaderAndEpoch newLeader) {
             appendRaftEvent("handleLeaderChange[" + newLeader.epoch() + "]", () -> {
                 final String newLeaderName = newLeader.leaderId().isPresent() ?
                         String.valueOf(newLeader.leaderId().getAsInt()) : "(none)";
@@ -1076,7 +1076,7 @@ public final class QuorumController implements Controller {
                         renounce();
                     }
                 } else if (newLeader.isLeader(nodeId)) {
-                    long newLastWriteOffset = endOffset - 1;
+                    long newLastWriteOffset = raftClient.logEndOffset() - 1;
                     log.info("Becoming the active controller at epoch {}, last write offset {}.",
                         newLeader.epoch(), newLastWriteOffset);
                     claim(newLeader.epoch(), newLastWriteOffset);

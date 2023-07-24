@@ -2395,6 +2395,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
+    public long logEndOffset() {
+        return log.endOffset().offset;
+    }
+
+    @Override
     public void close() {
         log.flush(true);
         if (kafkaRaftMetrics != null) {
@@ -2603,7 +2608,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (shouldFireLeaderChange(leaderAndEpoch)) {
                 lastFiredLeaderChange = leaderAndEpoch;
                 logger.debug("Notifying listener {} of leader change {}", listenerName(), leaderAndEpoch);
-                listener.handleLeaderChange(leaderAndEpoch, log.endOffset().offset);
+                listener.handleLeaderChange(leaderAndEpoch);
             }
         }
 
@@ -2625,7 +2630,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // leader and begins writing to the log.
             if (shouldFireLeaderChange(leaderAndEpoch) && nextOffset() >= epochStartOffset) {
                 lastFiredLeaderChange = leaderAndEpoch;
-                listener.handleLeaderChange(leaderAndEpoch, log.endOffset().offset);
+                listener.handleLeaderChange(leaderAndEpoch);
             }
         }
 

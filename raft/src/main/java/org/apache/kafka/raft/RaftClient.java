@@ -81,11 +81,8 @@ public interface RaftClient<T> extends AutoCloseable {
          * epoch.
          *
          * @param leader the current leader and epoch
-         * @param endOffset the current log end offset (exclusive). This is useful for nodes that
-         *                  are claiming leadership, because it lets them know what log offset they
-         *                  should attempt to write to next.
          */
-        default void handleLeaderChange(LeaderAndEpoch leader, long endOffset) {}
+        default void handleLeaderChange(LeaderAndEpoch leader) {}
 
         default void beginShutdown() {}
     }
@@ -247,4 +244,12 @@ public interface RaftClient<T> extends AutoCloseable {
      * @return the id of the latest snapshot, if it exists
      */
     Optional<OffsetAndEpoch> latestSnapshotId();
+
+    /**
+     * Returns the current end of the log. This method is thread-safe.
+     *
+     * @return the log end offset, which is one greater than the offset of the last record written,
+     * or 0 if there have not been any records written.
+     */
+    long logEndOffset();
 }
