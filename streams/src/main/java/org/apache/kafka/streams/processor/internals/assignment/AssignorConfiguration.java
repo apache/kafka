@@ -268,19 +268,12 @@ public final class AssignorConfiguration {
         public final long probingRebalanceIntervalMs;
         public final List<String> rackAwareAssignmentTags;
 
-        // TODO: get from streamsConfig after we add the config
-        public final Integer trafficCost;
-        public final Integer nonOverlapCost;
-
         private AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
             rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
-            // TODO: get from streamsConfig after we add the config
-            trafficCost = null;
-            nonOverlapCost = null;
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
@@ -288,24 +281,11 @@ public final class AssignorConfiguration {
                           final Integer numStandbyReplicas,
                           final Long probingRebalanceIntervalMs,
                           final List<String> rackAwareAssignmentTags) {
-            this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags, null, null);
-        }
-
-        AssignmentConfigs(final Long acceptableRecoveryLag,
-                          final Integer maxWarmupReplicas,
-                          final Integer numStandbyReplicas,
-                          final Long probingRebalanceIntervalMs,
-                          final List<String> rackAwareAssignmentTags,
-                          final Integer trafficCost,
-                          final Integer nonOverlapCost) {
             this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
             this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
-            // TODO: validate after we add config
-            this.trafficCost = trafficCost;
-            this.nonOverlapCost = nonOverlapCost;
         }
 
         private static <T> T validated(final String configKey, final T value) {

@@ -146,7 +146,7 @@ public class Graph<V extends Comparable<V>> {
         for (final Map.Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final SortedMap<V, Edge> edges = nodeEdges.getValue();
             for (final Edge nodeEdge : edges.values()) {
-                totalCost += nodeEdge.cost * nodeEdge.flow;
+                totalCost += (long) nodeEdge.cost * nodeEdge.flow;
             }
         }
         return totalCost;
