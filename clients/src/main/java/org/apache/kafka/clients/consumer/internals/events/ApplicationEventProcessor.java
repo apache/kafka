@@ -110,7 +110,7 @@ public class ApplicationEventProcessor {
         Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = event.future();
         if (!commitRequestManger.isPresent()) {
-            future.completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
+            event.future().completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
                     "CommittedRequestManager is not available. Check if group.id was set correctly"));
             return false;
         }

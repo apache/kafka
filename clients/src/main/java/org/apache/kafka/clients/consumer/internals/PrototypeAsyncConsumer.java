@@ -41,6 +41,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -96,9 +97,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    public PrototypeAsyncConsumer(final Properties properties,
-                                  final Deserializer<K> keyDeserializer,
-                                  final Deserializer<V> valueDeserializer) {
+
+    private WakeupTrigger wakeupTrigger = new WakeupTrigger();
+    public PrototypeAsyncConsumer(Properties properties,
+                         Deserializer<K> keyDeserializer,
+                         Deserializer<V> valueDeserializer) {
         this(Utils.propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
@@ -316,6 +319,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
 
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
+        wakeupTrigger.setActiveTask(event.future());
         eventHandler.add(event);
         try {
             return event.future().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -324,10 +328,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } catch (ExecutionException e) {
-            // Execution exception is thrown here
+            if (e.getCause() instanceof WakeupException)
+                throw new WakeupException();
             throw new KafkaException(e);
-        } catch (Exception e) {
-            throw e;
         }
     }
 
@@ -449,6 +452,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
+        wakeupTrigger.wakeup();
     }
 
     /**
@@ -469,7 +473,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        CompletableFuture<Void> commitFuture = commit(offsets);
+        CompletableFuture<Void> commitFuture = wakeupTrigger.setActiveTask(commit(offsets));
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
@@ -477,9 +481,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (final InterruptedException e) {
             throw new InterruptException(e);
         } catch (final ExecutionException e) {
+            if (e.getCause() instanceof WakeupException)
+                throw new WakeupException();
             throw new KafkaException(e);
-        } catch (final Exception e) {
-            throw e;
         }
     }
 
@@ -558,6 +562,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     public ConsumerRecords<K, V> poll(long timeout) {
         throw new KafkaException("method not implemented");
+    }
+
+    // Visible for testing
+    WakeupTrigger wakeupTrigger() {
+        return wakeupTrigger;
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
