@@ -85,7 +85,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         private PartitionWriter<U> partitionWriter;
         private CoordinatorLoader<U> loader;
         private CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
-        private Time time;
+        private Time time = Time.SYSTEM;
         private Timer timer;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
@@ -231,7 +231,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      *
      * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
      */
-    class EventBasedCoordinatorTimer implements CoordinatorTimer<U> {
+    class EventBasedCoordinatorTimer implements CoordinatorTimer<Void, U> {
         /**
          * The logger.
          */
@@ -258,7 +258,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             long delay,
             TimeUnit unit,
             boolean retry,
-            TimeoutOperation<U> operation
+            TimeoutOperation<Void, U> operation
         ) {
             // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
             // expires, the event is pushed to the queue of the coordinator runtime to be executed. This
@@ -277,7 +277,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                         }
 
                         // Execute the timeout operation.
-                        return new CoordinatorResult<>(operation.generateRecords(), null);
+                        return operation.generateRecords();
                     });
 
                     // If the write event fails, it is rescheduled with a small backoff except if retry
@@ -505,6 +505,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                         .withSnapshotRegistry(snapshotRegistry)
                         .withTime(time)
                         .withTimer(timer)
+                        .withTopicPartition(tp)
                         .build();
                     break;
 
@@ -654,7 +655,9 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                     // is put into the deferred event queue.
                     try {
                         // Apply the records to the state machine.
-                        result.records().forEach(context.coordinator::replay);
+                        if (result.replayRecords()) {
+                            result.records().forEach(context.coordinator::replay);
+                        }
 
                         // Write the records to the log and update the last written
                         // offset.
@@ -685,9 +688,13 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
          */
         @Override
         public void complete(Throwable exception) {
+            CompletableFuture<T> appendFuture = result != null ? result.appendFuture() : null;
+
             if (exception == null) {
+                if (appendFuture != null) result.appendFuture().complete(result.response());
                 future.complete(result.response());
             } else {
+                if (appendFuture != null) result.appendFuture().completeExceptionally(exception);
                 future.completeExceptionally(exception);
             }
         }

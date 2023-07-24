@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
@@ -28,6 +29,13 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -51,7 +59,11 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
+import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
+import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
@@ -71,10 +83,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
+import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
+import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
+import static org.apache.kafka.coordinator.group.Group.GroupType.GENERIC;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupEpochRecord;
@@ -82,6 +101,11 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupSubscript
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
 
 /**
  * The GroupMetadataManager manages the metadata of all generic and consumer groups. It holds
@@ -98,13 +122,19 @@ public class GroupMetadataManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
-        private CoordinatorTimer<Record> timer = null;
+        private CoordinatorTimer<Void, Record> timer = null;
         private List<PartitionAssignor> assignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
-        private int consumerGroupSessionTimeoutMs = 45000;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
+        private TopicPartition topicPartition = null;
         private MetadataImage metadataImage = null;
+        private int consumerGroupSessionTimeoutMs = 45000;
+        private int genericGroupMaxSize = Integer.MAX_VALUE;
+        private int genericGroupInitialRebalanceDelayMs = 3000;
+        private int genericGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
+        private int genericGroupMinSessionTimeoutMs;
+        private int genericGroupMaxSessionTimeoutMs;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -121,7 +151,7 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withTimer(CoordinatorTimer<Record> timer) {
+        Builder withTimer(CoordinatorTimer<Void, Record> timer) {
             this.timer = timer;
             return this;
         }
@@ -156,6 +186,36 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withTopicPartition(TopicPartition tp) {
+            this.topicPartition = tp;
+            return this;
+        }
+
+        Builder withGenericGroupMaxSize(int genericGroupMaxSize) {
+            this.genericGroupMaxSize = genericGroupMaxSize;
+            return this;
+        }
+
+        Builder withGenericGroupInitialRebalanceDelayMs(int genericGroupInitialRebalanceDelayMs) {
+            this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
+            return this;
+        }
+
+        Builder withGenericGroupNewMemberJoinTimeoutMs(int genericGroupNewMemberJoinTimeoutMs) {
+            this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
+            return this;
+        }
+
+        Builder withGenericGroupMinSessionTimeoutMs(int genericGroupMinSessionTimeoutMs) {
+            this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
+            return this;
+        }
+
+        Builder withGenericGroupMaxSessionTimeoutMs(int genericGroupMaxSessionTimeoutMs) {
+            this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
+            return this;
+        }
+
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -167,7 +227,12 @@ public class GroupMetadataManager {
             if (assignors == null || assignors.isEmpty())
                 throw new IllegalArgumentException("Assignors must be set before building.");
 
+            if (topicPartition == null) {
+                throw new IllegalStateException("TopicPartition must be set before building.");
+            }
+
             return new GroupMetadataManager(
+                topicPartition,
                 snapshotRegistry,
                 logContext,
                 time,
@@ -177,10 +242,25 @@ public class GroupMetadataManager {
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
-                consumerGroupMetadataRefreshIntervalMs
+                consumerGroupMetadataRefreshIntervalMs,
+                genericGroupMaxSize,
+                genericGroupInitialRebalanceDelayMs,
+                genericGroupNewMemberJoinTimeoutMs,
+                genericGroupMinSessionTimeoutMs,
+                genericGroupMaxSessionTimeoutMs
             );
         }
     }
+
+    /**
+     * The topic partition associated with the metadata manager.
+     */
+    private final TopicPartition topicPartition;
+
+    /**
+     * The log context.
+     */
+    private final LogContext logContext;
 
     /**
      * The logger.
@@ -200,7 +280,7 @@ public class GroupMetadataManager {
     /**
      * The system timer.
      */
-    private final CoordinatorTimer<Record> timer;
+    private final CoordinatorTimer<Void, Record> timer;
 
     /**
      * The supported partition assignors keyed by their name.
@@ -247,24 +327,66 @@ public class GroupMetadataManager {
      */
     private MetadataImage metadataImage;
 
+    /**
+     * An empty result returned to the state machine. This means that
+     * there are no records to append to the log.
+     *
+     * Package private for testing.
+     */
+    static final CoordinatorResult<Void, Record> EMPTY_RESULT =
+        new CoordinatorResult<>(Collections.emptyList(), CompletableFuture.completedFuture(null));
+
+    /**
+     * The maximum number of members allowed in a single generic group.
+     */
+    private final int genericGroupMaxSize;
+
+    /**
+     * Initial rebalance delay for members joining a generic group.
+     */
+    private final int genericGroupInitialRebalanceDelayMs;
+
+    /**
+     * The timeout used to wait for a new member in milliseconds.
+     */
+    private final int genericGroupNewMemberJoinTimeoutMs;
+
+    /**
+     * The group minimum session timeout.
+     */
+    private final int genericGroupMinSessionTimeoutMs;
+
+    /**
+     * The group maximum session timeout.
+     */
+    private final int genericGroupMaxSessionTimeoutMs;
+
     private GroupMetadataManager(
+        TopicPartition topicPartition,
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
-        CoordinatorTimer<Record> timer,
+        CoordinatorTimer<Void, Record> timer,
         List<PartitionAssignor> assignors,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
-        int consumerGroupMetadataRefreshIntervalMs
+        int consumerGroupMetadataRefreshIntervalMs,
+        int genericGroupMaxSize,
+        int genericGroupInitialRebalanceDelayMs,
+        int genericGroupNewMemberJoinTimeoutMs,
+        int genericGroupMinSessionTimeoutMs,
+        int genericGroupMaxSessionTimeoutMs
     ) {
+        this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.time = time;
         this.timer = timer;
         this.metadataImage = metadataImage;
         this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
+        this.topicPartition = topicPartition;
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -272,6 +394,11 @@ public class GroupMetadataManager {
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
         this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+        this.genericGroupMaxSize = genericGroupMaxSize;
+        this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
+        this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
+        this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
+        this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
     }
 
     /**
@@ -309,12 +436,51 @@ public class GroupMetadataManager {
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else {
-            if (group.type() == Group.GroupType.CONSUMER) {
+            if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
             } else {
                 // We don't support upgrading/downgrading between protocols at the moment so
                 // we throw an exception if a group exists with the wrong type.
                 throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+            }
+        }
+    }
+
+    /**
+     * Gets or maybe creates a generic group.
+     *
+     * @param groupId           The group id.
+     * @param createIfNotExists A boolean indicating whether the group should be
+     *                          created if it does not exist.
+     *
+     * @return A GenericGroup.
+     * @throws UnknownMemberIdException if the group does not exist and createIfNotExists is false.
+     * @throws GroupIdNotFoundException if the group is not a generic group.
+     *
+     * Package private for testing.
+     */
+    GenericGroup getOrMaybeCreateGenericGroup(
+        String groupId,
+        boolean createIfNotExists
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        Group group = groups.get(groupId);
+
+        if (group == null && !createIfNotExists) {
+            throw new UnknownMemberIdException(String.format("Generic group %s not found.", groupId));
+        }
+
+        if (group == null) {
+            GenericGroup genericGroup = new GenericGroup(logContext, groupId, GenericGroupState.EMPTY, time);
+            groups.put(groupId, genericGroup);
+            return genericGroup;
+        } else {
+            if (group.type() == GENERIC) {
+                return (GenericGroup) group;
+            } else {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we throw an exception if a group exists with the wrong type.
+                throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                    groupId));
             }
         }
     }
@@ -798,7 +964,7 @@ public class GroupMetadataManager {
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
-                return consumerGroupFenceMember(group, member);
+                return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -807,7 +973,7 @@ public class GroupMetadataManager {
                     groupId, memberId);
             }
 
-            return Collections.emptyList();
+            return new CoordinatorResult<>(Collections.emptyList());
         });
     }
 
@@ -848,12 +1014,12 @@ public class GroupMetadataManager {
                     member.memberEpoch() != expectedMemberEpoch) {
                     log.debug("[GroupId {}] Ignoring revocation timeout for {} because the member " +
                         "state does not match the expected state.", groupId, memberId);
-                    return Collections.emptyList();
+                    return new CoordinatorResult<>(Collections.emptyList());
                 }
 
                 log.info("[GroupId {}] Member {} fenced from the group because " +
                     "it failed to revoke partitions within {}ms.", groupId, memberId, revocationTimeoutMs);
-                return consumerGroupFenceMember(group, member);
+                return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
                     groupId, memberId);
@@ -862,7 +1028,7 @@ public class GroupMetadataManager {
                     groupId, memberId);
             }
 
-            return Collections.emptyList();
+            return new CoordinatorResult<>(Collections.emptyList());
         });
     }
 
@@ -1233,6 +1399,17 @@ public class GroupMetadataManager {
                 case GENERIC:
                     GenericGroup genericGroup = (GenericGroup) group;
                     log.info("Loaded generic group {} with {} members.", groupId, genericGroup.allMembers().size());
+                    genericGroup.allMembers().forEach(member -> {
+                        log.debug("Loaded member {} in generic group {}.", member.memberId(), groupId);
+                        rescheduleGenericGroupMemberHeartbeat(genericGroup, member);
+                    });
+
+                    if (genericGroup.size() > genericGroupMaxSize) {
+                        // In case the max size config has changed.
+                        prepareRebalance(genericGroup, "Freshly-loaded group " + groupId +
+                            " (size " + genericGroup.size() + ") is over capacity " + genericGroupMaxSize +
+                            ". Rebalancing in order to give a chance for consumers to commit offsets");
+                    }
                     break;
             }
         });
@@ -1244,5 +1421,1306 @@ public class GroupMetadataManager {
 
     public static String consumerGroupRevocationTimeoutKey(String groupId, String memberId) {
         return "revocation-timeout-" + groupId + "-" + memberId;
+    }
+
+    /**
+     * Replays GroupMetadataKey/Value to update the soft state of
+     * the generic group.
+     *
+     * @param key   A GroupMetadataKey key.
+     * @param value A GroupMetadataValue record.
+     */
+    public void replay(
+        GroupMetadataKey key,
+        GroupMetadataValue value
+    ) {
+        String groupId = key.group();
+
+        if (value == null)  {
+            // Tombstone. Group should be removed.
+            removeGroup(groupId);
+        } else {
+            List<GenericGroupMember> loadedMembers = new ArrayList<>();
+            for (GroupMetadataValue.MemberMetadata member : value.members()) {
+                int rebalanceTimeout = member.rebalanceTimeout() == -1 ?
+                    member.sessionTimeout() : member.rebalanceTimeout();
+
+                JoinGroupRequestProtocolCollection supportedProtocols = new JoinGroupRequestProtocolCollection();
+                supportedProtocols.add(new JoinGroupRequestProtocol()
+                    .setName(value.protocol())
+                    .setMetadata(member.subscription()));
+
+                GenericGroupMember loadedMember = new GenericGroupMember(
+                    member.memberId(),
+                    Optional.ofNullable(member.groupInstanceId()),
+                    member.clientId(),
+                    member.clientHost(),
+                    rebalanceTimeout,
+                    member.sessionTimeout(),
+                    value.protocolType(),
+                    supportedProtocols,
+                    member.assignment()
+                );
+
+                loadedMembers.add(loadedMember);
+            }
+
+            String protocolType = value.protocolType();
+
+            GenericGroup genericGroup = new GenericGroup(
+                this.logContext,
+                groupId,
+                loadedMembers.isEmpty() ? EMPTY : STABLE,
+                time,
+                value.generation(),
+                protocolType == null || protocolType.isEmpty() ? Optional.empty() : Optional.of(protocolType),
+                Optional.ofNullable(value.protocol()),
+                Optional.ofNullable(value.leader()),
+                value.currentStateTimestamp() == -1 ? Optional.empty() : Optional.of(value.currentStateTimestamp())
+            );
+
+            loadedMembers.forEach(member -> genericGroup.add(member, null));
+            groups.put(groupId, genericGroup);
+
+            genericGroup.setSubscribedTopics(
+                genericGroup.computeSubscribedTopics()
+            );
+        }
+    }
+
+    /**
+     * Handle a JoinGroupRequest.
+     *
+     * @param context The request context.
+     * @param request The actual JoinGroup request.
+     *
+     * @return The result that contains records to append if the join group phase completes.
+     */
+    public CoordinatorResult<Void, Record> genericGroupJoin(
+        RequestContext context,
+        JoinGroupRequestData request,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        CoordinatorResult<Void, Record> result = EMPTY_RESULT;
+
+        String groupId = request.groupId();
+        String memberId = request.memberId();
+        int sessionTimeoutMs = request.sessionTimeoutMs();
+
+        if (sessionTimeoutMs < genericGroupMinSessionTimeoutMs ||
+            sessionTimeoutMs > genericGroupMaxSessionTimeoutMs
+        ) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code())
+            );
+        } else {
+            boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
+            // Group is created if it does not exist and the member id is UNKNOWN. if member
+            // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
+            GenericGroup group;
+            boolean isNewGroup = !groups.containsKey(groupId);
+            try {
+                group = getOrMaybeCreateGenericGroup(groupId, isUnknownMember);
+            } catch (Throwable t) {
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setMemberId(memberId)
+                    .setErrorCode(Errors.forException(t).code())
+                );
+                return EMPTY_RESULT;
+            }
+
+            if (!acceptJoiningMember(group, memberId)) {
+                group.remove(memberId);
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setMemberId(UNKNOWN_MEMBER_ID)
+                    .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())
+                );
+            } else if (isUnknownMember) {
+                result = genericGroupJoinNewMember(
+                    context,
+                    request,
+                    group,
+                    responseFuture
+                );
+            } else {
+                result = genericGroupJoinExistingMember(
+                    context,
+                    request,
+                    group,
+                    responseFuture
+                );
+            }
+
+            if (isNewGroup && result == EMPTY_RESULT) {
+                // If there are no records to append and if a group was newly created, we need to append
+                // records to the log to commit the group to the timeline data structure.
+                CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+                appendFuture.whenComplete((__, t) -> {
+                    if (t != null) {
+                        // We failed to write the empty group metadata. This will revert the snapshot, removing
+                        // the newly created group.
+                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+
+                        responseFuture.complete(new JoinGroupResponseData()
+                            .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+                    }
+                });
+
+                List<Record> records = Collections.singletonList(
+                    RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+                );
+
+                return new CoordinatorResult<>(records, appendFuture);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Attempt to complete join group phase. We do not complete
+     * the join group phase if this is the initial rebalance.
+     *
+     * @param group The group.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> maybeCompleteJoinPhase(GenericGroup group) {
+        if (group.isInState(PREPARING_REBALANCE) &&
+            group.hasAllMembersJoined() &&
+            group.previousState() != EMPTY
+        ) {
+            return completeGenericGroupJoin(group);
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Handle a new member generic group join.
+     *
+     * @param context         The request context.
+     * @param request         The join group request.
+     * @param group           The group to add the member.
+     * @param responseFuture  The response future to complete.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> genericGroupJoinNewMember(
+        RequestContext context,
+        JoinGroupRequestData request,
+        GenericGroup group,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        if (group.isInState(DEAD)) {
+            // If the group is marked as dead, it means some other thread has just removed the group
+            // from the coordinator metadata; it is likely that the group has migrated to some other
+            // coordinator OR the group is in a transient unstable phase. Let the member retry
+            // finding the correct coordinator and rejoin.
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(UNKNOWN_MEMBER_ID)
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        } else if (!group.supportsProtocols(request.protocolType(), request.protocols())) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(UNKNOWN_MEMBER_ID)
+                .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code())
+            );
+        } else {
+            Optional<String> groupInstanceId = Optional.ofNullable(request.groupInstanceId());
+            String newMemberId = group.generateMemberId(context.clientId(), groupInstanceId);
+
+            if (groupInstanceId.isPresent()) {
+                return genericGroupJoinNewStaticMember(
+                    context,
+                    request,
+                    group,
+                    newMemberId,
+                    responseFuture
+                );
+            } else {
+                return genericGroupJoinNewDynamicMember(
+                    context,
+                    request,
+                    group,
+                    newMemberId,
+                    responseFuture
+                );
+            }
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Handle new static member join. If there was an existing member id for the group instance id,
+     * replace that member. Otherwise, add the member and rebalance.
+     *
+     * @param context         The request context.
+     * @param request         The join group request.
+     * @param group           The group to add the member.
+     * @param newMemberId     The newly generated member id.
+     * @param responseFuture  The response future to complete.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> genericGroupJoinNewStaticMember(
+        RequestContext context,
+        JoinGroupRequestData request,
+        GenericGroup group,
+        String newMemberId,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        String groupInstanceId = request.groupInstanceId();
+        String existingMemberId = group.staticMemberId(groupInstanceId);
+        if (existingMemberId != null) {
+            log.info("Static member with groupInstanceId={} and unknown member id joins " +
+                    "group {} in {} state. Replacing previously mapped member {} with this groupInstanceId.",
+                groupInstanceId, group.groupId(), group.currentState(), existingMemberId);
+
+            return updateStaticMemberAndRebalance(
+                context,
+                request,
+                group,
+                existingMemberId,
+                newMemberId,
+                responseFuture
+            );
+        } else {
+            log.info("Static member with groupInstanceId={} and unknown member id joins " +
+                    "group {} in {} state. Created a new member id {} for this member and added to the group.",
+                groupInstanceId, group.groupId(), group.currentState(), newMemberId);
+
+            return addMemberAndRebalance(context, request, group, newMemberId, responseFuture);
+        }
+    }
+
+    /**
+     * Handle a new dynamic member join. If the member id field is required, the group metadata manager
+     * will add the new member id to the pending members and respond with MEMBER_ID_REQUIRED along with
+     * the new member id for the client to join with.
+     *
+     * Otherwise, add the new member to the group and rebalance.
+     *
+     * @param context         The request context.
+     * @param request         The join group request.
+     * @param group           The group to add the member.
+     * @param newMemberId     The newly generated member id.
+     * @param responseFuture  The response future to complete.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> genericGroupJoinNewDynamicMember(
+        RequestContext context,
+        JoinGroupRequestData request,
+        GenericGroup group,
+        String newMemberId,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        if (JoinGroupRequest.requiresKnownMemberId(context.apiVersion())) {
+            // If member id required, register the member in the pending member list and send
+            // back a response to call for another join group request with allocated member id.
+            log.info("Dynamic member with unknown member id joins group {} in {} state. " +
+                    "Created a new member id {} and requesting the member to rejoin with this id.",
+                group.groupId(), group.currentState(), newMemberId);
+
+            group.addPendingMember(newMemberId);
+            String genericGroupHeartbeatKey = genericGroupHeartbeatKey(group.groupId(), newMemberId);
+
+            timer.schedule(
+                genericGroupHeartbeatKey,
+                request.sessionTimeoutMs(),
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> expireGenericGroupMemberHeartbeat(group, newMemberId)
+            );
+
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(newMemberId)
+                .setErrorCode(Errors.MEMBER_ID_REQUIRED.code())
+            );
+        } else {
+            log.info("Dynamic member with unknown member id joins group {} in state {}. " +
+                    "Created a new member id {} and added the member to the group.",
+                group.groupId(), group.currentState(), newMemberId);
+
+            return addMemberAndRebalance(context, request, group, newMemberId, responseFuture);
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Handle a join group request for an existing member.
+     *
+     * @param context         The request context.
+     * @param request         The join group request.
+     * @param group           The group to add the member.
+     * @param responseFuture  The response future to complete.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> genericGroupJoinExistingMember(
+        RequestContext context,
+        JoinGroupRequestData request,
+        GenericGroup group,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        String memberId = request.memberId();
+        String groupInstanceId = request.groupInstanceId();
+
+        if (group.isInState(DEAD)) {
+            // If the group is marked as dead, it means the group was recently removed the group
+            // from the coordinator metadata; it is likely that the group has migrated to some other
+            // coordinator OR the group is in a transient unstable phase. Let the member retry
+            // finding the correct coordinator and rejoin.
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        } else if (!group.supportsProtocols(request.protocolType(), request.protocols())) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code())
+            );
+        } else if (group.isPendingMember(memberId)) {
+            // A rejoining pending member will be accepted. Note that pending member cannot be a static member.
+            if (groupInstanceId != null) {
+                throw new IllegalStateException("Received unexpected JoinGroup with groupInstanceId=" +
+                    groupInstanceId + " for pending member with memberId=" + memberId);
+            }
+
+            log.debug("Pending dynamic member with id {} joins group {} in {} state. Adding to the group now.",
+                memberId, group.groupId(), group.currentState());
+
+            return addMemberAndRebalance(
+                context,
+                request,
+                group,
+                memberId,
+                responseFuture
+            );
+        } else {
+            Optional<Errors> memberError = validateExistingMember(
+                group,
+                memberId,
+                groupInstanceId,
+                "join-group"
+            );
+
+            if (memberError.isPresent()) {
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setMemberId(memberId)
+                    .setErrorCode(memberError.get().code())
+                );
+            } else {
+                GenericGroupMember member = group.member(memberId);
+                if (group.isInState(PREPARING_REBALANCE)) {
+                    return updateMemberThenRebalanceOrCompleteJoin(
+                        request,
+                        group,
+                        member,
+                        "Member " + member.memberId() + " is joining group during " + group.stateAsString() +
+                            "; client reason: " + JoinGroupRequest.joinReason(request),
+                        responseFuture
+                    );
+                } else if (group.isInState(COMPLETING_REBALANCE)) {
+                    if (member.matches(request.protocols())) {
+                        // Member is joining with the same metadata (which could be because it failed to
+                        // receive the initial JoinGroup response), so just return current group information
+                        // for the current generation.
+                        responseFuture.complete(new JoinGroupResponseData()
+                            .setMembers(group.isLeader(memberId) ?
+                                group.currentGenericGroupMembers() : Collections.emptyList())
+                            .setMemberId(memberId)
+                            .setGenerationId(group.generationId())
+                            .setProtocolName(group.protocolName().orElse(null))
+                            .setProtocolType(group.protocolType().orElse(null))
+                            .setLeader(group.leaderOrNull())
+                            .setSkipAssignment(false)
+                        );
+                    } else {
+                        // Member has changed metadata, so force a rebalance
+                        return updateMemberThenRebalanceOrCompleteJoin(
+                            request,
+                            group,
+                            member,
+                            "Updating metadata for member " + memberId + " during " + group.stateAsString() +
+                                "; client reason: " + JoinGroupRequest.joinReason(request),
+                            responseFuture
+                        );
+                    }
+                } else if (group.isInState(STABLE)) {
+                    if (group.isLeader(memberId)) {
+                        // Force a rebalance if the leader sends JoinGroup;
+                        // This allows the leader to trigger rebalances for changes affecting assignment
+                        // which do not affect the member metadata (such as topic metadata changes for the consumer)
+                        return updateMemberThenRebalanceOrCompleteJoin(
+                            request,
+                            group,
+                            member,
+                            "Leader " + memberId + " re-joining group during " + group.stateAsString() +
+                                "; client reason: " + JoinGroupRequest.joinReason(request),
+                            responseFuture
+                        );
+                    } else if (!member.matches(request.protocols())) {
+                        return updateMemberThenRebalanceOrCompleteJoin(
+                            request,
+                            group,
+                            member,
+                            "Updating metadata for member " + memberId + " during " + group.stateAsString() +
+                                "; client reason: " + JoinGroupRequest.joinReason(request),
+                            responseFuture
+                        );
+                    } else {
+                        // For followers with no actual change to their metadata, just return group information
+                        // for the current generation which will allow them to issue SyncGroup.
+                        responseFuture.complete(new JoinGroupResponseData()
+                            .setMembers(Collections.emptyList())
+                            .setMemberId(memberId)
+                            .setGenerationId(group.generationId())
+                            .setProtocolName(group.protocolName().orElse(null))
+                            .setProtocolType(group.protocolType().orElse(null))
+                            .setLeader(group.leaderOrNull())
+                            .setSkipAssignment(false)
+                        );
+                    }
+                } else {
+                    // Group reached unexpected (Empty) state. Let the joining member reset their generation and rejoin.
+                    log.warn("Attempt to add rejoining member {} of group {} in unexpected group state {}",
+                        memberId, group.groupId(), group.stateAsString());
+
+                    responseFuture.complete(new JoinGroupResponseData()
+                        .setMemberId(memberId)
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                    );
+                }
+            }
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Complete the join group phase. Remove all dynamic members that have not rejoined
+     * during this stage and proceed with the next generation for this group. The generation id
+     * is incremented and the group transitions to CompletingRebalance state if there is at least
+     * one member.
+     *
+     * If the group is in Empty state, append a new group metadata record to the log. Otherwise,
+     * complete all members' join group response futures and wait for sync requests from members.
+     *
+     * @param group The group that is completing the join group phase.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> completeGenericGroupJoin(
+        GenericGroup group
+    ) {
+        timer.cancel(genericGroupJoinKey(group.groupId()));
+        String groupId = group.groupId();
+
+        Map<String, GenericGroupMember> notYetRejoinedDynamicMembers =
+            group.notYetRejoinedMembers().entrySet().stream()
+                .filter(entry -> !entry.getValue().isStaticMember())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        if (!notYetRejoinedDynamicMembers.isEmpty()) {
+            notYetRejoinedDynamicMembers.values().forEach(failedMember -> {
+                group.remove(failedMember.memberId());
+                timer.cancel(genericGroupHeartbeatKey(group.groupId(), failedMember.memberId()));
+            });
+
+            log.info("Group {} removed dynamic members who haven't joined: {}",
+                groupId, notYetRejoinedDynamicMembers.keySet());
+        }
+
+        if (group.isInState(DEAD)) {
+            log.info("Group {} is dead, skipping rebalance stage.", groupId);
+        } else if (!group.maybeElectNewJoinedLeader() && !group.allMembers().isEmpty()) {
+            // If all members are not rejoining, we will postpone the completion
+            // of rebalance preparing stage, and send out another delayed operation
+            // until session timeout removes all the non-responsive members.
+            log.error("Group {} could not complete rebalance because no members rejoined.", groupId);
+
+            timer.schedule(
+                genericGroupJoinKey(groupId),
+                group.rebalanceTimeoutMs(),
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> completeGenericGroupJoin(group)
+            );
+
+            return EMPTY_RESULT;
+        } else {
+            group.initNextGeneration();
+            if (group.isInState(EMPTY)) {
+                log.info("Group {} with generation {} is now empty ({}-{})",
+                    groupId, group.generationId(), topicPartition.topic(), topicPartition.partition());
+
+                CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+                appendFuture.whenComplete((__, t) -> {
+                    if (t != null) {
+                        // We failed to write the empty group metadata. If the broker fails before another rebalance,
+                        // the previous generation written to the log will become active again (and most likely timeout).
+                        // This should be safe since there are no active members in an empty generation, so we just warn.
+                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+                    }
+                });
+
+                List<Record> records = Collections.singletonList(
+                    RecordHelpers.newGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+                );
+
+                return new CoordinatorResult<>(records, appendFuture);
+
+            } else {
+                log.info("Stabilized group {} generation {} ({}) with {} members",
+                    groupId, group.generationId(), topicPartition, group.size());
+
+                // Complete the awaiting join group response future for all the members after rebalancing
+                group.allMembers().forEach(member -> {
+                    List<JoinGroupResponseData.JoinGroupResponseMember> members = Collections.emptyList();
+                    if (group.isLeader(member.memberId())) {
+                        members = group.currentGenericGroupMembers();
+                    }
+
+                    JoinGroupResponseData response = new JoinGroupResponseData()
+                        .setMembers(members)
+                        .setMemberId(member.memberId())
+                        .setGenerationId(group.generationId())
+                        .setProtocolName(group.protocolName().orElse(null))
+                        .setProtocolType(group.protocolType().orElse(null))
+                        .setLeader(group.leaderOrNull())
+                        .setSkipAssignment(false)
+                        .setErrorCode(Errors.NONE.code());
+
+                    group.completeJoinFuture(member, response);
+                    rescheduleGenericGroupMemberHeartbeat(group, member);
+                    member.setIsNew(false);
+
+                    group.addPendingSyncMember(member.memberId());
+                });
+
+                schedulePendingSync(group);
+            }
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Wait for sync requests for the group.
+     *
+     * @param group The group.
+     */
+    private void schedulePendingSync(GenericGroup group) {
+        timer.schedule(genericGroupSyncKey(group.groupId()),
+            group.rebalanceTimeoutMs(),
+            TimeUnit.MILLISECONDS,
+            false,
+            () -> expirePendingSync(group, group.generationId()));
+    }
+
+    /**
+     * Invoked when the heartbeat operation is expired from the timer. Possibly remove the member and
+     * try complete the join phase.
+     *
+     * @param group     The group.
+     * @param memberId  The member id.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> expireGenericGroupMemberHeartbeat(
+        GenericGroup group,
+        String memberId
+    ) {
+        if (group.isInState(DEAD)) {
+            log.info("Received notification of heartbeat expiration for member {} after group {} " +
+                    "had already been unloaded or deleted.",
+                memberId, group.groupId());
+        } else if (group.isPendingMember(memberId)) {
+            log.info("Pending member {} in group {} has been removed after session timeout expiration.",
+                memberId, group.groupId());
+
+            return removePendingMemberAndUpdateGenericGroup(group, memberId);
+        } else if (!group.hasMemberId(memberId)) {
+            log.debug("Member {} has already been removed from the group.", memberId);
+        } else {
+            GenericGroupMember member = group.member(memberId);
+            if (!member.hasSatisfiedHeartbeat()) {
+                log.info("Member {} in group {} has failed, removing it from the group.",
+                    member.memberId(), group.groupId());
+
+                return removeMemberAndUpdateGenericGroup(
+                    group,
+                    member,
+                    "removing member " + member.memberId() + " on heartbeat expiration."
+                );
+            }
+        }
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Invoked when the heartbeat key is expired from the timer. Possibly remove the member
+     * from the group and try to complete the join phase.
+     *
+     * @param group     The group.
+     * @param member    The member.
+     * @param reason    The reason for removing the member.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> removeMemberAndUpdateGenericGroup(
+        GenericGroup group,
+        GenericGroupMember member,
+        String reason
+    ) {
+        // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
+        // to invoke the response future before removing the member. We return UNKNOWN_MEMBER_ID so
+        // that the consumer will retry the JoinGroup request if it is still active.
+        group.completeJoinFuture(member, new JoinGroupResponseData()
+            .setMemberId(UNKNOWN_MEMBER_ID)
+            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+        );
+        group.remove(member.memberId());
+
+        if (group.isInState(STABLE) || group.isInState(COMPLETING_REBALANCE)) {
+            return maybePrepareRebalanceOrCompleteJoin(group, reason);
+        } else if (group.isInState(PREPARING_REBALANCE) && group.hasAllMembersJoined()) {
+            return completeGenericGroupJoin(group);
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Remove a pending member from the group and possibly complete the join phase.
+     *
+     * @param group     The group.
+     * @param memberId  The member id.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> removePendingMemberAndUpdateGenericGroup(
+        GenericGroup group,
+        String memberId
+    ) {
+        group.remove(memberId);
+
+        if (group.isInState(PREPARING_REBALANCE) && group.hasAllMembersJoined()) {
+            return completeGenericGroupJoin(group);
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Update an existing member. Then begin a rebalance or complete the join phase.
+     *
+     * @param request         The join group request.
+     * @param group           The group to add the member.
+     * @param member          The member.
+     * @param joinReason      The client reason for the join request.
+     * @param responseFuture  The response future to complete.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> updateMemberThenRebalanceOrCompleteJoin(
+        JoinGroupRequestData request,
+        GenericGroup group,
+        GenericGroupMember member,
+        String joinReason,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        group.updateMember(
+            member,
+            request.protocols(),
+            request.rebalanceTimeoutMs(),
+            request.sessionTimeoutMs(),
+            responseFuture
+        );
+
+        return maybePrepareRebalanceOrCompleteJoin(group, joinReason);
+    }
+
+    /**
+     * We are validating two things:
+     *     1. If `groupInstanceId` is present, then it exists and is mapped to `memberId`
+     *     2. The `memberId` exists in the group
+     *
+     * @param group            The generic group.
+     * @param memberId         The member id.
+     * @param groupInstanceId  The group instance id.
+     * @param operation        The API operation.
+     *
+     * @return the error.
+     */
+    private Optional<Errors> validateExistingMember(
+        GenericGroup group,
+        String memberId,
+        String groupInstanceId,
+        String operation
+    ) {
+        if (groupInstanceId == null) {
+            if (!group.hasMemberId(memberId)) {
+                return Optional.of(Errors.UNKNOWN_MEMBER_ID);
+            } else {
+                return Optional.empty();
+            }
+        }
+
+        String existingMemberId = group.staticMemberId(groupInstanceId);
+        if (existingMemberId == null) {
+            return Optional.of(Errors.UNKNOWN_MEMBER_ID);
+        }
+
+        if (!existingMemberId.equals(memberId)) {
+            log.info("Request memberId={} for static member with groupInstanceId={} " +
+                    "is fenced by existing memberId={} during operation {}",
+                memberId, groupInstanceId, existingMemberId, operation);
+            
+            return Optional.of(Errors.FENCED_INSTANCE_ID);
+        }
+        
+        return Optional.empty();
+    }
+
+    /**
+     * Add a member and rebalance.
+     *
+     * @param context         The request context.
+     * @param request         The join group request.
+     * @param group           The group to add the member.
+     * @param memberId        The member id.
+     * @param responseFuture  The response future to complete.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> addMemberAndRebalance(
+        RequestContext context,
+        JoinGroupRequestData request,
+        GenericGroup group,
+        String memberId,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        Optional<String> groupInstanceId = Optional.ofNullable(request.groupInstanceId());
+        GenericGroupMember member = new GenericGroupMember(
+            memberId,
+            groupInstanceId,
+            context.clientId(),
+            context.clientAddress().toString(),
+            request.rebalanceTimeoutMs(),
+            request.sessionTimeoutMs(),
+            request.protocolType(),
+            request.protocols()
+        );
+
+        member.setIsNew(true);
+
+        // Update the newMemberAdded flag to indicate that the initial rebalance can be further delayed
+        if (group.isInState(PREPARING_REBALANCE) && group.previousState() == EMPTY) {
+            group.setNewMemberAdded(true);
+        }
+        
+        group.add(member, responseFuture);
+
+        // The session timeout does not affect new members since they do not have their memberId and
+        // cannot send heartbeats. Furthermore, we cannot detect disconnects because sockets are muted
+        // while the JoinGroup request is parked. If the client does disconnect (e.g. because of a request
+        // timeout during a long rebalance), they may simply retry which will lead to a lot of defunct
+        // members in the rebalance. To prevent this going on indefinitely, we time out JoinGroup requests
+        // for new members. If the new member is still there, we expect it to retry.
+        rescheduleGenericGroupMemberHeartbeat(group, member, genericGroupNewMemberJoinTimeoutMs);
+
+        return maybePrepareRebalanceOrCompleteJoin(group, "Adding new member " + memberId + " with group instance id " +
+            request.groupInstanceId() + "; client reason: " + JoinGroupRequest.joinReason(request));
+    }
+
+    /**
+     * Prepare a rebalance if the group is in a valid state. Otherwise, try
+     * to complete the join phase.
+     *
+     * @param group           The group to rebalance.
+     * @param reason          The reason for the rebalance.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> maybePrepareRebalanceOrCompleteJoin(
+        GenericGroup group,
+        String reason
+    ) {
+        if (group.canRebalance()) {
+            return prepareRebalance(group, reason);
+        } else {
+            return maybeCompleteJoinPhase(group);
+        }
+    }
+
+    /**
+     * Prepare a rebalance.
+     *
+     * @param group           The group to rebalance.
+     * @param reason          The reason for the rebalance.
+     *
+     * @return The coordinator result that will be appended to the log.
+     *
+     * Package private for testing.
+     */
+    CoordinatorResult<Void, Record> prepareRebalance(
+        GenericGroup group,
+        String reason
+    ) {
+        // If any members are awaiting sync, cancel their request and have them rejoin.
+        if (group.isInState(COMPLETING_REBALANCE)) {
+            resetAndPropagateAssignmentWithError(group, Errors.REBALANCE_IN_PROGRESS);
+        }
+
+        // If a sync expiration is pending, cancel it.
+        removeSyncExpiration(group);
+
+        boolean isInitialRebalance = group.isInState(EMPTY);
+        if (isInitialRebalance) {
+            // The group is new. Provide more time for the members to join.
+            int delayMs = genericGroupInitialRebalanceDelayMs;
+            int remainingMs = Math.max(group.rebalanceTimeoutMs() - genericGroupInitialRebalanceDelayMs, 0);
+
+            timer.schedule(
+                genericGroupJoinKey(group.groupId()),
+                delayMs,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> tryCompleteInitialRebalanceElseSchedule(group, delayMs, remainingMs)
+            );
+        }
+
+        group.transitionTo(PREPARING_REBALANCE);
+
+        log.info("Preparing to rebalance group {} in state {} with old generation {} ({}-{}) (reason: {})",
+            group.groupId(), group.currentState(), group.generationId(),
+            topicPartition.topic(), topicPartition.partition(), reason);
+
+        return isInitialRebalance ? EMPTY_RESULT : maybeCompleteJoinElseSchedule(group);
+    }
+
+    /**
+     * Try to complete the join phase. Otherwise, schedule a new join operation.
+     *
+     * @param group The group.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> maybeCompleteJoinElseSchedule(
+        GenericGroup group
+    ) {
+        String genericGroupJoinKey = genericGroupJoinKey(group.groupId());
+        if (group.hasAllMembersJoined()) {
+            // All members have joined. Proceed to sync phase.
+            return completeGenericGroupJoin(group);
+        } else {
+            timer.schedule(
+                genericGroupJoinKey,
+                group.rebalanceTimeoutMs(),
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> completeGenericGroupJoin(group)
+            );
+            return EMPTY_RESULT;
+        }
+    }
+
+    /**
+     * Try to complete the join phase of the initial rebalance.
+     * Otherwise, extend the rebalance.
+     *
+     * @param group The group under initial rebalance.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> tryCompleteInitialRebalanceElseSchedule(
+        GenericGroup group,
+        int delayMs,
+        int remainingMs
+    ) {
+        if (group.newMemberAdded() && remainingMs != 0) {
+            // A new member was added. Extend the delay.
+            group.setNewMemberAdded(false);
+            int newDelayMs = Math.min(genericGroupInitialRebalanceDelayMs, remainingMs);
+            int newRemainingMs = Math.max(remainingMs - delayMs, 0);
+
+            timer.schedule(
+                genericGroupJoinKey(group.groupId()),
+                newDelayMs,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> tryCompleteInitialRebalanceElseSchedule(group, newDelayMs, newRemainingMs)
+            );
+        } else {
+            // No more time remaining. Complete the join phase.
+            return completeGenericGroupJoin(group);
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Reset assignment for all members and propagate the error to all members in the group.
+     * 
+     * @param group  The group.
+     * @param error  The error to propagate.
+     */
+    private void resetAndPropagateAssignmentWithError(GenericGroup group, Errors error) {
+        if (!group.isInState(COMPLETING_REBALANCE)) {
+            throw new IllegalStateException("Group " + group.groupId() + " must be in " + COMPLETING_REBALANCE.name() +
+                " state but is in " + group.currentState() + ".");
+        }
+
+        group.allMembers().forEach(member -> member.setAssignment(GenericGroupMember.EMPTY_ASSIGNMENT));
+        propagateAssignment(group, error);
+    }
+
+    /**
+     * Propagate assignment and error to all members.
+     *
+     * @param group  The group.
+     * @param error  The error to propagate.
+     */
+    private void propagateAssignment(GenericGroup group, Errors error) {
+        Optional<String> protocolName = Optional.empty();
+        Optional<String> protocolType = Optional.empty();
+        if (error == Errors.NONE) {
+            protocolName = group.protocolName();
+            protocolType = group.protocolType();
+        }
+
+        for (GenericGroupMember member : group.allMembers()) {
+            if (!member.hasAssignment() && error == Errors.NONE) {
+                log.warn("Sending empty assignment to member {} of {} for " + "generation {} with no errors",
+                    member.memberId(), group.groupId(), group.generationId());
+            }
+
+            if (group.completeSyncFuture(member,
+                new SyncGroupResponseData()
+                    .setProtocolName(protocolName.orElse(null))
+                    .setProtocolType(protocolType.orElse(null))
+                    .setAssignment(member.assignment())
+                    .setErrorCode(error.code()))) {
+
+                // Reset the session timeout for members after propagating the member's assignment.
+                // This is because if any member's session expired while we were still awaiting either
+                // the leader sync group or the append future, its expiration will be ignored and no
+                // future heartbeat expectations will not be scheduled.
+                rescheduleGenericGroupMemberHeartbeat(group, member);
+            }
+        }
+    }
+
+    /**
+     * Complete and schedule next heartbeat.
+     *
+     * @param group    The group.
+     * @param member   The member.
+     */
+    private void rescheduleGenericGroupMemberHeartbeat(
+        GenericGroup group,
+        GenericGroupMember member
+    ) {
+        rescheduleGenericGroupMemberHeartbeat(group, member, member.sessionTimeoutMs());
+    }
+
+    /**
+     * Reschedule the heartbeat.
+     *
+     * @param group      The group.
+     * @param member     The member.
+     * @param timeoutMs  The timeout for the new heartbeat.
+     */
+    private void rescheduleGenericGroupMemberHeartbeat(
+        GenericGroup group,
+        GenericGroupMember member,
+        long timeoutMs
+    ) {
+        String genericGroupHeartbeatKey = genericGroupHeartbeatKey(group.groupId(), member.memberId());
+
+        // Reschedule the next heartbeat expiration deadline
+        timer.schedule(genericGroupHeartbeatKey,
+            timeoutMs,
+            TimeUnit.MILLISECONDS,
+            false,
+            () -> expireGenericGroupMemberHeartbeat(group, member.memberId()));
+    }
+
+    /**
+     * Remove the sync key from the timer and clear all pending sync members from the group.
+     * Invoked when a new rebalance is triggered.
+     *
+     * @param group  The group.
+     */
+    private void removeSyncExpiration(GenericGroup group) {
+        group.clearPendingSyncMembers();
+        timer.cancel(genericGroupSyncKey(group.groupId()));
+    }
+
+    /**
+     * Expire pending sync.
+     *
+     * @param group           The group.
+     * @param generationId    The generation when the pending sync was originally scheduled.
+     *
+     * @return The coordinator result that will be appended to the log.
+     * */
+    private CoordinatorResult<Void, Record> expirePendingSync(
+        GenericGroup group,
+        int generationId
+    ) {
+        if (generationId != group.generationId()) {
+            log.error("Received unexpected notification of sync expiration for {} with an old " +
+                "generation {} while the group has {}.", group.groupId(), generationId, group.generationId());
+        } else {
+            if (group.isInState(DEAD) || group.isInState(EMPTY) || group.isInState(PREPARING_REBALANCE)) {
+                log.error("Received unexpected notification of sync expiration after group {} already " +
+                    "transitioned to {} state.", group.groupId(), group.stateAsString());
+            } else if (group.isInState(COMPLETING_REBALANCE) || group.isInState(STABLE)) {
+                if (!group.hasReceivedSyncFromAllMembers()) {
+                    Set<String> pendingSyncMembers = new HashSet<>(group.allPendingSyncMembers());
+                    pendingSyncMembers.forEach(memberId -> {
+                        group.remove(memberId);
+                        timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
+                    });
+
+                    log.debug("Group {} removed members who haven't sent their sync requests: {}",
+                        group.groupId(), pendingSyncMembers);
+
+                    return prepareRebalance(group, "Removing " + pendingSyncMembers + " on pending sync request expiration");
+                }
+            }
+        }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Checks whether the group can accept a joining member.
+     *
+     * @param group      The group.
+     * @param memberId   The member.
+     *
+     * @return whether the group can accept a joining member.
+     */
+    private boolean acceptJoiningMember(GenericGroup group, String memberId) {
+        switch (group.currentState()) {
+            case EMPTY:
+            case DEAD:
+                // Always accept the request when the group is empty or dead
+                return true;
+            case PREPARING_REBALANCE:
+                // An existing member is accepted if it is already awaiting. New members are accepted
+                // up to the max group size. Note that the number of awaiting members is used here
+                // for two reasons:
+                // 1) the group size is not reliable as it could already be above the max group size
+                //    if the max group size was reduced.
+                // 2) using the number of awaiting members allows to kick out the last rejoining
+                //    members of the group.
+                return (group.hasMemberId(memberId) && group.member(memberId).isAwaitingJoin()) ||
+                    group.numAwaitingJoinResponse() < genericGroupMaxSize;
+            case COMPLETING_REBALANCE:
+            case STABLE:
+                // An existing member is accepted. New members are accepted up to the max group size.
+                // Note that the group size is used here. When the group transitions to CompletingRebalance,
+                // members who haven't rejoined are removed.
+                return group.hasMemberId(memberId) || group.size() < genericGroupMaxSize;
+            default:
+                throw new IllegalStateException("Unknown group state: " + group.stateAsString());
+        }
+    }
+
+    /**
+     * Update a static member and rebalance.
+     *
+     * @param context         The request context.
+     * @param request         The join group request.
+     * @param group           The group of the static member.
+     * @param oldMemberId     The existing static member id.
+     * @param newMemberId     The new joining static member id.
+     * @param responseFuture  The response future to complete.
+     *
+     * @return The coordinator result that will be appended to the log.
+     */
+    private CoordinatorResult<Void, Record> updateStaticMemberAndRebalance(
+        RequestContext context,
+        JoinGroupRequestData request,
+        GenericGroup group,
+        String oldMemberId,
+        String newMemberId,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        String currentLeader = group.leaderOrNull();
+        GenericGroupMember newMember = group.replaceStaticMember(request.groupInstanceId(), oldMemberId, newMemberId);
+
+        // Heartbeat of old member id will expire without effect since the group no longer contains that member id.
+        // New heartbeat shall be scheduled with new member id.
+        rescheduleGenericGroupMemberHeartbeat(group, newMember);
+
+        int oldRebalanceTimeoutMs = newMember.rebalanceTimeoutMs();
+        int oldSessionTimeoutMs = newMember.sessionTimeoutMs();
+        JoinGroupRequestProtocolCollection oldProtocols = newMember.supportedProtocols();
+
+        group.updateMember(
+            newMember,
+            request.protocols(),
+            request.rebalanceTimeoutMs(),
+            request.sessionTimeoutMs(),
+            responseFuture
+        );
+
+        if (group.isInState(STABLE)) {
+            // Check if group's selected protocol of next generation will change, if not, simply store group to persist
+            // the updated static member, if yes, rebalance should be triggered to keep the group's assignment
+            // and selected protocol consistent
+            String groupInstanceId = request.groupInstanceId();
+            String selectedProtocolForNextGeneration = group.selectProtocol();
+            if (group.protocolName().orElse("").equals(selectedProtocolForNextGeneration)) {
+                log.info("Static member which joins during Stable stage and doesn't affect " +
+                    "the selected protocol will not trigger a rebalance.");
+
+                CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+                appendFuture.whenComplete((__, t) -> {
+                    if (t != null) {
+                        log.warn("Failed to persist metadata for group {} static member {} with " +
+                            "group instance id {} due to {}. Reverting to old member id {}.",
+                            group.groupId(), newMemberId, groupInstanceId, t.getMessage(), oldMemberId);
+
+                        // Failed to persist the member id of the given static member, revert the update of the static member in the group.
+                        group.updateMember(newMember, oldProtocols, oldRebalanceTimeoutMs, oldSessionTimeoutMs, null);
+                        GenericGroupMember oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId);
+                        rescheduleGenericGroupMemberHeartbeat(group, oldMember);
+
+                        responseFuture.complete(
+                            new JoinGroupResponseData()
+                                .setMembers(Collections.emptyList())
+                                .setMemberId(UNKNOWN_MEMBER_ID)
+                                .setGenerationId(group.generationId())
+                                .setProtocolName(group.protocolName().orElse(null))
+                                .setProtocolType(group.protocolType().orElse(null))
+                                .setLeader(currentLeader)
+                                .setSkipAssignment(false)
+                                .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+
+                    } else if (JoinGroupRequest.supportsSkippingAssignment(context.apiVersion())) {
+                        boolean isLeader = group.isLeader(newMemberId);
+
+                        group.completeJoinFuture(newMember, new JoinGroupResponseData()
+                            .setMembers(isLeader ? group.currentGenericGroupMembers() : Collections.emptyList())
+                            .setMemberId(newMemberId)
+                            .setGenerationId(group.generationId())
+                            .setProtocolName(group.protocolName().orElse(null))
+                            .setProtocolType(group.protocolType().orElse(null))
+                            .setLeader(group.leaderOrNull())
+                            .setSkipAssignment(isLeader)
+                        );
+                    } else {
+                        group.completeJoinFuture(newMember, new JoinGroupResponseData()
+                            .setMembers(Collections.emptyList())
+                            .setMemberId(newMemberId)
+                            .setGenerationId(group.generationId())
+                            .setProtocolName(group.protocolName().orElse(null))
+                            .setProtocolType(group.protocolType().orElse(null))
+                            .setLeader(currentLeader)
+                            .setSkipAssignment(false)
+                        );
+                    }
+                });
+
+                List<Record> records = Collections.singletonList(
+                    RecordHelpers.newGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+                );
+
+                return new CoordinatorResult<>(records, appendFuture);
+            } else {
+                return maybePrepareRebalanceOrCompleteJoin(
+                    group,
+                    "Group's selectedProtocol will change because static member " +
+                        newMember.memberId() + " with instance id " + groupInstanceId +
+                        " joined with change of protocol; client reason: " + JoinGroupRequest.joinReason(request)
+                );
+            }
+        } else if (group.isInState(COMPLETING_REBALANCE)) {
+            // if the group is in after-sync stage, upon getting a new join-group of a known static member
+            // we should still trigger a new rebalance, since the old member may already be sent to the leader
+            // for assignment, and hence when the assignment gets back there would be a mismatch of the old member id
+            // with the new replaced member id. As a result the new member id would not get any assignment.
+            return prepareRebalance(
+                group,
+                "Updating metadata for static member " + newMember.memberId() + " with instance id " +
+                    request.groupInstanceId() + "; client reason: " + JoinGroupRequest.joinReason(request)
+            );
+        } else if (group.isInState(EMPTY) || group.isInState(DEAD)) {
+            throw new IllegalStateException("Group " + group.groupId() + " was not supposed to be in the state " +
+                group.stateAsString() + " when the unknown static member " + request.groupInstanceId() + " rejoins.");
+
+        }
+        return EMPTY_RESULT;
+    }
+
+    // Visible for testing
+    static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
+        switch (appendError) {
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case NOT_ENOUGH_REPLICAS:
+                return COORDINATOR_NOT_AVAILABLE;
+
+            case NOT_LEADER_OR_FOLLOWER:
+            case KAFKA_STORAGE_ERROR:
+                return NOT_COORDINATOR;
+
+            case MESSAGE_TOO_LARGE:
+            case RECORD_LIST_TOO_LARGE:
+            case INVALID_FETCH_SIZE:
+                return UNKNOWN_SERVER_ERROR;
+
+            default:
+                return appendError;
+        }
+    }
+
+    /**
+     * Generate a heartbeat key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     * @param memberId  The member id.
+     *
+     * @return the heartbeat key.
+     */
+    static String genericGroupHeartbeatKey(String groupId, String memberId) {
+        return "heartbeat-" + groupId + "-" + memberId;
+    }
+
+    /**
+     * Generate a join key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     *
+     * @return the join key.
+     */
+    static String genericGroupJoinKey(String groupId) {
+        return "join-" + groupId;
+    }
+
+    /**
+     * Generate a sync key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     *
+     * @return the sync key.
+     */
+    static String genericGroupSyncKey(String groupId) {
+        return "sync-" + groupId;
     }
 }
