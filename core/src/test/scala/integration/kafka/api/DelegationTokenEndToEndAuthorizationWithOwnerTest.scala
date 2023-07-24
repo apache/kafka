@@ -65,7 +65,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   override def configureSecurityAfterServersStart(): Unit = {
     // Create the Acls before calling super which will create the additiona tokens
     val superuserAdminClient = createPrivilegedAdminClient()
-    superuserAdminClient.createAcls(List(AclTokenCreate, AclTokenDescribe, AclTokenOtherDescribe).asJava).values
+    superuserAdminClient.createAcls(List(AclTokenOtherDescribe, AclTokenCreate, AclTokenDescribe).asJava).values
 
     brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TokenCreateAcl ++ TokenDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get,
