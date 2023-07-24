@@ -1797,7 +1797,6 @@ public class Worker {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connectorConfig.<SinkRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
-            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
                     keyConverter, valueConverter, headerConverter);
 
@@ -1808,7 +1807,8 @@ public class Worker {
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                     valueConverter, errorHandlingMetrics, headerConverter, transformationChain, consumer, classLoader, time,
-                    retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore());
+                    retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
+                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
         }
     }
 
