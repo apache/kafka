@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplication
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -216,6 +217,35 @@ public class PrototypeAsyncConsumerTest {
     public void testAssignOnEmptyTopicInPartition() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
+    }
+
+    @Test
+    public void testWakeup_commitSync() {
+        consumer = newConsumer(time, new StringDeserializer(),
+            new StringDeserializer());
+        consumer.wakeup();
+        assertThrows(WakeupException.class, () -> consumer.commitSync());
+        assertNoPendingWakeup(consumer.wakeupTrigger());
+    }
+
+    @Test
+    public void testWakeup_committed() {
+        consumer = newConsumer(time, new StringDeserializer(),
+            new StringDeserializer());
+        consumer.wakeup();
+        assertThrows(WakeupException.class, () -> consumer.committed(mockTopicPartitionOffset().keySet()));
+        assertNoPendingWakeup(consumer.wakeupTrigger());
+    }
+
+    @Test
+    public void testClosed() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        consumer.close();
+        assertDoesNotThrow(() -> consumer.committed(new HashSet<>()));
+    }
+
+    private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
+        assertTrue(wakeupTrigger.getPendingTask() == null);
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
