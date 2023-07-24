@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -41,6 +43,18 @@ import static org.apache.kafka.streams.processor.internals.assignment.StandbyTas
  */
 class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(ClientTagAwareStandbyTaskAssignor.class);
+
+    private final Function<ClientState, Map<String, String>> clientTagFunction;
+
+    public ClientTagAwareStandbyTaskAssignor() {
+        this(ClientState::clientTags);
+    }
+
+    public ClientTagAwareStandbyTaskAssignor(final Function<ClientState, Map<String, String>> clientTagFunction) {
+        this.clientTagFunction = clientTagFunction;
+    }
+
+
 
     /**
      * The algorithm distributes standby tasks for the {@param statefulTaskIds} over different tag dimensions.
@@ -128,8 +142,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
     @Override
     public boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
-        final Map<String, String> sourceClientTags = source.clientTags();
-        final Map<String, String> destinationClientTags = destination.clientTags();
+        final Map<String, String> sourceClientTags = clientTagFunction.apply(source);
+        final Map<String, String> destinationClientTags = clientTagFunction.apply(destination);
 
         for (final Entry<String, String> sourceClientTagEntry : sourceClientTags.entrySet()) {
             if (!sourceClientTagEntry.getValue().equals(destinationClientTags.get(sourceClientTagEntry.getKey()))) {
@@ -141,14 +155,14 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     // Visible for testing
-    static void fillClientsTagStatistics(final Map<UUID, ClientState> clientStates,
+    void fillClientsTagStatistics(final Map<UUID, ClientState> clientStates,
                                          final Map<TagEntry, Set<UUID>> tagEntryToClients,
                                          final Map<String, Set<String>> tagKeyToValues) {
         for (final Entry<UUID, ClientState> clientStateEntry : clientStates.entrySet()) {
             final UUID clientId = clientStateEntry.getKey();
             final ClientState clientState = clientStateEntry.getValue();
 
-            clientState.clientTags().forEach((tagKey, tagValue) -> {
+            clientTagFunction.apply(clientState).forEach((tagKey, tagValue) -> {
                 tagKeyToValues.computeIfAbsent(tagKey, ignored -> new HashSet<>()).add(tagValue);
                 tagEntryToClients.computeIfAbsent(new TagEntry(tagKey, tagValue), ignored -> new HashSet<>()).add(clientId);
             });
@@ -156,7 +170,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     // Visible for testing
-    static void assignStandbyTasksToClientsWithDifferentTags(final int numberOfStandbyClients,
+    void assignStandbyTasksToClientsWithDifferentTags(final int numberOfStandbyClients,
                                                              final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
                                                              final TaskId activeTaskId,
                                                              final UUID activeTaskClient,
@@ -201,7 +215,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             log.debug("Assigning {} out of {} standby tasks for an active task [{}] with client tags {}. " +
                       "Standby task client tags are {}.",
                       numberOfStandbyClients - numRemainingStandbys, numberOfStandbyClients, activeTaskId,
-                      clientStates.get(activeTaskClient).clientTags(), clientStateOnUsedTagDimensions.clientTags());
+                      clientTagFunction.apply(clientStates.get(activeTaskClient)), clientTagFunction.apply(clientStateOnUsedTagDimensions));
 
             clientStateOnUsedTagDimensions.assignStandby(activeTaskId);
             lastUsedClient = clientOnUnusedTagDimensions;
@@ -218,7 +232,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                      "Standby task assignment will fall back to assigning standby tasks to the least loaded clients.",
                      numRemainingStandbys, numberOfStandbyClients,
                      activeTaskId, rackAwareAssignmentTags,
-                     clientStates.get(activeTaskClient).clientTags());
+                     clientTagFunction.apply(clientStates.get(activeTaskClient)));
 
         } else {
             tasksToRemainingStandbys.remove(activeTaskId);
@@ -230,14 +244,14 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         return tagEntryToUsedClients.values().stream().anyMatch(usedClients -> usedClients.contains(client));
     }
 
-    private static void updateClientsOnAlreadyUsedTagEntries(final UUID usedClient,
+    private void updateClientsOnAlreadyUsedTagEntries(final UUID usedClient,
                                                              final int countOfUsedClients,
                                                              final Set<String> rackAwareAssignmentTags,
                                                              final Map<UUID, ClientState> clientStates,
                                                              final Map<TagEntry, Set<UUID>> tagEntryToClients,
                                                              final Map<String, Set<String>> tagKeyToValues,
                                                              final Map<TagEntry, Set<UUID>> tagEntryToUsedClients) {
-        final Map<String, String> usedClientTags = clientStates.get(usedClient).clientTags();
+        final Map<String, String> usedClientTags = clientTagFunction.apply(clientStates.get(usedClient));
 
         for (final Entry<String, String> usedClientTagEntry : usedClientTags.entrySet()) {
             final String tagKey = usedClientTagEntry.getKey();

@@ -48,23 +48,25 @@ public class RackAwareTaskAssignor {
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
-    private final Map<UUID, Map<String, Optional<String>>> racksForProcess;
+    private final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer;
     private final AssignmentConfigs assignmentConfigs;
     private final Map<TopicPartition, Set<String>> racksForPartition;
+    private final Map<UUID, String> racksForProcess;
     private final InternalTopicManager internalTopicManager;
 
     public RackAwareTaskAssignor(final Cluster fullMetadata,
                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                  final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
-                                 final Map<UUID, Map<String, Optional<String>>> racksForProcess,
+                                 final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
                                  final InternalTopicManager internalTopicManager,
                                  final AssignmentConfigs assignmentConfigs) {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
-        this.racksForProcess = racksForProcess;
+        this.racksForProcessConsumer = racksForProcessConsumer;
         this.internalTopicManager = internalTopicManager;
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
+        this.racksForProcess = new HashMap<>();
     }
 
     public synchronized boolean canEnableRackAwareAssignor() {
@@ -162,7 +164,7 @@ public class RackAwareTaskAssignor {
          * 1. RackId exist for all clients
          * 2. Different consumerId for same process should have same rackId
          */
-        for (final Map.Entry<UUID, Map<String, Optional<String>>> entry : racksForProcess.entrySet()) {
+        for (final Map.Entry<UUID, Map<String, Optional<String>>> entry : racksForProcessConsumer.entrySet()) {
             final UUID processId = entry.getKey();
             KeyValue<String, String> previousRackInfo = null;
             for (final Map.Entry<String, Optional<String>> rackEntry : entry.getValue().entrySet()) {
@@ -185,21 +187,21 @@ public class RackAwareTaskAssignor {
                     return false;
                 }
             }
+            if (previousRackInfo == null) {
+                log.warn("RackId doesn't exist for process {}. Disable {}", processId, getClass().getName());
+                return false;
+            }
+            racksForProcess.put(entry.getKey(), previousRackInfo.value);
         }
         return true;
     }
 
     private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost) {
-        final Map<String, Optional<String>> clientRacks = racksForProcess.get(processId);
-        if (clientRacks == null) {
-            throw new IllegalStateException("Client " + processId + " doesn't exist in processRacks");
-        }
-        final Optional<Optional<String>> clientRackOpt = clientRacks.values().stream().filter(Optional::isPresent).findFirst();
-        if (!clientRackOpt.isPresent() || !clientRackOpt.get().isPresent()) {
+        final String clientRack = racksForProcess.get(processId);
+        if (clientRack == null) {
             throw new IllegalStateException("Client " + processId + " doesn't have rack configured. Maybe forgot to call canEnableRackAwareAssignor first");
         }
 
-        final String clientRack = clientRackOpt.get().get();
         final Set<TopicPartition> topicPartitions = partitionsForTask.get(taskId);
         if (topicPartitions == null || topicPartitions.isEmpty()) {
             throw new IllegalStateException("Task " + taskId + " has no TopicPartitions");

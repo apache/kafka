@@ -44,8 +44,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
-import static org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor.assignStandbyTasksToClientsWithDifferentTags;
-import static org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor.fillClientsTagStatistics;
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.createLeastLoadedPrioritySetConstrainedByAssignedTask;
 import static org.junit.Assert.assertEquals;
@@ -134,13 +132,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
         final Map<TagEntry, Set<UUID>> tagEntryToClients = new HashMap<>();
 
-        fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
+        new ClientTagAwareStandbyTaskAssignor().fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
 
         final Map<TaskId, UUID> pendingStandbyTasksToClientId = new HashMap<>();
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas, allActiveTasks);
 
         for (final TaskId activeTaskId : allActiveTasks) {
-            assignStandbyTasksToClientsWithDifferentTags(
+            new ClientTagAwareStandbyTaskAssignor().assignStandbyTasksToClientsWithDifferentTags(
                 numStandbyReplicas,
                 constrainedPrioritySet,
                 activeTaskId,
@@ -177,13 +175,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
         final Map<TagEntry, Set<UUID>> tagEntryToClients = new HashMap<>();
 
-        fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
+        new ClientTagAwareStandbyTaskAssignor().fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
 
         final Map<TaskId, UUID> pendingStandbyTasksToClientId = new HashMap<>();
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas, allActiveTasks);
 
         for (final TaskId activeTaskId : allActiveTasks) {
-            assignStandbyTasksToClientsWithDifferentTags(
+            new ClientTagAwareStandbyTaskAssignor().assignStandbyTasksToClientsWithDifferentTags(
                 numStandbyReplicas,
                 constrainedPrioritySet,
                 activeTaskId,
