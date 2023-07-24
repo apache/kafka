@@ -26,6 +26,7 @@ import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
@@ -199,11 +200,13 @@ public class DefaultSslEngineFactoryTest {
     Map<String, Object> configs;
     X509Certificate[] chainWithValidEndCertificate;
     X509Certificate[] chainWithExpiredEndCertificate;
+    X509Certificate[] chainWithInvalidEndCertificate;
 
     @BeforeAll
     public void setUpOnce() throws CertificateException, NoSuchAlgorithmException {
-        chainWithValidEndCertificate = generateKeyChainIncludingCA(false);
-        chainWithExpiredEndCertificate = generateKeyChainIncludingCA(true);
+        chainWithValidEndCertificate = generateKeyChainIncludingCA(false, true);
+        chainWithExpiredEndCertificate = generateKeyChainIncludingCA(false, true);
+        chainWithInvalidEndCertificate = generateKeyChainIncludingCA(true, false);
     }
 
     @BeforeEach
@@ -333,28 +336,38 @@ public class DefaultSslEngineFactoryTest {
         final KeyPair keyPair = TestSslUtils.generateKeyPair("RSA");
         final String dn = "CN=Test, L=London, C=GB";
         // Create and initialize data structures
-        int nrOfCerts = 4;
+        int nrOfCerts = 5;
         X509Certificate[] testCerts = new X509Certificate[nrOfCerts];
         PublicKey[] signedWith = new PublicKey[nrOfCerts];
+        boolean[] expectValidEndCert = new boolean[nrOfCerts];
         final int days = 1;
         // Generate valid certificate
         testCerts[0] = TestSslUtils.generateCertificate(dn, keyPair, days, "SHA512withRSA");
         // Self-signed
         signedWith[0] = testCerts[0].getPublicKey();
+        expectValidEndCert[0] = true;
         // Generate expired, but valid certificate
         testCerts[1] = TestSslUtils.generateCertificate(dn, keyPair, -days, "SHA512withRSA");
         // Self-signed
         signedWith[1] = testCerts[1].getPublicKey();
+        expectValidEndCert[1] = true;
         // Use existing real certificate chain, where the end certificate (the first on in the
         // chain) is valid
         testCerts[2] = chainWithValidEndCertificate[0];
         // The end certificate must be signed by the intermediate CA public key
         signedWith[2] = chainWithValidEndCertificate[1].getPublicKey();
+        expectValidEndCert[2] = true;
         // Use existing real certificate chain, where the end certificate (the first on in the
         // chain) is expired
         testCerts[3] = chainWithExpiredEndCertificate[0];
         // The end certificate must be signed by the intermediate CA public key
         signedWith[3] = chainWithExpiredEndCertificate[1].getPublicKey();
+        expectValidEndCert[3] = true;
+        // Test with invalid certificate
+        testCerts[4] = chainWithInvalidEndCertificate[0];
+        // Check whether this certificate is signed by the intermediate certificate in our chain (it is not)
+        signedWith[4] = chainWithInvalidEndCertificate[1].getPublicKey();
+        expectValidEndCert[4] = false;
 
         for (int i = 0; i < nrOfCerts; i++) {
             X509Certificate cert = testCerts[i];
@@ -388,8 +401,13 @@ public class DefaultSslEngineFactoryTest {
             assertEquals(cert.getPublicKey(), wrappedCert.getPublicKey());
             assertEquals(cert.toString(), wrappedCert.toString());
             final PublicKey signingKey = signedWith[i];
-            assertDoesNotThrow(() -> cert.verify(signingKey));
-            assertDoesNotThrow(() -> wrappedCert.verify(signingKey));
+            if (expectValidEndCert[i]) {
+                assertDoesNotThrow(() -> cert.verify(signingKey));
+                assertDoesNotThrow(() -> wrappedCert.verify(signingKey));
+            } else {
+                assertThrows(SignatureException.class, () -> cert.verify(signingKey));
+                assertThrows(SignatureException.class, () -> wrappedCert.verify(signingKey));
+            }
             // Test timing now, starting with "now"
             Date dateNow = new Date();
             if (cert.getNotBefore().before(dateNow) && cert.getNotAfter().after(dateNow)) {
@@ -444,7 +462,7 @@ public class DefaultSslEngineFactoryTest {
      * @throws CertificateException
      * @throws NoSuchAlgorithmException
      */
-    private X509Certificate[] generateKeyChainIncludingCA(boolean expired)
+    private X509Certificate[] generateKeyChainIncludingCA(boolean expired, boolean endCertValid)
             throws CertificateException, NoSuchAlgorithmException {
         KeyPair[] keyPairs = new KeyPair[3];
         for (int i = 0; i < 3; i++) {
@@ -460,9 +478,17 @@ public class DefaultSslEngineFactoryTest {
         certs[1] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA, L=London, C=GB",
                 keyPairs[1], 365, 365, certs[2].getIssuerX500Principal().getName(), keyPairs[2],
                 "SHA512withRSA");
-        certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0],
-                endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
-                certs[1].getIssuerX500Principal().getName(), keyPairs[1], "SHA512withRSA");
+        if (endCertValid) {
+            // Generate a valid end certificate, i.e. one that is signed by our intermediate CA
+            certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0],
+                    endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
+                    certs[1].getIssuerX500Principal().getName(), keyPairs[1], "SHA512withRSA");
+        } else {
+            // Generate an invalid end certificate, by creating a self-signed one.
+            certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0],
+                    endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
+                    null, null, "SHA512withRSA");
+        }
         return certs;
     }
 
