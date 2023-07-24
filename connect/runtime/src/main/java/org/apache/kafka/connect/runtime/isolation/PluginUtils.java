@@ -205,7 +205,12 @@ public class PluginUtils {
         List<Path> pluginLocations = new ArrayList<>();
         for (String path : pluginPathElements) {
             try {
-                Path pluginPathElement = Paths.get(path).toAbsolutePath();
+                Path specifiedPath = Paths.get(path);
+                Path pluginPathElement = specifiedPath.toAbsolutePath();
+                if (!specifiedPath.isAbsolute()) {
+                    log.warn("Plugin path element '{}' is relative, evaluating to {}.",
+                            specifiedPath, pluginPathElement);
+                }
                 if (!Files.exists(pluginPathElement)) {
                     throw new FileNotFoundException(pluginPathElement.toString());
                 }
@@ -336,9 +341,14 @@ public class PluginUtils {
     }
 
     public static Set<PluginSource> pluginSources(List<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
+        Set<PluginSource> pluginSources = new HashSet<>(isolatedPluginSources(pluginLocations, classLoader, factory));
+        pluginSources.add(classpathPluginSource(classLoader.getParent()));
+        return pluginSources;
+    }
+
+    public static Set<PluginSource> isolatedPluginSources(List<Path> pluginLocations, ClassLoader parent, PluginClassLoaderFactory factory) {
         Set<PluginSource> pluginSources = new HashSet<>();
         for (Path pluginLocation : pluginLocations) {
-
             try {
                 List<URL> pluginUrls = new ArrayList<>();
                 for (Path path : pluginUrls(pluginLocation)) {
@@ -348,7 +358,7 @@ public class PluginUtils {
                 PluginClassLoader loader = factory.newPluginClassLoader(
                         pluginLocation.toUri().toURL(),
                         urls,
-                        classLoader
+                        parent
                 );
                 pluginSources.add(new PluginSource(pluginLocation, loader, urls));
             } catch (InvalidPathException | MalformedURLException e) {
@@ -357,13 +367,15 @@ public class PluginUtils {
                 log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
             }
         }
-        List<URL> parentUrls = new ArrayList<>();
-        parentUrls.addAll(ClasspathHelper.forJavaClassPath());
-        parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader.getParent()));
-        pluginSources.add(new PluginSource(PluginSource.CLASSPATH, classLoader.getParent(), parentUrls.toArray(new URL[0])));
         return pluginSources;
     }
 
+    public static PluginSource classpathPluginSource(ClassLoader classLoader) {
+        List<URL> parentUrls = new ArrayList<>();
+        parentUrls.addAll(ClasspathHelper.forJavaClassPath());
+        parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader));
+        return new PluginSource(PluginSource.CLASSPATH, classLoader, parentUrls.toArray(new URL[0]));
+    }
 
     /**
      * Return the simple class name of a plugin as {@code String}.

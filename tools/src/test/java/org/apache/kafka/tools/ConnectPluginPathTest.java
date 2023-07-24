@@ -29,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -54,6 +56,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class ConnectPluginPathTest {
+
+    private static final Logger log = LoggerFactory.getLogger(ConnectPluginPathTest.class);
 
     @TempDir
     public Path workspace;
@@ -227,14 +231,15 @@ public class ConnectPluginPathTest {
             ClassLoader parent = ConnectPluginPath.class.getClassLoader();
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory)
-                        .stream()
-                        .filter(PluginSource::isolated)
-                        .collect(Collectors.toSet());
+                Set<PluginSource> sources = PluginUtils.isolatedPluginSources(pluginLocations, delegatingClassLoader, factory);
+                String stdout = new String(out.toByteArray(), StandardCharsets.UTF_8);
+                String stderr = new String(err.toByteArray(), StandardCharsets.UTF_8);
+                log.info("STDOUT:\n{}", stdout);
+                log.info("STDERR:\n{}", stderr);
                 return new CommandResult(
                         returnCode,
-                        new String(out.toByteArray(), StandardCharsets.UTF_8),
-                        new String(err.toByteArray(), StandardCharsets.UTF_8),
+                        stdout,
+                        stderr,
                         new ReflectionScanner().discoverPlugins(sources),
                         new ServiceLoaderScanner().discoverPlugins(sources)
                 );

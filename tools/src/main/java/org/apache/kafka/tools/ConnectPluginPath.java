@@ -50,6 +50,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -60,7 +61,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.Predicate;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -204,39 +205,47 @@ public class ConnectPluginPath {
 
     public static void runCommand(Config config) throws TerseException {
         try {
-            for (Path pluginLocation : config.locations) {
-                ClassLoaderFactory factory = new ClassLoaderFactory();
-                try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(ConnectPluginPath.class.getClassLoader())) {
-                    Set<PluginSource> pluginSources = PluginUtils.pluginSources(Collections.singletonList(pluginLocation), delegatingClassLoader, factory);
-                    Predicate<PluginSource> isolated = PluginSource::isolated;
-                    PluginSource isolatedSource = pluginSources.stream()
-                            .filter(isolated)
-                            .findFirst()
-                            .orElseThrow(() -> new IllegalStateException("DelegatingClassLoader should have a PluginSource corresponding to" + pluginLocation));
-                    PluginSource classpathSource = pluginSources.stream()
-                            .filter(isolated.negate())
-                            .findFirst()
-                            .orElseThrow(() -> new IllegalStateException("DelegatingClassLoader should have a PluginSource corresponding to the classpath"));
-                    PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(Collections.singleton(isolatedSource));
-                    PluginScanResult serviceLoadResult = new ServiceLoaderScanner().discoverPlugins(Collections.singleton(isolatedSource));
-                    PluginScanResult merged = new PluginScanResult(Arrays.asList(scanResult, serviceLoadResult));
-                    Set<ManifestEntry> isolatedManifests = findManifests(isolatedSource);
-                    Set<ManifestEntry> classpathManifests = findManifests(classpathSource);
-                    classpathManifests.forEach(isolatedManifests::remove);
-                    Map<String, Set<ManifestEntry>> indexedManifests = manifestsByClassName(isolatedManifests);
-                    Map<String, List<String>> aliases = aliasesByClassName(PluginUtils.computeAliases(merged));
-                    merged.forEach(pluginDesc -> handlePlugin(config, isolatedSource, aliases, indexedManifests, pluginDesc.className(), pluginDesc.version(), pluginDesc.type(), true));
-                    Map<String, Set<ManifestEntry>> unloadablePlugins = new HashMap<>(indexedManifests);
-                    merged.forEach(pluginDesc -> unloadablePlugins.remove(pluginDesc.className()));
-                    for (Set<ManifestEntry> manifestEntries : unloadablePlugins.values()) {
-                        manifestEntries.forEach(manifestEntry -> handlePlugin(config, isolatedSource, aliases, indexedManifests, manifestEntry.className, PluginDesc.UNDEFINED_VERSION, manifestEntry.type, false));
-                    }
+            // Process the contents of the classpath to exclude it from later results.
+            ClassLoader parent = ConnectPluginPath.class.getClassLoader();
+            PluginSource classpathSource = PluginUtils.classpathPluginSource(parent);
+            Map<String, Set<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
+            PluginScanResult classpathPlugins = discoverPlugins(classpathSource);
+
+            ClassLoaderFactory factory = new ClassLoaderFactory();
+            try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
+                // Process the contents of the isolated locations to find plugins
+                Set<PluginSource> isolatedSources = PluginUtils.isolatedPluginSources(new ArrayList<>(config.locations), delegatingClassLoader, factory);
+                // Exclude manifest entries which are visible from the classpath
+                Map<PluginSource, Map<String, Set<ManifestEntry>>> isolatedManifests = isolatedSources.stream()
+                        .collect(Collectors.toMap(Function.identity(), source -> findManifests(source, classpathManifests)));
+                Map<PluginSource, PluginScanResult> isolatedPlugins = isolatedSources.stream()
+                        .collect(Collectors.toMap(Function.identity(), ConnectPluginPath::discoverPlugins));
+                // Calculate aliases including collisions with classpath plugins
+                Map<String, List<String>> aliases = computeAliases(classpathPlugins, isolatedPlugins.values());
+                beginCommand(config);
+                for (PluginSource isolatedSource : isolatedSources) {
+                    handlePluginSource(config, isolatedSource, isolatedManifests.get(isolatedSource), isolatedPlugins.get(isolatedSource), aliases);
                 }
+                endCommand(config);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
+
+    private static void beginCommand(Config config) {
+
+    }
+
+    private static void handlePluginSource(Config config, PluginSource isolatedSource, Map<String, Set<ManifestEntry>> indexedManifests, PluginScanResult merged, Map<String, List<String>> aliases) {
+        merged.forEach(pluginDesc -> handlePlugin(config, isolatedSource, aliases, indexedManifests, pluginDesc.className(), pluginDesc.version(), pluginDesc.type(), true));
+        Map<String, Set<ManifestEntry>> unloadablePlugins = new HashMap<>(indexedManifests);
+        merged.forEach(pluginDesc -> unloadablePlugins.remove(pluginDesc.className()));
+        for (Set<ManifestEntry> manifestEntries : unloadablePlugins.values()) {
+            manifestEntries.forEach(manifestEntry -> handlePlugin(config, isolatedSource, aliases, indexedManifests, manifestEntry.className, PluginDesc.UNDEFINED_VERSION, manifestEntry.type, false));
+        }
+    }
+
 
     private static void handlePlugin(
             // fixed
@@ -272,18 +281,27 @@ public class ConnectPluginPath {
             String firstAlias = aliases.size() > 0 ? aliases.get(0) : "null";
             String secondAlias = aliases.size() > 1 ? aliases.get(1) : "null";
             String pluginInfo = Stream.of(
-                    pluginLocation,
                     pluginName,
                     firstAlias,
                     secondAlias,
                     pluginVersion,
                     pluginType,
                     loadable,
-                    hasManifest
+                    hasManifest,
+                    pluginLocation // last because it is least important and most repetitive
             ).map(Objects::toString).collect(Collectors.joining("\t"));
-            // there should only be one location, otherwise the plugin source column will be ambiguous.
             config.out.println(pluginInfo);
         }
+    }
+
+    private static void endCommand(Config config) {
+
+    }
+
+    private static PluginScanResult discoverPlugins(PluginSource source) {
+        PluginScanResult serviceLoadResult = new ServiceLoaderScanner().discoverPlugins(Collections.singleton(source));
+        PluginScanResult reflectiveResult = new ReflectionScanner().discoverPlugins(Collections.singleton(source));
+        return new PluginScanResult(Arrays.asList(serviceLoadResult, reflectiveResult));
     }
 
     private static class ManifestEntry {
@@ -311,8 +329,8 @@ public class ConnectPluginPath {
         }
     }
 
-    private static Set<ManifestEntry> findManifests(PluginSource source) throws IOException {
-        Set<ManifestEntry> manifests = new HashSet<>();
+    private static Map<String, Set<ManifestEntry>> findManifests(PluginSource source, Map<String, Set<ManifestEntry>> exclude) {
+        Map<String, Set<ManifestEntry>> manifests = new HashMap<>();
         for (PluginType type : PluginType.values()) {
             if (type == PluginType.UNKNOWN) {
                 continue;
@@ -322,11 +340,16 @@ public class ConnectPluginPath {
                 while (resources.hasMoreElements())  {
                     URL url = resources.nextElement();
                     for (String className : parse(url)) {
-                        manifests.add(new ManifestEntry(url.toURI(), className, type));
+                        ManifestEntry e = new ManifestEntry(url.toURI(), className, type);
+                        if (!exclude.containsKey(className) || !exclude.get(className).contains(e)) {
+                            manifests.computeIfAbsent(className, ignored -> new HashSet<>()).add(e);
+                        }
                     }
                 }
             } catch (URISyntaxException e) {
-                throw new IOException(e);
+                throw new RuntimeException(e);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
         }
         return manifests;
@@ -379,17 +402,10 @@ public class ConnectPluginPath {
         return lc + 1;
     }
 
-    private static Map<String, Set<ManifestEntry>> manifestsByClassName(Set<ManifestEntry> manifests) {
-        Map<String, Set<ManifestEntry>> classToManifests = new HashMap<>();
-        for (ManifestEntry manifestEntry : manifests) {
-            Set<ManifestEntry> uris = classToManifests.computeIfAbsent(manifestEntry.className, ignored -> new HashSet<>());
-            uris.add(manifestEntry);
-        }
-        return classToManifests;
-    }
-
-    private static Map<String, List<String>> aliasesByClassName(Map<String, String> aliases) {
-        return aliases.entrySet()
+    private static Map<String, List<String>> computeAliases(PluginScanResult classpathPlugins, Collection<PluginScanResult> isolatedPlugins) {
+        List<PluginScanResult> allResults = new ArrayList<>(isolatedPlugins);
+        allResults.add(classpathPlugins);
+        return PluginUtils.computeAliases(new PluginScanResult(allResults)).entrySet()
                 .stream()
                 .collect(Collectors.toMap(
                         Map.Entry::getValue,
