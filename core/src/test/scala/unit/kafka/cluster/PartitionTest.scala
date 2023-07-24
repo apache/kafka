@@ -1337,7 +1337,7 @@ class PartitionTest extends AbstractPartitionTest {
       mock(classOf[LogReadInfo])
     }).when(partition).fetchRecords(any(), any(), anyLong(), anyInt(), anyBoolean(), anyBoolean())
 
-    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 3L)
+    assertDoesNotThrow(() => fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 3L))
   }
 
   @Test
