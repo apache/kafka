@@ -760,23 +760,23 @@ public class RecordHelpersTest {
         assertEquals(expectedRecord, record);
     }
 
-    private List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions){
+    public static List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
         List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
         for (int i = 0; i < numPartitions; i++) {
             partitionRacks.add(
                 new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
                     .setPartition(i)
-                    .setRacks(new ArrayList<>())
+                    .setRacks(Collections.emptyList())
             );
         }
         return partitionRacks;
     }
 
-    private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-      Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-      for(int i = 0; i < numPartitions ; i++) {
+    public static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
+        for (int i = 0; i < numPartitions ; i++) {
           partitionRacks.put(i, Collections.emptySet());
-      }
-      return partitionRacks;
+        }
+        return partitionRacks;
     }
 }

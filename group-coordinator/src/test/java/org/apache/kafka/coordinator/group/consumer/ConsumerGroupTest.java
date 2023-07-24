@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -428,7 +427,7 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("foo",
                     new TopicMetadata(fooTopicId, "foo", 1, mkMap(
-                        mkEntry(0, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()))
                     )
                 )
             ),
@@ -448,7 +447,7 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("foo",
                     new TopicMetadata(fooTopicId, "foo", 1, mkMap(
-                        mkEntry(0, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()))
                     )
                 )
             ),
@@ -476,13 +475,13 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("foo",
                     new TopicMetadata(fooTopicId, "foo", 1, mkMap(
-                        mkEntry(0, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()))
                     )
                 ),
                 mkEntry("bar",
                     new TopicMetadata(barTopicId, "bar", 2, mkMap(
-                        mkEntry(0, new HashSet<>()),
-                        mkEntry(1, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()),
+                        mkEntry(1, Collections.emptySet()))
                     )
                 )
             ),
@@ -502,13 +501,13 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("foo",
                     new TopicMetadata(fooTopicId, "foo", 1, mkMap(
-                        mkEntry(0, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()))
                     )
                 ),
                 mkEntry("bar",
                     new TopicMetadata(barTopicId, "bar", 2, mkMap(
-                        mkEntry(0, new HashSet<>()),
-                        mkEntry(1, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()),
+                        mkEntry(1, Collections.emptySet()))
                     )
                 )
             ),
@@ -525,7 +524,7 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("foo",
                     new TopicMetadata(fooTopicId, "foo", 1, mkMap(
-                        mkEntry(0, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()))
                     )
                 )
             ),
@@ -542,8 +541,8 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("bar",
                     new TopicMetadata(barTopicId, "bar", 2, mkMap(
-                        mkEntry(0, new HashSet<>()),
-                        mkEntry(1, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()),
+                        mkEntry(1, Collections.emptySet()))
                     )
                 )
             ),
@@ -560,20 +559,20 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("foo",
                     new TopicMetadata(fooTopicId, "foo", 1, mkMap(
-                        mkEntry(0, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()))
                     )
                 ),
                 mkEntry("bar",
                     new TopicMetadata(barTopicId, "bar", 2, mkMap(
-                        mkEntry(0, new HashSet<>()),
-                        mkEntry(1, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()),
+                        mkEntry(1, Collections.emptySet()))
                     )
                 ),
                 mkEntry("zar",
                     new TopicMetadata(zarTopicId, "zar", 3, mkMap(
-                        mkEntry(0, new HashSet<>()),
-                        mkEntry(1, new HashSet<>()),
-                        mkEntry(2, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()),
+                        mkEntry(1, Collections.emptySet()),
+                        mkEntry(2, Collections.emptySet()))
                     )
                 )
             ),
@@ -593,20 +592,20 @@ public class ConsumerGroupTest {
             mkMap(
                 mkEntry("foo",
                     new TopicMetadata(fooTopicId, "foo", 1, mkMap(
-                        mkEntry(0, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()))
                     )
                 ),
                 mkEntry("bar",
                     new TopicMetadata(barTopicId, "bar", 2, mkMap(
-                        mkEntry(0, new HashSet<>()),
-                        mkEntry(1, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()),
+                        mkEntry(1, Collections.emptySet()))
                     )
                 ),
                 mkEntry("zar",
                     new TopicMetadata(zarTopicId, "zar", 3, mkMap(
-                        mkEntry(0, new HashSet<>()),
-                        mkEntry(1, new HashSet<>()),
-                        mkEntry(2, new HashSet<>()))
+                        mkEntry(0, Collections.emptySet()),
+                        mkEntry(1, Collections.emptySet()),
+                        mkEntry(2, Collections.emptySet()))
                     )
                 )
             ),

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 
+import org.apache.kafka.coordinator.group.consumer.PartitionMetadata;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.junit.jupiter.api.Test;
 

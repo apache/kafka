@@ -117,6 +117,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGr
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.genericGroupHeartbeatKey;
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
@@ -5410,14 +5411,6 @@ public class GroupMetadataManagerTest {
             assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
         });
         return assignmentMap;
-    }
-
-    private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, Collections.emptySet());
-        }
-        return partitionRacks;
     }
 
     private List<String> verifyGenericGroupJoinResponses(

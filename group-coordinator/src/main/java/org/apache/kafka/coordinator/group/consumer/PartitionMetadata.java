@@ -14,8 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.consumer;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -36,7 +37,7 @@ public class PartitionMetadata {
     private final Map<Integer, Set<String>> partitionsWithRacks;
 
     /**
-     * If rack information isn't available pass an empty set.
+     * If rack information isn't available pass an empty map.
      */
     public PartitionMetadata(Map<Integer, Set<String>> partitionsWithRacks) {
         Objects.requireNonNull(partitionsWithRacks);
@@ -49,7 +50,7 @@ public class PartitionMetadata {
      * @return Number of partitions associated with the topic.
      */
     public int numPartitions() {
-        return partitionsWithRacks.size();
+        return this.numPartitions();
     }
 
     /**
@@ -60,6 +61,9 @@ public class PartitionMetadata {
      *         If no rack information is available, an empty set is returned.
      */
     public Set<String> racks(int partition) {
+        if(partitionsWithRacks.isEmpty()) {
+            return Collections.emptySet();
+        }
         return partitionsWithRacks.get(partition);
     }
 
@@ -78,8 +82,8 @@ public class PartitionMetadata {
 
     @Override
     public String toString() {
-        return "PartitionMetadata{" +
+        return "PartitionMetadata(" +
             "partitionsWithRacks=" + partitionsWithRacks +
-            '}';
+            ')';
     }
 }

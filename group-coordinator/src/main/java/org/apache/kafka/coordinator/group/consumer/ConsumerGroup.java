@@ -453,7 +453,7 @@ public class ConsumerGroup implements Group {
 
                 topicImage.partitions().forEach((partition, partitionRegistration) -> {
                     Set<String> racks = new HashSet<>();
-                    for (int replica : Objects.requireNonNull(partitionRegistration.replicas)) {
+                    for (int replica : partitionRegistration.replicas) {
                         Optional<String> rackOptional = clusterImage.broker(replica).rack();
                         // Only add rack if it is available for the broker/replica.
                         rackOptional.ifPresent(racks::add);
@@ -467,7 +467,8 @@ public class ConsumerGroup implements Group {
                     topicImage.id(),
                     topicImage.name(),
                     topicImage.partitions().size(),
-                    partitionRacks));
+                    partitionRacks)
+                );
             }
         });
 
