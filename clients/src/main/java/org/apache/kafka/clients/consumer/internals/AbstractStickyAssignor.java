@@ -131,8 +131,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         Set<String> subscribedTopics = new HashSet<>();
 
-        // keep track of all previously owned partitions, so we can invalidate them if invalid input is
-        // detected, e.g. two consumers somehow claiming the same partition in the same/current generation
+        // keep track of all previously owned partitions so we can invalidate them if invalid input is
+        // detected, eg two consumers somehow claiming the same partition in the same/current generation
         Map<TopicPartition, String> allPreviousPartitionsToOwner = new HashMap<>();
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
@@ -361,9 +361,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 }
             }
 
-            // for now, we want to make sure there is no partition movements of the same topic between a pair of consumers.
+            // for now we want to make sure there is no partition movements of the same topic between a pair of consumers.
             // the odds of finding a cycle among more than two consumers seem to be very low (according to various randomized
-            // tests with the given sticky algorithm) that it should not be worth the added complexity of handling those cases.
+            // tests with the given sticky algorithm) that it should not worth the added complexity of handling those cases.
             for (List<String> cycle: cycles)
                 if (cycle.size() == 3) // indicates a cycle of length 2
                     return true;
@@ -806,7 +806,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         private void verifyUnfilledMembers() {
 
             if (!unfilledMembersWithUnderMinQuotaPartitions.isEmpty()) {
-                // we expected all the remaining unfilled members have minQuota partitions, and we're already at the expected number
+                // we expected all the remaining unfilled members have minQuota partitions and we're already at the expected number
                 // of members with more than the minQuota partitions. Otherwise, there must be error here.
                 if (currentNumMembersWithOverMinQuotaPartitions != expectedNumMembersWithOverMinQuotaPartitions) {
                     log.error("Current number of members with more than the minQuota partitions: {}, is less than the expected number " +
@@ -896,7 +896,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      *    while preserving rack-alignment. This step is used only for rack-aware assignment.
      * 4. Assigning the remaining unassigned partitions in a way that balances out the overall assignments of partitions to consumers.
      *    For rack-aware algorithm, these are partitions that could not be aligned on racks within the balancing constraints.
-     * 5. Further, balancing out the resulting assignment by finding the partitions that can be reassigned
+     * 5. Further balancing out the resulting assignment by finding the partitions that can be reassigned
      *    to another consumer towards an overall more balanced assignment. For rack-aware algorithm, attempt
      *    to retain rack alignment if possible.
      *
@@ -1021,7 +1021,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             revocationRequired = true;
                         } else {
                             // otherwise, remove the topic partition from those that need to be assigned only if
-                            // its current consumer is still subscribed to its topic (because it is already assigned,
+                            // its current consumer is still subscribed to its topic (because it is already assigned
                             // and we would want to preserve that assignment as much as possible)
                             assignedPartitions.add(partition);
                         }
@@ -1075,7 +1075,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
          * update the prevAssignment with the partitions, consumer and generation in parameters
          *
          * @param partitions:       The partitions to be updated the prevAssignment
-         * @param consumer:         The consumerId
+         * @param consumer:         The consumer Id
          * @param prevAssignment:   The assignment contains the assignment with the 2nd largest generation
          * @param generation:       The generation of this assignment (partitions)
          */
@@ -1321,7 +1321,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     fixedAssignments.put(consumer, currentAssignment.remove(consumer));
                 }
 
-            // create a deep copy of the current assignment, so we can revert to it if we do not get a more balanced assignment later
+            // create a deep copy of the current assignment so we can revert to it if we do not get a more balanced assignment later
             Map<String, List<TopicPartition>> preBalanceAssignment = deepCopy(currentAssignment);
             Map<TopicPartition, String> preBalancePartitionConsumers = new HashMap<>(currentPartitionConsumer);
 
@@ -1332,7 +1332,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             boolean reassignmentPerformed = performReassignments(sortedAllPartitions, prevAssignment);
 
-            // if we are not preserving existing assignments, and we have made changes to the current assignment
+            // if we are not preserving existing assignments and we have made changes to the current assignment
             // make sure we are getting a more balanced assignment; otherwise, revert to previous assignment
             if (!initializing && reassignmentPerformed && getBalanceScore(currentAssignment) >= getBalanceScore(preBalanceAssignment)) {
                 deepCopy(preBalanceAssignment, currentAssignment);
@@ -1358,7 +1358,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // repeat reassignment until no partition can be moved to improve the balance
             do {
                 modified = false;
-                // reassign all reassignable partitions (starting from the partition with the least potential consumers and if needed)
+                // reassign all reassignable partitions (starting from the partition with least potential consumers and if needed)
                 // until the full list is processed or a balance is achieved
                 Iterator<TopicPartition> partitionIterator = reassignablePartitions.iterator();
                 while (partitionIterator.hasNext() && !isBalanced()) {
