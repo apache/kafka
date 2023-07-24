@@ -62,6 +62,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ConnectPluginPath {
 
@@ -75,7 +76,7 @@ public class ConnectPluginPath {
         ArgumentParser parser = parser();
         try {
             Namespace namespace = parser.parseArgs(args);
-            Config config = parseConfig(parser, namespace, out, err);
+            Config config = parseConfig(parser, namespace, out);
             runCommand(config);
             return 0;
         } catch (ArgumentParserException e) {
@@ -115,7 +116,7 @@ public class ConnectPluginPath {
             pluginProviders.addArgument("--plugin-path")
                 .setDefault(new ArrayList<>())
                 .action(Arguments.append())
-                .help("A list of locations containing plugins");
+                .help("A comma-delimited list of locations containing plugins");
 
             pluginProviders.addArgument("--worker-config")
                 .setDefault(new ArrayList<>())
@@ -126,13 +127,17 @@ public class ConnectPluginPath {
         return parser;
     }
 
-    private static Config parseConfig(ArgumentParser parser, Namespace namespace, PrintStream out, PrintStream err) throws ArgumentParserException, TerseException {
+    private static Config parseConfig(ArgumentParser parser, Namespace namespace, PrintStream out) throws ArgumentParserException, TerseException {
         Set<Path> locations = parseLocations(parser, namespace);
-        switch (namespace.getString("subcommand")) {
+        String subcommand = namespace.getString("subcommand");
+        if (subcommand == null) {
+            throw new ArgumentParserException("No subcommand specified", parser);
+        }
+        switch (subcommand) {
             case "list":
-                return new Config(Command.LIST, locations, out, err);
+                return new Config(Command.LIST, locations, out);
             default:
-                throw new ArgumentParserException("No subcommand specified", parser);
+                throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
         }
     }
 
@@ -164,7 +169,11 @@ public class ConnectPluginPath {
             }
         }
         for (String rawLocation : rawLocations) {
-            pluginLocations.add(Paths.get(rawLocation));
+            Path pluginLocation = Paths.get(rawLocation);
+            if (!pluginLocation.toFile().exists()) {
+                throw new TerseException("Specified location " + pluginLocation + " does not exist");
+            }
+            pluginLocations.add(pluginLocation);
         }
         return pluginLocations;
     }
@@ -177,13 +186,11 @@ public class ConnectPluginPath {
         private final Command command;
         private final Set<Path> locations;
         private final PrintStream out;
-        private final PrintStream err;
 
-        private Config(Command command, Set<Path> locations, PrintStream out, PrintStream err) {
+        private Config(Command command, Set<Path> locations, PrintStream out) {
             this.command = command;
             this.locations = locations;
             this.out = out;
-            this.err = err;
         }
 
         @Override
@@ -216,13 +223,13 @@ public class ConnectPluginPath {
                     Set<ManifestEntry> isolatedManifests = findManifests(isolatedSource);
                     Set<ManifestEntry> classpathManifests = findManifests(classpathSource);
                     classpathManifests.forEach(isolatedManifests::remove);
-                    Map<String, Set<ManifestEntry>> indexedManifests = indexManifests(isolatedManifests);
-                    Map<String, List<String>> aliases = invertAliases(PluginUtils.computeAliases(merged));
+                    Map<String, Set<ManifestEntry>> indexedManifests = manifestsByClassName(isolatedManifests);
+                    Map<String, List<String>> aliases = aliasesByClassName(PluginUtils.computeAliases(merged));
+                    merged.forEach(pluginDesc -> handlePlugin(config, isolatedSource, aliases, indexedManifests, pluginDesc.className(), pluginDesc.version(), pluginDesc.type(), true));
                     Map<String, Set<ManifestEntry>> unloadablePlugins = new HashMap<>(indexedManifests);
                     merged.forEach(pluginDesc -> unloadablePlugins.remove(pluginDesc.className()));
-                    merged.forEach(pluginDesc -> operation(config, isolatedSource, aliases, indexedManifests, pluginDesc.className(), pluginDesc.version(), pluginDesc.type(), true));
                     for (Set<ManifestEntry> manifestEntries : unloadablePlugins.values()) {
-                        manifestEntries.forEach(manifestEntry -> operation(config, isolatedSource, aliases, indexedManifests, manifestEntry.className, PluginDesc.UNDEFINED_VERSION, manifestEntry.type, false));
+                        manifestEntries.forEach(manifestEntry -> handlePlugin(config, isolatedSource, aliases, indexedManifests, manifestEntry.className, PluginDesc.UNDEFINED_VERSION, manifestEntry.type, false));
                     }
                 }
             }
@@ -231,7 +238,7 @@ public class ConnectPluginPath {
         }
     }
 
-    private static <T> void operation(
+    private static void handlePlugin(
             // fixed
             Config config,
             // each location
@@ -244,10 +251,10 @@ public class ConnectPluginPath {
             PluginType pluginType,
             boolean loadable
     ) {
-        operation(config, source, pluginName, pluginVersion, aliases.getOrDefault(pluginName, Collections.emptyList()), pluginType, loadable, manifests.containsKey(pluginName));
+        handlePlugin(config, source, pluginName, pluginVersion, aliases.getOrDefault(pluginName, Collections.emptyList()), pluginType, loadable, manifests.containsKey(pluginName));
     }
 
-    private static <T> void operation(
+    private static void handlePlugin(
             // fixed
             Config config,
             // each location
@@ -264,9 +271,7 @@ public class ConnectPluginPath {
         if (config.command == Command.LIST) {
             String firstAlias = aliases.size() > 0 ? aliases.get(0) : "null";
             String secondAlias = aliases.size() > 1 ? aliases.get(1) : "null";
-            // there should only be one location, otherwise the plugin source column will be ambiguous.
-            config.out.printf(
-                    "%s\t%s\t%s\t%s\t%s\t%s\t%b\t%b%n",
+            String pluginInfo = Stream.of(
                     pluginLocation,
                     pluginName,
                     firstAlias,
@@ -275,7 +280,9 @@ public class ConnectPluginPath {
                     pluginType,
                     loadable,
                     hasManifest
-            );
+            ).map(Objects::toString).collect(Collectors.joining("\t"));
+            // there should only be one location, otherwise the plugin source column will be ambiguous.
+            config.out.println(pluginInfo);
         }
     }
 
@@ -372,7 +379,7 @@ public class ConnectPluginPath {
         return lc + 1;
     }
 
-    private static Map<String, Set<ManifestEntry>> indexManifests(Set<ManifestEntry> manifests) {
+    private static Map<String, Set<ManifestEntry>> manifestsByClassName(Set<ManifestEntry> manifests) {
         Map<String, Set<ManifestEntry>> classToManifests = new HashMap<>();
         for (ManifestEntry manifestEntry : manifests) {
             Set<ManifestEntry> uris = classToManifests.computeIfAbsent(manifestEntry.className, ignored -> new HashSet<>());
@@ -381,19 +388,15 @@ public class ConnectPluginPath {
         return classToManifests;
     }
 
-    private static Map<String, List<String>> invertAliases(Map<String, String> aliases) {
+    private static Map<String, List<String>> aliasesByClassName(Map<String, String> aliases) {
         return aliases.entrySet()
                 .stream()
-                .collect(Collectors.toMap(Map.Entry::getValue, e -> Collections.singletonList(e.getKey()), (a, b) -> {
-                    if (a instanceof ArrayList) {
-                        a.addAll(b);
-                        return a;
-                    } else {
-                        List<String> result = new ArrayList<>();
-                        result.addAll(a);
-                        result.addAll(b);
-                        return result;
-                    }
-                }));
+                .collect(Collectors.toMap(
+                        Map.Entry::getValue,
+                        e -> new ArrayList<>(Collections.singletonList(e.getKey())),
+                        (a, b) -> {
+                            a.addAll(b);
+                            return a;
+                        }));
     }
 }
