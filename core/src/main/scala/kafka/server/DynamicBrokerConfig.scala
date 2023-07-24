@@ -1077,8 +1077,10 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
 class DynamicProducerStateManagerConfig(val producerStateManagerConfig: ProducerStateManagerConfig) extends BrokerReconfigurable with Logging {
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    info(s"Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from ${producerStateManagerConfig.producerIdExpirationMs()} to ${newConfig.producerIdExpirationMs}")
-    producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
+    if (producerStateManagerConfig.producerIdExpirationMs() != newConfig.producerIdExpirationMs) {
+      info(s"Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from ${producerStateManagerConfig.producerIdExpirationMs()} to ${newConfig.producerIdExpirationMs}")
+      producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
+    }
   }
 
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
