@@ -18,11 +18,11 @@ import time
 from ducktape.utils.util import wait_until
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
-from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, CLIENTS_JAR_NAME
 from kafkatest.services.monitor.http import HttpMetricsCollector
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import DEV_BRANCH, LATEST_0_9
 
 
 class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
@@ -83,19 +83,24 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
 
         cmd = ""
 
-        if node.version < DEV_BRANCH:
-            # In order to ensure more consistent configuration between versions, always use the ProducerPerformance
-            # tool from the development branch
-            tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
-
+        if node.version <= LATEST_0_9:
+            tools_jar = self.path.jar(TOOLS_JAR_NAME, LATEST_0_9)
+            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, LATEST_0_9)
             for jar in (tools_jar, tools_dependant_libs_jar):
                 cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % jar
-            cmd += "export CLASSPATH; "
-
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
-        cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
-              "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
+            cmd += "export CLASSPATH; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
+            cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
+                    "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
+        else:
+            # we use the ProducerPerformance tool from the development branch in order to ensure more consistent configuration between versions
+            tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
+            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
+            clients_jar = self.path.jar(CLIENTS_JAR_NAME, DEV_BRANCH)
+            for jar in (tools_jar, tools_dependant_libs_jar, clients_jar):
+                cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % jar
+            cmd += "export CLASSPATH; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
+            cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
+                    "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
 
         self.security_config.setup_node(node)
         if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
