@@ -834,7 +834,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 throw new IllegalStateException("You must specify the QuorumControllerMetrics.");
             }
             if (time == null) {
-                time = Time.SYSTEM;
+                throw new IllegalStateException("You must specify the Time.");
             }
             return new KRaftMigrationDriver(
                 nodeId,
