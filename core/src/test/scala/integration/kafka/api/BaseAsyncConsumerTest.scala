@@ -32,10 +32,12 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
     consumer.commitAsync(cb)
     waitUntilTrue(() => {
       cb.successCount == 1
     }, "wait until commit is completed successfully", 5000)
+    assertTrue(consumer.assignment.contains(tp))
   }
 
   @Test
