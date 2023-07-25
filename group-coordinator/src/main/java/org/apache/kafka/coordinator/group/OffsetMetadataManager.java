@@ -229,7 +229,8 @@ public class OffsetMetadataManager {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
         }
 
-        if (request.generationIdOrMemberEpoch() < 0 && group.isInState(EMPTY)) {
+        final int generationId = request.generationIdOrMemberEpoch();
+        if (generationId < 0 && group.isInState(EMPTY)) {
             // When the generation id is -1, the request comes from either the admin client
             // or a consumer which does not use the group management facility. In this case,
             // the request can commit offsets if the group is empty.
@@ -237,7 +238,7 @@ public class OffsetMetadataManager {
         }
 
         Optional<String> groupInstanceId = OffsetCommitRequest.groupInstanceId(request);
-        if (request.generationIdOrMemberEpoch() >= 0 || !request.memberId().isEmpty() || groupInstanceId.isPresent()) {
+        if (generationId >= 0 || !request.memberId().isEmpty() || groupInstanceId.isPresent()) {
             // We are validating three things:
             // 1. If the `groupInstanceId` is present, then it exists and is mapped to `memberId`;
             // 2. The `memberId` exists in the group; and
@@ -255,7 +256,7 @@ public class OffsetMetadataManager {
                 throw Errors.UNKNOWN_MEMBER_ID.exception();
             }
 
-            if (request.generationIdOrMemberEpoch() != group.generationId()) {
+            if (generationId != group.generationId()) {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
         } else if (!group.isInState(EMPTY)) {
@@ -286,8 +287,9 @@ public class OffsetMetadataManager {
         RequestContext context,
         OffsetCommitRequestData request
     ) throws KafkaException {
-        if (request.generationIdOrMemberEpoch() < 0 && group.members().isEmpty()) {
-            // When the generation id is -1, the request comes from either the admin client
+        final int memberEpoch = request.generationIdOrMemberEpoch();
+        if (memberEpoch < 0 && group.members().isEmpty()) {
+            // When the member epoch is -1, the request comes from either the admin client
             // or a consumer which does not use the group management facility. In this case,
             // the request can commit offsets if the group is empty.
             return;
@@ -297,8 +299,10 @@ public class OffsetMetadataManager {
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
 
-        final int memberEpoch = group.getOrMaybeCreateMember(request.memberId(), false).memberEpoch();
-        if (request.generationIdOrMemberEpoch() != memberEpoch) {
+        final int expectedMemberEpoch = group
+            .getOrMaybeCreateMember(request.memberId(), false)
+            .memberEpoch();
+        if (memberEpoch != expectedMemberEpoch) {
             // Consumers using the new consumer group protocol (KIP-848) should be using the
             // OffsetCommit API >= 9. As we don't support upgrading from the old to the new
             // protocol yet, we return an UNSUPPORTED_VERSION error if an older version is
@@ -406,8 +410,11 @@ public class OffsetMetadataManager {
         final TopicPartition tp = new TopicPartition(key.topic(), key.partition());
 
         if (value != null) {
-            // Ensures that there is a corresponding group for the offsets. If a group does
-            // not exist, a generic group is created as a so-called "simple group".
+            // The generic or consumer group should exist when offsets are committed or
+            // replayed. However, it won't if the consumer commits offsets but does not
+            // use the membership functionality. In this case, we automatically create
+            // a so-called "simple consumer group". This is an empty generic group
+            // without a protocol type.
             try {
                 groupMetadataManager.group(groupId);
             } catch (GroupIdNotFoundException ex) {

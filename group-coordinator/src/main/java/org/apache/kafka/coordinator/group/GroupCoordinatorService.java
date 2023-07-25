@@ -472,6 +472,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
+        // For backwards compatibility, we support offset commits for the empty groupId.
         if (request.groupId() == null) {
             return CompletableFuture.completedFuture(OffsetCommitRequest.getErrorResponse(
                 request,
