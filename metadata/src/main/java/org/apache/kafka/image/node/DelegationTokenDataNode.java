@@ -39,24 +39,35 @@ public class DelegationTokenDataNode implements MetadataNode {
         TokenInformation tokenInformation = data.tokenInformation();
         StringBuilder bld = new StringBuilder();
         bld.append("DelegationTokenData");
+        bld.append("tokenId=");
+        if (printer.redactionCriteria().shouldRedactDelegationToken()) {
+            bld.append("[redacted]");
+        } else {
+            bld.append(tokenInformation.tokenId());
+        }
         bld.append("(owner=");
         if (printer.redactionCriteria().shouldRedactDelegationToken()) {
             bld.append("[redacted]");
         } else {
             bld.append(tokenInformation.ownerAsString());
         }
-        // XXX Need more fields
+        bld.append("(tokenRequester=");
+        if (printer.redactionCriteria().shouldRedactDelegationToken()) {
+            bld.append("[redacted]");
+        } else {
+            bld.append(tokenInformation.tokenRequesterAsString());
+        }
+        bld.append("(renewers=");
+        if (printer.redactionCriteria().shouldRedactDelegationToken()) {
+            bld.append("[redacted]");
+        } else {
+            bld.append(String.join(" ", tokenInformation.renewersAsString()));
+        }
         bld.append(", issueTimestamp=");
         if (printer.redactionCriteria().shouldRedactDelegationToken()) {
             bld.append("[redacted]");
         } else {
             bld.append(tokenInformation.issueTimestamp());
-        }
-        bld.append(", expiryTimestamp=");
-        if (printer.redactionCriteria().shouldRedactDelegationToken()) {
-            bld.append("[redacted]");
-        } else {
-            bld.append(tokenInformation.expiryTimestamp());
         }
         bld.append(", maxTimestamp=");
         if (printer.redactionCriteria().shouldRedactDelegationToken()) {
@@ -65,6 +76,12 @@ public class DelegationTokenDataNode implements MetadataNode {
             bld.append(tokenInformation.maxTimestamp());
         }
         bld.append(")");
+        bld.append(", expiryTimestamp=");
+        if (printer.redactionCriteria().shouldRedactDelegationToken()) {
+            bld.append("[redacted]");
+        } else {
+            bld.append(tokenInformation.expiryTimestamp());
+        }
         printer.output(bld.toString());
     }
 }
