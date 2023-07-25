@@ -32,9 +32,9 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
   def testGetRackAlternatedBrokerListAndAssignReplicasToBrokers(): Unit = {
     val rackMap = Map(0 -> "rack1", 1 -> "rack3", 2 -> "rack3", 3 -> "rack2", 4 -> "rack2", 5 -> "rack1")
     val newList = AdminUtils.getRackAlternatedBrokerList(rackMap.map(e => (e._1.asInstanceOf[Integer], e._2)).asJava)
-    assertEquals(List(0, 3, 1, 5, 4, 2), newList)
+    assertEquals(List(0, 3, 1, 5, 4, 2), newList.asScala.toList)
     val anotherList = AdminUtils.getRackAlternatedBrokerList((rackMap.toMap - 5).map(e => (e._1.asInstanceOf[Integer], e._2)).asJava)
-    assertEquals(List(0, 3, 1, 4, 2), anotherList)
+    assertEquals(List(0, 3, 1, 4, 2), anotherList.asScala.toList)
     val assignment = CoreUtils.asScala(AdminUtils.assignReplicasToBrokers(toBrokerMetadata(rackMap), 7, 3, 0, 0))
     val expected = Map(0 -> List(0, 3, 1),
                        1 -> List(3, 1, 5),
@@ -222,7 +222,7 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
         8 -> List(3, 0, 1),
         9 -> List(4, 1, 2))
 
-    val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 3, 0, -1)
+    val actualAssignment = CoreUtils.asScala(AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 3, 0, -1))
     assertEquals(expectedAssignment, actualAssignment)
   }
 }
