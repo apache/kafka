@@ -17,6 +17,8 @@
 
 package org.apache.kafka.image.publisher;
 
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.image.FakeSnapshotWriter;
 import org.apache.kafka.image.MetadataImageTest;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -26,7 +28,6 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.Optional;
@@ -43,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class SnapshotEmitterTest {
     static class MockRaftClient implements RaftClient<ApiMessageAndVersion> {
-        TreeMap<OffsetAndEpoch, MockSnapshotWriter> writers = new TreeMap<>();
+        TreeMap<OffsetAndEpoch, FakeSnapshotWriter> writers = new TreeMap<>();
 
         @Override
         public void initialize() {
@@ -103,7 +104,7 @@ public class SnapshotEmitterTest {
             if (writers.containsKey(snapshotId)) {
                 return Optional.empty();
             }
-            MockSnapshotWriter writer = new MockSnapshotWriter(snapshotId);
+            FakeSnapshotWriter writer = new FakeSnapshotWriter(snapshotId);
             writers.put(snapshotId, writer);
             return Optional.of(writer);
         }
@@ -124,72 +125,24 @@ public class SnapshotEmitterTest {
         }
     }
 
-    static class MockSnapshotWriter implements SnapshotWriter<ApiMessageAndVersion> {
-        private final OffsetAndEpoch snapshotId;
-        private boolean frozen = false;
-        private boolean closed = false;
-        private final List<List<ApiMessageAndVersion>> batches;
-
-        MockSnapshotWriter(OffsetAndEpoch snapshotId) {
-            this.snapshotId = snapshotId;
-            this.batches = new ArrayList<>();
-        }
-
-        @Override
-        public OffsetAndEpoch snapshotId() {
-            return snapshotId;
-        }
-
-        @Override
-        public long lastContainedLogOffset() {
-            return snapshotId.offset() - 1;
-        }
-
-        @Override
-        public int lastContainedLogEpoch() {
-            return snapshotId.epoch();
-        }
-
-        @Override
-        public boolean isFrozen() {
-            return frozen;
-        }
-
-        @Override
-        public void append(List<ApiMessageAndVersion> records) {
-            batches.add(records);
-        }
-
-        List<List<ApiMessageAndVersion>> batches() {
-            List<List<ApiMessageAndVersion>> results = new ArrayList<>();
-            batches.forEach(batch -> results.add(new ArrayList<>(batch)));
-            return results;
-        }
-
-        @Override
-        public void freeze() {
-            frozen = true;
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-        }
-
-        boolean isClosed() {
-            return closed;
-        }
-    }
-
     @Test
     public void testEmit() throws Exception {
         MockRaftClient mockRaftClient = new MockRaftClient();
+        MockTime time = new MockTime(0, 10000L, 20000L);
         SnapshotEmitter emitter = new SnapshotEmitter.Builder().
+            setTime(time).
             setBatchSize(2).
             setRaftClient(mockRaftClient).
             build();
+        assertEquals(0L, emitter.metrics().latestSnapshotGeneratedAgeMs());
+        assertEquals(0L, emitter.metrics().latestSnapshotGeneratedBytes());
+        time.sleep(30000L);
+        assertEquals(30000L, emitter.metrics().latestSnapshotGeneratedAgeMs());
+        assertEquals(0L, emitter.metrics().latestSnapshotGeneratedBytes());
         emitter.maybeEmit(MetadataImageTest.IMAGE1);
-        MockSnapshotWriter writer = mockRaftClient.writers.get(
+        assertEquals(0L, emitter.metrics().latestSnapshotGeneratedAgeMs());
+        assertEquals(1400L, emitter.metrics().latestSnapshotGeneratedBytes());
+        FakeSnapshotWriter writer = mockRaftClient.writers.get(
                 MetadataImageTest.IMAGE1.provenance().snapshotId());
         assertNotNull(writer);
         assertEquals(MetadataImageTest.IMAGE1.highestOffsetAndEpoch().offset(),
