@@ -203,7 +203,7 @@ public class ReplicaVerificationTool {
                         } catch (InterruptedException ignored) {
                         }
                     });
-                }));
+                }, "ReplicaVerificationToolShutdownHook"));
 
                 fetcherThreads.forEach(Thread::start);
                 System.out.printf("%s: verification process is started%n",
