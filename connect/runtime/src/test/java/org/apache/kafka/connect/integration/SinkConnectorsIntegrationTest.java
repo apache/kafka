@@ -16,15 +16,10 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -47,16 +42,11 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
-import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
-import static org.apache.kafka.connect.runtime.SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG;
-import static org.apache.kafka.connect.runtime.SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG;
-import static org.apache.kafka.connect.runtime.SinkConnectorConfig.DLQ_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
-import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION_MESSAGE;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -317,48 +307,6 @@ public class SinkConnectorsIntegrationTest {
         assertEquals(1, task.timesAssigned(tp3));
         assertEquals(0, task.timesRevoked(tp3));
         assertEquals(0, task.timesCommitted(tp3));
-    }
-
-    @Test
-    public void testDeadLetterQueue() throws Exception {
-        String topic = "test-topic";
-        String dlqTopic = "dlq-topic";
-        Map<String, String> connectorProps = baseSinkConnectorProps(topic);
-        connectorProps.put(DLQ_TOPIC_NAME_CONFIG, dlqTopic);
-        connectorProps.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        connectorProps.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
-        connectorProps.put(ERRORS_TOLERANCE_CONFIG, "all");
-        connectorProps.put(VALUE_CONVERTER_CLASS_CONFIG, ThrowingConverter.class.getName());
-
-        connect.kafka().createTopic(topic);
-        connect.kafka().produce(topic, "test-message-1");
-
-        connect.configureConnector(CONNECTOR_NAME, connectorProps);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS, "Connector and task did not start in time.");
-
-        ConsumerRecord<byte[], byte[]> dlqRecord = connect.kafka().consume(1, 10_000, dlqTopic).iterator().next();
-
-        assertEquals("test-message-1", new String(dlqRecord.value()));
-        assertEquals("Failed to convert value", new String(dlqRecord.headers().lastHeader(ERROR_HEADER_EXCEPTION_MESSAGE).value()));
-    }
-
-    // Public to allow for plugin discovery in the embedded Connect worker to complete without errors
-    public static class ThrowingConverter implements Converter {
-
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-
-        }
-
-        @Override
-        public byte[] fromConnectData(String topic, Schema schema, Object value) {
-            throw new ConnectException("Failed to convert value");
-        }
-
-        @Override
-        public SchemaAndValue toConnectData(String topic, byte[] value) {
-            throw new ConnectException("Failed to convert value");
-        }
     }
 
     private Map<String, String> baseSinkConnectorProps(String topics) {

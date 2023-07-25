@@ -99,6 +99,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1963,12 +1964,13 @@ public class WorkerSinkTaskTest {
     @Test
     public void testErrorReportersConfigured() {
         RetryWithToleranceOperator retryWithToleranceOperator = createMock(RetryWithToleranceOperator.class);
+        List<ErrorReporter> errorReporters = Collections.singletonList(createMock(ErrorReporter.class));
         createTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator,
-                () -> Collections.singletonList(createMock(ErrorReporter.class)));
+                () -> errorReporters);
 
         expectInitializeTask();
-        Capture<List<ErrorReporter>> errorReporters = EasyMock.newCapture();
-        retryWithToleranceOperator.reporters(EasyMock.capture(errorReporters));
+        Capture<List<ErrorReporter>> errorReportersCapture = EasyMock.newCapture();
+        retryWithToleranceOperator.reporters(EasyMock.capture(errorReportersCapture));
         PowerMock.expectLastCall();
 
         PowerMock.replayAll(retryWithToleranceOperator);
@@ -1976,7 +1978,23 @@ public class WorkerSinkTaskTest {
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
-        assertEquals(1, errorReporters.getValue().size());
+        assertEquals(errorReporters, errorReportersCapture.getValue());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testErrorReporterConfigurationExceptionPropagation() {
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
+                () -> {
+                    throw new ConnectException("Failed to create error reporters");
+                }
+        );
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        assertThrows(ConnectException.class, () -> workerTask.initializeAndStart());
 
         PowerMock.verifyAll();
     }

@@ -291,7 +291,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore,
-                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck);
+                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList);
     }
 
     @Test
