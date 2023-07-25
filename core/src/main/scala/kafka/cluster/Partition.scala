@@ -960,19 +960,19 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica): Unit = {
+    var followerReplicaState = followerReplica.stateSnapshot
     val needsIsrUpdate = !partitionState.isInflight &&
-      canAddReplicaToIsr(followerReplica.brokerId, followerReplica.stateSnapshot) && inReadLock(leaderIsrUpdateLock) {
-      val followerReplicaState = followerReplica.stateSnapshot
+      canAddReplicaToIsr(followerReplica.brokerId, followerReplicaState) && inReadLock(leaderIsrUpdateLock) {
       needsExpandIsr(followerReplica.brokerId, followerReplicaState)
     }
     if (needsIsrUpdate) {
       val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
         // check if this replica needs to be added to the ISR
-        val followerReplicaState = followerReplica.stateSnapshot
+        followerReplicaState = followerReplica.stateSnapshot
         partitionState match {
           case currentState: CommittedPartitionState if needsExpandIsr(followerReplica.brokerId, followerReplicaState) =>
             val brokerEpoch = if (metadataCache.isInstanceOf[KRaftMetadataCache]) followerReplicaState.brokerEpoch.getOrElse(-1L) else -1
-            Some(prepareIsrExpand(currentState, followerReplica.brokerId, brokerEpoch))
+            Some(prepareIsrExpand(currentState, new BrokerState().setBrokerId(followerReplica.brokerId).setBrokerEpoch(brokerEpoch)))
           case _ =>
             None
         }
@@ -1706,8 +1706,7 @@ class Partition(val topicPartition: TopicPartition,
 
   private def prepareIsrExpand(
     currentState: CommittedPartitionState,
-    newInSyncReplicaId: Int,
-    newInSyncReplicaEpoch: Long
+    newInSyncBrokerState: BrokerState
   ): PendingExpandIsr = {
     // When expanding the ISR, we assume that the new replica will make it into the ISR
     // before we receive confirmation that it has. This ensures that the HW will already
@@ -1719,11 +1718,11 @@ class Partition(val topicPartition: TopicPartition,
       localBrokerId,
       leaderEpoch,
       partitionState.leaderRecoveryState,
-      isrWithBrokerEpoch :+ new BrokerState().setBrokerId(newInSyncReplicaId).setBrokerEpoch(newInSyncReplicaEpoch),
+      isrWithBrokerEpoch :+ newInSyncBrokerState,
       partitionEpoch
     )
     val updatedState = PendingExpandIsr(
-      newInSyncReplicaId,
+      newInSyncBrokerState.brokerId(),
       newLeaderAndIsr,
       currentState
     )

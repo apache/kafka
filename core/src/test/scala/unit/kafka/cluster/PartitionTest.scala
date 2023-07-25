@@ -1917,11 +1917,11 @@ class PartitionTest extends AbstractPartitionTest {
     // Fetch to let the follower catch up to the log end offset, but using a stale broker epoch. The Fetch should not
     // be able to update the fetch state.
     val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
-    fetchFollower(partition,
+    assertThrows(classOf[NotLeaderOrFollowerException], () => fetchFollower(partition,
       replicaId = remoteBrokerId1,
       fetchOffset = log.logEndOffset,
       replicaEpoch = Some(wrongReplicaEpoch)
-    )
+    ))
 
     assertReplicaState(partition, remoteBrokerId1,
       lastCaughtUpTimeMs = time.milliseconds(),

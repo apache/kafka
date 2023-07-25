@@ -116,24 +116,24 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
       if (brokerEpoch != -1 && brokerEpoch < expectedBrokerEpoch) {
         throw Errors.NOT_LEADER_OR_FOLLOWER.exception(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
           s"vs expected=$expectedBrokerEpoch")
-      } else {
-        val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
-          math.max(currentReplicaState.lastCaughtUpTimeMs, followerFetchTimeMs)
-        } else if (followerFetchOffsetMetadata.messageOffset >= currentReplicaState.lastFetchLeaderLogEndOffset) {
-          math.max(currentReplicaState.lastCaughtUpTimeMs, currentReplicaState.lastFetchTimeMs)
-        } else {
-          currentReplicaState.lastCaughtUpTimeMs
-        }
-
-        ReplicaState(
-          logStartOffset = followerStartOffset,
-          logEndOffsetMetadata = followerFetchOffsetMetadata,
-          lastFetchLeaderLogEndOffset = math.max(leaderEndOffset, currentReplicaState.lastFetchLeaderLogEndOffset),
-          lastFetchTimeMs = followerFetchTimeMs,
-          lastCaughtUpTimeMs = lastCaughtUpTime,
-          brokerEpoch = Option(brokerEpoch)
-        )
       }
+
+      val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
+        math.max(currentReplicaState.lastCaughtUpTimeMs, followerFetchTimeMs)
+      } else if (followerFetchOffsetMetadata.messageOffset >= currentReplicaState.lastFetchLeaderLogEndOffset) {
+        math.max(currentReplicaState.lastCaughtUpTimeMs, currentReplicaState.lastFetchTimeMs)
+      } else {
+        currentReplicaState.lastCaughtUpTimeMs
+      }
+
+      ReplicaState(
+        logStartOffset = followerStartOffset,
+        logEndOffsetMetadata = followerFetchOffsetMetadata,
+        lastFetchLeaderLogEndOffset = math.max(leaderEndOffset, currentReplicaState.lastFetchLeaderLogEndOffset),
+        lastFetchTimeMs = followerFetchTimeMs,
+        lastCaughtUpTimeMs = lastCaughtUpTime,
+        brokerEpoch = Option(brokerEpoch)
+      )
     }
   }
 
