@@ -31,23 +31,13 @@ import java.util.Set;
 public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
 
     /**
-     * The topic IDs are mapped to their corresponding {@link PartitionMetadata}
-     * object, which contains metadata such as the rack information for the partition replicas.
+     * The topic IDs are mapped to their corresponding {@link TopicMetadata}
+     * object, which contains topic and partition metadata.
      */
-    Map<Uuid, PartitionMetadata> topicPartitionMetadata;
+    Map<Uuid, TopicMetadata> topicMetadata;
 
-    public SubscribedTopicMetadata(Map<Uuid, PartitionMetadata> TopicPartitionMetadata) {
-        this.topicPartitionMetadata = TopicPartitionMetadata;
-    }
-
-    /**
-     * A set of topic Ids that the consumer group is subscribed to.
-     *
-     * @return Set of topic Ids corresponding to the subscribed topics.
-     */
-    @Override
-    public Set<Uuid> subscribedTopicIds() {
-        return topicPartitionMetadata.keySet();
+    public SubscribedTopicMetadata(Map<Uuid, TopicMetadata> topicMetadata) {
+        this.topicMetadata = topicMetadata;
     }
 
     /**
@@ -55,16 +45,11 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
      *
      * @param topicId   Uuid corresponding to the topic.
      * @return The number of partitions corresponding to the given topicId.
-     *         If the topicId doesn't exist return 0;
+     *         If the topicId doesn't exist return -1;
      */
     @Override
     public int numPartitions(Uuid topicId) {
-        PartitionMetadata partitionMetadata = topicPartitionMetadata.get(topicId);
-        if (partitionMetadata == null) {
-            return 0;
-        }
-
-        return partitionMetadata.numPartitions();
+        return this.topicMetadata.containsKey(topicId) ? this.topicMetadata.get(topicId).numPartitions() : -1;
     }
 
     /**
@@ -77,12 +62,9 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        PartitionMetadata partitionMetadata = topicPartitionMetadata.get(topicId);
-        if (partitionMetadata == null) {
-            return Collections.emptySet();
-        }
-
-        return partitionMetadata.racks(partition);
+        return this.topicMetadata.containsKey(topicId) ?
+            this.topicMetadata.get(topicId).partitionRacks().get(partition) :
+            Collections.emptySet();
     }
 
     @Override
@@ -90,18 +72,18 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         SubscribedTopicMetadata that = (SubscribedTopicMetadata) o;
-        return topicPartitionMetadata.equals(that.topicPartitionMetadata);
+        return topicMetadata.equals(that.topicMetadata);
     }
 
     @Override
     public int hashCode() {
-        return topicPartitionMetadata.hashCode();
+        return topicMetadata.hashCode();
     }
 
     @Override
     public String toString() {
         return "SubscribedTopicMetadata(" +
-            "topicPartitionMetadata=" + topicPartitionMetadata +
+            "topicMetadata=" + topicMetadata +
             ')';
     }
 }

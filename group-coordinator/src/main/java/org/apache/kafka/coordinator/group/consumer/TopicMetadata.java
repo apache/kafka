@@ -47,7 +47,7 @@ public class TopicMetadata {
 
     /**
      * Map of every partition to a set of its rackIds.
-     * If the rack information is unavailable, pass an empty set.
+     * If the rack information is unavailable, this is an empty map.
      */
     private final Map<Integer, Set<String>> partitionRacks;
 
@@ -94,7 +94,8 @@ public class TopicMetadata {
     }
 
     /**
-     * @return The map of every partition to the set of corresponding rack Ids of its replicas.
+     * @return Every partition mapped to the set of corresponding rack Ids of its replicas.
+     *         An empty map is returned if no rack information is available.
      */
     public Map<Integer, Set<String>> partitionRacks() {
         return this.partitionRacks;
@@ -136,8 +137,8 @@ public class TopicMetadata {
         ConsumerGroupPartitionMetadataValue.TopicMetadata record
     ) {
         // Converting the data type from a list stored in the record to a map.
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(record.partitionRacks().size());
-        for (ConsumerGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionRacks()) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(record.partitionMetadata().size());
+        for (ConsumerGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionMetadata()) {
             partitionRacks.put(partitionMetadata.partition(), Collections.unmodifiableSet(new HashSet<>(partitionMetadata.racks())));
         }
 

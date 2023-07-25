@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,9 +59,7 @@ public class TopicMetadataTest {
             .setTopicId(topicId)
             .setTopicName(topicName)
             .setNumPartitions(15)
-            .setPartitionRacks(
-                new ArrayList<>()
-            );
+            .setPartitionMetadata(Collections.emptyList());
 
         assertEquals(
             new TopicMetadata(topicId, topicName, 15, Collections.emptyMap()),

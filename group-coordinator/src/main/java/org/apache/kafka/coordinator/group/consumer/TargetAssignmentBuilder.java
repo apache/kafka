@@ -243,19 +243,17 @@ public class TargetAssignmentBuilder {
         });
 
         // Prepare the topic metadata.
-        Map<Uuid, PartitionMetadata> topicMetadataMap = new HashMap<>();
+        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
             topicMetadataMap.put(
                 topicMetadata.id(),
-                new PartitionMetadata(topicMetadata.partitionRacks())
+                topicMetadata
             )
         );
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(
-                Collections.unmodifiableMap(memberSpecs)
-            ),
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs)),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 

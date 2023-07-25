@@ -133,17 +133,17 @@ public class RecordHelpers {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
         newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
             List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
-            topicMetadata.partitionRacks().forEach((partition, racks) -> {
+            topicMetadata.partitionRacks().forEach((partition, racks) ->
                 partitionMetadata.add(new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
                     .setPartition(partition)
                     .setRacks(new ArrayList<>(racks))
-                );
-            });
+                )
+            );
             value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-                .setPartitionRacks(partitionMetadata)
+                .setPartitionMetadata(partitionMetadata)
             );
         });
 

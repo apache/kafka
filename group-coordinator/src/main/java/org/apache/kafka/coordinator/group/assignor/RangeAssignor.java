@@ -85,16 +85,12 @@ public class RangeAssignor implements PartitionAssignor {
         membersData.forEach((memberId, memberMetadata) -> {
             Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
             for (Uuid topicId : topics) {
-                // Only topics that are present in both the subscribed topics list and the topic metadata should be
-                // considered for assignment.
-                if (subscribedTopicDescriber.subscribedTopicIds().contains(topicId)) {
-                    membersPerTopic
-                        .computeIfAbsent(topicId, k -> new ArrayList<>())
-                        .add(memberId);
-                } else {
-                    throw new PartitionAssignorException("Member " + memberId + " subscribed to topic " +
-                        topicId + " which doesn't exist in the topic metadata");
+                if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
+                    throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
                 }
+                membersPerTopic
+                    .computeIfAbsent(topicId, k -> new ArrayList<>())
+                    .add(memberId);
             }
         });
 

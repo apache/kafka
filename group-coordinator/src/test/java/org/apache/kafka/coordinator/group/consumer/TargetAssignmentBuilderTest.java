@@ -147,13 +147,13 @@ public class TargetAssignmentBuilderTest {
             Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
 
             // All the existing members are prepared.
-            members.forEach((memberId, member) -> {
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
+            members.forEach((memberId, member) -> memberSpecs.put(memberId,
+                createAssignmentMemberSpec(
                     member,
                     targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                     subscriptionMetadata
-                ));
-            });
+                )
+            ));
 
             // All the updated are added and all the deleted
             // members are removed.
@@ -170,10 +170,9 @@ public class TargetAssignmentBuilderTest {
             });
 
             // Prepare the expected topic metadata.
-            Map<Uuid, PartitionMetadata> topicMetadataMap = new HashMap<>();
-            subscriptionMetadata.forEach((topicName, topicMetadata) ->  {
-                topicMetadataMap.put(topicMetadata.id(), new PartitionMetadata(topicMetadata.partitionRacks()));
-            });
+            Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
+            subscriptionMetadata.forEach((topicName, topicMetadata) ->
+                topicMetadataMap.put(topicMetadata.id(), topicMetadata));
 
             // Prepare the expected assignment spec.
             AssignmentSpec assignmentSpec = new AssignmentSpec(

@@ -186,12 +186,12 @@ public class RecordHelpersTest {
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
                             .setNumPartitions(10)
-                            .setPartitionRacks(mkListOfPartitionRacks(10)),
+                            .setPartitionMetadata(mkListOfPartitionRacks(10)),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
                             .setNumPartitions(20)
-                            .setPartitionRacks(mkListOfPartitionRacks(20)))),
+                            .setPartitionMetadata(mkListOfPartitionRacks(20)))),
                 (short) 0));
 
         assertEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
