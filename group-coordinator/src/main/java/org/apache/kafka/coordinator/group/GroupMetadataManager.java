@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
@@ -1808,100 +1809,100 @@ public class GroupMetadataManager {
                 responseFuture
             );
         } else {
-            Optional<Errors> memberError = validateExistingMember(
-                group,
-                memberId,
-                groupInstanceId,
-                "join-group"
-            );
-
-            if (memberError.isPresent()) {
+            try {
+                group.validateMember(
+                    memberId,
+                    groupInstanceId,
+                    "join-group"
+                );
+            } catch (KafkaException ex) {
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(memberId)
-                    .setErrorCode(memberError.get().code())
+                    .setErrorCode(Errors.forException(ex).code())
                 );
-            } else {
-                GenericGroupMember member = group.member(memberId);
-                if (group.isInState(PREPARING_REBALANCE)) {
+                return EMPTY_RESULT;
+            }
+
+            GenericGroupMember member = group.member(memberId);
+            if (group.isInState(PREPARING_REBALANCE)) {
+                return updateMemberThenRebalanceOrCompleteJoin(
+                    request,
+                    group,
+                    member,
+                    "Member " + member.memberId() + " is joining group during " + group.stateAsString() +
+                        "; client reason: " + JoinGroupRequest.joinReason(request),
+                    responseFuture
+                );
+            } else if (group.isInState(COMPLETING_REBALANCE)) {
+                if (member.matches(request.protocols())) {
+                    // Member is joining with the same metadata (which could be because it failed to
+                    // receive the initial JoinGroup response), so just return current group information
+                    // for the current generation.
+                    responseFuture.complete(new JoinGroupResponseData()
+                        .setMembers(group.isLeader(memberId) ?
+                            group.currentGenericGroupMembers() : Collections.emptyList())
+                        .setMemberId(memberId)
+                        .setGenerationId(group.generationId())
+                        .setProtocolName(group.protocolName().orElse(null))
+                        .setProtocolType(group.protocolType().orElse(null))
+                        .setLeader(group.leaderOrNull())
+                        .setSkipAssignment(false)
+                    );
+                } else {
+                    // Member has changed metadata, so force a rebalance
                     return updateMemberThenRebalanceOrCompleteJoin(
                         request,
                         group,
                         member,
-                        "Member " + member.memberId() + " is joining group during " + group.stateAsString() +
+                        "Updating metadata for member " + memberId + " during " + group.stateAsString() +
                             "; client reason: " + JoinGroupRequest.joinReason(request),
                         responseFuture
                     );
-                } else if (group.isInState(COMPLETING_REBALANCE)) {
-                    if (member.matches(request.protocols())) {
-                        // Member is joining with the same metadata (which could be because it failed to
-                        // receive the initial JoinGroup response), so just return current group information
-                        // for the current generation.
-                        responseFuture.complete(new JoinGroupResponseData()
-                            .setMembers(group.isLeader(memberId) ?
-                                group.currentGenericGroupMembers() : Collections.emptyList())
-                            .setMemberId(memberId)
-                            .setGenerationId(group.generationId())
-                            .setProtocolName(group.protocolName().orElse(null))
-                            .setProtocolType(group.protocolType().orElse(null))
-                            .setLeader(group.leaderOrNull())
-                            .setSkipAssignment(false)
-                        );
-                    } else {
-                        // Member has changed metadata, so force a rebalance
-                        return updateMemberThenRebalanceOrCompleteJoin(
-                            request,
-                            group,
-                            member,
-                            "Updating metadata for member " + memberId + " during " + group.stateAsString() +
-                                "; client reason: " + JoinGroupRequest.joinReason(request),
-                            responseFuture
-                        );
-                    }
-                } else if (group.isInState(STABLE)) {
-                    if (group.isLeader(memberId)) {
-                        // Force a rebalance if the leader sends JoinGroup;
-                        // This allows the leader to trigger rebalances for changes affecting assignment
-                        // which do not affect the member metadata (such as topic metadata changes for the consumer)
-                        return updateMemberThenRebalanceOrCompleteJoin(
-                            request,
-                            group,
-                            member,
-                            "Leader " + memberId + " re-joining group during " + group.stateAsString() +
-                                "; client reason: " + JoinGroupRequest.joinReason(request),
-                            responseFuture
-                        );
-                    } else if (!member.matches(request.protocols())) {
-                        return updateMemberThenRebalanceOrCompleteJoin(
-                            request,
-                            group,
-                            member,
-                            "Updating metadata for member " + memberId + " during " + group.stateAsString() +
-                                "; client reason: " + JoinGroupRequest.joinReason(request),
-                            responseFuture
-                        );
-                    } else {
-                        // For followers with no actual change to their metadata, just return group information
-                        // for the current generation which will allow them to issue SyncGroup.
-                        responseFuture.complete(new JoinGroupResponseData()
-                            .setMembers(Collections.emptyList())
-                            .setMemberId(memberId)
-                            .setGenerationId(group.generationId())
-                            .setProtocolName(group.protocolName().orElse(null))
-                            .setProtocolType(group.protocolType().orElse(null))
-                            .setLeader(group.leaderOrNull())
-                            .setSkipAssignment(false)
-                        );
-                    }
+                }
+            } else if (group.isInState(STABLE)) {
+                if (group.isLeader(memberId)) {
+                    // Force a rebalance if the leader sends JoinGroup;
+                    // This allows the leader to trigger rebalances for changes affecting assignment
+                    // which do not affect the member metadata (such as topic metadata changes for the consumer)
+                    return updateMemberThenRebalanceOrCompleteJoin(
+                        request,
+                        group,
+                        member,
+                        "Leader " + memberId + " re-joining group during " + group.stateAsString() +
+                            "; client reason: " + JoinGroupRequest.joinReason(request),
+                        responseFuture
+                    );
+                } else if (!member.matches(request.protocols())) {
+                    return updateMemberThenRebalanceOrCompleteJoin(
+                        request,
+                        group,
+                        member,
+                        "Updating metadata for member " + memberId + " during " + group.stateAsString() +
+                            "; client reason: " + JoinGroupRequest.joinReason(request),
+                        responseFuture
+                    );
                 } else {
-                    // Group reached unexpected (Empty) state. Let the joining member reset their generation and rejoin.
-                    log.warn("Attempt to add rejoining member {} of group {} in unexpected group state {}",
-                        memberId, group.groupId(), group.stateAsString());
-
+                    // For followers with no actual change to their metadata, just return group information
+                    // for the current generation which will allow them to issue SyncGroup.
                     responseFuture.complete(new JoinGroupResponseData()
+                        .setMembers(Collections.emptyList())
                         .setMemberId(memberId)
-                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                        .setGenerationId(group.generationId())
+                        .setProtocolName(group.protocolName().orElse(null))
+                        .setProtocolType(group.protocolType().orElse(null))
+                        .setLeader(group.leaderOrNull())
+                        .setSkipAssignment(false)
                     );
                 }
+            } else {
+                // Group reached unexpected (Empty) state. Let the joining member reset their generation and rejoin.
+                log.warn("Attempt to add rejoining member {} of group {} in unexpected group state {}",
+                    memberId, group.groupId(), group.stateAsString());
+
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setMemberId(memberId)
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                );
             }
         }
 
@@ -2150,48 +2151,6 @@ public class GroupMetadataManager {
         );
 
         return maybePrepareRebalanceOrCompleteJoin(group, joinReason);
-    }
-
-    /**
-     * We are validating two things:
-     *     1. If `groupInstanceId` is present, then it exists and is mapped to `memberId`
-     *     2. The `memberId` exists in the group
-     *
-     * @param group            The generic group.
-     * @param memberId         The member id.
-     * @param groupInstanceId  The group instance id.
-     * @param operation        The API operation.
-     *
-     * @return the error.
-     */
-    private Optional<Errors> validateExistingMember(
-        GenericGroup group,
-        String memberId,
-        String groupInstanceId,
-        String operation
-    ) {
-        if (groupInstanceId == null) {
-            if (!group.hasMemberId(memberId)) {
-                return Optional.of(Errors.UNKNOWN_MEMBER_ID);
-            } else {
-                return Optional.empty();
-            }
-        }
-
-        String existingMemberId = group.staticMemberId(groupInstanceId);
-        if (existingMemberId == null) {
-            return Optional.of(Errors.UNKNOWN_MEMBER_ID);
-        }
-
-        if (!existingMemberId.equals(memberId)) {
-            log.info("Request memberId={} for static member with groupInstanceId={} " +
-                    "is fenced by existing memberId={} during operation {}",
-                memberId, groupInstanceId, existingMemberId, operation);
-            
-            return Optional.of(Errors.FENCED_INSTANCE_ID);
-        }
-        
-        return Optional.empty();
     }
 
     /**

@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalLong;
 
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
@@ -237,32 +236,19 @@ public class OffsetMetadataManager {
             return;
         }
 
-        Optional<String> groupInstanceId = OffsetCommitRequest.groupInstanceId(request);
-        if (generationId >= 0 || !request.memberId().isEmpty() || groupInstanceId.isPresent()) {
-            // We are validating three things:
-            // 1. If the `groupInstanceId` is present, then it exists and is mapped to `memberId`;
-            // 2. The `memberId` exists in the group; and
-            // 3. The `generationId` matches the current generation id.
-            if (groupInstanceId.isPresent()) {
-                String memberId = group.staticMemberId(groupInstanceId.get());
-                if (memberId == null) {
-                    throw Errors.UNKNOWN_MEMBER_ID.exception();
-                } else if (!request.memberId().equals(memberId)) {
-                    throw Errors.FENCED_INSTANCE_ID.exception();
-                }
-            }
-
-            if (!group.hasMemberId(request.memberId())) {
-                throw Errors.UNKNOWN_MEMBER_ID.exception();
-            }
+        if (generationId >= 0 || !request.memberId().isEmpty() || request.groupInstanceId() != null) {
+            group.validateMember(
+                request.memberId(),
+                request.groupInstanceId(),
+                "offset-commit"
+            );
 
             if (generationId != group.generationId()) {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
         } else if (!group.isInState(EMPTY)) {
-            // If the request does not contain the member id and the generation
-            // id (version 0), offset commits are only accepted when the group
-            // is empty.
+            // If the request does not contain the member id and the generation id (version 0),
+            // offset commits are only accepted when the group is empty.
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
 

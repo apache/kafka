@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -736,6 +738,39 @@ public class GenericGroup implements Group {
     public String generateMemberId(String clientId, Optional<String> groupInstanceId) {
         return groupInstanceId.map(s -> s + MEMBER_ID_DELIMITER + UUID.randomUUID())
             .orElseGet(() -> clientId + MEMBER_ID_DELIMITER + UUID.randomUUID());
+    }
+
+    /**
+     * Validates that (1) the group instance id exists and is mapped to the member id
+     * if the group instance id is provided; and (2) the member id exists in the group.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param operation         The operation.
+     *
+     * @throws UnknownMemberIdException
+     * @throws FencedInstanceIdException
+     */
+    public void validateMember(
+        String memberId,
+        String groupInstanceId,
+        String operation
+    ) throws UnknownMemberIdException, FencedInstanceIdException {
+        if (groupInstanceId != null) {
+            String existingMemberId = staticMemberId(groupInstanceId);
+            if (existingMemberId == null) {
+                throw Errors.UNKNOWN_MEMBER_ID.exception();
+            } else if (!existingMemberId.equals(memberId)) {
+                log.info("Request memberId={} for static member with groupInstanceId={} " +
+                         "is fenced by existing memberId={} during operation {}",
+                    memberId, groupInstanceId, existingMemberId, operation);
+                throw Errors.FENCED_INSTANCE_ID.exception();
+            }
+        }
+
+        if (!hasMemberId(memberId)) {
+            throw Errors.UNKNOWN_MEMBER_ID.exception();
+        }
     }
 
     /**

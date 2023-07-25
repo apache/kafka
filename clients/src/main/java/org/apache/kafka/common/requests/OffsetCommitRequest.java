@@ -121,8 +121,4 @@ public class OffsetCommitRequest extends AbstractRequest {
     public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new OffsetCommitRequest(new OffsetCommitRequestData(new ByteBufferAccessor(buffer), version), version);
     }
-
-    public static Optional<String> groupInstanceId(OffsetCommitRequestData request) {
-        return Optional.ofNullable(request.groupInstanceId());
-    }
 }
