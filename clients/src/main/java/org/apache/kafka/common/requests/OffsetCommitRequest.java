@@ -30,7 +30,6 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 public class OffsetCommitRequest extends AbstractRequest {
     // default values for the current version
