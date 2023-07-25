@@ -74,10 +74,12 @@ public class BooleanConverterTest {
     @Test
     public void testToConnect() {
         assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, TRUE).schema());
-        assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, FALSE).schema());
-        assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, null).schema());
         assertTrue((Boolean) converter.toConnectData(TOPIC, TRUE).value());
+
+        assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, FALSE).schema());
         assertFalse((Boolean) converter.toConnectData(TOPIC, FALSE).value());
+
+        assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, null).schema());
         assertNull(converter.toConnectData(TOPIC, null).value());
     }
 }
