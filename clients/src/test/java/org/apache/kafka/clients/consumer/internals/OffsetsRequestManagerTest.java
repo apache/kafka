@@ -260,7 +260,7 @@ public class OffsetsRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("retriableErrors")
-    public void testRequestFailsWithRetriableError_RetrySucceeds(Errors error) throws ExecutionException, InterruptedException {
+    public void testFetchOffsetsFailsWithRetriableError_RetrySucceeds(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -297,18 +297,18 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestNotSupportedErrorReturnsNullOffset() throws ExecutionException,
+    public void testFetchOffsetsNotSupportedErrorReturnsNullOffset() throws ExecutionException,
             InterruptedException {
-        testResponseWithErrorAndUnknownOffsets(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT);
+        testFetchOffsetsResponseWithErrorAndUnknownOffsets(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT);
     }
 
     @Test
-    public void testRequestWithUnknownOffsetInResponseReturnsNullOffset() throws ExecutionException,
+    public void testFetchOffsetsWithUnknownOffsetInResponseReturnsNullOffset() throws ExecutionException,
             InterruptedException {
-        testResponseWithErrorAndUnknownOffsets(Errors.NONE);
+        testFetchOffsetsResponseWithErrorAndUnknownOffsets(Errors.NONE);
     }
 
-    private void testResponseWithErrorAndUnknownOffsets(Errors error) throws ExecutionException, InterruptedException {
+    private void testFetchOffsetsResponseWithErrorAndUnknownOffsets(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -338,7 +338,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestPartiallyFailsWithRetriableError_RetrySucceeds() throws ExecutionException, InterruptedException {
+    public void testFetchOffsetsPartiallyFailsWithRetriableError_RetrySucceeds() throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         timestampsToSearch.put(TEST_PARTITION_1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
         timestampsToSearch.put(TEST_PARTITION_2, ListOffsetsRequest.EARLIEST_TIMESTAMP);
@@ -398,7 +398,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestFailedResponse_NonRetriableAuthError() {
+    public void testFetchOffsetsFailedResponse_NonRetriableAuthError() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -427,7 +427,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestFailedResponse_NonRetriableErrorTimeout() {
+    public void testFetchOffsetsFailedResponse_NonRetriableErrorTimeout() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -459,7 +459,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestFails_AuthenticationException() {
+    public void testFetchOffsetsFails_AuthenticationException() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -607,7 +607,6 @@ public class OffsetsRequestManagerTest {
 
     @Test
     public void testValidatePositionsSuccess() {
-        when(metadata.updateVersion()).thenReturn(1);
         final int leaderEpoch = 1;
         Metadata.LeaderAndEpoch currentLeader = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1), Optional.of(leaderEpoch));
         SubscriptionState.FetchPosition currentPosition = new SubscriptionState.FetchPosition(1L,
@@ -627,9 +626,6 @@ public class OffsetsRequestManagerTest {
         response.onComplete();
 
         assertEquals(0, requestManager.requestsToSend());
-        verify(subscriptionState).maybeValidatePositionForCurrentLeader(any(), any(), any());
-        verify(subscriptionState).setNextAllowedRetry(any(), anyLong());
-
 
         OffsetForLeaderEpochResponseData.EpochEndOffset expectedEpochEndOffset =
                 epochEndOffsetFromResponse(response);
@@ -638,8 +634,44 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testValidatePositionsThrowsPreviousException() {
+    public void testValidatePositionsSkippedForOldBroker() {
+        final int leaderEpoch = 1;
+        Metadata.LeaderAndEpoch currentLeader = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1), Optional.of(leaderEpoch));
+        SubscriptionState.FetchPosition currentPosition = new SubscriptionState.FetchPosition(1L,
+                Optional.of(1), currentLeader);
+
+        Set<TopicPartition> assignedPartitions = new HashSet<>(asList(TEST_PARTITION_1));
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(assignedPartitions);
+        when(subscriptionState.position(TEST_PARTITION_1)).thenReturn(currentPosition);
+        NodeApiVersions versionUnderV3 = NodeApiVersions.create(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id,
+                (short) 0, (short) 2);
+        when(apiVersions.get(currentLeader.leader.get().idString())).thenReturn(versionUnderV3);
+
+        requestManager.validatePositionsIfNeeded();
+
+        assertEquals(0, requestManager.requestsToSend());
+        verify(subscriptionState).completeValidation(TEST_PARTITION_1);
+    }
+
+    @Test
+    public void testValidatePositionsUnknownNode() {
         when(metadata.updateVersion()).thenReturn(1);
+        final int leaderEpoch = 1;
+        Metadata.LeaderAndEpoch currentLeader = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1), Optional.of(leaderEpoch));
+        SubscriptionState.FetchPosition currentPosition = new SubscriptionState.FetchPosition(1L,
+                Optional.of(1), currentLeader);
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(new HashSet<>(asList(TEST_PARTITION_1)));
+        when(subscriptionState.position(TEST_PARTITION_1)).thenReturn(currentPosition);
+        when(apiVersions.get(currentLeader.leader.get().idString())).thenReturn(null);
+
+        requestManager.validatePositionsIfNeeded();
+
+        assertEquals(0, requestManager.requestsToSend());
+        verify(subscriptionState, never()).maybeCompleteValidation(any(), any(), any());
+    }
+
+    @Test
+    public void testValidatePositionsThrowsPreviousException() {
         final int leaderEpoch = 1;
         Metadata.LeaderAndEpoch currentLeader = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1), Optional.of(leaderEpoch));
         SubscriptionState.FetchPosition currentPosition = new SubscriptionState.FetchPosition(1L,
@@ -679,8 +711,6 @@ public class OffsetsRequestManagerTest {
                                                           Metadata.LeaderAndEpoch currentLeader,
                                                           SubscriptionState.FetchPosition currentPosition) {
         Set<TopicPartition> assignedPartitions = new HashSet<>(asList(partition));
-        when(subscriptionState.assignedPartitions()).thenReturn(assignedPartitions);
-        when(metadata.currentLeader(partition)).thenReturn(currentLeader);
         when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(assignedPartitions);
         when(subscriptionState.position(partition)).thenReturn(currentPosition);
         when(apiVersions.get(currentLeader.leader.get().idString())).thenReturn(NodeApiVersions.create());
