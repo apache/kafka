@@ -17,7 +17,9 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -495,6 +497,30 @@ public class ConsumerGroup implements Group {
      */
     public DeadlineAndEpoch metadataRefreshDeadline() {
         return metadataRefreshDeadline;
+    }
+
+    /**
+     * Validates the OffsetCommit request.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param memberEpoch       The member epoch.
+     */
+    @Override
+    public void validateOffsetCommit(
+        String memberId,
+        String groupInstanceId,
+        int memberEpoch
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        // When the member epoch is -1, the request comes from either the admin client
+        // or a consumer which does not use the group management facility. In this case,
+        // the request can commit offsets if the group is empty.
+        if (memberEpoch < 0 && members().isEmpty()) return;
+
+        final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
+        if (memberEpoch != member.memberEpoch()) {
+            throw Errors.STALE_MEMBER_EPOCH.exception();
+        }
     }
 
     /**

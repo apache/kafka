@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -590,5 +591,32 @@ public class ConsumerGroupTest {
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
         assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
         assertEquals(0, group.metadataRefreshDeadline().epoch);
+    }
+
+    @Test
+    public void testValidateOffsetCommit() {
+        ConsumerGroup group = createConsumerGroup("group-foo");
+
+        // Simulate a call from the admin client without member id and member epoch.
+        // This should pass only if the group is empty.
+        group.validateOffsetCommit("", "", -1);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("member-id", null, 0));
+
+        // Create a member.
+        group.getOrMaybeCreateMember("member-id", true);
+
+        // A call from the admin client should fail as the group is not empty.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", "", -1));
+
+        // The member epoch is stale.
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-id", "", 10));
+
+        // This should succeed.
+        group.validateOffsetCommit("member-id", "", 0);
     }
 }

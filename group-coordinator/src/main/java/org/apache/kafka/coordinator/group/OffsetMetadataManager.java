@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
@@ -29,11 +29,8 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -45,10 +42,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
-
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 
 /**
  * The OffsetMetadataManager manages the offsets of all the groups. It basically maintains
@@ -198,101 +191,19 @@ public class OffsetMetadataManager {
             }
         }
 
-        // Validate the request based on the group type.
-        switch (group.type()) {
-            case GENERIC:
-                validateOffsetCommitForGenericGroup(
-                    (GenericGroup) group,
-                    request
-                );
-                break;
-
-            case CONSUMER:
-                validateOffsetCommitForConsumerGroup(
-                    (ConsumerGroup) group,
-                    context,
-                    request
-                );
-                break;
-        }
-    }
-
-    /**
-     * Validates an OffsetCommit request for a generic group.
-     *
-     * @param group     The generic group.
-     * @param request   The actual request.
-     */
-    private void validateOffsetCommitForGenericGroup(
-        GenericGroup group,
-        OffsetCommitRequestData request
-    ) throws KafkaException {
-        if (group.isInState(DEAD)) {
-            throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
-        }
-
-        final int generationId = request.generationIdOrMemberEpoch();
-        if (generationId < 0 && group.isInState(EMPTY)) {
-            // When the generation id is -1, the request comes from either the admin client
-            // or a consumer which does not use the group management facility. In this case,
-            // the request can commit offsets if the group is empty.
-            return;
-        }
-
-        if (generationId >= 0 || !request.memberId().isEmpty() || request.groupInstanceId() != null) {
-            group.validateMember(
+        try {
+            group.validateOffsetCommit(
                 request.memberId(),
                 request.groupInstanceId(),
-                "offset-commit"
+                request.generationIdOrMemberEpoch()
             );
-
-            if (generationId != group.generationId()) {
-                throw Errors.ILLEGAL_GENERATION.exception();
-            }
-        } else if (!group.isInState(EMPTY)) {
-            // If the request does not contain the member id and the generation id (version 0),
-            // offset commits are only accepted when the group is empty.
-            throw Errors.UNKNOWN_MEMBER_ID.exception();
-        }
-
-        if (group.isInState(COMPLETING_REBALANCE)) {
-            // We should not receive a commit request if the group has not completed rebalance;
-            // but since the consumer's member.id and generation is valid, it means it has received
-            // the latest group generation information from the JoinResponse.
-            // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
-            throw Errors.REBALANCE_IN_PROGRESS.exception();
-        }
-    }
-
-    /**
-     * Validates an OffsetCommit request for a consumer group.
-     *
-     * @param group     The consumer group.
-     * @param context   The request context.
-     * @param request   The actual request.
-     */
-    private void validateOffsetCommitForConsumerGroup(
-        ConsumerGroup group,
-        RequestContext context,
-        OffsetCommitRequestData request
-    ) throws KafkaException {
-        final int memberEpoch = request.generationIdOrMemberEpoch();
-        if (memberEpoch < 0 && group.members().isEmpty()) {
-            // When the member epoch is -1, the request comes from either the admin client
-            // or a consumer which does not use the group management facility. In this case,
-            // the request can commit offsets if the group is empty.
-            return;
-        }
-
-        final ConsumerGroupMember member = group.getOrMaybeCreateMember(request.memberId(), false);
-        final int expectedMemberEpoch = member.memberEpoch();
-        if (memberEpoch != expectedMemberEpoch) {
-            // Consumers using the new consumer group protocol (KIP-848) should be using the
-            // OffsetCommit API >= 9. As we don't support upgrading from the old to the new
-            // protocol yet, we return an UNSUPPORTED_VERSION error if an older version is
-            // used. We will revise this when the upgrade path is implemented.
+        } catch (StaleMemberEpochException ex) {
+            // The STALE_MEMBER_EPOCH error is only returned for new consumer group (KIP-848). When
+            // it is, the member should be using the OffsetCommit API version >= 9. As we don't
+            // support upgrading from the old to the new protocol yet, we return UNSUPPORTED_VERSION
+            // error if an older version is used. We will revise this when the upgrade path is implemented.
             if (context.header.apiVersion() >= 9) {
-                throw Errors.STALE_MEMBER_EPOCH.exception();
+                throw ex;
             } else {
                 throw Errors.UNSUPPORTED_VERSION.exception();
             }
