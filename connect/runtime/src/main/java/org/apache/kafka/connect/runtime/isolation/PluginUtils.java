@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -201,7 +202,7 @@ public class PluginUtils {
             return Collections.emptySet();
         }
         String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(pluginPath.trim(), -1);
-        Set<Path> pluginLocations = new HashSet<>();
+        Set<Path> pluginLocations = new LinkedHashSet<>();
         for (String path : pluginPathElements) {
             try {
                 Path pluginPathElement = Paths.get(path).toAbsolutePath();
@@ -329,7 +330,7 @@ public class PluginUtils {
     }
 
     public static Set<PluginSource> pluginSources(Set<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
-        Set<PluginSource> pluginSources = new HashSet<>();
+        Set<PluginSource> pluginSources = new LinkedHashSet<>();
         for (Path pluginLocation : pluginLocations) {
 
             try {
