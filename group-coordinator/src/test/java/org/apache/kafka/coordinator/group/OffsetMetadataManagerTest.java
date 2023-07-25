@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -202,12 +203,21 @@ public class OffsetMetadataManagerTest {
         }
     }
 
-    @Test
-    public void testOffsetCommitWithUnknownGroup() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testOffsetCommitWithUnknownGroup(short version) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
+        Class<? extends Throwable> expectedType;
+        if (version >= 9) {
+            expectedType = GroupIdNotFoundException.class;
+        } else {
+            expectedType = IllegalGenerationException.class;
+        }
+
         // Verify that the request is rejected with the correct exception.
-        assertThrows(IllegalGenerationException.class, () -> context.commitOffset(
+        assertThrows(expectedType, () -> context.commitOffset(
+            version,
             new OffsetCommitRequestData()
                 .setGroupId("foo")
                 .setMemberId("member")

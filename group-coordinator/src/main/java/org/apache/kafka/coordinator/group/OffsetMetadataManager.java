@@ -185,9 +185,16 @@ public class OffsetMetadataManager {
                 // is accepted.
                 group = groupMetadataManager.getOrMaybeCreateGenericGroup(request.groupId(), true);
             } else {
-                // Maintain backward compatibility. This is a bit weird in the
-                // context of the new protocol though.
-                throw Errors.ILLEGAL_GENERATION.exception();
+                if (context.header.apiVersion() >= 9) {
+                    // Starting from version 9 of the OffsetCommit API, we return GROUP_ID_NOT_FOUND
+                    // if the group does not exist. This error works for both the old and the new
+                    // protocol for clients using this version of the API.
+                    throw Errors.GROUP_ID_NOT_FOUND.exception();
+                } else {
+                    // For older version, we return ILLEGAL_GENERATION to preserve the backward
+                    // compatibility.
+                    throw Errors.ILLEGAL_GENERATION.exception();
+                }
             }
         }
 
