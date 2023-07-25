@@ -20,6 +20,7 @@ package kafka.cluster
 import kafka.log.UnifiedLog
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 
 import java.util.concurrent.atomic.AtomicReference
@@ -88,7 +89,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
 
   /**
    * Update the replica's fetch state only if the broker epoch is -1 or it is larger or equal to the current broker
-   * epoch. This can fence fetch state update from a stale request.
+   * epoch. Otherwise, NOT_LEADER_OR_FOLLOWER exception will be thrown. This can fence fetch state update from a
+   * stale request.
    *
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
    * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
@@ -101,19 +103,19 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
-  def maybeUpdateFetchState(
+  def updateFetchStateOrThrow(
     followerFetchOffsetMetadata: LogOffsetMetadata,
     followerStartOffset: Long,
     followerFetchTimeMs: Long,
     leaderEndOffset: Long,
     brokerEpoch: Long
-  ): Boolean = {
-    var updateSuccess = true
+  ): Unit = {
     replicaState.updateAndGet { currentReplicaState =>
       // Fence the update if it provides a stale broker epoch.
-      if (brokerEpoch != -1 && brokerEpoch < currentReplicaState.brokerEpoch.getOrElse(-1L)) {
-        updateSuccess = false
-        currentReplicaState
+      val expectedBrokerEpoch = currentReplicaState.brokerEpoch.getOrElse(-1L)
+      if (brokerEpoch != -1 && brokerEpoch < expectedBrokerEpoch) {
+        throw Errors.NOT_LEADER_OR_FOLLOWER.exception(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
+          s"vs expected=$expectedBrokerEpoch")
       } else {
         val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
           math.max(currentReplicaState.lastCaughtUpTimeMs, followerFetchTimeMs)
@@ -133,7 +135,6 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
         )
       }
     }
-    updateSuccess
   }
 
   /**

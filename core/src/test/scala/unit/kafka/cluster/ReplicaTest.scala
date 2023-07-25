@@ -18,9 +18,10 @@ package kafka.cluster
 
 import kafka.log.UnifiedLog
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 object ReplicaTest {
@@ -85,7 +86,7 @@ class ReplicaTest {
     leaderEndOffset: Long
   ): Long = {
     val currentTimeMs = time.milliseconds()
-    replica.maybeUpdateFetchState(
+    replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(followerFetchOffset),
       followerStartOffset = followerStartOffset,
       followerFetchTimeMs = currentTimeMs,
@@ -315,33 +316,33 @@ class ReplicaTest {
 
   @Test
   def testFenceStaleUpdates(): Unit = {
-    assertTrue(replica.maybeUpdateFetchState(
+    replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 1L,
       followerFetchTimeMs = 1,
       leaderEndOffset = 10L,
       brokerEpoch = 1L
-    ))
-    assertTrue(replica.maybeUpdateFetchState(
+    )
+    replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 2L,
       followerFetchTimeMs = 2,
       leaderEndOffset = 10L,
       brokerEpoch = 2L
-    ))
-    assertFalse(replica.maybeUpdateFetchState(
+    )
+    assertThrows(classOf[NotLeaderOrFollowerException], () => replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 2L,
       followerFetchTimeMs = 3,
       leaderEndOffset = 10L,
       brokerEpoch = 1L
     ))
-    assertTrue(replica.maybeUpdateFetchState(
+    replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 2L,
       followerFetchTimeMs = 4,
       leaderEndOffset = 10L,
       brokerEpoch = -1L
-    ))
+    )
   }
 }
