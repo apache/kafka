@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.tools.reassign;
+package org.apache.kafka.admin;
 
 import java.util.Optional;
 
