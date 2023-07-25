@@ -29,7 +29,6 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Paths;
 
@@ -50,9 +49,10 @@ public class PluginDescTest {
     public void setUp() throws Exception {
         // Fairly simple use case, thus no need to create a random directory here yet.
         URL location = Paths.get("/tmp").toUri().toURL();
+        URL otherLocation = Paths.get("/tmp-other").toUri().toURL();
         // Normally parent will be a DelegatingClassLoader.
         pluginLoader = new PluginClassLoader(location, new URL[0], systemLoader);
-        otherPluginLoader = new PluginClassLoader(location, new URL[0], systemLoader);
+        otherPluginLoader = new PluginClassLoader(otherLocation, new URL[0], systemLoader);
     }
 
     @SuppressWarnings("rawtypes")
