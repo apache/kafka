@@ -192,11 +192,12 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
     }
 
     @Override
-    public void freeze() {
+    public long freeze() {
         finalizeSnapshotWithFooter();
         appendBatches(accumulator.drain());
         snapshot.freeze();
         accumulator.close();
+        return snapshot.sizeInBytes();
     }
 
     @Override
