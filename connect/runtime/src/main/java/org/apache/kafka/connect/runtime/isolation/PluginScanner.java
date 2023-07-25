@@ -136,13 +136,13 @@ public abstract class PluginScanner {
                     pluginImpl = handleLinkageError(type, source, iterator::next);
                 } catch (ServiceConfigurationError t) {
                     log.error("Failed to discover {} in {}{}",
-                            type, source.location(), reflectiveErrorDescription(t.getCause()), t);
+                            type.simpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
                     continue;
                 }
                 Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
                 if (pluginKlass.getClassLoader() != source.loader()) {
                     log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                            type, pluginKlass.getClassLoader(), source.location());
+                            type.simpleName(), pluginKlass.getClassLoader(), source.location());
                     continue;
                 }
                 result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), type, source));
@@ -181,7 +181,7 @@ public abstract class PluginScanner {
                         || !Objects.equals(lastError.getClass(), t.getClass())
                         || !Objects.equals(lastError.getMessage(), t.getMessage())) {
                     log.error("Failed to discover {} in {}{}",
-                            type, source.location(), reflectiveErrorDescription(t.getCause()), t);
+                            type.simpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
                 }
                 lastError = t;
             }

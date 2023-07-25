@@ -129,14 +129,14 @@ public class ReflectionScanner extends PluginScanner {
             }
             if (pluginKlass.getClassLoader() != source.loader()) {
                 log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                        type, pluginKlass.getClassLoader(), source.location());
+                        pluginKlass, pluginKlass.getClassLoader(), source.location());
                 continue;
             }
             try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
                 result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), type, source));
             } catch (ReflectiveOperationException | LinkageError e) {
                 log.error("Failed to discover {} in {}: Unable to instantiate {}{}",
-                        type, source.location(), pluginKlass.getSimpleName(),
+                        type.simpleName(), source.location(), pluginKlass.getSimpleName(),
                         reflectiveErrorDescription(e), e);
             }
         }

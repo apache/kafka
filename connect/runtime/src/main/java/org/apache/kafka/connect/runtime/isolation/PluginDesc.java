@@ -21,7 +21,7 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
 import java.util.Objects;
 
-public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
+public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
     public static final String UNDEFINED_VERSION = "undefined";
     private final Class<? extends T> klass;
     private final String name;
@@ -110,7 +110,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
     }
 
     @Override
-    public int compareTo(PluginDesc<T> other) {
+    public int compareTo(PluginDesc<?> other) {
         int nameComp = name.compareTo(other.name);
         int versionComp = encodedVersion.compareTo(other.encodedVersion);
         // isolated plugins appear after classpath plugins when they have identical versions.
@@ -118,7 +118,10 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         // choose an arbitrary order between different classloaders and types
         int loaderComp = loader.hashCode() - other.loader.hashCode();
         int typeComp = type.compareTo(other.type);
-        return nameComp != 0 ? nameComp : (versionComp != 0 ? versionComp :
-                (isolatedComp != 0 ? isolatedComp : (loaderComp != 0 ? loaderComp : typeComp)));
+        return nameComp != 0 ? nameComp :
+                versionComp != 0 ? versionComp :
+                        isolatedComp != 0 ? isolatedComp :
+                                loaderComp != 0 ? loaderComp :
+                                        typeComp;
     }
 }

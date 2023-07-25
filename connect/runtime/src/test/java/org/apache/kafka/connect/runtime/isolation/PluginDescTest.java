@@ -203,7 +203,7 @@ public class PluginDescTest {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
-    public void testPluginDescComparison() throws MalformedURLException {
+    public void testPluginDescComparison() {
         PluginDesc<SinkConnector> connectorDescPluginPath = new PluginDesc<>(
                 SinkConnector.class,
                 regularVersion,
@@ -300,7 +300,7 @@ public class PluginDescTest {
                 systemLoader
         );
 
-        assertNewer(jsonConverterPlugin, (PluginDesc<Converter>) (PluginDesc<?>) jsonHeaderConverterPlugin);
+        assertNewer(jsonConverterPlugin, jsonHeaderConverterPlugin);
     }
 
     private static <T> void assertPluginDesc(
@@ -318,7 +318,7 @@ public class PluginDescTest {
         assertEquals(desc.location(), location);
     }
 
-    private static <T> void assertNewer(PluginDesc<T> older, PluginDesc<T> newer) {
+    private static void assertNewer(PluginDesc<?> older, PluginDesc<?> newer) {
         assertTrue(newer + " should be newer than " + older, older.compareTo(newer) < 0);
     }
 }
