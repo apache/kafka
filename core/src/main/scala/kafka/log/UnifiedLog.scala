@@ -581,18 +581,27 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Maybe create and return the verification guard object for the given producer ID if the transaction is not yet ongoing.
    * Creation starts the verification process. Otherwise return null.
    */
-  def maybeStartTransactionVerification(producerId: Long): Object = lock synchronized {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = lock synchronized {
     if (hasOngoingTransaction(producerId))
       null
     else
-      getOrMaybeCreateVerificationGuard(producerId, true)
+      maybeCreateVerificationGuard(producerId, sequence, epoch)
   }
 
   /**
-   * Maybe create the VerificationStateEntry for the given producer ID -- if an entry is present, return its verification guard, otherwise, return null.
+   * Maybe create the VerificationStateEntry for the given producer ID -- always return the verification guard
    */
-  def getOrMaybeCreateVerificationGuard(producerId: Long, createIfAbsent: Boolean = false): Object = lock synchronized {
-    val entry = producerStateManager.verificationStateEntry(producerId, createIfAbsent)
+  def maybeCreateVerificationGuard(producerId: Long,
+                                   sequence: Int,
+                                   epoch: Short): Object = lock synchronized {
+    producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch).verificationGuard
+  }
+
+  /**
+   * If an VerificationStateEntry is present for the given producer ID, return its verification guard, otherwise, return null.
+   */
+  def verificationGuard(producerId: Long): Object = lock synchronized {
+    val entry = producerStateManager.verificationStateEntry(producerId)
     if (entry != null) entry.verificationGuard else null
   }
 
@@ -1042,7 +1051,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: Object): Boolean = {
-    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && (requestVerificationGuard != getOrMaybeCreateVerificationGuard(batch.producerId) || requestVerificationGuard == null)
+    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() &&
+      (requestVerificationGuard != verificationGuard(batch.producerId) || requestVerificationGuard == null)
   }
 
   /**
