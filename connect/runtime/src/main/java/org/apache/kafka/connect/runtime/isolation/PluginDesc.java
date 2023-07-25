@@ -32,12 +32,12 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
     private final String location;
     private final ClassLoader loader;
 
-    public PluginDesc(Class<? extends T> klass, String version, ClassLoader loader) {
+    public PluginDesc(Class<? extends T> klass, String version, PluginType type, ClassLoader loader) {
         this.klass = klass;
         this.name = klass.getName();
         this.version = version != null ? version : "null";
         this.encodedVersion = new DefaultArtifactVersion(this.version);
-        this.type = PluginType.from(klass);
+        this.type = type;
         this.typeName = type.toString();
         this.location = loader instanceof PluginClassLoader
                 ? ((PluginClassLoader) loader).location()
