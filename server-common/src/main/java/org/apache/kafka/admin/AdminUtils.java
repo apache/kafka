@@ -35,6 +35,8 @@ import java.util.stream.Collectors;
 public class AdminUtils {
     static final Random RAND = new Random();
 
+    public static final String ADMIN_CLIENT_ID = "__admin_client";
+
     public static Map<Integer, List<Integer>> assignReplicasToBrokers(Collection<BrokerMetadata> brokerMetadatas,
                                                                       int nPartitions,
                                                                       int replicationFactor) {

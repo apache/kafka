@@ -16,15 +16,37 @@
  */
 package org.apache.kafka.admin;
 
+import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * Broker metadata used by admin tools.
+ */
 public class BrokerMetadata {
     public final int id;
 
     public final Optional<String> rack;
 
+    /**
+     * @param id an integer that uniquely identifies this broker
+     * @param rack the rack of the broker, which is used to in rack aware partition assignment for fault tolerance.
+     *             Examples: "RACK1", "us-east-1d"
+     */
     public BrokerMetadata(int id, Optional<String> rack) {
         this.id = id;
         this.rack = rack;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BrokerMetadata that = (BrokerMetadata) o;
+        return id == that.id && Objects.equals(rack, that.rack);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, rack);
     }
 }
