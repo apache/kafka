@@ -342,7 +342,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
-                log.error("Request {} hit an unexpected exception: {}",
+                log.error("SyncGroup request {} hit an unexpected exception: {}",
                     request, exception.getMessage());
             }
 

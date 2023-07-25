@@ -923,7 +923,7 @@ public class GroupMetadataManagerTest {
             // Member should be removed as session expires.
             List<ExpiredTimeout<Void, Record>> timeouts = sleep(timeoutMs);
             List<Record> expectedRecords = Collections.singletonList(newGroupMetadataRecord(
-                "group-id",
+                group.groupId(),
                 new GroupMetadataValue()
                     .setMembers(Collections.emptyList())
                     .setGeneration(group.generationId())
@@ -4229,7 +4229,7 @@ public class GroupMetadataManagerTest {
             .withGroupId("group-id")
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withProtocolType("connect")
-            .withProtocols(defaultProtocolCollection())
+            .withProtocols(toProtocols("range"))
             .build();
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
@@ -4250,7 +4250,7 @@ public class GroupMetadataManagerTest {
             .withGroupId("group-id")
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withProtocolType("")
-            .withProtocols(defaultProtocolCollection())
+            .withProtocols(toProtocols("range"))
             .build();
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
@@ -4409,7 +4409,7 @@ public class GroupMetadataManagerTest {
 
         // Sending consistent protocol should be accepted
         responseFuture = new CompletableFuture<>();
-        result = context.sendGenericGroupJoin(request.setProtocols(defaultProtocolCollection()), responseFuture, true);
+        result = context.sendGenericGroupJoin(request.setProtocols(toProtocols("range")), responseFuture, true);
 
         assertTrue(result.records().isEmpty());
         assertFalse(responseFuture.isDone());
@@ -4855,7 +4855,7 @@ public class GroupMetadataManagerTest {
             .build();
         GenericGroup group = context.createGenericGroup("group-id");
 
-        JoinGroupRequestProtocolCollection protocols = defaultProtocolCollection();
+        JoinGroupRequestProtocolCollection protocols = toProtocols("range");
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -4874,16 +4874,7 @@ public class GroupMetadataManagerTest {
         assertTrue(group.isInState(COMPLETING_REBALANCE));
         assertEquals(1, group.generationId());
 
-        protocols = new JoinGroupRequestProtocolCollection(0);
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array()));
-
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("roundrobin")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("bar"))).array()));
+        protocols = toProtocols("range", "roundrobin");
 
         // Send updated member metadata. This should trigger a rebalance and complete the join phase.
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
@@ -4942,13 +4933,12 @@ public class GroupMetadataManagerTest {
             .build();
         GenericGroup group = context.createGenericGroup("group-id");
 
-        JoinGroupRequestProtocolCollection protocols = defaultProtocolCollection();
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withProtocolType("consumer")
-            .withProtocols(protocols)
+            .withProtocols(toProtocols("range"))
             .build();
 
         JoinGroupResponseData leaderResponse = context.joinGenericGroupAsDynamicMemberAndCompleteJoin(request);
@@ -4981,16 +4971,7 @@ public class GroupMetadataManagerTest {
         // Member rejoins with updated metadata. This should trigger a rebalance.
         String memberId = memberResponseFuture.get().memberId();
 
-        protocols = new JoinGroupRequestProtocolCollection(0);
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array()));
-
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("roundrobin")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("bar"))).array()));
+        JoinGroupRequestProtocolCollection protocols = toProtocols("range", "roundrobin");
 
         memberResponseFuture = new CompletableFuture<>();
         result = context.sendGenericGroupJoin(request.setMemberId(memberId).setProtocols(protocols), memberResponseFuture);
@@ -5262,7 +5243,7 @@ public class GroupMetadataManagerTest {
             .withGroupInstanceId("group-instance-id")
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withProtocolType("consumer")
-            .withProtocols(defaultProtocolCollection())
+            .withProtocols(toProtocols("range"))
             .build();
 
         JoinGroupResponseData response = context.joinGenericGroupAndCompleteJoin(request, true, supportSkippingAssignment);
@@ -5277,12 +5258,7 @@ public class GroupMetadataManagerTest {
         group.transitionTo(STABLE);
 
         // Static member rejoins with UNKNOWN_MEMBER_ID. This should update the log with the generated member id.
-        JoinGroupRequestProtocolCollection protocols = defaultProtocolCollection();
-
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("roundrobin")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("bar"))).array()));
+        JoinGroupRequestProtocolCollection protocols = toProtocols("range", "roundrobin");
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
         CoordinatorResult<Void, Record> result = context.sendGenericGroupJoin(
@@ -5347,20 +5323,12 @@ public class GroupMetadataManagerTest {
             .build();
         GenericGroup group = context.createGenericGroup("group-id");
 
-        JoinGroupRequestProtocolCollection protocols = defaultProtocolCollection();
-
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("roundrobin")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("bar"))).array())
-        );
-
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
             .withGroupInstanceId("group-instance-id")
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withProtocolType("consumer")
-            .withProtocols(protocols)
+            .withProtocols(toProtocols("range", "roundrobin"))
             .build();
 
         JoinGroupResponseData response = context.joinGenericGroupAndCompleteJoin(request, true, true);
@@ -5373,16 +5341,12 @@ public class GroupMetadataManagerTest {
         group.transitionTo(STABLE);
 
         // Static member rejoins with UNKNOWN_MEMBER_ID. The selected protocol changes and triggers a rebalance.
-        protocols = new JoinGroupRequestProtocolCollection(0);
-
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("roundrobin")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("bar"))).array())
-        );
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-        CoordinatorResult<Void, Record> result = context.sendGenericGroupJoin(request.setProtocols(protocols), responseFuture);
+        CoordinatorResult<Void, Record> result = context.sendGenericGroupJoin(
+            request.setProtocols(toProtocols("roundrobin")),
+            responseFuture
+        );
 
         assertTrue(result.records().isEmpty());
         assertTrue(responseFuture.isDone());
@@ -5399,7 +5363,7 @@ public class GroupMetadataManagerTest {
             .build();
         GenericGroup group = context.createGenericGroup("group-id");
 
-        JoinGroupRequestProtocolCollection protocols = defaultProtocolCollection();
+        JoinGroupRequestProtocolCollection protocols = toProtocols("range");
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -5481,7 +5445,7 @@ public class GroupMetadataManagerTest {
             .build();
         GenericGroup group = context.createGenericGroup("group-id");
 
-        JoinGroupRequestProtocolCollection protocols = defaultProtocolCollection();
+        JoinGroupRequestProtocolCollection protocols = toProtocols("range");
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -5802,22 +5766,12 @@ public class GroupMetadataManagerTest {
         }
 
         JoinGroupRequestBuilder withDefaultProtocolTypeAndProtocols() {
-            this.protocols = defaultProtocolCollection();
+            this.protocols = toProtocols("range");
             return this;
         }
 
         JoinGroupRequestBuilder withProtocolSuperset() {
-            this.protocols.add(new JoinGroupRequestProtocol()
-                .setName("range")
-                .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                    Collections.singletonList("foo"))).array())
-            );
-
-            this.protocols.add(new JoinGroupRequestProtocol()
-                .setName("roundrobin")
-                .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                    Collections.singletonList("bar"))).array())
-            );
+            this.protocols = toProtocols("range", "roundrobin");
             return this;
         }
 
@@ -5927,7 +5881,7 @@ public class GroupMetadataManagerTest {
         // Member should be removed as heartbeat expires. The group is now empty.
         List<ExpiredTimeout<Void, Record>> timeouts = context.sleep(5000);
         List<Record> expectedRecords = Collections.singletonList(newGroupMetadataRecord(
-            "group-id",
+            group.groupId(),
             new GroupMetadataValue()
                 .setMembers(Collections.emptyList())
                 .setGeneration(2)
@@ -6558,12 +6512,7 @@ public class GroupMetadataManagerTest {
         );
 
         // A static follower rejoin with changed protocol will trigger rebalance.
-        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("roundrobin")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array())
-        );
+        JoinGroupRequestProtocolCollection protocols = toProtocols("roundrobin");
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
             .withGroupInstanceId("follower-instance-id")
@@ -6626,12 +6575,7 @@ public class GroupMetadataManagerTest {
         assertNotEquals("roundrobin", group.selectProtocol());
 
         // A static follower rejoin with changed protocol will trigger rebalance.
-        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("roundrobin")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array())
-        );
+        JoinGroupRequestProtocolCollection protocols = toProtocols("roundrobin");
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -6687,13 +6631,7 @@ public class GroupMetadataManagerTest {
             "follower-instance-id"
         );
 
-        String selectedProtocol = group.selectProtocol();
-        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName(selectedProtocol)
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array())
-        );
+        JoinGroupRequestProtocolCollection protocols = toProtocols(group.selectProtocol());
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -6805,13 +6743,7 @@ public class GroupMetadataManagerTest {
 
         // A static follower rejoin with protocol changing to leader protocol subset won't trigger rebalance if updated
         // group's selectProtocol remain unchanged.
-        String selectedProtocol = group.selectProtocol();
-        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName(selectedProtocol)
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array())
-        );
+        JoinGroupRequestProtocolCollection protocols = toProtocols(group.selectProtocol());
 
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
             .withGroupId("group-id")
@@ -6974,11 +6906,7 @@ public class GroupMetadataManagerTest {
         );
 
         // The follower protocol changed from protocolSuperset to general protocols.
-        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array()));
+        JoinGroupRequestProtocolCollection protocols = toProtocols("range");
 
         followerJoinFuture = new CompletableFuture<>();
         result = context.sendGenericGroupJoin(
@@ -8282,15 +8210,16 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedGroupInstanceIds, groupInstanceIds);
     }
 
-
-
-    private static JoinGroupRequestProtocolCollection defaultProtocolCollection() {
+    private static JoinGroupRequestProtocolCollection toProtocols(String... protocolNames) {
         JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
-        protocols.add(new JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Collections.singletonList("foo"))).array())
-        );
+        List<String> topicNames = Arrays.asList("foo", "bar", "baz");
+        for (int i = 0; i < protocolNames.length; i++) {
+            protocols.add(new JoinGroupRequestProtocol()
+                .setName(protocolNames[i])
+                .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    Collections.singletonList(topicNames.get(i % topicNames.size())))).array())
+            );
+        }
         return protocols;
     }
 
