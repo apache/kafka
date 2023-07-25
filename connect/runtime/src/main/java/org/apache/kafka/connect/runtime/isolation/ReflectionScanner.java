@@ -69,7 +69,7 @@ public class ReflectionScanner extends PluginScanner {
 
     private static final Logger log = LoggerFactory.getLogger(ReflectionScanner.class);
 
-    public static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
+    private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         T pluginImpl = pluginKlass.getDeclaredConstructor().newInstance();
         return versionFor(pluginImpl);
     }
