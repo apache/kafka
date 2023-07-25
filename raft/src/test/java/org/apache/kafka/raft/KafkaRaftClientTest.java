@@ -78,6 +78,7 @@ public class KafkaRaftClientTest {
         int localId = 0;
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId)).build();
         context.assertElectedLeader(1, localId);
+        assertEquals(context.log.endOffset().offset, context.client.logEndOffset());
     }
 
     @Test
