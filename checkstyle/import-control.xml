@@ -296,9 +296,11 @@
   </subpackage>
 
   <subpackage name="tools">
+    <allow pkg="org.apache.kafka.admin"/>
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.tools" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
@@ -313,6 +315,7 @@
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
+
   </subpackage>
 
   <subpackage name="trogdor">

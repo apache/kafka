@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,24 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.admin;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.server.common.AdminOperationException;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class AdminUtils {
-    private static final Logger log = LoggerFactory.getLogger(AdminUtils.class);
+    static final Random RAND = new Random();
 
-    static final Random rand = new Random();
-
-    static final String AdminClientId = "__admin_client";
-
-    public static Map<Integer, List<Integer>> assignReplicasToBrokers(Iterable<BrokerMetadata> brokerMetadatas,
+    public static Map<Integer, List<Integer>> assignReplicasToBrokers(Collection<BrokerMetadata> brokerMetadatas,
                                                                       int nPartitions,
                                                                       int replicationFactor) {
         return assignReplicasToBrokers(brokerMetadatas, nPartitions, replicationFactor, -1, -1);
@@ -109,28 +113,101 @@ public class AdminUtils {
      *                                 assign each replica to a unique rack.
      *
      */
-    public static Map<Integer, List<Integer>> assignReplicasToBrokers(Iterable<BrokerMetadata> brokerMetadatas,
+    public static Map<Integer, List<Integer>> assignReplicasToBrokers(Collection<BrokerMetadata> brokerMetadatas,
                                                                       int nPartitions,
                                                                       int replicationFactor,
                                                                       int fixedStartIndex,
                                                                       int startPartitionId) {
-        return null;
+        if (nPartitions <= 0)
+            throw new InvalidPartitionsException("Number of partitions must be larger than 0.");
+        if (replicationFactor <= 0)
+            throw new InvalidReplicationFactorException("Replication factor must be larger than 0.");
+        if (replicationFactor > brokerMetadatas.size())
+            throw new InvalidReplicationFactorException("Replication factor: " + replicationFactor + " larger than available brokers: " + brokerMetadatas.size() + ".");
+        if (brokerMetadatas.stream().noneMatch(b -> b.rack.isPresent()))
+            return assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.stream().map(b -> b.id).collect(Collectors.toList()), fixedStartIndex,
+                startPartitionId);
+        else {
+            if (brokerMetadatas.stream().anyMatch(b -> !b.rack.isPresent()))
+                throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.");
+            return assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
+                startPartitionId);
+        }
     }
 
     private static Map<Integer, List<Integer>> assignReplicasToBrokersRackUnaware(int nPartitions,
                                                                                   int replicationFactor,
-                                                                                  Iterable<Integer> brokerList,
+                                                                                  Collection<Integer> brokerList,
                                                                                   int fixedStartIndex,
                                                                                   int startPartitionId) {
-        return null;
+        Map<Integer, List<Integer>> ret = new HashMap<>();
+        Integer[] brokerArray = brokerList.toArray(new Integer[0]);
+        int startIndex = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerArray.length);
+        int currentPartitionId = Math.max(0, startPartitionId);
+        int nextReplicaShift = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerArray.length);
+        for (int i = 0; i < nPartitions; i++) {
+            if (currentPartitionId > 0 && (currentPartitionId % brokerArray.length == 0))
+                nextReplicaShift += 1;
+            int firstReplicaIndex = (currentPartitionId + startIndex) % brokerArray.length;
+            List<Integer> replicaBuffer = new ArrayList<>();
+            replicaBuffer.add(brokerArray[firstReplicaIndex]);
+            for (int j = 0; j < replicationFactor - 1; j++)
+                replicaBuffer.add(brokerArray[replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerArray.length)]);
+            ret.put(currentPartitionId, replicaBuffer);
+            currentPartitionId += 1;
+        }
+        return ret;
     }
 
     private static Map<Integer, List<Integer>> assignReplicasToBrokersRackAware(int nPartitions,
                                                                                 int replicationFactor,
-                                                                                Iterable<BrokerMetadata> brokerMetadatas,
+                                                                                Collection<BrokerMetadata> brokerMetadatas,
                                                                                 int fixedStartIndex,
                                                                                 int startPartitionId) {
-        return null;
+        Map<Integer, String> brokerRackMap = new HashMap<>();
+        brokerMetadatas.forEach(m -> brokerRackMap.put(m.id, m.rack.get()));
+        int numRacks = new HashSet<>(brokerRackMap.values()).size();
+        List<Integer> arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap);
+        int numBrokers = arrangedBrokerList.size();
+        Map<Integer, List<Integer>> ret = new HashMap<>();
+        int startIndex = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(arrangedBrokerList.size());
+        int currentPartitionId = Math.max(0, startPartitionId);
+        int nextReplicaShift = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(arrangedBrokerList.size());
+        for (int i = 0; i < nPartitions; i++) {
+            if (currentPartitionId > 0 && (currentPartitionId % arrangedBrokerList.size() == 0))
+                nextReplicaShift += 1;
+            int firstReplicaIndex = (currentPartitionId + startIndex) % arrangedBrokerList.size();
+            int leader = arrangedBrokerList.get(firstReplicaIndex);
+            List<Integer> replicaBuffer = new ArrayList<>();
+            replicaBuffer.add(leader);
+            Set<String> racksWithReplicas = new HashSet<>();
+            racksWithReplicas.add(brokerRackMap.get(leader));
+            Set<Integer> brokersWithReplicas = new HashSet<>();
+            brokersWithReplicas.add(leader);
+            int k = 0;
+            for (int j = 0; j < replicationFactor - 1; j++) {
+                boolean done = false;
+                while (!done) {
+                    Integer broker = arrangedBrokerList.get(replicaIndex(firstReplicaIndex, nextReplicaShift * numRacks, k, arrangedBrokerList.size()));
+                    String rack = brokerRackMap.get(broker);
+                    // Skip this broker if
+                    // 1. there is already a broker in the same rack that has assigned a replica AND there is one or more racks
+                    //    that do not have any replica, or
+                    // 2. the broker has already assigned a replica AND there is one or more brokers that do not have replica assigned
+                    if ((!racksWithReplicas.contains(rack) || racksWithReplicas.size() == numRacks)
+                        && (!brokersWithReplicas.contains(broker) || brokersWithReplicas.size() == numBrokers)) {
+                        replicaBuffer.add(broker);
+                        racksWithReplicas.add(rack);
+                        brokersWithReplicas.add(broker);
+                        done = true;
+                    }
+                    k += 1;
+                }
+            }
+            ret.put(currentPartitionId, replicaBuffer);
+            currentPartitionId += 1;
+        }
+        return ret;
     }
 
     /**
@@ -149,11 +226,26 @@ public class AdminUtils {
      * distributed to all racks.
      */
     static List<Integer> getRackAlternatedBrokerList(Map<Integer, String> brokerRackMap) {
-        return null;
+        Map<String, Iterator<Integer>> brokersIteratorByRack = new HashMap<>();
+        getInverseMap(brokerRackMap).forEach((rack, brokers) -> brokersIteratorByRack.put(rack, brokers.iterator()));
+        String[] racks = brokersIteratorByRack.keySet().toArray(new String[0]);
+        Arrays.sort(racks);
+        List<Integer> results = new ArrayList<>();
+        int rackIndex = 0;
+        while (results.size() < brokerRackMap.size()) {
+            Iterator<Integer> rackIterator = brokersIteratorByRack.get(racks[rackIndex]);
+            if (rackIterator.hasNext())
+                results.add(rackIterator.next());
+            rackIndex = (rackIndex + 1) % racks.length;
+        }
+        return results;
     }
 
     static Map<String, List<Integer>> getInverseMap(Map<Integer, String> brokerRackMap) {
-        return null;
+        Map<String, List<Integer>> results = new HashMap<>();
+        brokerRackMap.forEach((id, rack) -> results.computeIfAbsent(rack, key -> new ArrayList<>()).add(id));
+        results.forEach((rack, rackAndIdList) -> rackAndIdList.sort(Integer::compareTo));
+        return results;
     }
 
     static int replicaIndex(int firstReplicaIndex, int secondReplicaShift, int replicaIndex, int nBrokers) {

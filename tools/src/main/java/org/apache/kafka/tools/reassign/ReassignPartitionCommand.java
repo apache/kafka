@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools.reassign;
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -92,33 +91,33 @@ public class ReassignPartitionCommand {
 
     // Throttles that are set at the level of an individual broker.
     //DynamicConfig.Broker.LeaderReplicationThrottledRateProp
-    private static final String brokerLevelLeaderThrottle = "leader.replication.throttled.rate";
+    private static final String BROKER_LEVEL_LEADER_THROTTLE = "leader.replication.throttled.rate";
     //DynamicConfig.Broker.FollowerReplicationThrottledRateProp
-    private static final String brokerLevelFollowerThrottle = "follower.replication.throttled.rate";
+    private static final String BROKER_LEVEL_FOLLOWER_THROTTLE = "follower.replication.throttled.rate";
     //DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp
-    private static final String brokerLevelLogDirThrottle = "replica.alter.log.dirs.io.max.bytes.per.second";
-    private static final List<String> brokerLevelThrottles = Arrays.asList(
-        brokerLevelLeaderThrottle,
-        brokerLevelFollowerThrottle,
-        brokerLevelLogDirThrottle
+    private static final String BROKER_LEVEL_LOG_DIR_THROTTLE = "replica.alter.log.dirs.io.max.bytes.per.second";
+    private static final List<String> BROKER_LEVEL_THROTTLES = Arrays.asList(
+        BROKER_LEVEL_LEADER_THROTTLE,
+        BROKER_LEVEL_FOLLOWER_THROTTLE,
+        BROKER_LEVEL_LOG_DIR_THROTTLE
     );
 
     // Throttles that are set at the level of an individual topic.
     //LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-    private static final String topicLevelLeaderThrottle = "leader.replication.throttled.replicas";
+    private static final String TOPIC_LEVEL_LEADER_THROTTLE = "leader.replication.throttled.replicas";
     //LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-    private static final String topicLevelFollowerThrottle = "follower.replication.throttled.replicas";
-    private static final List<String> topicLevelThrottles = Arrays.asList(
-        topicLevelLeaderThrottle,
-        topicLevelFollowerThrottle
+    private static final String TOPIC_LEVEL_FOLLOWER_THROTTLE = "follower.replication.throttled.replicas";
+    private static final List<String> TOPIC_LEVEL_THROTTLES = Arrays.asList(
+        TOPIC_LEVEL_LEADER_THROTTLE,
+        TOPIC_LEVEL_FOLLOWER_THROTTLE
     );
 
-    private static final String cannotExecuteBecauseOfExistingMessage = "Cannot execute because " +
+    private static final String CANNOT_EXECUTE_BECAUSE_OF_EXISTING_MESSAGE = "Cannot execute because " +
         "there is an existing partition assignment.  Use --additional to override this and " +
         "create a new partition assignment in addition to the existing one. The --additional " +
         "flag can also be used to change the throttle by resubmitting the current reassignment.";
 
-    private static final String youMustRunVerifyPeriodicallyMessage = "Warning: You must run " +
+    private static final String YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE = "Warning: You must run " +
         "--verify periodically, until the reassignment completes, to ensure the throttle " +
         "is removed.";
 
@@ -422,7 +421,7 @@ public class ReassignPartitionCommand {
                 moveState = new MissingReplicaMoveState(targetLogDir);
             } else {
                 DescribeReplicaLogDirsResult.ReplicaLogDirInfo info = replicaLogDirInfos.get(replica);
-                if (info.getCurrentReplicaLogDir() == null){
+                if (info.getCurrentReplicaLogDir() == null) {
                     moveState = new MissingLogDirMoveState(targetLogDir);
                 } else if (info.getFutureReplicaLogDir() == null) {
                     if (info.getCurrentReplicaLogDir().equals(targetLogDir)) {
@@ -515,7 +514,7 @@ public class ReassignPartitionCommand {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         brokers.forEach(brokerId -> configOps.put(
             new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString()),
-            brokerLevelThrottles.stream().map(throttle -> new AlterConfigOp(
+            BROKER_LEVEL_THROTTLES.stream().map(throttle -> new AlterConfigOp(
                 new ConfigEntry(throttle, null), AlterConfigOp.OpType.DELETE)).collect(Collectors.toList())
         ));
         adminClient.incrementalAlterConfigs(configOps).all().get();
@@ -531,7 +530,7 @@ public class ReassignPartitionCommand {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         topics.forEach(topicName -> configOps.put(
             new ConfigResource(ConfigResource.Type.TOPIC, topicName),
-            topicLevelThrottles.stream().map(throttle -> new AlterConfigOp(new ConfigEntry(throttle, null),
+            TOPIC_LEVEL_THROTTLES.stream().map(throttle -> new AlterConfigOp(new ConfigEntry(throttle, null),
                 AlterConfigOp.OpType.DELETE)).collect(Collectors.toList())
 
         ));
@@ -561,9 +560,9 @@ public class ReassignPartitionCommand {
         Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
         List<BrokerMetadata> brokerMetadatas = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, brokerMetadatas);
-        System.out.printf("Current partition replica assignment\n%s\n%n",
+        System.out.printf("Current partition replica assignment%n%s%n%n",
             formatAsReassignmentJson(currentAssignments, Collections.emptyMap()));
-        System.out.printf("Proposed partition reassignment configuration\n%s",
+        System.out.printf("Proposed partition reassignment configuration%n%s",
             formatAsReassignmentJson(proposedAssignments, Collections.emptyMap()));
         return new Tuple<>(proposedAssignments, currentAssignments);
     }
@@ -735,7 +734,7 @@ public class ReassignPartitionCommand {
         // If there is an existing assignment, check for --additional before proceeding.
         // This helps avoid surprising users.
         if (!additional && !currentReassignments.isEmpty()) {
-            throw new TerseReassignmentFailureException(cannotExecuteBecauseOfExistingMessage);
+            throw new TerseReassignmentFailureException(CANNOT_EXECUTE_BECAUSE_OF_EXISTING_MESSAGE);
         }
         Set<Integer> brokers = new HashSet<>();
         proposedParts.values().forEach(brokers::addAll);
@@ -745,7 +744,7 @@ public class ReassignPartitionCommand {
         System.out.println(currentPartitionReplicaAssignmentToString(proposedParts, currentParts));
 
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
-            System.out.println(youMustRunVerifyPeriodicallyMessage);
+            System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
 
             if (interBrokerThrottle >= 0) {
                 Map<String, Map<Integer, PartitionMove>> moveMap = calculateProposedMoveMap(currentReassignments, proposedParts, currentParts);
@@ -926,7 +925,7 @@ public class ReassignPartitionCommand {
         for (Map.Entry<TopicPartition, KafkaFuture<Void>> e :  results.entrySet()) {
             try {
                 e.getValue().get();
-            } catch(ExecutionException t) {
+            } catch (ExecutionException t) {
                 errors.put(e.getKey(), t.getCause());
             }
         }
@@ -950,7 +949,7 @@ public class ReassignPartitionCommand {
         for (Map.Entry<TopicPartition, KafkaFuture<Void>> e :  results.entrySet()) {
             try {
                 e.getValue().get();
-            } catch(ExecutionException t) {
+            } catch (ExecutionException t) {
                 errors.put(e.getKey(), t.getCause());
             }
         }
@@ -1092,10 +1091,10 @@ public class ReassignPartitionCommand {
         topicNames.forEach(topicName -> {
             List<AlterConfigOp> ops = new ArrayList<>();
             if (leaderThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(topicLevelLeaderThrottle, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(TOPIC_LEVEL_LEADER_THROTTLE, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
             }
             if (followerThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(topicLevelFollowerThrottle, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(TOPIC_LEVEL_FOLLOWER_THROTTLE, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
             }
             if (!ops.isEmpty()) {
                 configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topicName), ops);
@@ -1127,9 +1126,9 @@ public class ReassignPartitionCommand {
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             reassigningBrokers.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
-                ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelLeaderThrottle,
+                ops.add(new AlterConfigOp(new ConfigEntry(BROKER_LEVEL_LEADER_THROTTLE,
                     Long.toString(interBrokerThrottle)), AlterConfigOp.OpType.SET));
-                ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelFollowerThrottle,
+                ops.add(new AlterConfigOp(new ConfigEntry(BROKER_LEVEL_FOLLOWER_THROTTLE,
                     Long.toString(interBrokerThrottle)), AlterConfigOp.OpType.SET));
                 configs.put(new ConfigResource(ConfigResource.Type.BROKER, Long.toString(brokerId)), ops);
             });
@@ -1152,7 +1151,7 @@ public class ReassignPartitionCommand {
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             movingBrokers.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
-                ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelLogDirThrottle, Long.toString(logDirThrottle)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(BROKER_LEVEL_LOG_DIR_THROTTLE, Long.toString(logDirThrottle)), AlterConfigOp.OpType.SET));
                 configs.put(new ConfigResource(ConfigResource.Type.BROKER, Long.toString(brokerId)), ops);
             });
             admin.incrementalAlterConfigs(configs).all().get();
@@ -1320,7 +1319,7 @@ public class ReassignPartitionCommand {
         JsonValue js;
         try {
             js = Json.tryParseFull(jsonData);
-        } catch(JsonParseException f) {
+        } catch (JsonParseException f) {
             throw new AdminOperationException(f);
         }
         Optional<JsonValue> version = js.asJsonObject().get("version");
