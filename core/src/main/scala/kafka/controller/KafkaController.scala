@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.api._
 import kafka.common._
 import kafka.cluster.Broker
-import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback}
+import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback, ZkMigrationStateMetricName}
 import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
@@ -44,8 +44,9 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, MetadataTypeMetric}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -81,10 +82,11 @@ object KafkaController extends Logging {
   private val ReplicasIneligibleToDeleteCountMetricName = "ReplicasIneligibleToDeleteCount"
   private val ActiveBrokerCountMetricName = "ActiveBrokerCount"
   private val FencedBrokerCountMetricName = "FencedBrokerCount"
+  private val ZkMigrationStateMetricName = "ZkMigrationState"
 
   // package private for testing
   private[controller] val MetricNames = Set(
-    MetadataTypeMetric.METRIC_NAME,
+    ZkMigrationStateMetricName,
     ActiveControllerCountMetricName,
     OfflinePartitionsCountMetricName,
     PreferredReplicaImbalanceCountMetricName,
@@ -173,7 +175,7 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
-  metricsGroup.newGauge(MetadataTypeMetric.METRIC_NAME, () => MetadataTypeMetric.ZK)
+  metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK)
   metricsGroup.newGauge(ActiveControllerCountMetricName, () => if (isActive) 1 else 0)
   metricsGroup.newGauge(OfflinePartitionsCountMetricName, () => offlinePartitionCount)
   metricsGroup.newGauge(PreferredReplicaImbalanceCountMetricName, () => preferredReplicaImbalanceCount)

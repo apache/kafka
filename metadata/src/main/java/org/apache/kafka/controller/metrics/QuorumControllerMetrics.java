@@ -23,7 +23,6 @@ import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
-import org.apache.kafka.server.metrics.MetadataTypeMetric;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -39,8 +38,6 @@ import java.util.function.Consumer;
  * @link{org.apache.kafka.controller.metrics.ControllerMetadataMetrics}, not here.
  */
 public class QuorumControllerMetrics implements AutoCloseable {
-    private final static MetricName METADATA_TYPE = getMetricName(
-        "KafkaController", MetadataTypeMetric.METRIC_NAME);
     private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
         "KafkaController", "ActiveControllerCount");
     private final static MetricName EVENT_QUEUE_TIME_MS = getMetricName(
@@ -91,12 +88,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
     ) {
         this.registry = registry;
         this.active = false;
-        registry.ifPresent(r -> r.newGauge(METADATA_TYPE, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return MetadataTypeMetric.KRAFT;
-            }
-        }));
         registry.ifPresent(r -> r.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -219,7 +210,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
-            METADATA_TYPE,
             ACTIVE_CONTROLLER_COUNT,
             EVENT_QUEUE_TIME_MS,
             EVENT_QUEUE_PROCESSING_TIME_MS,

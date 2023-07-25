@@ -36,7 +36,7 @@ public class ControllerMetadataMetricsTest {
     public void testMetricNames() {
         MetricsRegistry registry = new MetricsRegistry();
         try {
-            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), false)) {
+            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
@@ -60,7 +60,7 @@ public class ControllerMetadataMetricsTest {
     public void testZkMigrationMetricNames() {
         MetricsRegistry registry = new MetricsRegistry();
         try {
-            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), true)) {
+            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
@@ -84,7 +84,7 @@ public class ControllerMetadataMetricsTest {
     @Test
     public void testMetadataErrorCount() {
         MetricsRegistry registry = new MetricsRegistry();
-        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), false)) {
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             @SuppressWarnings("unchecked")
             Gauge<Integer> metadataErrorCount = (Gauge<Integer>) registry
                     .allMetrics()
@@ -109,7 +109,7 @@ public class ControllerMetadataMetricsTest {
         BiConsumer<ControllerMetadataMetrics, Integer> incrementer
     ) {
         MetricsRegistry registry = new MetricsRegistry();
-        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry), false)) {
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             assertEquals(0, metricsGetter.apply(metrics));
             assertEquals(0, registryGetter.apply(registry));
             setter.accept(metrics, 123);

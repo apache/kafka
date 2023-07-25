@@ -68,9 +68,9 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     /**
      * Create a new ControllerMetadataMetrics object.
      *
-     * @param registry  The metrics registry, or Optional.empty if this is a test and we don't have one.
+     * @param registry The metrics registry, or Optional.empty if this is a test and we don't have one.
      */
-    public ControllerMetadataMetrics(Optional<MetricsRegistry> registry, boolean zkMigrationEnabled) {
+    public ControllerMetadataMetrics(Optional<MetricsRegistry> registry) {
         this.registry = registry;
         registry.ifPresent(r -> r.newGauge(FENCED_BROKER_COUNT, new Gauge<Integer>() {
             @Override
@@ -121,14 +121,13 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             }
         }));
 
-        if (zkMigrationEnabled) {
-            registry.ifPresent(r -> r.newGauge(MIGRATING_ZK_BROKER_COUNT, new Gauge<Integer>() {
-                @Override
-                public Integer value() {
-                    return migratingZkBrokerCount();
-                }
-            }));
-        }
+        registry.ifPresent(r -> r.newGauge(MIGRATING_ZK_BROKER_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return migratingZkBrokerCount();
+            }
+        }));
+
     }
 
     public void setFencedBrokerCount(int brokerCount) {
@@ -154,7 +153,6 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     public int activeBrokerCount() {
         return this.activeBrokerCount.get();
     }
-
 
     public void setMigratingZkBrokerCount(int brokerCount) {
         this.migratingZkBrokerCount.set(brokerCount);
