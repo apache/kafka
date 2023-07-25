@@ -572,6 +572,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         log.error("KRaft controller indicates a completed migration, but the migration driver is somehow active.");
                         transitionTo(MigrationDriverState.INACTIVE);
                         break;
+                    default:
+                        throw new IllegalStateException("Unsupported ZkMigrationState " + zkMigrationState);
                 }
             }
         }

@@ -1273,6 +1273,8 @@ public final class QuorumController implements Controller {
                                 "has been completed.");
                         }
                         break;
+                    default:
+                        throw new IllegalStateException("Unsupported ZkMigrationState " + featureControl.zkMigrationState());
                 }
             } else {
                 if (zkMigrationEnabled) {
