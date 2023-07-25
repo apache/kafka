@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -28,6 +29,7 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -434,7 +436,8 @@ public class ConsumerGroup implements Group {
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember,
-        TopicsImage topicsImage
+        TopicsImage topicsImage,
+        ClusterImage clusterImage
     ) {
         // Copy and update the current subscriptions.
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
@@ -442,14 +445,30 @@ public class ConsumerGroup implements Group {
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
+
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
+                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
+
+                topicImage.partitions().forEach((partition, partitionRegistration) -> {
+                    Set<String> racks = new HashSet<>();
+                    for (int replica : partitionRegistration.replicas) {
+                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
+                        // Only add rack if it is available for the broker/replica.
+                        rackOptional.ifPresent(racks::add);
+                    }
+                    // If no racks are available for any replica of this partition, store an empty map.
+                    if (!racks.isEmpty())
+                        partitionRacks.put(partition, racks);
+                });
+
                 newSubscriptionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
-                    topicImage.partitions().size()
-                ));
+                    topicImage.partitions().size(),
+                    partitionRacks)
+                );
             }
         });
 

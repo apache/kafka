@@ -58,6 +58,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,16 +161,17 @@ public class RecordHelpersTest {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
+
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
-            10
-        ));
+            10,
+            mkMapOfPartitionRacks(10)));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
-            20
-        ));
+            20,
+            mkMapOfPartitionRacks(20)));
 
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
@@ -183,11 +185,13 @@ public class RecordHelpersTest {
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
-                            .setNumPartitions(10),
+                            .setNumPartitions(10)
+                            .setPartitionMetadata(mkListOfPartitionRacks(10)),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
-                            .setNumPartitions(20))),
+                            .setNumPartitions(20)
+                            .setPartitionMetadata(mkListOfPartitionRacks(20)))),
                 (short) 0));
 
         assertEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
@@ -612,7 +616,7 @@ public class RecordHelpersTest {
                 MetadataVersion.IBP_3_5_IV2
             ));
     }
-
+      
     @ParameterizedTest
     @MethodSource("metadataToExpectedGroupMetadataValue")
     public void testEmptyGroupMetadataRecord(
@@ -620,7 +624,6 @@ public class RecordHelpersTest {
         short expectedGroupMetadataValueVersion
     ) {
         Time time = new MockTime();
-
         List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
 
         Record expectedRecord = new Record(
@@ -755,5 +758,25 @@ public class RecordHelpersTest {
 
         Record record = RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
         assertEquals(expectedRecord, record);
+    }
+
+    public static List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
+        List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
+        for (int i = 0; i < numPartitions; i++) {
+            partitionRacks.add(
+                new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
+                    .setPartition(i)
+                    .setRacks(Collections.emptyList())
+            );
+        }
+        return partitionRacks;
+    }
+
+    public static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
+        for (int i = 0; i < numPartitions ; i++) {
+          partitionRacks.put(i, Collections.emptySet());
+        }
+        return partitionRacks;
     }
 }

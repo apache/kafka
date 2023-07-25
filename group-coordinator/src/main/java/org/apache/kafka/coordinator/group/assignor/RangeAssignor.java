@@ -78,23 +78,19 @@ public class RangeAssignor implements PartitionAssignor {
     /**
      * @return Map of topic ids to a list of members subscribed to them.
      */
-    private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec) {
+    private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) {
         Map<Uuid, List<String>> membersPerTopic = new HashMap<>();
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
         membersData.forEach((memberId, memberMetadata) -> {
             Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
             for (Uuid topicId : topics) {
-                // Only topics that are present in both the subscribed topics list and the topic metadata should be
-                // considered for assignment.
-                if (assignmentSpec.topics().containsKey(topicId)) {
-                    membersPerTopic
-                        .computeIfAbsent(topicId, k -> new ArrayList<>())
-                        .add(memberId);
-                } else {
-                    throw new PartitionAssignorException("Member " + memberId + " subscribed to topic " +
-                        topicId + " which doesn't exist in the topic metadata");
+                if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
+                    throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
                 }
+                membersPerTopic
+                    .computeIfAbsent(topicId, k -> new ArrayList<>())
+                    .add(memberId);
             }
         });
 
@@ -118,14 +114,14 @@ public class RangeAssignor implements PartitionAssignor {
      * </ol>
      */
     @Override
-    public GroupAssignment assign(final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+    public GroupAssignment assign(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
         Map<String, MemberAssignment> newAssignment = new HashMap<>();
 
         // Step 1
-        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentSpec);
+        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentSpec, subscribedTopicDescriber);
 
         membersPerTopic.forEach((topicId, membersForTopic) -> {
-            int numPartitionsForTopic = assignmentSpec.topics().get(topicId).numPartitions();
+            int numPartitionsForTopic = subscribedTopicDescriber.numPartitions(topicId);
             int minRequiredQuota = numPartitionsForTopic / membersForTopic.size();
             // Each member can get only ONE extra partition per topic after receiving the minimum quota.
             int numMembersWithExtraPartition = numPartitionsForTopic % membersForTopic.size();

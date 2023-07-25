@@ -19,7 +19,12 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Immutable topic metadata.
@@ -40,23 +45,31 @@ public class TopicMetadata {
      */
     private final int numPartitions;
 
+    /**
+     * Map of every partition to a set of its rackIds.
+     * If the rack information is unavailable, this is an empty map.
+     */
+    private final Map<Integer, Set<String>> partitionRacks;
+
     public TopicMetadata(
         Uuid id,
         String name,
-        int numPartitions
+        int numPartitions,
+        Map<Integer, Set<String>> partitionRacks
     ) {
-        this.id = Objects.requireNonNull(id);
-        if (Uuid.ZERO_UUID.equals(id)) {
-            throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
-        }
-        this.name = Objects.requireNonNull(name);
-        if (name.isEmpty()) {
-            throw new IllegalArgumentException("Topic name cannot be empty.");
-        }
-        this.numPartitions = numPartitions;
-        if (numPartitions < 0) {
-            throw new IllegalArgumentException("Number of partitions cannot be negative.");
-        }
+            this.id = Objects.requireNonNull(id);
+            this.partitionRacks = Objects.requireNonNull(partitionRacks);
+            if (Uuid.ZERO_UUID.equals(id)) {
+                throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
+            }
+            this.name = Objects.requireNonNull(name);
+            if (name.isEmpty()) {
+                throw new IllegalArgumentException("Topic name cannot be empty.");
+            }
+            this.numPartitions = numPartitions;
+            if (numPartitions < 0) {
+                throw new IllegalArgumentException("Number of partitions cannot be negative.");
+            }
     }
 
     /**
@@ -80,6 +93,14 @@ public class TopicMetadata {
         return this.numPartitions;
     }
 
+    /**
+     * @return Every partition mapped to the set of corresponding rack Ids of its replicas.
+     *         An empty map is returned if no rack information is available.
+     */
+    public Map<Integer, Set<String>> partitionRacks() {
+        return this.partitionRacks;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -89,7 +110,8 @@ public class TopicMetadata {
 
         if (!id.equals(that.id)) return false;
         if (!name.equals(that.name)) return false;
-        return numPartitions == that.numPartitions;
+        if (numPartitions != that.numPartitions) return false;
+        return partitionRacks.equals(that.partitionRacks);
     }
 
     @Override
@@ -97,6 +119,7 @@ public class TopicMetadata {
         int result = id.hashCode();
         result = 31 * result + name.hashCode();
         result = 31 * result + numPartitions;
+        result = 31 * result + partitionRacks.hashCode();
         return result;
     }
 
@@ -106,16 +129,23 @@ public class TopicMetadata {
             "id=" + id +
             ", name=" + name +
             ", numPartitions=" + numPartitions +
+            ", partitionRacks=" + partitionRacks +
             ')';
     }
 
     public static TopicMetadata fromRecord(
         ConsumerGroupPartitionMetadataValue.TopicMetadata record
     ) {
+        // Converting the data type from a list stored in the record to a map.
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(record.partitionMetadata().size());
+        for (ConsumerGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionMetadata()) {
+            partitionRacks.put(partitionMetadata.partition(), Collections.unmodifiableSet(new HashSet<>(partitionMetadata.racks())));
+        }
+
         return new TopicMetadata(
             record.topicId(),
             record.topicName(),
-            record.numPartitions()
-        );
+            record.numPartitions(),
+            partitionRacks);
     }
 }

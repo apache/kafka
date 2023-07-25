@@ -777,7 +777,8 @@ public class GroupMetadataManager {
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
-                metadataImage.topics()
+                metadataImage.topics(),
+                metadataImage.cluster()
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -927,7 +928,8 @@ public class GroupMetadataManager {
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
             member,
             null,
-            metadataImage.topics()
+            metadataImage.topics(),
+            metadataImage.cluster()
         );
 
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
