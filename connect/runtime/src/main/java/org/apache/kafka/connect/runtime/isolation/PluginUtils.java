@@ -350,8 +350,10 @@ public class PluginUtils {
                 log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
             }
         }
-        URL[] classpathUrls = ClasspathHelper.forJavaClassPath().toArray(new URL[0]);
-        pluginSources.add(new PluginSource(null, classLoader.getParent(), classpathUrls));
+        List<URL> parentUrls = new ArrayList<>();
+        parentUrls.addAll(ClasspathHelper.forJavaClassPath());
+        parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader.getParent()));
+        pluginSources.add(new PluginSource(PluginSource.CLASSPATH, classLoader.getParent(), parentUrls.toArray(new URL[0])));
         return pluginSources;
     }
 
@@ -406,7 +408,7 @@ public class PluginUtils {
             if (classNames.size() == 1) {
                 aliases.put(alias, classNames.stream().findAny().get());
             } else {
-                log.warn("Ignoring ambiguous alias '{}' since it refers to multiple distinct plugins {}", alias, classNames);
+                log.debug("Ignoring ambiguous alias '{}' since it refers to multiple distinct plugins {}", alias, classNames);
             }
         }
         return aliases;

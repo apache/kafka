@@ -168,11 +168,11 @@ public class CoordinatorRuntimeTest {
      */
     private static class MockCoordinator implements Coordinator<String> {
         private final TimelineHashSet<String> records;
-        private final CoordinatorTimer<String> timer;
+        private final CoordinatorTimer<Void, String> timer;
 
         MockCoordinator(
             SnapshotRegistry snapshotRegistry,
-            CoordinatorTimer<String> timer
+            CoordinatorTimer<Void, String> timer
         ) {
             this.records = new TimelineHashSet<>(snapshotRegistry, 0);
             this.timer = timer;
@@ -187,7 +187,7 @@ public class CoordinatorRuntimeTest {
             return Collections.unmodifiableSet(new HashSet<>(records));
         }
 
-        CoordinatorTimer<String> timer() {
+        CoordinatorTimer<Void, String> timer() {
             return timer;
         }
     }
@@ -197,7 +197,7 @@ public class CoordinatorRuntimeTest {
      */
     private static class MockCoordinatorBuilder implements CoordinatorBuilder<MockCoordinator, String> {
         private SnapshotRegistry snapshotRegistry;
-        private CoordinatorTimer<String> timer;
+        private CoordinatorTimer<Void, String> timer;
 
         @Override
         public CoordinatorBuilder<MockCoordinator, String> withSnapshotRegistry(
@@ -223,9 +223,15 @@ public class CoordinatorRuntimeTest {
 
         @Override
         public CoordinatorBuilder<MockCoordinator, String> withTimer(
-            CoordinatorTimer<String> timer
+            CoordinatorTimer<Void, String> timer
         ) {
             this.timer = timer;
+            return this;
+        }
+
+        public CoordinatorBuilder<MockCoordinator, String> withTopicPartition(
+            TopicPartition topicPartition
+        ) {
             return this;
         }
 
@@ -271,6 +277,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -334,6 +341,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -384,6 +392,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -432,6 +441,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -497,6 +507,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
 
@@ -546,6 +557,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
 
@@ -962,7 +974,7 @@ public class CoordinatorRuntimeTest {
 
         // Timer #1. This is never executed.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.SECONDS, true,
-            () -> Arrays.asList("record5", "record6"));
+            () -> new CoordinatorResult<>(Arrays.asList("record5", "record6"), null));
 
         // The coordinator timer should have one pending task.
         assertEquals(1, ctx.timer.size());
@@ -1010,6 +1022,8 @@ public class CoordinatorRuntimeTest {
         when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
         when(builder.build())
             .thenReturn(coordinator0)
             .thenReturn(coordinator1);
@@ -1068,11 +1082,11 @@ public class CoordinatorRuntimeTest {
 
         // Timer #1.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
-            () -> Arrays.asList("record1", "record2"));
+            () -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), null));
 
         // Timer #2.
         ctx.coordinator.timer.schedule("timer-2", 20, TimeUnit.MILLISECONDS, true,
-            () -> Arrays.asList("record3", "record4"));
+            () -> new CoordinatorResult<>(Arrays.asList("record3", "record4"), null));
 
         // The coordinator timer should have two pending tasks.
         assertEquals(2, ctx.timer.size());
@@ -1122,7 +1136,7 @@ public class CoordinatorRuntimeTest {
 
         // Timer #1.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
-            () -> Collections.singletonList("record1"));
+            () -> new CoordinatorResult<>(Collections.singletonList("record1"), null));
 
         // The coordinator timer should have one pending task.
         assertEquals(1, ctx.timer.size());
@@ -1135,14 +1149,14 @@ public class CoordinatorRuntimeTest {
 
         // Schedule a second timer with the same key.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
-            () -> Collections.singletonList("record2"));
+            () -> new CoordinatorResult<>(Collections.singletonList("record2"), null));
 
         // The coordinator timer should still have one pending task.
         assertEquals(1, ctx.timer.size());
 
         // Schedule a third timer with the same key.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
-            () -> Collections.singletonList("record3"));
+            () -> new CoordinatorResult<>(Collections.singletonList("record3"), null));
 
         // The coordinator timer should still have one pending task.
         assertEquals(1, ctx.timer.size());
@@ -1193,7 +1207,7 @@ public class CoordinatorRuntimeTest {
 
         // Timer #1.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
-            () -> Collections.singletonList("record1"));
+            () -> new CoordinatorResult<>(Collections.singletonList("record1"), null));
 
         // The coordinator timer should have one pending task.
         assertEquals(1, ctx.timer.size());
@@ -1206,7 +1220,7 @@ public class CoordinatorRuntimeTest {
 
         // Schedule a second timer with the same key.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true,
-            () -> Collections.singletonList("record2"));
+            () -> new CoordinatorResult<>(Collections.singletonList("record2"), null));
 
         // The coordinator timer should still have one pending task.
         assertEquals(1, ctx.timer.size());

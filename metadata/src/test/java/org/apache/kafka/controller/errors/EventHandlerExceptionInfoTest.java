@@ -31,6 +31,8 @@ import java.util.OptionalLong;
 import java.util.concurrent.RejectedExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -63,6 +65,11 @@ public class EventHandlerExceptionInfoTest {
     private static final EventHandlerExceptionInfo UNEXPECTED_END_OFFSET =
         EventHandlerExceptionInfo.fromInternal(
             new UnexpectedBaseOffsetException("Wanted base offset 3, but the next offset was 4"),
+            () -> OptionalInt.of(1));
+
+    private static final EventHandlerExceptionInfo TIMEOUT =
+        EventHandlerExceptionInfo.fromInternal(
+            new TimeoutException(),
             () -> OptionalInt.of(1));
 
     @Test
@@ -169,5 +176,20 @@ public class EventHandlerExceptionInfoTest {
             "NotControllerException) at epoch 123 in 90 microseconds. Renouncing leadership " +
             "and reverting to the last committed offset 456.",
                 UNEXPECTED_END_OFFSET.failureMessage(123, OptionalLong.of(90L), true, 456L));
+    }
+
+    @Test
+    public void testIsNotTimeoutException() {
+        assertFalse(TOPIC_EXISTS.isTimeoutException());
+        assertFalse(REJECTED_EXECUTION.isTimeoutException());
+        assertFalse(INTERRUPTED.isTimeoutException());
+        assertFalse(NULL_POINTER.isTimeoutException());
+        assertFalse(NOT_LEADER.isTimeoutException());
+        assertFalse(UNEXPECTED_END_OFFSET.isTimeoutException());
+    }
+
+    @Test
+    public void testIsTimeoutException() {
+        assertTrue(TIMEOUT.isTimeoutException());
     }
 }

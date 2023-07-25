@@ -155,6 +155,10 @@ public final class EventHandlerExceptionInfo {
         return externalException.orElse(internalException);
     }
 
+    public boolean isTimeoutException() {
+        return internalException instanceof TimeoutException;
+    }
+
     public String failureMessage(
         int epoch,
         OptionalLong deltaUs,

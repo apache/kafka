@@ -37,6 +37,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
@@ -65,6 +66,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
@@ -195,6 +197,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final boolean topicTrackingEnabled;
     private final TopicCreation topicCreation;
     private final Executor closeExecutor;
+    private final Supplier<List<ErrorReporter>> errorReportersSupplier;
 
     // Visible for testing
     List<SourceRecord> toSend;
@@ -224,7 +227,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        Time time,
                                        RetryWithToleranceOperator retryWithToleranceOperator,
                                        StatusBackingStore statusBackingStore,
-                                       Executor closeExecutor) {
+                                       Executor closeExecutor,
+                                       Supplier<List<ErrorReporter>> errorReportersSupplier) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
@@ -242,6 +246,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         this.offsetStore = Objects.requireNonNull(offsetStore, "offset store cannot be null for source tasks");
         this.closeExecutor = closeExecutor;
         this.sourceTaskContext = sourceTaskContext;
+        this.errorReportersSupplier = errorReportersSupplier;
 
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
@@ -261,6 +266,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     @Override
     protected void initializeAndStart() {
+        retryWithToleranceOperator.reporters(errorReportersSupplier.get());
         prepareToInitializeTask();
         offsetStore.start();
         // If we try to start the task at all by invoking initialize, then count this as
