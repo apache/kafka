@@ -189,7 +189,7 @@ public class OffsetMetadataManager {
                     // Starting from version 9 of the OffsetCommit API, we return GROUP_ID_NOT_FOUND
                     // if the group does not exist. This error works for both the old and the new
                     // protocol for clients using this version of the API.
-                    throw Errors.GROUP_ID_NOT_FOUND.exception();
+                    throw ex;
                 } else {
                     // For older version, we return ILLEGAL_GENERATION to preserve the backward
                     // compatibility.
