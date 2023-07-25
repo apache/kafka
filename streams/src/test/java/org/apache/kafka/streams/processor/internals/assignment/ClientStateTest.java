@@ -537,7 +537,7 @@ public class ClientStateTest {
     @Test
     public void shouldReturnClientTags() {
         final Map<String, String> clientTags = mkMap(mkEntry("k1", "v1"));
-        assertEquals(clientTags, new ClientState(0, clientTags).clientTags());
+        assertEquals(clientTags, new ClientState(null, 0, clientTags).clientTags());
     }
 
     @Test

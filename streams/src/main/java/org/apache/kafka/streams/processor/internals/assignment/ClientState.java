@@ -59,25 +59,31 @@ public class ClientState {
     private final ClientStateTask revokingActiveTasks = new ClientStateTask(null, new TreeMap<>());
 
     private int capacity;
+    private UUID processId;
 
     public ClientState() {
-        this(0);
+        this(null, 0);
     }
 
-    public ClientState(final Map<String, String> clientTags) {
-        this(0, clientTags);
+    public ClientState(final UUID processId, final Map<String, String> clientTags) {
+        this(processId, 0, clientTags);
     }
 
     ClientState(final int capacity) {
-        this(capacity, Collections.emptyMap());
+        this(null, capacity);
     }
 
-    ClientState(final int capacity, final Map<String, String> clientTags) {
+    ClientState(final UUID processId, final int capacity) {
+        this(processId, capacity, Collections.emptyMap());
+    }
+
+    ClientState(final UUID processId, final int capacity, final Map<String, String> clientTags) {
         previousStandbyTasks.taskIds(new TreeSet<>());
         previousActiveTasks.taskIds(new TreeSet<>());
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
+        this.processId = processId;
         this.clientTags = unmodifiableMap(clientTags);
     }
 
@@ -97,6 +103,10 @@ public class ClientState {
 
     int capacity() {
         return capacity;
+    }
+
+    UUID processId() {
+        return processId;
     }
 
     public void incrementCapacity() {

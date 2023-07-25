@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -194,6 +195,10 @@ public class RackAwareTaskAssignor {
             racksForProcess.put(entry.getKey(), previousRackInfo.value);
         }
         return true;
+    }
+
+    public Map<UUID, String> racksForProcess() {
+        return Collections.unmodifiableMap(racksForProcess);
     }
 
     private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost) {

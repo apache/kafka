@@ -16,12 +16,26 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.UUID;
+
 class StandbyTaskAssignorFactory {
     private StandbyTaskAssignorFactory() {}
 
-    static StandbyTaskAssignor create(final AssignorConfiguration.AssignmentConfigs configs) {
+    static StandbyTaskAssignor create(final AssignorConfiguration.AssignmentConfigs configs,
+                                      final RackAwareTaskAssignor rackAwareTaskAssignor) {
         if (!configs.rackAwareAssignmentTags.isEmpty()) {
             return new ClientTagAwareStandbyTaskAssignor();
+        } else if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+            final Map<UUID, String> racksForProcess = rackAwareTaskAssignor.racksForProcess();
+            return new ClientTagAwareStandbyTaskAssignor(
+                (processId, clientState) -> mkMap(mkEntry("rack", racksForProcess.get(processId))),
+                assignmentConfigs -> Collections.singletonList("rack")
+            );
         } else {
             return new DefaultStandbyTaskAssignor();
         }
