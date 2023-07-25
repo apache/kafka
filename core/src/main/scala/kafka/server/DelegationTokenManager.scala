@@ -148,7 +148,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   }
 
   private def loadCache(): Unit = {
-    println("Nothing to load")
+      // Nothing to load.
   }
 
   /**

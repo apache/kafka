@@ -115,7 +115,6 @@ class DelegationTokenManagerZk(config: KafkaConfig,
   }
 
   private def loadCache(): Unit = {
-    println("Nothing to load")
     lock.synchronized {
       val tokens = zkClient.getChildren(DelegationTokensZNode.path)
       info(s"Loading the token cache. Total token count: ${tokens.size}")
@@ -336,7 +335,6 @@ class DelegationTokenManagerZk(config: KafkaConfig,
   }
 
   object TokenChangedNotificationHandler extends NotificationHandler {
-    println("Nothing to Notigy")
     override def processNotification(tokenIdBytes: Array[Byte]): Unit = {
       lock.synchronized {
         val tokenId = new String(tokenIdBytes, StandardCharsets.UTF_8)

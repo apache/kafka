@@ -162,7 +162,6 @@ public class DelegationTokenControlManager {
 
     private TokenInformation getToken(byte[] hmac) {
         String base64Pwd = Base64.getEncoder().encodeToString(hmac);
-        System.out.println("tokencache has token count : " + tokenCache.tokens().size());
         return tokenCache.tokenForHmac(base64Pwd);
     }
 

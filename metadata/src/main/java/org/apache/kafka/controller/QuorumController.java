@@ -1904,7 +1904,6 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         CreateDelegationTokenRequestData request
     ) {
-        System.out.println("QuorumController createDelegationToken: start");
         return appendWriteEvent("createDelegationToken", context.deadlineNs(),
             () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersion()));
     }
@@ -1914,7 +1913,6 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         RenewDelegationTokenRequestData request
     ) {
-        System.out.println("QuorumController renewDelegationToken: start");
         return appendWriteEvent("renewDelegationToken", context.deadlineNs(),
             () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersion()));
     }
@@ -1924,7 +1922,6 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         ExpireDelegationTokenRequestData request
     ) {
-        System.out.println("QuorumController expireDelegationToken: start");
         return appendWriteEvent("expireDelegationToken", context.deadlineNs(),
             () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersion()));
     }

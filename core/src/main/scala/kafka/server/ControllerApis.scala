@@ -866,7 +866,6 @@ class ControllerApis(val requestChannel: RequestChannel,
           Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
     }
 
-    println("ControllerApis:handleCreateDelegationTokenRequest:authorized")
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       OptionalLong.empty())
     // XXX We need to prepare the response here so that we can applu the version here
