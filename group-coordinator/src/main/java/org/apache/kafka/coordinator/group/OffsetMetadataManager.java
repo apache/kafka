@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
@@ -281,13 +282,8 @@ public class OffsetMetadataManager {
             return;
         }
 
-        if (!group.hasMember(request.memberId())) {
-            throw Errors.UNKNOWN_MEMBER_ID.exception();
-        }
-
-        final int expectedMemberEpoch = group
-            .getOrMaybeCreateMember(request.memberId(), false)
-            .memberEpoch();
+        final ConsumerGroupMember member = group.getOrMaybeCreateMember(request.memberId(), false);
+        final int expectedMemberEpoch = member.memberEpoch();
         if (memberEpoch != expectedMemberEpoch) {
             // Consumers using the new consumer group protocol (KIP-848) should be using the
             // OffsetCommit API >= 9. As we don't support upgrading from the old to the new
