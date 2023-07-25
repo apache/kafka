@@ -27,7 +27,10 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
@@ -42,6 +45,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BatchAccumulatorTest {
@@ -520,4 +524,40 @@ class BatchAccumulatorTest {
             return acc.append(epoch, records, OptionalLong.empty(), false);
         }
     };
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAppendWithRequiredBaseOffset(boolean correctOffset) {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        ByteBuffer buffer = ByteBuffer.allocate(maxBatchSize);
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(buffer);
+
+        BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+        );
+
+        if (correctOffset) {
+            assertEquals(baseOffset, acc.append(leaderEpoch,
+                    singletonList("a"),
+                    OptionalLong.of(baseOffset),
+                    true));
+        } else {
+            assertEquals("Wanted base offset 156, but the next offset was 157",
+                assertThrows(UnexpectedBaseOffsetException.class, () -> {
+                    acc.append(leaderEpoch,
+                        singletonList("a"),
+                        OptionalLong.of(baseOffset - 1),
+                        true);
+                }).getMessage());
+        }
+        acc.close();
+    }
 }

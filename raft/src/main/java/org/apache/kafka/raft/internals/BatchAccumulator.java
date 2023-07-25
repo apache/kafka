@@ -126,7 +126,7 @@ public class BatchAccumulator<T> implements Closeable {
 
         appendLock.lock();
         try {
-            long endOffset = nextOffset + records.size() - 1;
+            long lastOffset = nextOffset + records.size() - 1;
             requiredBaseOffset.ifPresent(r -> {
                 if (r != nextOffset) {
                     throw new UnexpectedBaseOffsetException("Wanted base offset " + r +
@@ -154,8 +154,8 @@ public class BatchAccumulator<T> implements Closeable {
 
             maybeResetLinger();
 
-            nextOffset = endOffset + 1;
-            return endOffset;
+            nextOffset = lastOffset + 1;
+            return lastOffset;
         } finally {
             appendLock.unlock();
         }
