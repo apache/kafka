@@ -115,6 +115,10 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         int versionComp = encodedVersion.compareTo(other.encodedVersion);
         // isolated plugins appear after classpath plugins when they have identical versions.
         int isolatedComp = Boolean.compare(other.loader instanceof PluginClassLoader, loader instanceof PluginClassLoader);
-        return nameComp != 0 ? nameComp : (versionComp != 0 ? versionComp : isolatedComp);
+        // choose an arbitrary order between different classloaders and types
+        int loaderComp = loader.hashCode() - other.loader.hashCode();
+        int typeComp = type.compareTo(other.type);
+        return nameComp != 0 ? nameComp : (versionComp != 0 ? versionComp :
+                (isolatedComp != 0 ? isolatedComp : (loaderComp != 0 ? loaderComp : typeComp)));
     }
 }

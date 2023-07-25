@@ -17,14 +17,19 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Paths;
 
@@ -39,6 +44,7 @@ public class PluginDescTest {
     private final String snapshotVersion = "1.0.0-SNAPSHOT";
     private final String noVersion = "undefined";
     private PluginClassLoader pluginLoader;
+    private PluginClassLoader otherPluginLoader;
 
     @Before
     public void setUp() throws Exception {
@@ -46,6 +52,7 @@ public class PluginDescTest {
         URL location = Paths.get("/tmp").toUri().toURL();
         // Normally parent will be a DelegatingClassLoader.
         pluginLoader = new PluginClassLoader(location, new URL[0], systemLoader);
+        otherPluginLoader = new PluginClassLoader(location, new URL[0], systemLoader);
     }
 
     @SuppressWarnings("rawtypes")
@@ -194,9 +201,9 @@ public class PluginDescTest {
         assertNotEquals(transformDescPluginPath, transformDescClasspath);
     }
 
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
-    public void testPluginDescComparison() {
+    public void testPluginDescComparison() throws MalformedURLException {
         PluginDesc<SinkConnector> connectorDescPluginPath = new PluginDesc<>(
                 SinkConnector.class,
                 regularVersion,
@@ -260,6 +267,40 @@ public class PluginDescTest {
         );
 
         assertNewer(predicateDescPluginPath, predicateDescClasspath);
+
+        PluginDesc<ConfigProvider> configProviderDescPluginPath = new PluginDesc<>(
+                FileConfigProvider.class,
+                regularVersion,
+                PluginType.CONFIGPROVIDER,
+                pluginLoader
+        );
+
+        PluginDesc<ConfigProvider> configProviderDescOtherPluginLoader = new PluginDesc<>(
+                FileConfigProvider.class,
+                regularVersion,
+                PluginType.CONFIGPROVIDER,
+                otherPluginLoader
+        );
+
+        assertTrue("Different plugin loaders should have an ordering",
+                configProviderDescPluginPath.compareTo(configProviderDescOtherPluginLoader) != 0);
+
+
+        PluginDesc<Converter> jsonConverterPlugin = new PluginDesc<>(
+                JsonConverter.class,
+                regularVersion,
+                PluginType.CONVERTER,
+                systemLoader
+        );
+
+        PluginDesc<HeaderConverter> jsonHeaderConverterPlugin = new PluginDesc<>(
+                JsonConverter.class,
+                regularVersion,
+                PluginType.HEADER_CONVERTER,
+                systemLoader
+        );
+
+        assertNewer(jsonConverterPlugin, (PluginDesc<Converter>) (PluginDesc<?>) jsonHeaderConverterPlugin);
     }
 
     private static <T> void assertPluginDesc(
