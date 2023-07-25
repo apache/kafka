@@ -221,7 +221,7 @@ public class OffsetMetadataManager {
      * @param group     The generic group.
      * @param request   The actual request.
      */
-    public void validateOffsetCommitForGenericGroup(
+    private void validateOffsetCommitForGenericGroup(
         GenericGroup group,
         OffsetCommitRequestData request
     ) throws KafkaException {
@@ -269,7 +269,7 @@ public class OffsetMetadataManager {
      * @param context   The request context.
      * @param request   The actual request.
      */
-    public void validateOffsetCommitForConsumerGroup(
+    private void validateOffsetCommitForConsumerGroup(
         ConsumerGroup group,
         RequestContext context,
         OffsetCommitRequestData request
