@@ -1621,11 +1621,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  def maybeDeleteRemote(deleteRemote: Boolean): Unit = {
-    if (deleteRemote && remoteLogEnabled())
-      RemoteLogManager.addTopicIdToBeDeleted(_topicId.asJava)
-  }
-
   // visible for testing
   private[log] def takeProducerSnapshot(): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()

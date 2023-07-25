@@ -17,8 +17,6 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteLogManager
-
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
