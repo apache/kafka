@@ -328,8 +328,6 @@
               files="(GroupMetadataManager|ConsumerGroupTest|GroupMetadataManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
-    <suppress checks="ParameterNumber"
-              files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="ClassDataAbstractionCouplingCheck"
               files="(RecordHelpersTest|GroupMetadataManagerTest).java"/>
     <suppress checks="JavaNCSS"

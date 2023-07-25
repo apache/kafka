@@ -30,20 +30,12 @@ import java.util.Set;
  */
 @InterfaceStability.Unstable
 public interface SubscribedTopicDescriber {
-
-    /**
-     * Returns a set of subscribed topic Ids.
-     *
-     * @return Set of topicIds corresponding to the subscribed topics.
-     */
-    Set<Uuid> subscribedTopicIds();
-
     /**
      * Number of partitions for the given topic Id.
      *
      * @param topicId   Uuid corresponding to the topic.
      * @return The number of partitions corresponding to the given topicId.
-     *         If the topicId doesn't exist return 0;
+     *         If the topicId doesn't exist return -1;
      */
     int numPartitions(Uuid topicId);
 
