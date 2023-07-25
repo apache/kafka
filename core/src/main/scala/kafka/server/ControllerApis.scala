@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.{lang, util}
+import java.nio.ByteBuffer
 import java.util.{Collections, OptionalLong}
 import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
@@ -868,11 +869,22 @@ class ControllerApis(val requestChannel: RequestChannel,
 
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       OptionalLong.empty())
-    // XXX We need to prepare the response here so that we can applu the version here
+
+    // Copy the response data to a new response so we can apply the request version
     controller.createDelegationToken(context, alterRequest.data)
       .thenApply[Unit] { response =>
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-           new CreateDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
+           CreateDelegationTokenResponse.prepareResponse(
+             request.context.requestVersion,
+             requestThrottleMs,
+             Errors.forCode(response.errorCode()),
+             new KafkaPrincipal(response.principalType(), response.principalName()),
+             new KafkaPrincipal(response.tokenRequesterPrincipalType(), response.tokenRequesterPrincipalName()),
+             response.issueTimestampMs(),
+             response.expiryTimestampMs(),
+             response.maxTimestampMs(),
+             response.tokenId(),
+             ByteBuffer.wrap(response.hmac())))
       }
   }
 
