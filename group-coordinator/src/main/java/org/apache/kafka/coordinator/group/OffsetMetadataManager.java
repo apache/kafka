@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -43,7 +42,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
@@ -314,6 +312,27 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Computes the expiration timestamp based on the retention time provided in the OffsetCommit
+     * request.
+     *
+     * The "default" expiration timestamp is defined as now + retention. The retention may be overridden
+     * in versions from v2 to v4. Otherwise, the retention defined on the broker is used. If an explicit
+     * commit timestamp is provided (v1 only), the expiration timestamp is computed based on that.
+     *
+     * @param retentionTimeMs   The retention time in milliseconds.
+     * @param currentTimeMs     The current time in milliseconds.
+     *
+     * @return An optional containing the expiration timestamp if defined; an empty optional otherwise.
+     */
+    private static OptionalLong expireTimestampMs(
+        long retentionTimeMs,
+        long currentTimeMs
+    ) {
+        return retentionTimeMs == OffsetCommitRequest.DEFAULT_RETENTION_TIME ?
+            OptionalLong.empty() : OptionalLong.of(currentTimeMs + retentionTimeMs);
+    }
+
+    /**
      * Handles an OffsetCommit request.
      *
      * @param context The request context.
@@ -328,14 +347,10 @@ public class OffsetMetadataManager {
     ) throws ApiException {
         validateOffsetCommit(context, request);
 
-        final long currentTimeMs = time.milliseconds();
-        // "default" expiration timestamp is defined as now + retention. The retention may be overridden
-        // in versions from v2 to v4. Otherwise, the retention defined on the broker is used. If an explicit
-        // commit timestamp is provided (v1 only), the expiration timestamp is computed based on that.
-        final OptionalLong expireTimestampMs = request.retentionTimeMs() == OffsetCommitRequest.DEFAULT_RETENTION_TIME ?
-            OptionalLong.empty() : OptionalLong.of(currentTimeMs + request.retentionTimeMs());
         final OffsetCommitResponseData response = new OffsetCommitResponseData();
         final List<Record> records = new ArrayList<>();
+        final long currentTimeMs = time.milliseconds();
+        final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
         request.topics().forEach(topic -> {
             final OffsetCommitResponseData.OffsetCommitResponseTopic topicResponse =
@@ -357,18 +372,9 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.NONE.code()));
 
-                    final OptionalInt leaderEpoch = partition.committedLeaderEpoch() == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
-                        OptionalInt.empty() : OptionalInt.of(partition.committedLeaderEpoch());
-                    final String metadata = partition.committedMetadata() == null ?
-                        OffsetAndMetadata.NO_METADATA : partition.committedMetadata();
-                    final long commitTimestampMs = partition.commitTimestamp() == OffsetCommitRequest.DEFAULT_TIMESTAMP ?
-                        currentTimeMs : partition.commitTimestamp();
-
-                    final OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(
-                        partition.committedOffset(),
-                        leaderEpoch,
-                        metadata,
-                        commitTimestampMs,
+                    final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
+                        partition,
+                        currentTimeMs,
                         expireTimestampMs
                     );
 
