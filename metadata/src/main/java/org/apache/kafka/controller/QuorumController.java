@@ -126,7 +126,6 @@ import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -461,6 +460,12 @@ public final class QuorumController implements Controller {
     private Throwable handleEventException(String name,
                                            OptionalLong startProcessingTimeNs,
                                            Throwable exception) {
+        if (!startProcessingTimeNs.isPresent() &&
+                ControllerExceptions.isTimeoutException(exception)) {
+            // If the event never started, and the exception is a timeout, increment the timed
+            // out metric.
+            controllerMetrics.incrementOperationsTimedOut();
+        }
         Throwable externalException =
                 ControllerExceptions.toExternalException(exception, () -> latestController());
         if (!startProcessingTimeNs.isPresent()) {
@@ -492,6 +497,15 @@ public final class QuorumController implements Controller {
         return externalException;
     }
 
+    private long updateEventStartMetricsAndGetTime(OptionalLong eventCreatedTimeNs) {
+        long now = time.nanoseconds();
+        controllerMetrics.incrementOperationsStarted();
+        if (eventCreatedTimeNs.isPresent()) {
+            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs.getAsLong()));
+        }
+        return now;
+    }
+
     /**
      * A controller event for handling internal state changes, such as Raft inputs.
      */
@@ -508,9 +522,8 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            long now = time.nanoseconds();
-            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            startProcessingTimeNs = OptionalLong.of(now);
+            startProcessingTimeNs = OptionalLong.of(
+                updateEventStartMetricsAndGetTime(OptionalLong.of(eventCreatedTimeNs)));
             log.debug("Executing {}.", this);
             handler.run();
             handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
@@ -527,9 +540,14 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void appendControlEvent(String name, Runnable handler) {
+    void appendControlEvent(String name, Runnable handler) {
         ControllerEvent event = new ControllerEvent(name, handler);
         queue.append(event);
+    }
+
+    void appendControlEventWithDeadline(String name, Runnable handler, long deadlineNs) {
+        ControllerEvent event = new ControllerEvent(name, handler);
+        queue.appendWithDeadline(deadlineNs, event);
     }
 
     /**
@@ -555,9 +573,8 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            long now = time.nanoseconds();
-            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            startProcessingTimeNs = OptionalLong.of(now);
+            startProcessingTimeNs = OptionalLong.of(
+                updateEventStartMetricsAndGetTime(OptionalLong.of(eventCreatedTimeNs)));
             T value = handler.get();
             handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
             future.complete(value);
@@ -692,12 +709,11 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            long now = time.nanoseconds();
-            if (!flags.contains(DOES_NOT_UPDATE_QUEUE_TIME)) {
-                // We exclude deferred events from the event queue time metric to prevent
-                // incorrectly including the deferral time in the queue time.
-                controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            }
+            // Deferred events set the DOES_NOT_UPDATE_QUEUE_TIME flag to prevent incorrectly
+            // including their deferral time in the event queue time.
+            startProcessingTimeNs = OptionalLong.of(
+                updateEventStartMetricsAndGetTime(flags.contains(DOES_NOT_UPDATE_QUEUE_TIME) ?
+                    OptionalLong.empty() : OptionalLong.of(eventCreatedTimeNs)));
             int controllerEpoch = curClaimEpoch;
             if (!isActiveController(controllerEpoch)) {
                 throw ControllerExceptions.newWrongControllerException(latestController());
@@ -706,7 +722,6 @@ public final class QuorumController implements Controller {
                 log.info("Cannot run write operation {} in pre-migration mode. Returning NOT_CONTROLLER.", name);
                 throw ControllerExceptions.newPreMigrationException(latestController());
             }
-            startProcessingTimeNs = OptionalLong.of(now);
             ControllerResult<T> result = op.generateRecordsAndResult();
             if (result.records().isEmpty()) {
                 op.processBatchEndOffset(writeOffset);
@@ -1063,6 +1078,9 @@ public final class QuorumController implements Controller {
             appendRaftEvent("handleLeaderChange[" + newLeader.epoch() + "]", () -> {
                 final String newLeaderName = newLeader.leaderId().isPresent() ?
                         String.valueOf(newLeader.leaderId().getAsInt()) : "(none)";
+                if (newLeader.leaderId().isPresent()) {
+                    controllerMetrics.incrementNewActiveControllers();
+                }
                 if (isActiveController()) {
                     if (newLeader.isLeader(nodeId)) {
                         log.warn("We were the leader in epoch {}, and are still the leader " +
@@ -1308,7 +1326,7 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void renounce() {
+    void renounce() {
         try {
             if (curClaimEpoch == -1) {
                 throw new RuntimeException("Cannot renounce leadership because we are not the " +
@@ -2302,20 +2320,12 @@ public final class QuorumController implements Controller {
     }
 
     // VisibleForTesting
-    public CountDownLatch pause() {
-        final CountDownLatch latch = new CountDownLatch(1);
-        appendControlEvent("pause", () -> {
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                log.info("Interrupted while waiting for unpause.", e);
-            }
-        });
-        return latch;
+    Time time() {
+        return time;
     }
 
     // VisibleForTesting
-    Time time() {
-        return time;
+    QuorumControllerMetrics controllerMetrics() {
+        return controllerMetrics;
     }
 }

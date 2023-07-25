@@ -30,7 +30,7 @@
   //
   // Starting in version 7, records can be produced using ZStandard compression.  See KIP-110.
   //
-  // Starting in Version 8, response has RecordErrors and ErrorMEssage. See KIP-467.
+  // Starting in Version 8, response has RecordErrors and ErrorMessage. See KIP-467.
   //
   // Version 9 enables flexible versions.
   "validVersions": "0-9",
