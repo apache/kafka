@@ -2319,4 +2319,11 @@ public final class QuorumController implements Controller {
     QuorumControllerMetrics controllerMetrics() {
         return controllerMetrics;
     }
+
+    // VisibleForTesting
+    void setWriteOffset(long newWriteOffset) {
+        appendControlEvent("setWriteOffset", () -> {
+            this.writeOffset = newWriteOffset;
+        });
+    }
 }
