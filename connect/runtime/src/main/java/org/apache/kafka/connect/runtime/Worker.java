@@ -1370,7 +1370,6 @@ public class Worker {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connectorConfig.<SinkRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
-            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
                     keyConverter, valueConverter, headerConverter);
 
@@ -1381,7 +1380,8 @@ public class Worker {
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                     valueConverter, errorHandlingMetrics, headerConverter, transformationChain, consumer, classLoader, time,
-                    retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore());
+                    retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
+                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
         }
     }
 
@@ -1410,7 +1410,6 @@ public class Worker {
 
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
@@ -1442,7 +1441,7 @@ public class Worker {
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics,
                     headerConverter, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, classLoader, time,
-                    retryWithToleranceOperator, herder.statusBackingStore(), executor);
+                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
         }
     }
 
@@ -1478,7 +1477,6 @@ public class Worker {
 
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
@@ -1508,7 +1506,8 @@ public class Worker {
             return new ExactlyOnceWorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, errorHandlingMetrics, classLoader, time, retryWithToleranceOperator,
-                    herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck);
+                    herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck,
+                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
         }
     }
 
