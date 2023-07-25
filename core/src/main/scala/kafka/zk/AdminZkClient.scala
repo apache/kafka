@@ -16,13 +16,14 @@
 */
 package kafka.zk
 
-import java.util.Properties
-import kafka.admin.{AdminUtils, BrokerMetadata, RackAwareMode}
+import java.util.{Optional, Properties}
+import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -77,10 +78,10 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         " to make replica assignment without rack information.")
     }
     val brokerMetadatas = rackAwareMode match {
-      case RackAwareMode.Disabled => brokers.map(broker => BrokerMetadata(broker.id, None))
+      case RackAwareMode.Disabled => brokers.map(broker => new BrokerMetadata(broker.id, Optional.empty()))
       case RackAwareMode.Safe if brokersWithRack.size < brokers.size =>
-        brokers.map(broker => BrokerMetadata(broker.id, None))
-      case _ => brokers.map(broker => BrokerMetadata(broker.id, broker.rack))
+        brokers.map(broker => new BrokerMetadata(broker.id, Optional.empty()))
+      case _ => brokers.map(broker => new BrokerMetadata(broker.id, Optional.ofNullable(broker.rack.orNull)))
     }
     brokerMetadatas.sortBy(_.id)
   }

@@ -20,6 +20,7 @@ package kafka.server.metadata
 import kafka.controller.StateChangeLogger
 import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
@@ -32,7 +33,6 @@ import org.apache.kafka.image.MetadataImage
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.ThreadLocalRandom
-import kafka.admin.BrokerMetadata
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
@@ -215,7 +215,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
     image.cluster().brokers().values().asScala.filterNot(_.fenced()).
-      map(b => BrokerMetadata(b.id, b.rack.asScala))
+      map(b => new BrokerMetadata(b.id, b.rack))
   }
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {

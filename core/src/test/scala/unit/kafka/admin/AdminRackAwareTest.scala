@@ -17,10 +17,12 @@
 package kafka.admin
 
 import kafka.utils.Logging
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.errors.InvalidReplicationFactorException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import java.util.Optional
 import scala.collection.Map
 
 class AdminRackAwareTest extends RackAwareTest with Logging {
@@ -196,7 +198,7 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
 
   @Test
   def testReplicaAssignment(): Unit = {
-    val brokerMetadatas = (0 to 4).map(new BrokerMetadata(_, None))
+    val brokerMetadatas = (0 to 4).map(new BrokerMetadata(_, Optional.empty()))
 
     // test 0 replication factor
     assertThrows(classOf[InvalidReplicationFactorException],

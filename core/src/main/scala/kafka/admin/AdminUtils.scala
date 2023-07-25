@@ -19,6 +19,7 @@ package kafka.admin
 
 import java.util.Random
 import kafka.utils.Logging
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicationFactorException}
 import org.apache.kafka.server.common.AdminOperationException
 
@@ -111,11 +112,11 @@ object AdminUtils extends Logging {
       throw new InvalidReplicationFactorException("Replication factor must be larger than 0.")
     if (replicationFactor > brokerMetadatas.size)
       throw new InvalidReplicationFactorException(s"Replication factor: $replicationFactor larger than available brokers: ${brokerMetadatas.size}.")
-    if (brokerMetadatas.forall(_.rack.isEmpty))
+    if (brokerMetadatas.forall(!_.rack.isPresent))
       assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.map(_.id), fixedStartIndex,
         startPartitionId)
     else {
-      if (brokerMetadatas.exists(_.rack.isEmpty))
+      if (brokerMetadatas.exists(!_.rack.isPresent))
         throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.")
       assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
         startPartitionId)
@@ -150,8 +151,8 @@ object AdminUtils extends Logging {
                                                brokerMetadatas: Iterable[BrokerMetadata],
                                                fixedStartIndex: Int,
                                                startPartitionId: Int): Map[Int, Seq[Int]] = {
-    val brokerRackMap = brokerMetadatas.collect { case BrokerMetadata(id, Some(rack)) =>
-      id -> rack
+    val brokerRackMap = brokerMetadatas.collect { bm =>
+      bm.id -> bm.rack.get()
     }.toMap
     val numRacks = brokerRackMap.values.toSet.size
     val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
