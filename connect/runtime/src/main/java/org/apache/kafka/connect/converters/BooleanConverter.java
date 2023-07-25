@@ -23,14 +23,20 @@ import org.apache.kafka.common.serialization.BooleanDeserializer;
 import org.apache.kafka.common.serialization.BooleanSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
 /**
- * {@link Converter} and {@link HeaderConverter} implementation that supports serializing to and deserializing from Boolean values.
+ * {@link Converter} and {@link HeaderConverter} implementation that supports serializing to and
+ * deserializing from Boolean values.
+ * <p>
+ * When converting from bytes to Kafka Connect format, the converter will always return an optional
+ * BOOLEAN schema.
  */
 public class BooleanConverter implements Converter, HeaderConverter {
 
@@ -55,18 +61,27 @@ public class BooleanConverter implements Converter, HeaderConverter {
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         Map<String, Object> conf = new HashMap<>(configs);
-        conf.put(BooleanConverterConfig.TYPE_CONFIG, isKey ? ConverterType.KEY.getName() : ConverterType.VALUE.getName());
+        conf.put(ConverterConfig.TYPE_CONFIG,
+            isKey ? ConverterType.KEY.getName() : ConverterType.VALUE.getName());
         configure(conf);
     }
 
     @Override
     public byte[] fromConnectData(String topic, Schema schema, Object value) {
-        return serializer.serialize(topic, (Boolean) value);
+        if (schema != null && schema.type() != Type.BOOLEAN)
+            throw new DataException("Invalid schema type for BooleanConverter: " + schema.type().toString());
+
+        try {
+            return serializer.serialize(topic, (Boolean) value);
+        } catch (ClassCastException e) {
+            throw new DataException("BooleanConverter is not compatible with objects of type " + value.getClass());
+        }
     }
 
     @Override
     public SchemaAndValue toConnectData(String topic, byte[] value) {
-        return new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA, deserializer.deserialize(topic, value));
+        return new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA,
+            deserializer.deserialize(topic, value));
     }
 
 

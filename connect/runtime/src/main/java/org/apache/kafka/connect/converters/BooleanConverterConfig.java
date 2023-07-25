@@ -25,13 +25,13 @@ import org.apache.kafka.connect.storage.ConverterConfig;
  */
 public class BooleanConverterConfig extends ConverterConfig {
 
-  private static final ConfigDef CONFIG = ConverterConfig.newConfigDef();
+    private static final ConfigDef CONFIG = ConverterConfig.newConfigDef();
 
-  public static ConfigDef configDef() {
-    return CONFIG;
-  }
+    public static ConfigDef configDef() {
+        return CONFIG;
+    }
 
-  public BooleanConverterConfig(Map<String, ?> props) {
-    super(CONFIG, props);
-  }
+    public BooleanConverterConfig(Map<String, ?> props) {
+        super(CONFIG, props);
+    }
 }
