@@ -22,6 +22,8 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
@@ -340,13 +342,12 @@ public class OffsetMetadataManager {
 
         request.topics().forEach(topic -> {
             final OffsetCommitResponseData.OffsetCommitResponseTopic topicResponse =
-                new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                    .setName(topic.name());
+                new OffsetCommitResponseTopic().setName(topic.name());
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
                 if (partition.committedMetadata() != null && partition.committedMetadata().length() > offsetMetadataMaxSize) {
-                    topicResponse.partitions().add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                    topicResponse.partitions().add(new OffsetCommitResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
@@ -354,7 +355,7 @@ public class OffsetMetadataManager {
                         request.groupId(), partition.committedOffset(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
 
-                    topicResponse.partitions().add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                    topicResponse.partitions().add(new OffsetCommitResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.NONE.code()));
 
