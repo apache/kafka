@@ -88,7 +88,7 @@ public class RackAwareTaskAssignor {
     }
 
     // Visible for testing. This method also checks if all TopicPartitions exist in cluster
-    public boolean populateTopicsToDiscribe(final Set<String> topicsToDescribe) {
+    public boolean populateTopicsToDescribe(final Set<String> topicsToDescribe) {
         // Make sure rackId exist for all TopicPartitions needed
         for (final Set<TopicPartition> topicPartitions : partitionsForTask.values()) {
             for (final TopicPartition topicPartition : topicPartitions) {
@@ -118,7 +118,7 @@ public class RackAwareTaskAssignor {
     private boolean validateTopicPartitionRack() {
         // Make sure rackId exist for all TopicPartitions needed
         final Set<String> topicsToDescribe = new HashSet<>();
-        if (!populateTopicsToDiscribe(topicsToDescribe)) {
+        if (!populateTopicsToDescribe(topicsToDescribe)) {
             return false;
         }
 
@@ -234,8 +234,17 @@ public class RackAwareTaskAssignor {
         return clientList.size() + taskIdList.size();
     }
 
-    // For testing. canEnableRackAwareAssignor must be called first
-    long activeTasksCost(final SortedMap<UUID, ClientState> clientStates, final SortedSet<TaskId> activeTasks, final int trafficCost, final int nonOverlapCost) {
+    /**
+     * Compute the cost for the provided {@code activeTasks}. The passed in active tasks must be contained in {@code clientState}.
+     */
+    long activeTasksCost(final SortedSet<TaskId> activeTasks,
+                         final SortedMap<UUID, ClientState> clientStates,
+                         final int trafficCost,
+                         final int nonOverlapCost) {
+        if (activeTasks.isEmpty()) {
+            return 0;
+        }
+
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Graph<Integer> graph = constructActiveTaskGraph(clientList, taskIdList,
@@ -252,14 +261,14 @@ public class RackAwareTaskAssignor {
      * cross rack traffic can be higher. In extreme case, if we set {@code nonOverlapCost} to 0 and @{code trafficCost}
      * to a positive value, the computed assignment will be minimum for cross rack traffic. If we set {@code trafficCost} to 0,
      * and {@code nonOverlapCost} to a positive value, the computed assignment should be the same as input
-     * @param clientStates Client states
      * @param activeTasks Tasks to reassign if needed. They must be assigned already in clientStates
+     * @param clientStates Client states
      * @param trafficCost Cost of cross rack traffic for each TopicPartition
      * @param nonOverlapCost Cost of assign a task to a different client
      * @return Total cost after optimization
      */
-    public long optimizeActiveTasks(final SortedMap<UUID, ClientState> clientStates,
-                                    final SortedSet<TaskId> activeTasks,
+    public long optimizeActiveTasks(final SortedSet<TaskId> activeTasks,
+                                    final SortedMap<UUID, ClientState> clientStates,
                                     final int trafficCost,
                                     final int nonOverlapCost) {
         if (activeTasks.isEmpty()) {
@@ -321,13 +330,12 @@ public class RackAwareTaskAssignor {
             if (!taskClientMap.containsKey(taskId)) {
                 throw new IllegalArgumentException("Task " + taskId + " not assigned to any client");
             }
-        }
 
-        final int sinkId = getSinkID(clientList, taskIdList);
-        for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
+            // Add edge from source to task
             graph.addEdge(SOURCE_ID, taskNodeId, 1, 0, 1);
         }
 
+        final int sinkId = getSinkID(clientList, taskIdList);
         // It's possible that some clients have 0 task assign. These clients will have 0 tasks assigned
         // even though it may have higher traffic cost. This is to maintain the original assigned task count
         for (int i = 0; i < clientList.size(); i++) {

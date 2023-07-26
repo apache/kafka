@@ -176,7 +176,7 @@ public class RackAwareTaskAssignorTest {
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
         assertFalse(assignor.canEnableRackAwareAssignor());
-        assertFalse(assignor.populateTopicsToDiscribe(new HashSet<>()));
+        assertFalse(assignor.populateTopicsToDescribe(new HashSet<>()));
         assertTrue(assignor.validateClientRack());
     }
 
@@ -192,7 +192,7 @@ public class RackAwareTaskAssignorTest {
         );
 
         assertTrue(assignor.validateClientRack());
-        assertFalse(assignor.populateTopicsToDiscribe(new HashSet<>()));
+        assertFalse(assignor.populateTopicsToDescribe(new HashSet<>()));
         // False since nodeMissingRack has one node which doesn't have rack
         assertFalse(assignor.canEnableRackAwareAssignor());
     }
@@ -290,7 +290,7 @@ public class RackAwareTaskAssignorTest {
         );
 
         assertFalse(assignor.canEnableRackAwareAssignor());
-        assertTrue(assignor.populateTopicsToDiscribe(new HashSet<>()));
+        assertTrue(assignor.populateTopicsToDescribe(new HashSet<>()));
     }
 
     @Test
@@ -314,10 +314,10 @@ public class RackAwareTaskAssignorTest {
         final SortedSet<TaskId> taskIds = mkSortedSet();
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(0, originalCost);
 
-        final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(0, cost);
 
         assertEquals(mkSet(TASK_0_1, TASK_1_1), clientState0.activeTasks());
@@ -356,11 +356,11 @@ public class RackAwareTaskAssignorTest {
 
         assertTrue(assignor.canEnableRackAwareAssignor());
         int expected = stateful ? 40 : 4;
-        final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(expected, originalCost);
 
         expected = stateful ? 4 : 0;
-        final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(expected, cost);
 
         assertEquals(mkSet(TASK_0_0, TASK_1_0), clientState0.activeTasks());
@@ -390,8 +390,8 @@ public class RackAwareTaskAssignorTest {
             .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().activeTasks().size()));
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, trafficCost, nonOverlapCost);
-        final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
+        final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertThat(cost, lessThanOrEqualTo(originalCost));
 
         for (final Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
@@ -425,10 +425,10 @@ public class RackAwareTaskAssignorTest {
 
         // Because trafficCost is 0, original assignment should be maintained
         assertTrue(assignor.canEnableRackAwareAssignor());
-        final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, 0, 1);
+        final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, 0, 1);
         assertEquals(0, originalCost);
 
-        final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, 0, 1);
+        final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, 0, 1);
         assertEquals(0, cost);
 
         // Make sure assignment doesn't change
@@ -468,12 +468,12 @@ public class RackAwareTaskAssignorTest {
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_1_0);
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         int expected = stateful ? 20 : 2;
         assertEquals(expected, originalCost);
 
         expected = stateful ? 2 : 0;
-        final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(expected, cost);
 
         // UUID_1 remains empty
@@ -512,12 +512,12 @@ public class RackAwareTaskAssignorTest {
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0);
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         int expected = stateful ? 20 : 2;
         assertEquals(expected, originalCost);
 
         expected = stateful ? 2 : 0;
-        final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(expected, cost);
 
         // Because original assignment is not balanced (3 tasks but client 0 has no task), we maintain it
@@ -555,10 +555,10 @@ public class RackAwareTaskAssignorTest {
 
         assertTrue(assignor.canEnableRackAwareAssignor());
         final int expectedCost = stateful ? 10 : 1;
-        final long originalCost = assignor.activeTasksCost(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(expectedCost, originalCost);
 
-        final long cost = assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost);
+        final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(expectedCost, cost);
 
         // Even though assigning all tasks to UUID_2 will result in min cost, but it's not balanced
@@ -590,7 +590,7 @@ public class RackAwareTaskAssignorTest {
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         final Exception exception = assertThrows(IllegalStateException.class,
-            () -> assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost));
+            () -> assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost));
         Assertions.assertEquals("Client 00000000-0000-0000-0000-000000000002 doesn't have rack configured. Maybe forgot to call "
             + "canEnableRackAwareAssignor first", exception.getMessage());
     }
@@ -619,7 +619,7 @@ public class RackAwareTaskAssignorTest {
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         assertTrue(assignor.canEnableRackAwareAssignor());
         final Exception exception = assertThrows(IllegalArgumentException.class,
-            () -> assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost));
+            () -> assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost));
         Assertions.assertEquals(
             "Task 1_1 assigned to multiple clients 00000000-0000-0000-0000-000000000005, "
                 + "00000000-0000-0000-0000-000000000002", exception.getMessage());
@@ -649,7 +649,7 @@ public class RackAwareTaskAssignorTest {
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
         assertTrue(assignor.canEnableRackAwareAssignor());
         final Exception exception = assertThrows(IllegalArgumentException.class,
-            () -> assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost));
+            () -> assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost));
         Assertions.assertEquals(
             "Task 1_0 not assigned to any client", exception.getMessage());
     }
