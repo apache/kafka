@@ -59,18 +59,6 @@ public class PluginClassLoader extends URLClassLoader {
     }
 
     /**
-     * Constructor that defines the system classloader as parent of this plugin classloader.
-     *
-     * @param pluginLocation the top-level location of the plugin to be loaded in isolation by this
-     * classloader.
-     * @param urls the list of urls from which to load classes and resources for this plugin.
-     */
-    public PluginClassLoader(URL pluginLocation, URL[] urls) {
-        super(urls);
-        this.pluginLocation = Objects.requireNonNull(pluginLocation, "Plugin location must be non-null");
-    }
-
-    /**
      * Returns the top-level location of the classes and dependencies required by the plugin that
      * is loaded by this classloader.
      *
