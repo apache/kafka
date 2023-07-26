@@ -173,7 +173,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // Visible for testing
     ExecutorService forwardRequestExecutor;
-    private final ExecutorService herderExecutor;
+    // Visible for testing
+    final ExecutorService herderExecutor;
     // Visible for testing
     ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
