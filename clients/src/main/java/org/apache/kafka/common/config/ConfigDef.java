@@ -947,9 +947,15 @@ public class ConfigDef {
     }
 
     public static class ValidString implements Validator {
-        final List<String> validStrings;
+        // visible for testing
+        protected final List<String> validStrings;
 
-        private ValidString(List<String> validStrings) {
+        // visible for testing
+        protected  ValidString(ValidString validString) {
+            this(validString.validStrings);
+        }
+
+        ValidString(List<String> validStrings) {
             this.validStrings = validStrings;
         }
 

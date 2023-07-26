@@ -119,6 +119,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 case StreamsConfig.UPGRADE_FROM_32:
                 case StreamsConfig.UPGRADE_FROM_33:
                 case StreamsConfig.UPGRADE_FROM_34:
+                    // there is no need to add new versions here
                     return false;
                 default:
                     return true;

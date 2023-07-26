@@ -94,6 +94,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 case StreamsConfig.UPGRADE_FROM_31:
                 case StreamsConfig.UPGRADE_FROM_32:
                 case StreamsConfig.UPGRADE_FROM_33:
+                    // there is no need to add new versions hers
                     return true;
                 default:
                     return false;

@@ -123,6 +123,9 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_31:
                 case StreamsConfig.UPGRADE_FROM_32:
                 case StreamsConfig.UPGRADE_FROM_33:
+                case StreamsConfig.UPGRADE_FROM_34:
+                    // we need to add new version when new "upgrade.from" values become available
+
                     // This config is for explicitly sending FK response to a requested partition
                     // and should not affect the rebalance protocol
                     break;
@@ -178,6 +181,9 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_31:
                 case StreamsConfig.UPGRADE_FROM_32:
                 case StreamsConfig.UPGRADE_FROM_33:
+                case StreamsConfig.UPGRADE_FROM_34:
+                    // we need to add new version when new "upgrade.from" values become available
+
                     // This config is for explicitly sending FK response to a requested partition
                     // and should not affect the metadata version
                     break;

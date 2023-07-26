@@ -147,7 +147,8 @@ public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
-    private static final ConfigDef CONFIG;
+    // visible for testing
+    protected static final ConfigDef CONFIG;
 
     private final boolean eosEnabled;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
