@@ -277,6 +277,12 @@ class BrokerTopicMetrics(name: Option[String]) {
     BrokerTopicStats.TotalFetchRequestsPerSec -> MeterWrapper(BrokerTopicStats.TotalFetchRequestsPerSec, "requests"),
     BrokerTopicStats.FetchMessageConversionsPerSec -> MeterWrapper(BrokerTopicStats.FetchMessageConversionsPerSec, "requests"),
     BrokerTopicStats.ProduceMessageConversionsPerSec -> MeterWrapper(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests"),
+    BrokerTopicStats.RemoteBytesOutPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesOutPerSec, "bytes"),
+    BrokerTopicStats.RemoteBytesInPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesInPerSec, "bytes"),
+    BrokerTopicStats.RemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteReadRequestsPerSec, "requests"),
+    BrokerTopicStats.RemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteWriteRequestsPerSec, "requests"),
+    BrokerTopicStats.FailedRemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteReadRequestsPerSec, "requests"),
+    BrokerTopicStats.FailedRemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteWriteRequestsPerSec, "requests"),
     BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec -> MeterWrapper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMagicNumberRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMessageCrcRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests"),
@@ -336,6 +342,18 @@ class BrokerTopicMetrics(name: Option[String]) {
 
   def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
+  def remoteBytesOutRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteBytesOutPerSec).meter()
+
+  def remoteBytesInRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteBytesInPerSec).meter()
+
+  def remoteReadRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteReadRequestsPerSec).meter()
+
+  def remoteWriteRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteWriteRequestsPerSec).meter()
+
+  def failedRemoteReadRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedRemoteReadRequestsPerSec).meter()
+
+  def failedRemoteWriteRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedRemoteWriteRequestsPerSec).meter()
+
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)
     if (meter != null)
@@ -360,6 +378,12 @@ object BrokerTopicStats {
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"
   val ReassignmentBytesInPerSec = "ReassignmentBytesInPerSec"
   val ReassignmentBytesOutPerSec = "ReassignmentBytesOutPerSec"
+  val RemoteBytesOutPerSec = "RemoteBytesOutPerSec"
+  val RemoteBytesInPerSec = "RemoteBytesInPerSec"
+  val RemoteReadRequestsPerSec = "RemoteReadRequestsPerSec"
+  val RemoteWriteRequestsPerSec = "RemoteWriteRequestsPerSec"
+  val FailedRemoteReadRequestsPerSec = "RemoteReadErrorsPerSec"
+  val FailedRemoteWriteRequestsPerSec = "RemoteWriteErrorsPerSec"
 
   // These following topics are for LogValidator for better debugging on failed records
   val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
@@ -415,6 +439,12 @@ class BrokerTopicStats extends Logging {
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesOutPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesInPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.RemoteReadRequestsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.RemoteWriteRequestsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteReadRequestsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteWriteRequestsPerSec)
     }
   }
 

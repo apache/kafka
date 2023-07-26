@@ -267,23 +267,42 @@
   Below is the configuration of the Kafka Admin client library.
   <!--#include virtual="generated/admin_client_config.html" -->
 
-  <h3 class="anchor-heading"><a id="systemproperties" class="anchor-link"></a><a href="#systemproperties">3.8 System Properties</a></h3>
+  <h3 class="anchor-heading"><a id="mirrormakerconfigs" class="anchor-link"></a><a href="#mirrormakerconfigs">3.8 MirrorMaker Configs</a></h3>
+  Below is the configuration of the connectors that make up MirrorMaker 2.
+
+  <h4 class="anchor-heading"><a id="mirrormakercommonconfigs" class="anchor-link"></a><a href="#mirrormakercommonconfigs">3.8.1 MirrorMaker Common Configs</a></h4>
+  Below are the common configuration properties that apply to all three connectors.
+  <!--#include virtual="generated/mirror_connector_config.html" -->
+
+  <h4 class="anchor-heading"><a id="mirrormakersourceconfigs" class="anchor-link"></a><a href="#mirrormakersourceconfigs">3.8.2 MirrorMaker Source Configs</a></h4>
+  Below is the configuration of MirrorMaker 2 source connector for replicating topics.
+  <!--#include virtual="generated/mirror_source_config.html" -->
+
+  <h4 class="anchor-heading"><a id="mirrormakercheckpointconfigs" class="anchor-link"></a><a href="#mirrormakercheckpointconfigs">3.8.3 MirrorMaker Checkpoint Configs</a></h4>
+  Below is the configuration of MirrorMaker 2 checkpoint connector for emitting consumer offset checkpoints.
+  <!--#include virtual="generated/mirror_checkpoint_config.html" -->
+
+  <h4 class="anchor-heading"><a id="mirrormakerheartbeatconfigs" class="anchor-link"></a><a href="#mirrormakerheartbeatconfigs">3.8.4 MirrorMaker HeartBeat Configs</a></h4>
+  Below is the configuration of MirrorMaker 2 heartbeat connector for checking connectivity between connectors and clusters.
+  <!--#include virtual="generated/mirror_heartbeat_config.html" -->
+
+  <h3 class="anchor-heading"><a id="systemproperties" class="anchor-link"></a><a href="#systemproperties">3.9 System Properties</a></h3>
   Kafka supports some configuration that can be enabled through Java system properties. System properties are usually set by passing the -D flag to the Java virtual machine in which Kafka components are running.
   Below are the supported system properties.
   <ul class="config-list">
-  <li>
-    <h4><a id="org.apache.kafka.disallowed.login.modules"></a><a id="systemproperties_org.apache.kafka.disallowed.login.modules" href="#systemproperties_org.apache.kafka.disallowed.login.modules">org.apache.kafka.disallowed.login.modules</a></h4>
-    <p>This system property is used to disable the problematic login modules usage in SASL JAAS configuration. This property accepts comma-separated list of loginModule names. By default <b>com.sun.security.auth.module.JndiLoginModule</b> loginModule is disabled.
-    <p>If users want to enable JndiLoginModule, users need to explicitly reset the system property like below. We advise the users to validate configurations and only allow trusted JNDI configurations. For more details <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-25194">CVE-2023-25194</a>.
-    <p><pre class="brush: bash;"> -Dorg.apache.kafka.disallowed.login.modules=</pre>
-    <p>To disable more loginModules, update the system property with comma-separated loginModule names. Make sure to explicitly add <b>JndiLoginModule</b> module name to the comma-separated list like below.
-    <p><pre class="brush: bash;"> -Dorg.apache.kafka.disallowed.login.modules=com.sun.security.auth.module.JndiLoginModule,com.ibm.security.auth.module.LdapLoginModule,com.ibm.security.auth.module.Krb5LoginModule</pre>
-    <table><tbody>
-    <tr><th>Since:</th><td>3.4.0</td></tr>
-    <tr><th>Default Value:</th><td>com.sun.security.auth.module.JndiLoginModule</td></tr>
-    </tbody></table>
-  </li>
- </ul>
+    <li>
+      <h4><a id="org.apache.kafka.disallowed.login.modules"></a><a id="systemproperties_org.apache.kafka.disallowed.login.modules" href="#systemproperties_org.apache.kafka.disallowed.login.modules">org.apache.kafka.disallowed.login.modules</a></h4>
+      <p>This system property is used to disable the problematic login modules usage in SASL JAAS configuration. This property accepts comma-separated list of loginModule names. By default <b>com.sun.security.auth.module.JndiLoginModule</b> loginModule is disabled.
+      <p>If users want to enable JndiLoginModule, users need to explicitly reset the system property like below. We advise the users to validate configurations and only allow trusted JNDI configurations. For more details <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-25194">CVE-2023-25194</a>.
+      <p><pre class="brush: bash;"> -Dorg.apache.kafka.disallowed.login.modules=</pre>
+      <p>To disable more loginModules, update the system property with comma-separated loginModule names. Make sure to explicitly add <b>JndiLoginModule</b> module name to the comma-separated list like below.
+      <p><pre class="brush: bash;"> -Dorg.apache.kafka.disallowed.login.modules=com.sun.security.auth.module.JndiLoginModule,com.ibm.security.auth.module.LdapLoginModule,com.ibm.security.auth.module.Krb5LoginModule</pre>
+      <table><tbody>
+      <tr><th>Since:</th><td>3.4.0</td></tr>
+      <tr><th>Default Value:</th><td>com.sun.security.auth.module.JndiLoginModule</td></tr>
+      </tbody></table>
+    </li>
+  </ul>
 </script>
 
 <div class="p-configuration"></div>

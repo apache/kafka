@@ -160,7 +160,7 @@ def regexReplace(path, pattern, replacement):
             f.write(line)
 
 def user_ok(msg):
-    ok = input(msg)
+    ok = sanitize_input(msg)
     return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
@@ -209,7 +209,7 @@ def get_jdk(prefs, version):
     """
     Get settings for the specified JDK version.
     """
-    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
+    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: sanitize_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ)
     if jdk_java_home.strip(): jdk_env['JAVA_HOME'] = jdk_java_home
     else: jdk_java_home = jdk_env['JAVA_HOME']
@@ -310,17 +310,25 @@ def validate_release_num(version):
         fail("The specified version is not a valid release version number")
     validate_release_version_parts(version)
 
+def sanitize_input(input_msg: str) -> str:
+    """Sanitize inputs from users. This removes leading and trailing spaces.
+       Use this function instead of input where user input is needed.
+    """
+    input_from_user = input(input_msg)
+    return input_from_user.strip()
+     
+
 def command_release_announcement_email():
     tags = cmd_output('git tag').split()
     release_tag_pattern = re.compile('^[0-9]+\.[0-9]+\.[0-9]+$')
     release_tags = sorted([t for t in tags if re.match(release_tag_pattern, t)])
     release_version_num = release_tags[-1]
     if not user_ok("""Is the current release %s ? (y/n): """ % release_version_num):
-        release_version_num = input('What is the current release version:')
+        release_version_num = sanitize_input('What is the current release version:')
         validate_release_num(release_version_num)
     previous_release_version_num = release_tags[-2]
     if not user_ok("""Is the previous release %s ? (y/n): """ % previous_release_version_num):
-        previous_release_version_num = input('What is the previous release version:')
+        previous_release_version_num = sanitize_input('What is the previous release version:')
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
@@ -488,10 +496,10 @@ starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
 cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
-release_version = input("Release version (without any RC info, e.g. 1.0.0): ")
+release_version = sanitize_input("Release version (without any RC info, e.g. 1.0.0): ")
 release_version_parts = get_release_version_parts(release_version)
 
-rc = input("Release candidate number: ")
+rc = sanitize_input("Release candidate number: ")
 
 dev_branch = '.'.join(release_version_parts[:2])
 docs_release_version = docs_version(release_version)
@@ -515,7 +523,7 @@ if not rc:
     sys.exit(0)
 
 # Prereq checks
-apache_id = get_pref(prefs, 'apache_id', lambda: input("Enter your apache username: "))
+apache_id = get_pref(prefs, 'apache_id', lambda: sanitize_input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
 jdk17_env = get_jdk(prefs, 17)
@@ -524,7 +532,7 @@ def select_gpg_key():
     print("Here are the available GPG keys:")
     available_keys = cmd_output("gpg --list-secret-keys")
     print(available_keys)
-    key_name = input("Which user name (enter the user name without email address): ")
+    key_name = sanitize_input("Which user name (enter the user name without email address): ")
     if key_name not in available_keys:
         fail("Couldn't find the requested key.")
     return key_name

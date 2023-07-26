@@ -20,12 +20,12 @@ package kafka.admin
 import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections}
 import kafka.admin.ReassignPartitionsCommand._
-import kafka.common.AdminCommandFailedException
 import kafka.utils.Exit
 import org.apache.kafka.clients.admin.{Config, MockAdminClient, PartitionReassignment}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidReplicationFactorException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 

@@ -61,7 +61,15 @@ public class ConsumerManager implements Closeable {
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
         Path committedOffsetsPath = new File(rlmmConfig.logDir(), COMMITTED_OFFSETS_FILE_NAME).toPath();
-        consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, topicPartitioner, committedOffsetsPath, time, 60_000L);
+        consumerTask = new ConsumerTask(
+                consumer,
+                rlmmConfig.remoteLogMetadataTopicName(),
+                remotePartitionMetadataEventHandler,
+                topicPartitioner,
+                committedOffsetsPath,
+                time,
+                60_000L
+        );
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
 
@@ -76,7 +84,8 @@ public class ConsumerManager implements Closeable {
     }
 
     /**
-     * Waits if necessary for the consumption to reach the offset of the given {@code recordMetadata}.
+     * Waits if necessary for the consumption to reach the {@code offset} of the given record
+     * at a certain {@code partition} of the metadata topic.
      *
      * @param recordMetadata record metadata to be checked for consumption.
      * @throws TimeoutException if this method execution did not complete with in the wait time configured with
@@ -87,10 +96,10 @@ public class ConsumerManager implements Closeable {
     }
 
     /**
-     * Waits if necessary for the consumption to reach the offset of the given {@code recordMetadata}.
+     * Waits if necessary for the consumption to reach the partition/offset of the given {@code RecordMetadata}
      *
      * @param recordMetadata record metadata to be checked for consumption.
-     * @param timeoutMs      wait timeout in milli seconds
+     * @param timeoutMs      wait timeout in milliseconds
      * @throws TimeoutException if this method execution did not complete with in the given {@code timeoutMs}.
      */
     public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
@@ -98,25 +107,29 @@ public class ConsumerManager implements Closeable {
         final int partition = recordMetadata.partition();
         final long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
 
+        log.info("Waiting until consumer is caught up with the target partition: [{}]", partition);
+
         // If the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.isPartitionAssigned(partition)) {
-            throw new KafkaException("This consumer is not subscribed to the target partition " + partition + " on which message is produced.");
+            throw new KafkaException("This consumer is not assigned to the target partition " + partition + ". " +
+                    "Partitions currently assigned: " + consumerTask.metadataPartitionsAssigned());
         }
 
         final long offset = recordMetadata.offset();
         long startTimeMs = time.milliseconds();
         while (true) {
+            log.debug("Checking if partition [{}] is up to date with offset [{}]", partition, offset);
             long receivedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
             if (receivedOffset >= offset) {
                 return;
             }
 
-            log.debug("Committed offset [{}] for partition [{}], but the target offset: [{}],  Sleeping for [{}] to retry again",
-                      offset, partition, receivedOffset, consumeCheckIntervalMs);
+            log.debug("Expected offset [{}] for partition [{}], but the committed offset: [{}],  Sleeping for [{}] to retry again",
+                    offset, partition, receivedOffset, consumeCheckIntervalMs);
 
             if (time.milliseconds() - startTimeMs > timeoutMs) {
-                log.warn("Committed offset for partition:[{}] is : [{}], but the target offset: [{}] ",
-                         partition, receivedOffset, offset);
+                log.warn("Expected offset for partition:[{}] is : [{}], but the committed offset: [{}] ",
+                        partition, receivedOffset, offset);
                 throw new TimeoutException("Timed out in catching up with the expected offset by consumer.");
             }
 
@@ -126,7 +139,7 @@ public class ConsumerManager implements Closeable {
 
     @Override
     public void close() throws IOException {
-        // Consumer task will close the task and it internally closes all the resources including the consumer.
+        // Consumer task will close the task, and it internally closes all the resources including the consumer.
         Utils.closeQuietly(consumerTask, "ConsumerTask");
 
         // Wait until the consumer thread finishes.
