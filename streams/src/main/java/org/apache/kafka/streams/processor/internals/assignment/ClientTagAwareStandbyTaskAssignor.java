@@ -158,8 +158,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
     // Visible for testing
     void fillClientsTagStatistics(final Map<UUID, ClientState> clientStates,
-                                         final Map<TagEntry, Set<UUID>> tagEntryToClients,
-                                         final Map<String, Set<String>> tagKeyToValues) {
+                                  final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                  final Map<String, Set<String>> tagKeyToValues) {
         for (final Entry<UUID, ClientState> clientStateEntry : clientStates.entrySet()) {
             final UUID clientId = clientStateEntry.getKey();
             final ClientState clientState = clientStateEntry.getValue();
@@ -173,15 +173,15 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
     // Visible for testing
     void assignStandbyTasksToClientsWithDifferentTags(final int numberOfStandbyClients,
-                                                             final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                             final TaskId activeTaskId,
-                                                             final UUID activeTaskClient,
-                                                             final Set<String> rackAwareAssignmentTags,
-                                                             final Map<UUID, ClientState> clientStates,
-                                                             final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                             final Map<String, Set<String>> tagKeyToValues,
-                                                             final Map<TagEntry, Set<UUID>> tagEntryToClients,
-                                                             final Map<TaskId, UUID> pendingStandbyTasksToClientId) {
+                                                      final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                      final TaskId activeTaskId,
+                                                      final UUID activeTaskClient,
+                                                      final Set<String> rackAwareAssignmentTags,
+                                                      final Map<UUID, ClientState> clientStates,
+                                                      final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                      final Map<String, Set<String>> tagKeyToValues,
+                                                      final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                                      final Map<TaskId, UUID> pendingStandbyTasksToClientId) {
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
         // We set countOfUsedClients as 1 because client where active task is located has to be considered as used.
