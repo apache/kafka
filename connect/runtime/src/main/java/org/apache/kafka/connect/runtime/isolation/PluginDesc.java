@@ -116,7 +116,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
         // isolated plugins appear after classpath plugins when they have identical versions.
         int isolatedComp = Boolean.compare(other.loader instanceof PluginClassLoader, loader instanceof PluginClassLoader);
         // choose an arbitrary order between different locations and types
-        int loaderComp = location.compareTo(other.location);
+        int loaderComp = Objects.compare(location, other.location, String::compareTo);
         int typeComp = type.compareTo(other.type);
         return nameComp != 0 ? nameComp :
                 versionComp != 0 ? versionComp :
