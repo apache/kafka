@@ -762,7 +762,8 @@ public abstract class AbstractStickyAssignorTest {
                         assignment.get(consumer), generationId, i)
                 );
             } else {
-                subscriptions.put(consumer,
+                subscriptions.put(
+                        consumer,
                         buildSubscriptionV2Above(topics.subList(topicCount / 2, topicCount),
                         assignment.get(consumer), generationId, i)
                 );
