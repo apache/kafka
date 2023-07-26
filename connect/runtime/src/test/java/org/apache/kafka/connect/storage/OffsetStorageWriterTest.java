@@ -16,21 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.apache.kafka.connect.util.LoggingContext;
-import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,14 +29,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.ExecutionException;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -61,8 +45,6 @@ import static org.mockito.Mockito.when;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class OffsetStorageWriterTest {
@@ -76,8 +58,6 @@ public class OffsetStorageWriterTest {
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
 
     private static final Exception EXCEPTION = new RuntimeException("error");
-
-    private static final Exception PRODUCE_EXCEPTION = new KafkaException();
 
     private final OffsetBackingStore store = mock(OffsetBackingStore.class);
     private final Converter keyConverter = mock(Converter.class);
@@ -215,245 +195,6 @@ public class OffsetStorageWriterTest {
         flushFuture.get(1000, TimeUnit.MILLISECONDS);
     }
 
-    @Test
-    public void testFlushFailureWhenWriteToSecondaryStoreFailsForTombstoneOffsets() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
-        KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", true);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        Future<Void> flushFuture = offsetStorageWriter.doFlush((error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        });
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
-    }
-
-    @Test
-    public void testFlushSuccessWhenWritesSucceedToBothPrimaryAndSecondaryStoresForTombstoneOffsets() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
-        KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        offsetStorageWriter.doFlush((error, result) -> {
-            assertNull(error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
-    }
-
-    @Test
-    public void testFlushSuccessWhenWriteToSecondaryStoreFailsForNonTombstoneOffsets() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
-        KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", true);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        offsetStorageWriter.doFlush((error, result) -> {
-            assertNull(error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
-    }
-
-    @Test
-    public void testFlushSuccessWhenWritesToPrimaryAndSecondaryStoreSucceeds() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
-        KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        offsetStorageWriter.doFlush((error, result) -> {
-            assertNull(error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
-    }
-
-    @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceeds() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
-        KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        Future<Void> flushFuture = offsetStorageWriter.doFlush((error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        });
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
-    }
-
-    @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceedsForTombstoneRecords() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
-        KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        Future<Void> flushFuture = offsetStorageWriter.doFlush((error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        });
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
-    }
-
-    @Test
-    public void testFlushSuccessWhenWritesToPrimaryStoreSucceedsWithNoSecondaryStore() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", false);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                () -> LoggingContext.forConnector("source-connector"),
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        offsetStorageWriter.doFlush((error, result) -> {
-            assertNull(error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
-    }
-
-    @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsWithNoSecondaryStore() throws Exception {
-
-        KafkaOffsetBackingStore connectorStore = setupOffsetBackingStoreWithProducer("topic1", true);
-
-        mockKeyValueConversion(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                () -> LoggingContext.forConnector("source-connector"),
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
-
-        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
-        Future<Void> flushFuture = offsetStorageWriter.doFlush((error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        });
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
-    }
-
-    @SuppressWarnings("unchecked")
-    private KafkaOffsetBackingStore setupOffsetBackingStoreWithProducer(String topic, boolean throwingProducer) {
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(() -> mock(TopicAdmin.class), () -> "connect",  mock(Converter.class));
-        MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        Node noNode = Node.noNode();
-        Node[] nodes = new Node[]{noNode};
-        consumer.updatePartitions(topic, Collections.singletonList(new PartitionInfo(topic, 0, noNode, nodes, nodes)));
-        KafkaBasedLog<byte[], byte[]> kafkaBasedLog = new KafkaBasedLog<byte[], byte[]>(
-                topic, new HashMap<>(), new HashMap<>(),
-                () -> mock(TopicAdmin.class), mock(Callback.class), new MockTime(), null) {
-            @Override
-            protected Producer<byte[], byte[]> createProducer() {
-                return createMockProducer(throwingProducer);
-            }
-
-            @Override
-            protected Consumer<byte[], byte[]> createConsumer() {
-                return consumer;
-            }
-        };
-        kafkaBasedLog.start();
-        offsetBackingStore.offsetLog = kafkaBasedLog;
-        return offsetBackingStore;
-    }
-
-    private Producer<byte[], byte[]> createMockProducer(boolean throwingProducer) {
-        return new MockProducer<byte[], byte[]>() {
-            @Override
-            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final org.apache.kafka.clients.producer.Callback callback) {
-                if (throwingProducer) {
-                    callback.onCompletion(null, PRODUCE_EXCEPTION);
-                } else {
-                    callback.onCompletion(null, null);
-                }
-                return null;
-            }
-        };
-    }
-
     /**
      * Expect a request to store data to the underlying OffsetBackingStore.
      *
@@ -471,7 +212,9 @@ public class OffsetStorageWriterTest {
                              Map<String, Object> value, byte[] valueSerialized,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        mockKeyValueConversion(key, keySerialized, value, valueSerialized);
+        List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
+        when(keyConverter.fromConnectData(NAMESPACE, null, keyWrapped)).thenReturn(keySerialized);
+        when(valueConverter.fromConnectData(NAMESPACE, null, value)).thenReturn(valueSerialized);
 
         final ArgumentCaptor<Callback<Void>> storeCallback = ArgumentCaptor.forClass(Callback.class);
         final Map<ByteBuffer, ByteBuffer> offsetsSerialized = Collections.singletonMap(
@@ -491,12 +234,6 @@ public class OffsetStorageWriterTest {
                 return null;
             });
         });
-    }
-
-    private void mockKeyValueConversion(Map<String, Object> key, byte[] keySerialized, Map<String, Object> value, byte[] valueSerialized) {
-        List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
-        when(keyConverter.fromConnectData(NAMESPACE, null, keyWrapped)).thenReturn(keySerialized);
-        when(valueConverter.fromConnectData(NAMESPACE, null, value)).thenReturn(valueSerialized);
     }
 
 }
