@@ -172,6 +172,9 @@ public interface RaftClient<T> extends AutoCloseable {
      * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
      *
+     * If the current base offset does not match the supplied required base offset,
+     * then this method will throw {@link UnexpectedBaseOffsetException}.
+     *
      * @param epoch the current leader epoch
      * @param requiredBaseOffset if this is set, it is the offset we must use as the base offset.
      * @param records the list of records to append
@@ -181,7 +184,7 @@ public interface RaftClient<T> extends AutoCloseable {
      *         committed
      * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
      * @throws BufferAllocationException we failed to allocate memory for the records
-     * @throws UnexpectedBaseOffsetException the requested end offset could not be obtained.
+     * @throws UnexpectedBaseOffsetException the requested base offset could not be obtained.
      */
     long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records);
 
