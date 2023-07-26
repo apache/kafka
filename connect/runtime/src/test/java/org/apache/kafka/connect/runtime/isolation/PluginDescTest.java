@@ -34,7 +34,10 @@ import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class PluginDescTest {
     private final ClassLoader systemLoader = ClassLoader.getSystemClassLoader();
@@ -301,6 +304,23 @@ public class PluginDescTest {
         );
 
         assertNewer(jsonConverterPlugin, jsonHeaderConverterPlugin);
+    }
+
+    @Test
+    public void testNullArguments() {
+        // Null version is acceptable
+        PluginDesc<SinkConnector> sink = new PluginDesc<>(SinkConnector.class, null, PluginType.SINK, systemLoader);
+        assertEquals("null", sink.version());
+
+        // Direct nulls are not acceptable for other arguments
+        assertThrows(NullPointerException.class, () -> new PluginDesc<>(null, regularVersion, PluginType.SINK, systemLoader));
+        assertThrows(NullPointerException.class, () -> new PluginDesc<>(SinkConnector.class, regularVersion, null, systemLoader));
+        assertThrows(NullPointerException.class, () -> new PluginDesc<>(SinkConnector.class, regularVersion, PluginType.SINK, null));
+
+        // PluginClassLoaders must have non-null locations
+        PluginClassLoader nullLocationLoader = mock(PluginClassLoader.class);
+        when(nullLocationLoader.location()).thenReturn(null);
+        assertThrows(NullPointerException.class, () -> new PluginDesc<>(SinkConnector.class, regularVersion, PluginType.SINK, nullLocationLoader));
     }
 
     private static <T> void assertPluginDesc(

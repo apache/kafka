@@ -33,14 +33,15 @@ public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
     private final ClassLoader loader;
 
     public PluginDesc(Class<? extends T> klass, String version, PluginType type, ClassLoader loader) {
-        this.klass = klass;
-        this.name = klass.getName();
+        this.klass = Objects.requireNonNull(klass, "Plugin class must be non-null");
+        this.name = this.klass.getName();
         this.version = version != null ? version : "null";
         this.encodedVersion = new DefaultArtifactVersion(this.version);
-        this.type = type;
-        this.typeName = type.toString();
+        this.type = Objects.requireNonNull(type, "Plugin type must be non-null");
+        this.typeName = this.type.toString();
+        Objects.requireNonNull(loader, "Plugin classloader must be non-null");
         this.location = loader instanceof PluginClassLoader
-                ? ((PluginClassLoader) loader).location()
+                ? Objects.requireNonNull(((PluginClassLoader) loader).location(), "Plugin location must be non-null")
                 : "classpath";
         this.loader = loader;
     }
@@ -116,7 +117,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
         // isolated plugins appear after classpath plugins when they have identical versions.
         int isolatedComp = Boolean.compare(other.loader instanceof PluginClassLoader, loader instanceof PluginClassLoader);
         // choose an arbitrary order between different locations and types
-        int loaderComp = Objects.compare(location, other.location, String::compareTo);
+        int loaderComp = location.compareTo(other.location);
         int typeComp = type.compareTo(other.type);
         return nameComp != 0 ? nameComp :
                 versionComp != 0 ? versionComp :

@@ -55,7 +55,7 @@ public class PluginClassLoader extends URLClassLoader {
      */
     public PluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
         super(urls, parent);
-        this.pluginLocation = pluginLocation;
+        this.pluginLocation = Objects.requireNonNull(pluginLocation, "Plugin location must be non-null");
     }
 
     /**
@@ -67,7 +67,7 @@ public class PluginClassLoader extends URLClassLoader {
      */
     public PluginClassLoader(URL pluginLocation, URL[] urls) {
         super(urls);
-        this.pluginLocation = pluginLocation;
+        this.pluginLocation = Objects.requireNonNull(pluginLocation, "Plugin location must be non-null");
     }
 
     /**
