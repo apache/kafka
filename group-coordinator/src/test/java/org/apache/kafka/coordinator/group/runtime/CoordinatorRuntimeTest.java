@@ -970,15 +970,14 @@ public class CoordinatorRuntimeTest {
         assertFalse(write2.isDone());
 
         // The coordinator timer should be empty.
-        CoordinatorRuntime.EventBasedCoordinatorTimer coordinatorTimer = ctx.timer;
-        assertEquals(0, coordinatorTimer.size());
+        assertEquals(0, ctx.timer.size());
 
         // Timer #1. This is never executed.
         ctx.coordinator.timer.schedule("timer-1", 10, TimeUnit.SECONDS, true,
             () -> new CoordinatorResult<>(Arrays.asList("record5", "record6"), null));
 
         // The coordinator timer should have one pending task.
-        assertEquals(1, coordinatorTimer.size());
+        assertEquals(1, ctx.timer.size());
 
         // Close the runtime.
         runtime.close();
@@ -991,7 +990,7 @@ public class CoordinatorRuntimeTest {
         verify(loader).close();
 
         // The coordinator timer should be empty.
-        assertEquals(0, coordinatorTimer.size());
+        assertEquals(0, ctx.timer.size());
     }
 
     @Test
