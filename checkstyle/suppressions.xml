@@ -201,7 +201,7 @@
               files="Murmur3.java"/>
 
     <suppress checks="(NPathComplexity|CyclomaticComplexity)"
-              files="KStreamSlidingWindowAggregate.java"/>
+              files="(KStreamSlidingWindowAggregate|RackAwareTaskAssignor).java"/>
 
     <!-- suppress FinalLocalVariable outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
