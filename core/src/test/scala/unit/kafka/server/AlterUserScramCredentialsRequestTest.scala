@@ -73,7 +73,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   private val user1 = "user1"
   private val user2 = "user2"
   private val user3 = "user3@user3.com"
-
   private val unknownUser = "unknownUser"
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
