@@ -67,6 +67,7 @@ import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
+import org.apache.kafka.storage.internals.log.CorruptIndexException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -574,6 +575,8 @@ public class RemoteLogManager implements Closeable {
                 }
             } catch (InterruptedException ex) {
                 throw ex;
+            } catch (CorruptIndexException ex) {
+                logger.error("Error occurred while copying log segments. Index appeared to be corrupted for partition: {}  ", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteWriteRequestRate().mark();
@@ -598,6 +601,13 @@ public class RemoteLogManager implements Closeable {
         private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
+
+            // Corrupted indexes should not be uploaded to remote storage
+            // Example case: Local storage was filled, what caused index corruption
+            // We should avoid uploading such segments
+            segment.timeIndex().sanityCheck();
+            segment.offsetIndex().sanityCheck();
+            segment.txnIndex().sanityCheck();
 
             logger.info("Copying {} to remote storage.", logFileName);
             RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
