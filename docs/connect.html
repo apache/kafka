@@ -545,41 +545,64 @@ errors.tolerance=all</pre>
 
     <h4><a id="connect_plugindiscovery" href="#connect_plugindiscovery">Plugin Discovery</a></h4>
 
-    <p>Plugin discovery is the name for the strategy which the Connect worker uses to find plugin classes and make them accessible to configure and run in Connectors and Tasks. The choice of strategy is controlled by the <code>plugin.discovery</code> worker configuration. Prior to version 3.6, this strategy was not configurable, and behaved like the <code>ONLY_SCAN</code> mode. For 3.6 and later, this mode defaults to <code>HYBRID_WARN</code> for normal use-cases, and <code>HYBRID_FAIl</code> in unit-test environments that use the <code>EmbeddedConnectCluster</code>. This configuration affects the startup time of the Connect worker, with <code>SERVICE_LOAD</code> mode being significantly faster than all other modes. It is for this reason that <code>SERVICE_LOAD</code> is the new recommended configuration for production workloads. However, this mode may not be compatible with all connectors, and some migration may need to be performed.</p>
+    <p>Plugin discovery is the name for the strategy which the Connect worker uses to find plugin classes and make them accessible to configure and run in Connectors and Tasks. This is controlled by the <a href="#connectconfigs_plugin.discovery"><code>plugin.discovery</code> worker configuration</a>, and has a significant impact on worker startup time. <code>SERVICE_LOAD</code> is the fastest strategy, but care should be taken to verify that plugins are compatible before setting this configuration to <code>SERVICE_LOAD</code>.</p>
+
+    <p>Prior to version 3.6, this strategy was not configurable, and behaved like the <code>ONLY_SCAN</code> mode which is compatible with all plugins. For version 3.6 and later, this mode defaults to <code>HYBRID_WARN</code> which is also compatible with all plugins, but logs a warning for all plugins which are incompatible with the other modes. For unit-test environments that use the <code>EmbeddedConnectCluster</code> this defaults to the <code>HYBRID_FAIL</code> strategy, which stops the worker with an error if an incompatible plugin is detected. Finally, the <code>SERVICE_LOAD</code> strategy will silently hide incompatible plugins and make them unusable.</p>
 
     <h5><a id="connect_plugindiscovery_compatibility" href="#connect_plugindiscovery_compatibility">Verifying Plugin Compatibility</a></h5>
 
-    <p>In order to use <code>SERVICE_LOAD</code>, all plugins must be compatible with the mode. To verify if all of your plugins are compatible, configure your worker in a test environment with <code>HYBRID_FAIL</code>, and start the worker. Upon startup the worker will check compatibility for all plugins, and if at least one plugin is not compatible the worker will fail to start up. All incompatible plugins will be listed in the exception thrown during startup. If all plugins are compatible, startup will succeed, and it should be safe to then use <code>SERVICE_LOAD</code> mode with that environment. If you have WARN logging enabled, then you can also use <code>HYBRID_WARN</code> and look for log messages indicating whether the plugins are compatible, without the danger of failing the worker.</p>
+    <p>To verify if all of your plugins are compatible, first ensure that you are using version 3.6 or later of the Connect runtime. You can then perform one of the following checks:</p>
+
+    <ul>
+        <li>Start your worker with the default <code>HYBRID_WARN</code>strategy, and WARN logs enabled for the <code>org.apache.kafka.connect</code> package. At least one WARN log message mentioning the <code>plugin.discovery</code> configuration should be printed. This log message will explicitly say that all plugins are compatible, or list the incompatible plugins.</li>
+        <li>Start your worker in a test environment with <code>HYBRID_FAIL</code>. If all plugins are compatible, startup will succeed. If at least one plugin is not compatible the worker will fail to start up, and all incompatible plugins will be listed in the exception.</li>
+    </ul>
+
+    <p>If the verification step succeeds, then your current set of installed plugins are compatible, and it should be safe to change the <code>plugin.discovery</code> configuration to <code>SERVICE_LOAD</code>. If you change the set of already-installed plugins, they may no longer be compatible, and you should repeat the above verification. If the verification fails, you must address the incompatible plugins before using the <code>SERVICE_LOAD</code> strategy.</p>
 
     <h5><a id="connect_plugindiscovery_migrateartifact" href="#connect_plugindiscovery_migrateartifact">Operators: Artifact Migration</a></h5>
 
-    <p>If you discover that one or more of your plugins are incompatible with <code>SERVICE_LOAD</code> mode, there are multiple ways to try to resolve the incompatibility, listed below from most to least preferable.</p>
+    <p>As an operator of Connect, if you discover incompatible plugins, there are multiple ways to try to resolve the incompatibility. They are listed below from most to least preferable.</p>
 
     <ol>
         <li>Upgrade your incompatible plugins to the latest release version from your plugin provider.</li>
-        <li>Contact your plugin provider and request that they migrate the plugin to be compatible, following the <a href="#connect_plugindiscovery_migratesource">source migration instructions</a>.</li>
-        <li>Migrate the plugins yourself using the migration script provided with your installation of Kafka.</li>
+        <li>Contact your plugin provider and request that they migrate the plugin to be compatible, following the <a href="#connect_plugindiscovery_migratesource">source migration instructions</a>, and then upgrade to the migrated version.</li>
+        <li>Migrate the plugin artifacts yourself using the included migration script.</li>
     </ol>
 
-    <p>The migration script (located in <code>bin/connect-plugin-path.sh</code> or <code>bin\windows\connect-plugin-path.bat</code> of your Kafka installation) is a script which can automatically migrate incompatible plugins already installed on your Connect worker. It does this by adding or modifying JAR or resource files for your installed plugins. This is not suitable for environments using code-signing, as this will change the binaries such that they should fail signature verification.</p>
+    <p>The migration script is located in <code>bin/connect-plugin-path.sh</code> and <code>bin\windows\connect-plugin-path.bat</code> of your Kafka installation. The script can migrate incompatible plugin artifacts already installed on your Connect worker's <code>plugin.path</code> by adding or modifying JAR or resource files. This is not suitable for environments using code-signing, as this may change the artifacts such that they will fail signature verification. View the built-in help with <code>--help</code>.</p>
 
-    <p>To use the migration script, you must provide the script with the location of the plugins which you wish to migrate. This can be done with the <code>--worker-config</code>, <code>--plugin-path</code>, <code>--plugin-location</code> configurations. Use the <code>list</code> sub-command to preview the set of plugins which are visible and subject to migration. Once you see that all incompatible plugins are included in the listing, you can proceed to dry-run the migration. Note that the <code>sync-manifests</code> command requires all specified paths to be writable, and may alter the contents of the directories. Make a backup of the specified paths, or copy them to a writable directory before running <code>sync-manifests</code>.</p>
+    <p>To perform a migration, first use the <code>list</code> subcommand to get an overview of the plugins available to the script. You must tell the script where to find plugins, which can be done with the repeatable <code>--worker-config</code>, <code>--plugin-path</code>, and <code>--plugin-location</code> arguments. The script will only migrate plugins present in the paths specified, so if you add plugins to your worker's classpath, then you will need to specify those plugins via one or more <code>--plugin-location</code> arguments.</p>
 
-    <p>To dry-run the migration, use the <code>sync-manifests</code> sub-command with the <code>--dry-run</code> argument. This will perform all parts of the migration, except writing the results of the migration to disk. Only if this command succeeds should you remove the <code>--dry-run</code> option and proceed with the migration. After the migration is completed without <code>--dry-run</code>, you can follow the instructions in <a href="#connect_plugindiscovery_compatibility">Verifying Plugin Compatibility</a> to verify that the migration is complete. The migration and verification steps may be put into a Continuous Integration process to automatically migrate plugins.</p>
+    <p>Once you see that all incompatible plugins are included in the listing, you can proceed to dry-run the migration with <code>sync-manifests --dry-run</code>. This will perform all parts of the migration, except for writing the results of the migration to disk. Note that the <code>sync-manifests</code> command requires all specified paths to be writable, and may alter the contents of the directories. Make a backup of the specified paths, or copy them to a writable directory.</p>
+
+    <p>Ensure that you have a backup and the dry-run succeeds before removing the <code>--dry-run</code> flag and actually running the migration. If the migration fails without the <code>--dry-run</code> flag, then the partially migrated artifacts should be discarded. The migration is idempotent, so running it multiple times and on already-migrated plugins is safe. After the migration is completed, you should <a href="#connect_plugindiscovery_compatibility">verify the migration is complete</a>. These migration and verification steps may be put into a Continuous Integration process to automatically migrate plugins.</p>
 
     <h5><a id="connect_plugindiscovery_migratesource" href="#connect_plugindiscovery_migratesource">Developers: Source Migration</a></h5>
 
-    <p>In order to have access to the different <code>plugin.discovery</code> modes for verification, ensure that your connect-runtime dependency is at least AK version 3.6 or equivalent. If you are using the <code>EmbeddedConnectCluster</code>, it uses <code>HYBRID_FAIL</code> mode, so upgrading to this version should cause your tests to fail. If not, you can add a test suite that starts up an <code>EmbeddedConnectCluster</code> and does nothing with it. If you are using the <code>EmbeddedConnectCluster</code> with default settings, and those tests are passing, then your migration is complete.</p>
+    <p>To make plugins compatible with <code>SERVICE_LOAD</code>, it is necessary to add <a href="https://docs.oracle.com/javase/8/docs/api/java/util/ServiceLoader.html">ServiceLoader</a> manifests to your source code, which should then be packaged in the release artifact. Manifests are resource files in <code>META-INF/services/</code> named after their superclass type, and contain a list of fully-qualified subclass names, one on each line. Manifests should be located in the same module as the classes they refer to, not in the corresponding test resources.</p>
 
-    <p>To make plugins compatible with <code>SERVICE_LOAD</code>, it is necessary to add <a href="https://docs.oracle.com/javase/8/docs/api/java/util/ServiceLoader.html">ServiceLoader</a> manifests to your released artifact. Manifests are resource files in <code>META-INF/services/</code> named after their superclass type, and containing a list of fully-qualified subclass names, one on each line. In order for a plugin to be compatible, it must appear as a line in a manifest corresponding to its superclass. For example, if your connector is <code>com.example.MySinkConnector</code>, then the manifest file must be <code>META-INF/services/org.apache.kafka.connect.sink.SinkConnector</code>, and the contents must be similar to the following:</p>
+    <p>In order for a plugin to be compatible, it must appear as a line in a manifest corresponding to the plugin superclass it extends. If a single plugin implements multiple plugin interfaces, then it should appear in each corresponding manifest. If you have no classes for a certain type of plugin, you do not need to include a manifest file for that type. If you have classes which should not be visible as plugins, they should be marked abstract. The following types are expected to have manifests:</p>
+
+    <ul>
+        <li><code>org.apache.kafka.connect.sink.SinkConnector</code></li>
+        <li><code>org.apache.kafka.connect.source.SourceConnector</code></li>
+        <li><code>org.apache.kafka.connect.storage.Converter</code></li>
+        <li><code>org.apache.kafka.connect.storage.HeaderConverter</code></li>
+        <li><code>org.apache.kafka.connect.transforms.Transformation</code></li>
+        <li><code>org.apache.kafka.connect.transforms.predicates.Predicate</code></li>
+        <li><code>org.apache.kafka.common.config.provider.ConfigProvider</code></li>
+        <li><code>org.apache.kafka.connect.rest.ConnectRestExtension</code></li>
+        <li><code>org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy</code></li>
+    </ul>
+
+    <p>For example, if you only have one connector with the fully-qualified name <code>com.example.MySinkConnector</code>, then only one manifest file must be added to resources in <code>META-INF/services/org.apache.kafka.connect.sink.SinkConnector</code>, and the contents should be similar to the following:</p>
 
     <pre class="brush: resource;">
-# Your license goes here, every line that isn't a class name must start with a # character
-org.example.MySinkConnector</pre>
+# license header or comment
+com.example.MySinkConnector</pre>
 
-    <p>A manifest file should be added for each type of plugin included in your artifact, and lines added to those manifests for each of the plugin classes themselves. If you have classes which should not be visible as plugins, they should be marked abstract.</p>
-
-    <p>Once you have added all necessary manifests and classes to those manifests, you can re-run your <code>EmbeddedConnectCluster</code> tests to verify that the migration is complete. You can release the plugin normally, and operators can upgrade to the compatible version.</p>
+    <p>You should then verify that your manifests are correct. either with the <a href="#connect-plugindiscovery_verification">manual verification steps</a> or with unit tests. If you aren't using the <code>EmbeddedConnectCluster</code> you can add a test suite that starts up an <code>EmbeddedConnectCluster</code> and does nothing with it. If you are using the <code>EmbeddedConnectCluster</code>, then ensure you are using version 3.6 or later of the connect-runtime main and test artifacts. If you have a test that passes using the default <code>HYBRID_FAIL</code> strategy, then your migration is complete. You can then release the plugin normally, and operators can upgrade to the compatible version.</p>
 
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
 
@@ -621,7 +644,7 @@ org.example.MySinkConnector</pre>
 public class FileStreamSourceConnector extends SourceConnector {
     private Map&lt;String, String&gt; props;</pre>
 
-    <p>Add a corresponding ServiceLoader manifest <code>META-INF/services/org.apache.kafka.connect.source.SourceConnector</code>for the connector to allow it to be discovered by the runtime.</p>
+    <p>Add a corresponding ServiceLoader manifest to your resources in <code>META-INF/services/org.apache.kafka.connect.source.SourceConnector</code> to allow it to be discovered by the runtime.</p>
 <pre class="brush: resource;">
 package.for.your.FileStreamSourceConnector</pre>
 
