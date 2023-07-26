@@ -337,7 +337,7 @@ public class RackAwareTaskAssignor {
                     Collectors.toList());
                 final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
 
-                Graph<Integer> graph = constructTaskGraph(clients, taskIdList, clientStates, taskClientMap, originalAssignedTaskNumber,
+                final Graph<Integer> graph = constructTaskGraph(clients, taskIdList, clientStates, taskClientMap, originalAssignedTaskNumber,
                     ClientState::hasStandbyTask, trafficCost, nonOverlapCost);
                 graph.solveMinCostFlow();
 
