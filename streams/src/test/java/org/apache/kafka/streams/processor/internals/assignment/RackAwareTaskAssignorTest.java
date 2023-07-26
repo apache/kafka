@@ -591,7 +591,7 @@ public class RackAwareTaskAssignorTest {
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         final Exception exception = assertThrows(IllegalStateException.class,
             () -> assignor.optimizeActiveTasks(clientStateMap, taskIds, trafficCost, nonOverlapCost));
-        Assertions.assertEquals("TopicPartition topic0-0 has no rack information. Maybe forgot to call "
+        Assertions.assertEquals("Client 00000000-0000-0000-0000-000000000002 doesn't have rack configured. Maybe forgot to call "
             + "canEnableRackAwareAssignor first", exception.getMessage());
     }
 

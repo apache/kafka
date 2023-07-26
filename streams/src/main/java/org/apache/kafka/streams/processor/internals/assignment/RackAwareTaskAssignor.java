@@ -238,7 +238,7 @@ public class RackAwareTaskAssignor {
     long activeTasksCost(final SortedMap<UUID, ClientState> clientStates, final SortedSet<TaskId> activeTasks, final int trafficCost, final int nonOverlapCost) {
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
-        final Graph<Integer> graph = constructActiveTaskGraph(activeTasks, clientList, taskIdList,
+        final Graph<Integer> graph = constructActiveTaskGraph(clientList, taskIdList,
             clientStates, new HashMap<>(), new HashMap<>(), trafficCost, nonOverlapCost);
         return graph.totalCost();
     }
@@ -270,20 +270,19 @@ public class RackAwareTaskAssignor {
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
-        final Graph<Integer> graph = constructActiveTaskGraph(activeTasks, clientList, taskIdList,
+        final Graph<Integer> graph = constructActiveTaskGraph(clientList, taskIdList,
             clientStates, taskClientMap, originalAssignedTaskNumber, trafficCost, nonOverlapCost);
 
         graph.solveMinCostFlow();
         final long cost = graph.totalCost();
 
-        assignActiveTaskFromMinCostFlow(graph, activeTasks, clientList, taskIdList,
+        assignActiveTaskFromMinCostFlow(graph, clientList, taskIdList,
             clientStates, originalAssignedTaskNumber, taskClientMap);
 
         return cost;
     }
 
-    private Graph<Integer> constructActiveTaskGraph(final SortedSet<TaskId> activeTasks,
-                                                    final List<UUID> clientList,
+    private Graph<Integer> constructActiveTaskGraph(final List<UUID> clientList,
                                                     final List<TaskId> taskIdList,
                                                     final Map<UUID, ClientState> clientStates,
                                                     final Map<TaskId, UUID> taskClientMap,
@@ -292,7 +291,7 @@ public class RackAwareTaskAssignor {
                                                     final int nonOverlapCost) {
         final Graph<Integer> graph = new Graph<>();
 
-        for (final TaskId taskId : activeTasks) {
+        for (final TaskId taskId : taskIdList) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
                 if (clientState.getValue().hasAssignedTask(taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
@@ -345,7 +344,6 @@ public class RackAwareTaskAssignor {
     }
 
     private void assignActiveTaskFromMinCostFlow(final Graph<Integer> graph,
-                                                 final SortedSet<TaskId> activeTasks,
                                                  final List<UUID> clientList,
                                                  final List<TaskId> taskIdList,
                                                  final Map<UUID, ClientState> clientStates,
@@ -374,14 +372,14 @@ public class RackAwareTaskAssignor {
         }
 
         // Validate task assigned
-        if (tasksAssigned != activeTasks.size()) {
+        if (tasksAssigned != taskIdList.size()) {
             throw new IllegalStateException("Computed active task assignment number "
-                + tasksAssigned + " is different size " + activeTasks.size());
+                + tasksAssigned + " is different size " + taskIdList.size());
         }
 
         // Validate original assigned task number matches
         final Map<UUID, Integer> assignedTaskNumber = new HashMap<>();
-        for (final TaskId taskId : activeTasks) {
+        for (final TaskId taskId : taskIdList) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
                 if (clientState.getValue().hasAssignedTask(taskId)) {
                     assignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
