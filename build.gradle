@@ -33,6 +33,7 @@ buildscript {
 plugins {
   id 'com.github.ben-manes.versions' version '0.46.0'
   id 'idea'
+  id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.1.2'
   id 'org.nosphere.apache.rat' version "0.8.0"
@@ -729,9 +730,9 @@ subprojects {
         dependsOn tasks.test
         sourceSets sourceSets.main
         reports {
-          html.enabled = true
-          xml.enabled = true
-          csv.enabled = false
+          html.required = true
+          xml.required = true
+          csv.required = false
         }
       }
 
@@ -802,10 +803,9 @@ if (userEnableTestCoverage) {
     executionData.from = javaProjects.jacocoTestReport.executionData
 
     reports {
-      html.enabled = true
-      xml.enabled = true
+      html.required = true
+      xml.required = true
     }
-
     // workaround to ignore projects that don't have any tests at all
     onlyIf = { true }
     doFirst {
