@@ -8318,9 +8318,9 @@ public class GroupMetadataManagerTest {
             CompletableFuture<SyncGroupResponseData> syncFuture,
             CoordinatorResult<Void, Record> coordinatorResult
         ) {
-           this.syncFuture = syncFuture;
-           this.records = coordinatorResult.records();
-           this.appendFuture = coordinatorResult.appendFuture();
+            this.syncFuture = syncFuture;
+            this.records = coordinatorResult.records();
+            this.appendFuture = coordinatorResult.appendFuture();
         }
     }
 }
