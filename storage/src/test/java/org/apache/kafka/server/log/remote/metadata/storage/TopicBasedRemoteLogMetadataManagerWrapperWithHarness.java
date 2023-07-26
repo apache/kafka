@@ -87,7 +87,7 @@ public class TopicBasedRemoteLogMetadataManagerWrapperWithHarness implements Rem
     }
 
     @Override
-    public Long remoteLogSize(TopicIdPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
+    public long remoteLogSize(TopicIdPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
         return remoteLogMetadataManagerHarness.remoteLogMetadataManager().remoteLogSize(topicPartition, leaderEpoch);
     }
 

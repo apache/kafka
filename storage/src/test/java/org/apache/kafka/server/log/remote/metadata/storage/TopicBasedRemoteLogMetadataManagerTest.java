@@ -195,7 +195,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
         // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
         // fetching those events and build the cache.
-        waitUntilConsumerCatchesup(topicIdPartition, topicIdPartition, 30_000L);
+        waitUntilConsumerCatchesUp(topicIdPartition, topicIdPartition, 30_000L);
 
         Long remoteLogSize = topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 0);
 
@@ -222,7 +222,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
         // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
         // fetching those events and build the cache.
-        waitUntilConsumerCatchesup(topicIdPartition, topicIdPartition, 30_000L);
+        waitUntilConsumerCatchesUp(topicIdPartition, topicIdPartition, 30_000L);
 
         Assertions.assertEquals(SEG_SIZE, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 0));
         Assertions.assertEquals(SEG_SIZE * 2, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 1));
