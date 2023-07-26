@@ -81,25 +81,25 @@ import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDir
  * The local tiered storage keeps a simple structure of directories mimicking that of Apache Kafka.
  * <p>
  * The name of each of the files under the scope of a log segment (the log file, its indexes, etc.)
- * follows the structure UuidBase64-FileType.
+ * follows the structure startOffset-UuidBase64-FileType.
  * <p>
  * Given the root directory of the storage, segments and associated files are organized as represented below.
  * </p>
  * <code>
- * / storage-directory  / topic-0-LWgrMmVrT0a__7a4SasuPA / bCqX9U--S-6U8XUM9II25Q.log
- * .                                                     . bCqX9U--S-6U8XUM9II25Q.index
- * .                                                     . bCqX9U--S-6U8XUM9II25Q.timeindex
- * .                                                     . h956soEzTzi9a-NOQ-DvKA.log
- * .                                                     . h956soEzTzi9a-NOQ-DvKA.index
- * .                                                     . h956soEzTzi9a-NOQ-DvKA.timeindex
+ * / storage-directory  / topic-0-LWgrMmVrT0a__7a4SasuPA / 00000000000000000011-bCqX9U--S-6U8XUM9II25Q.log
+ * .                                                     . 00000000000000000011-bCqX9U--S-6U8XUM9II25Q.index
+ * .                                                     . 00000000000000000011-bCqX9U--S-6U8XUM9II25Q.timeindex
+ * .                                                     . 00000000000000000011-h956soEzTzi9a-NOQ-DvKA.log
+ * .                                                     . 00000000000000000011-h956soEzTzi9a-NOQ-DvKA.index
+ * .                                                     . 00000000000000000011-h956soEzTzi9a-NOQ-DvKA.timeindex
  * .
- * / topic-1-LWgrMmVrT0a__7a4SasuPA / o8CQPT86QQmbFmi3xRmiHA.log
- * .                                . o8CQPT86QQmbFmi3xRmiHA.index
- * .                                . o8CQPT86QQmbFmi3xRmiHA.timeindex
+ * / topic-1-LWgrMmVrT0a__7a4SasuPA / 00000000000000000011-o8CQPT86QQmbFmi3xRmiHA.log
+ * .                                . 00000000000000000011-o8CQPT86QQmbFmi3xRmiHA.index
+ * .                                . 00000000000000000011-o8CQPT86QQmbFmi3xRmiHA.timeindex
  * .
- * / btopic-3-DRagLm_PS9Wl8fz1X43zVg / jvj3vhliTGeU90sIosmp_g.log
- * .                                 . jvj3vhliTGeU90sIosmp_g.index
- * .                                 . jvj3vhliTGeU90sIosmp_g.timeindex
+ * / topic-3-DRagLm_PS9Wl8fz1X43zVg / 00000000000000000011-jvj3vhliTGeU90sIosmp_g.log
+ * .                                . 00000000000000000011-jvj3vhliTGeU90sIosmp_g.index
+ * .                                . 00000000000000000011-jvj3vhliTGeU90sIosmp_g.timeindex
  * </code>
  */
 public final class LocalTieredStorage implements RemoteStorageManager {
@@ -310,7 +310,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             RemoteLogSegmentFileset fileset = null;
 
             try {
-                fileset = openFileset(storageDirectory, id);
+                fileset = openFileset(storageDirectory, metadata);
 
                 logger.info("Offloading log segment for {} from segment={}", id.topicIdPartition(), data.logSegment());
 
@@ -359,7 +359,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             eventBuilder.withStartPosition(startPos).withEndPosition(endPos);
 
             try {
-                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata.remoteLogSegmentId());
+                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata);
 
                 final InputStream inputStream = newInputStream(fileset.getFile(SEGMENT).toPath(), READ);
                 inputStream.skip(startPos);
@@ -386,7 +386,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(eventType, metadata);
 
             try {
-                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata.remoteLogSegmentId());
+                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata);
 
                 File file = fileset.getFile(fileType);
                 final InputStream inputStream = (fileType.isOptional() && !file.exists()) ?
@@ -411,7 +411,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             if (deleteEnabled) {
                 try {
                     final RemoteLogSegmentFileset fileset = openFileset(
-                            storageDirectory, metadata.remoteLogSegmentId());
+                            storageDirectory, metadata);
 
                     if (!fileset.delete()) {
                         throw new RemoteStorageException("Failed to delete remote log segment with id:" +

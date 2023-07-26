@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -40,6 +41,7 @@ import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -48,6 +50,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 
@@ -84,12 +87,13 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             Time time,
                             RetryWithToleranceOperator retryWithToleranceOperator,
                             StatusBackingStore statusBackingStore,
-                            Executor closeExecutor) {
+                            Executor closeExecutor,
+                            Supplier<List<ErrorReporter>> errorReportersSupplier) {
 
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
                 admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
-                time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
+                time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
 
         this.committableOffsets = CommittableOffsets.EMPTY;
         this.submittedRecords = new SubmittedRecords();
