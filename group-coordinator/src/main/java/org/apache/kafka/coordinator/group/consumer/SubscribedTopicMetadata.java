@@ -25,13 +25,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The subscribed topic metadata class is used by the {@link PartitionAssignor}
- * to obtain topic and partition metadata of subscribed topics.
+ * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
+ * topic and partition metadata for the topics that the consumer group is subscribed to.
  */
 public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
-
     /**
-     * The topic IDs are mapped to their corresponding {@link TopicMetadata}
+     * The topic IDs mapped to their corresponding {@link TopicMetadata}
      * object, which contains topic and partition metadata.
      */
     Map<Uuid, TopicMetadata> topicMetadata;
@@ -41,11 +40,11 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
     }
 
     /**
-     * Number of partitions available for the given topic Id.
+     * The number of partitions for the given topic ID.
      *
      * @param topicId   Uuid corresponding to the topic.
-     * @return The number of partitions corresponding to the given topicId.
-     *         If the topicId doesn't exist return -1;
+     * @return The number of partitions corresponding to the given topic ID,
+     *         or -1 if the topic ID does not exist.
      */
     @Override
     public int numPartitions(Uuid topicId) {
@@ -53,12 +52,12 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
     }
 
     /**
-     * Returns all the racks associated with the replicas for the given partition.
+     * Returns all the available racks associated with the replicas of the given partition.
      *
      * @param topicId   Uuid corresponding to the partition's topic.
      * @param partition Partition number within topic.
      * @return The set of racks corresponding to the replicas of the topics partition.
-     *         If the topicId doesn't exist return an empty set;
+     *         If the topic ID does not exist, an empty set is returned
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {

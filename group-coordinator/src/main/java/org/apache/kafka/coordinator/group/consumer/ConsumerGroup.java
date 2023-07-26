@@ -404,8 +404,8 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return An immutable Map containing the subscription metadata for all the topics whose
-     *         members are subscribed to.
+     * @return An immutable Map of subscription metadata for each topic that
+     *         the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> subscriptionMetadata() {
         return Collections.unmodifiableMap(subscribedTopicMetadata);
@@ -427,11 +427,12 @@ public class ConsumerGroup implements Group {
      * Computes the subscription metadata based on the current subscription and
      * an updated member.
      *
-     * @param oldMember     The old member.
-     * @param newMember     The new member.
-     * @param topicsImage   The topic metadata.
+     * @param oldMember     The old member of the consumer group.
+     * @param newMember     The updated member of the consumer group.
+     * @param topicsImage   The current metadata for all available topics.
+     * @param clusterImage  The current metadata for the Kafka cluster.
      *
-     * @return The new subscription metadata as an immutable Map.
+     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
         ConsumerGroupMember oldMember,
@@ -450,15 +451,14 @@ public class ConsumerGroup implements Group {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
                 Map<Integer, Set<String>> partitionRacks = new HashMap<>();
-
                 topicImage.partitions().forEach((partition, partitionRegistration) -> {
                     Set<String> racks = new HashSet<>();
                     for (int replica : partitionRegistration.replicas) {
                         Optional<String> rackOptional = clusterImage.broker(replica).rack();
-                        // Only add rack if it is available for the broker/replica.
+                        // Only add the rack if it is available for the broker/replica.
                         rackOptional.ifPresent(racks::add);
                     }
-                    // If no racks are available for any replica of this partition, store an empty map.
+                    // If no rack information is available for any replica of this partition, store an empty map.
                     if (!racks.isEmpty())
                         partitionRacks.put(partition, racks);
                 });
@@ -467,7 +467,7 @@ public class ConsumerGroup implements Group {
                     topicImage.id(),
                     topicImage.name(),
                     topicImage.partitions().size(),
-                    partitionRacks)
+                    partitionRacks.isEmpty() ? Collections.emptyMap() : partitionRacks)
                 );
             }
         });

@@ -137,15 +137,18 @@ public class TopicMetadata {
         ConsumerGroupPartitionMetadataValue.TopicMetadata record
     ) {
         // Converting the data type from a list stored in the record to a map.
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(record.partitionMetadata().size());
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>();
         for (ConsumerGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionMetadata()) {
-            partitionRacks.put(partitionMetadata.partition(), Collections.unmodifiableSet(new HashSet<>(partitionMetadata.racks())));
+            partitionRacks.put(
+                partitionMetadata.partition(),
+                Collections.unmodifiableSet(new HashSet<>(partitionMetadata.racks()))
+            );
         }
 
         return new TopicMetadata(
             record.topicId(),
             record.topicName(),
             record.numPartitions(),
-            partitionRacks);
+            partitionRacks.isEmpty() ? Collections.emptyMap() : partitionRacks);
     }
 }

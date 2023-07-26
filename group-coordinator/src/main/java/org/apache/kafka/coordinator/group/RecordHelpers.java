@@ -133,17 +133,20 @@ public class RecordHelpers {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
         newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
             List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
-            topicMetadata.partitionRacks().forEach((partition, racks) ->
-                partitionMetadata.add(new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
-                    .setPartition(partition)
-                    .setRacks(new ArrayList<>(racks))
-                )
-            );
+            if (!topicMetadata.partitionRacks().isEmpty()) {
+                topicMetadata.partitionRacks().forEach((partition, racks) -> {
+                    partitionMetadata.add(new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
+                        .setPartition(partition)
+                        .setRacks(new ArrayList<>(racks))
+                    );
+                });
+            }
+            // If partition rack information is empty, store an empty list in the record.
             value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-                .setPartitionMetadata(partitionMetadata)
+                .setPartitionMetadata(partitionMetadata.isEmpty() ? Collections.emptyList() : partitionMetadata)
             );
         });
 

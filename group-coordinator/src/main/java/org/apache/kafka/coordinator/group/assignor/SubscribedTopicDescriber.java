@@ -23,7 +23,7 @@ import java.util.Set;
 
 /**
  * The subscribed topic describer is used by the {@link PartitionAssignor}
- * to obtain topic and partition metadata of subscribed topics.
+ * to obtain topic and partition metadata of the subscribed topics.
  *
  * The interface is kept in an internal module until KIP-848 is fully
  * implemented and ready to be released.
@@ -31,21 +31,21 @@ import java.util.Set;
 @InterfaceStability.Unstable
 public interface SubscribedTopicDescriber {
     /**
-     * Number of partitions for the given topic Id.
+     * The number of partitions for the given topic ID.
      *
      * @param topicId   Uuid corresponding to the topic.
-     * @return The number of partitions corresponding to the given topicId.
-     *         If the topicId doesn't exist return -1;
+     * @return The number of partitions corresponding to the given topic ID,
+     *         or -1 if the topic ID does not exist.
      */
     int numPartitions(Uuid topicId);
 
     /**
-     * Returns all the racks associated with the replicas for the given partition.
+     * Returns all the available racks associated with the replicas of the given partition.
      *
      * @param topicId   Uuid corresponding to the partition's topic.
      * @param partition Partition number within topic.
      * @return The set of racks corresponding to the replicas of the topics partition.
-     *         If the topicId doesn't exist return an empty set;
+     *         If the topic ID does not exist, an empty set is returned
      */
     Set<String> racksForPartition(Uuid topicId, int partition);
 }
