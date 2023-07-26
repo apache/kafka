@@ -299,6 +299,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     @Override
     public void stop() {
         super.stop();
+        task.stop();
         stopRequestedLatch.countDown();
     }
 
