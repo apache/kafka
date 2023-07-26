@@ -31,6 +31,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generic.GenericGroup;
+import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -170,7 +172,7 @@ public class OffsetMetadataManager {
      * @param context The request context.
      * @param request The actual request.
      */
-    private void validateOffsetCommit(
+    private Group validateOffsetCommit(
         RequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
@@ -215,6 +217,8 @@ public class OffsetMetadataManager {
                 throw Errors.UNSUPPORTED_VERSION.exception();
             }
         }
+
+        return group;
     }
 
     /**
@@ -251,7 +255,19 @@ public class OffsetMetadataManager {
         RequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
-        validateOffsetCommit(context, request);
+        Group group = validateOffsetCommit(context, request);
+
+        // In the old consumer group protocol, the offset commits maintain the session if
+        // the group is in Stable or PreparingRebalance state.
+        if (group.type() == Group.GroupType.GENERIC) {
+            GenericGroup genericGroup = (GenericGroup) group;
+            if (genericGroup.isInState(GenericGroupState.STABLE) || genericGroup.isInState(GenericGroupState.PREPARING_REBALANCE)) {
+                groupMetadataManager.rescheduleGenericGroupMemberHeartbeat(
+                    genericGroup,
+                    genericGroup.member(request.memberId())
+                );
+            }
+        }
 
         final OffsetCommitResponseData response = new OffsetCommitResponseData();
         final List<Record> records = new ArrayList<>();

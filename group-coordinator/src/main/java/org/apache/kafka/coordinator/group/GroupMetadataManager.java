@@ -2388,7 +2388,7 @@ public class GroupMetadataManager {
      * @param group    The group.
      * @param member   The member.
      */
-    private void rescheduleGenericGroupMemberHeartbeat(
+    public void rescheduleGenericGroupMemberHeartbeat(
         GenericGroup group,
         GenericGroupMember member
     ) {

@@ -57,6 +57,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -70,6 +71,7 @@ public class OffsetMetadataManagerTest {
     static class OffsetMetadataManagerTestContext {
         public static class Builder {
             final private MockTime time = new MockTime();
+            final private MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(time);
             final private LogContext logContext = new LogContext();
             final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
             private MetadataImage metadataImage = null;
@@ -85,7 +87,7 @@ public class OffsetMetadataManagerTest {
 
                 GroupMetadataManager groupMetadataManager = new GroupMetadataManager.Builder()
                     .withTime(time)
-                    .withTimer(new MockCoordinatorTimer<>(time))
+                    .withTimer(timer)
                     .withSnapshotRegistry(snapshotRegistry)
                     .withLogContext(logContext)
                     .withMetadataImage(metadataImage)
@@ -104,6 +106,7 @@ public class OffsetMetadataManagerTest {
 
                 return new OffsetMetadataManagerTestContext(
                     time,
+                    timer,
                     snapshotRegistry,
                     groupMetadataManager,
                     offsetMetadataManager
@@ -112,6 +115,7 @@ public class OffsetMetadataManagerTest {
         }
 
         final MockTime time;
+        final MockCoordinatorTimer<Void, Record> timer;
         final SnapshotRegistry snapshotRegistry;
         final GroupMetadataManager groupMetadataManager;
         final OffsetMetadataManager offsetMetadataManager;
@@ -121,11 +125,13 @@ public class OffsetMetadataManagerTest {
 
         OffsetMetadataManagerTestContext(
             MockTime time,
+            MockCoordinatorTimer<Void, Record> timer,
             SnapshotRegistry snapshotRegistry,
             GroupMetadataManager groupMetadataManager,
             OffsetMetadataManager offsetMetadataManager
         ) {
             this.time = time;
+            this.timer = timer;
             this.snapshotRegistry = snapshotRegistry;
             this.groupMetadataManager = groupMetadataManager;
             this.offsetMetadataManager = offsetMetadataManager;
@@ -166,6 +172,17 @@ public class OffsetMetadataManagerTest {
 
             result.records().forEach(this::replay);
             return result;
+        }
+
+        public List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> sleep(long ms) {
+            time.sleep(ms);
+            List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> timeouts = timer.poll();
+            timeouts.forEach(timeout -> {
+                if (timeout.result.replayRecords()) {
+                    timeout.result.records().forEach(this::replay);
+                }
+            });
+            return timeouts;
         }
 
         private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
@@ -535,6 +552,55 @@ public class OffsetMetadataManagerTest {
             )),
             result.records()
         );
+    }
+
+    @Test
+    public void testGenericGroupOffsetCommitMaintainsSession() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Create a group.
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+            "foo",
+            true
+        );
+
+        // Add member.
+        GenericGroupMember member = mkGenericMember("member", Optional.empty());
+        group.add(member);
+
+        // Transition to next generation.
+        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.initNextGeneration();
+        assertEquals(1, group.generationId());
+        group.transitionTo(GenericGroupState.STABLE);
+
+        // Schedule session timeout. This would be normally done when
+        // the group transitions to stable.
+        context.groupMetadataManager.rescheduleGenericGroupMemberHeartbeat(group, member);
+
+        // Advance time by half of the session timeout.
+        assertEquals(Collections.emptyList(), context.sleep(5000 / 2));
+
+        // Commit.
+        context.commitOffset(
+            new OffsetCommitRequestData()
+                .setGroupId("foo")
+                .setMemberId("member")
+                .setGenerationIdOrMemberEpoch(1)
+                .setRetentionTimeMs(1234L)
+                .setTopics(Collections.singletonList(
+                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                        .setName("bar")
+                        .setPartitions(Collections.singletonList(
+                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                .setPartitionIndex(0)
+                                .setCommittedOffset(100L)
+                        ))
+                ))
+        );
+
+        // Advance time by half of the session timeout.
+        assertEquals(Collections.emptyList(), context.sleep(5000 / 2));
     }
 
     @Test
