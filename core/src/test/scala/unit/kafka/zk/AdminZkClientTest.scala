@@ -336,7 +336,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")
     val brokerMetadatas = toBrokerMetadata(rackInfo, brokersWithoutRack = brokerList.filterNot(rackInfo.keySet))
-    TestUtils.createBrokersInZk(brokerMetadatas, zkClient)
+    TestUtils.createBrokersInZk(brokerMetadatas.asScala.toSeq, zkClient)
 
     val processedMetadatas1 = adminZkClient.getBrokerMetadatas(RackAwareMode.Disabled)
     assertEquals(brokerList, processedMetadatas1.map(_.id))

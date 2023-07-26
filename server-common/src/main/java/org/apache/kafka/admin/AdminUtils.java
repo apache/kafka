@@ -227,20 +227,20 @@ public class AdminUtils {
      * distribution of leader and replica counts on each broker and that replicas are
      * distributed to all racks.
      */
-    static List<Integer> getRackAlternatedBrokerList(Map<Integer, String> brokerRackMap) {
+    public static List<Integer> getRackAlternatedBrokerList(Map<Integer, String> brokerRackMap) {
         Map<String, Iterator<Integer>> brokersIteratorByRack = new HashMap<>();
         getInverseMap(brokerRackMap).forEach((rack, brokers) -> brokersIteratorByRack.put(rack, brokers.iterator()));
         String[] racks = brokersIteratorByRack.keySet().toArray(new String[0]);
         Arrays.sort(racks);
-        List<Integer> results = new ArrayList<>();
+        List<Integer> result = new ArrayList<>();
         int rackIndex = 0;
-        while (results.size() < brokerRackMap.size()) {
+        while (result.size() < brokerRackMap.size()) {
             Iterator<Integer> rackIterator = brokersIteratorByRack.get(racks[rackIndex]);
             if (rackIterator.hasNext())
-                results.add(rackIterator.next());
+                result.add(rackIterator.next());
             rackIndex = (rackIndex + 1) % racks.length;
         }
-        return results;
+        return result;
     }
 
     static Map<String, List<Integer>> getInverseMap(Map<Integer, String> brokerRackMap) {
