@@ -206,6 +206,10 @@ public class ClientState {
         return assignedStandbyTasks.taskIds().contains(taskId);
     }
 
+    boolean hasActiveTask(final TaskId taskId) {
+        return assignedActiveTasks.taskIds().contains(taskId);
+    }
+
     int standbyTaskCount() {
         return assignedStandbyTasks.taskIds().size();
     }

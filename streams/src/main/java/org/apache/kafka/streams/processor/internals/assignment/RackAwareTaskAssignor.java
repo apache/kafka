@@ -29,6 +29,10 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -241,14 +245,29 @@ public class RackAwareTaskAssignor {
                          final SortedMap<UUID, ClientState> clientStates,
                          final int trafficCost,
                          final int nonOverlapCost) {
-        if (activeTasks.isEmpty()) {
+        return tasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasActiveTask);
+    }
+
+    // For testing. canEnableRackAwareAssignor must be called first
+    long standByTasksCost(final SortedSet<TaskId> activeTasks,
+                          final SortedMap<UUID, ClientState> clientStates,
+                          final int trafficCost,
+                          final int nonOverlapCost) {
+        return tasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasStandbyTask);
+    }
+
+    private long tasksCost(final SortedSet<TaskId> tasks,
+                           final SortedMap<UUID, ClientState> clientStates,
+                           final int trafficCost,
+                           final int nonOverlapCost,
+                           final BiPredicate<ClientState, TaskId> hasAssignedTask) {
+        if (tasks.isEmpty()) {
             return 0;
         }
-
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
-        final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
-        final Graph<Integer> graph = constructActiveTaskGraph(clientList, taskIdList,
-            clientStates, new HashMap<>(), new HashMap<>(), trafficCost, nonOverlapCost);
+        final List<TaskId> taskIdList = new ArrayList<>(tasks);
+        final Graph<Integer> graph = constructTaskGraph(clientList, taskIdList,
+            clientStates, new HashMap<>(), new HashMap<>(), hasAssignedTask, trafficCost, nonOverlapCost);
         return graph.totalCost();
     }
 
@@ -279,30 +298,70 @@ public class RackAwareTaskAssignor {
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
-        final Graph<Integer> graph = constructActiveTaskGraph(clientList, taskIdList,
-            clientStates, taskClientMap, originalAssignedTaskNumber, trafficCost, nonOverlapCost);
+        final Graph<Integer> graph = constructTaskGraph(clientList, taskIdList,
+            clientStates, taskClientMap, originalAssignedTaskNumber, ClientState::hasActiveTask, trafficCost, nonOverlapCost);
 
         graph.solveMinCostFlow();
         final long cost = graph.totalCost();
 
-        assignActiveTaskFromMinCostFlow(graph, clientList, taskIdList,
-            clientStates, originalAssignedTaskNumber, taskClientMap);
+        assignActiveTaskFromMinCostFlow(graph, clientList, taskIdList, clientStates, originalAssignedTaskNumber,
+            taskClientMap, ClientState::assignActive, ClientState::unassignActive, ClientState::hasAssignedTask);
 
         return cost;
     }
 
-    private Graph<Integer> constructActiveTaskGraph(final List<UUID> clientList,
-                                                    final List<TaskId> taskIdList,
-                                                    final Map<UUID, ClientState> clientStates,
-                                                    final Map<TaskId, UUID> taskClientMap,
-                                                    final Map<UUID, Integer> originalAssignedTaskNumber,
-                                                    final int trafficCost,
-                                                    final int nonOverlapCost) {
+    public long optimizeStandbyTasks(final SortedMap<UUID, ClientState> clientStates,
+                                     final SortedSet<TaskId> standbyTasks,
+                                     final int trafficCost,
+                                     final int nonOverlapCost,
+                                     final BiPredicate<ClientState, ClientState> canSwap) {
+        final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
+        for (int i = 0; i < clientList.size(); i++) {
+            for (int j = i + 1; j < clientList.size(); j++) {
+                final ClientState clientState1 = clientStates.get(clientList.get(i));
+                final ClientState clientState2 = clientStates.get(clientList.get(j));
+                if (!canSwap.test(clientState1, clientState2)) {
+                    continue;
+                }
+                final List<TaskId> swappable1 = clientState1.standbyTasks().stream()
+                    .filter(task -> !clientState2.hasAssignedTask(task))
+                    .collect(Collectors.toList());
+                final List<TaskId> swappable2 = clientState2.standbyTasks().stream()
+                    .filter(task -> !clientState1.hasAssignedTask(task))
+                    .collect(Collectors.toList());
+                final List<TaskId> taskIdList = Stream.concat(swappable1.stream(), swappable2.stream())
+                    .sorted()
+                    .collect(Collectors.toList());
+                final Map<TaskId, UUID> taskClientMap = new HashMap<>();
+                final List<UUID> clients = Stream.of(clientList.get(i), clientList.get(j)).sorted().collect(
+                    Collectors.toList());
+                final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
+
+                Graph<Integer> graph = constructTaskGraph(clients, taskIdList, clientStates, taskClientMap, originalAssignedTaskNumber,
+                    ClientState::hasStandbyTask, trafficCost, nonOverlapCost);
+                graph.solveMinCostFlow();
+
+                assignActiveTaskFromMinCostFlow(graph, clientList, taskIdList, clientStates, originalAssignedTaskNumber,
+                    taskClientMap, ClientState::assignActive, ClientState::unassignActive, ClientState::hasAssignedTask);
+            }
+        }
+
+        return standByTasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost);
+    }
+
+    private Graph<Integer> constructTaskGraph(final List<UUID> clientList,
+                                              final List<TaskId> taskIdList,
+                                              final Map<UUID, ClientState> clientStates,
+                                              final Map<TaskId, UUID> taskClientMap,
+                                              final Map<UUID, Integer> originalAssignedTaskNumber,
+                                              final BiPredicate<ClientState, TaskId> hasAssignedTask,
+                                              final int trafficCost,
+                                              final int nonOverlapCost) {
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
-                if (clientState.getValue().hasAssignedTask(taskId)) {
+                if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
             }
@@ -315,7 +374,7 @@ public class RackAwareTaskAssignor {
                 final int clientNodeId = taskIdList.size() + j;
                 final UUID processId = clientList.get(j);
 
-                final int flow = clientStates.get(processId).hasAssignedTask(taskId) ? 1 : 0;
+                final int flow = hasAssignedTask.test(clientStates.get(processId), taskId) ? 1 : 0;
                 final int cost = getCost(taskId, processId, flow == 1, trafficCost, nonOverlapCost);
                 if (flow == 1) {
                     if (taskClientMap.containsKey(taskId)) {
@@ -356,7 +415,10 @@ public class RackAwareTaskAssignor {
                                                  final List<TaskId> taskIdList,
                                                  final Map<UUID, ClientState> clientStates,
                                                  final Map<UUID, Integer> originalAssignedTaskNumber,
-                                                 final Map<TaskId, UUID> taskClientMap) {
+                                                 final Map<TaskId, UUID> taskClientMap,
+                                                 final BiConsumer<ClientState, TaskId> assignTask,
+                                                 final BiConsumer<ClientState, TaskId> unassignTask,
+                                                 final BiPredicate<ClientState, TaskId> hasAssignedTask) {
         int tasksAssigned = 0;
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
             final TaskId taskId = taskIdList.get(taskNodeId);
@@ -373,8 +435,8 @@ public class RackAwareTaskAssignor {
                         break;
                     }
 
-                    clientStates.get(originalProcessId).unassignActive(taskId);
-                    clientStates.get(processId).assignActive(taskId);
+                    unassignTask.accept(clientStates.get(originalProcessId), taskId);
+                    assignTask.accept(clientStates.get(processId), taskId);
                 }
             }
         }
@@ -389,7 +451,7 @@ public class RackAwareTaskAssignor {
         final Map<UUID, Integer> assignedTaskNumber = new HashMap<>();
         for (final TaskId taskId : taskIdList) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
-                if (clientState.getValue().hasAssignedTask(taskId)) {
+                if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     assignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
             }
