@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -68,6 +69,8 @@ import java.util.stream.Stream;
 public class ConnectPluginPath {
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
+    private static final int LIST_TABLE_COLUMN_COUNT = 8;
+    private static final int LIST_SUMMARY_COLUMN_COUNT = 4;
 
     public static void main(String[] args) {
         Exit.exit(mainNoExit(args, System.out, System.err));
@@ -205,102 +208,196 @@ public class ConnectPluginPath {
 
     public static void runCommand(Config config) throws TerseException {
         try {
-            // Process the contents of the classpath to exclude it from later results.
             ClassLoader parent = ConnectPluginPath.class.getClassLoader();
+            ServiceLoaderScanner serviceLoaderScanner = new ServiceLoaderScanner();
+            ReflectionScanner reflectionScanner = new ReflectionScanner();
+            // Process the contents of the classpath to exclude it from later results.
             PluginSource classpathSource = PluginUtils.classpathPluginSource(parent);
             Map<String, Set<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
-            PluginScanResult classpathPlugins = discoverPlugins(classpathSource);
+            PluginScanResult classpathPlugins = discoverPlugins(classpathSource, reflectionScanner, serviceLoaderScanner);
 
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                // Process the contents of the isolated locations to find plugins
                 Set<PluginSource> isolatedSources = PluginUtils.isolatedPluginSources(new ArrayList<>(config.locations), delegatingClassLoader, factory);
-                // Exclude manifest entries which are visible from the classpath
                 Map<PluginSource, Map<String, Set<ManifestEntry>>> isolatedManifests = isolatedSources.stream()
-                        .collect(Collectors.toMap(Function.identity(), source -> findManifests(source, classpathManifests)));
+                        .collect(Collectors.toMap(Function.identity(),
+                                // Exclude manifest entries which are visible from the classpath
+                                source -> findManifests(source, classpathManifests)));
                 Map<PluginSource, PluginScanResult> isolatedPlugins = isolatedSources.stream()
-                        .collect(Collectors.toMap(Function.identity(), ConnectPluginPath::discoverPlugins));
+                        .collect(Collectors.toMap(Function.identity(),
+                                source -> discoverPlugins(source, reflectionScanner, serviceLoaderScanner)));
                 // Calculate aliases including collisions with classpath plugins
                 Map<String, List<String>> aliases = computeAliases(classpathPlugins, isolatedPlugins.values());
-                beginCommand(config);
-                for (PluginSource isolatedSource : isolatedSources) {
-                    handlePluginSource(config, isolatedSource, isolatedManifests.get(isolatedSource), isolatedPlugins.get(isolatedSource), aliases);
-                }
-                endCommand(config);
+                // Merge the plugins and manifest results to get the individual units of work
+                Map<PluginSource, Set<Row>> isolatedRows = isolatedSources.stream()
+                        .collect(Collectors.toMap(Function.identity(),
+                                source -> enumerateRows(source, isolatedManifests.get(source), aliases, isolatedPlugins.get(source))));
+                runCommand(config, isolatedManifests, isolatedPlugins, isolatedRows);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    private static void beginCommand(Config config) {
+    /**
+     * The unit of work for a command.
+     * <p>This is unique to the (source, class, type) tuple, and contains additional pre-computed information
+     * that pertains to this specific plugin.
+     */
+    private static class Row {
+        private final PluginSource source;
+        private final String className;
+        private final PluginType type;
+        private final String version;
+        private final List<String> aliases;
+        private final boolean loadable;
+        private final boolean hasManifest;
 
-    }
+        public Row(PluginSource source, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
+            this.source = source;
+            this.className = className;
+            this.version = version;
+            this.type = type;
+            this.aliases = aliases;
+            this.loadable = loadable;
+            this.hasManifest = hasManifest;
+        }
 
-    private static void handlePluginSource(Config config, PluginSource isolatedSource, Map<String, Set<ManifestEntry>> indexedManifests, PluginScanResult merged, Map<String, List<String>> aliases) {
-        merged.forEach(pluginDesc -> handlePlugin(config, isolatedSource, aliases, indexedManifests, pluginDesc.className(), pluginDesc.version(), pluginDesc.type(), true));
-        Map<String, Set<ManifestEntry>> unloadablePlugins = new HashMap<>(indexedManifests);
-        merged.forEach(pluginDesc -> unloadablePlugins.remove(pluginDesc.className()));
-        for (Set<ManifestEntry> manifestEntries : unloadablePlugins.values()) {
-            manifestEntries.forEach(manifestEntry -> handlePlugin(config, isolatedSource, aliases, indexedManifests, manifestEntry.className, PluginDesc.UNDEFINED_VERSION, manifestEntry.type, false));
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Row row = (Row) o;
+            return source.equals(row.source) && className.equals(row.className) && type == row.type;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(source, className, type);
         }
     }
 
-
-    private static void handlePlugin(
-            // fixed
-            Config config,
-            // each location
-            PluginSource source,
-            Map<String, List<String>> aliases,
-            Map<String, Set<ManifestEntry>> manifests,
-            // each plugin
-            String pluginName,
-            String pluginVersion,
-            PluginType pluginType,
-            boolean loadable
-    ) {
-        handlePlugin(config, source, pluginName, pluginVersion, aliases.getOrDefault(pluginName, Collections.emptyList()), pluginType, loadable, manifests.containsKey(pluginName));
+    private static Set<Row> enumerateRows(PluginSource source, Map<String, Set<ManifestEntry>> manifests, Map<String, List<String>> aliases, PluginScanResult scanResult) {
+        Set<Row> rows = new HashSet<>();
+        // Perform a deep copy of the manifests because we're going to be mutating our copy.
+        Map<String, Set<ManifestEntry>> unloadablePlugins = manifests.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())));
+        scanResult.forEach(pluginDesc -> {
+            // Emit a loadable row for this scan result, since it was found during plugin discovery
+            rows.add(newRow(source, pluginDesc.className(), pluginDesc.type(), pluginDesc.version(), true, manifests, aliases));
+            // Remove the ManifestEntry if it has the same className and type as one of the loadable plugins.
+            unloadablePlugins.get(pluginDesc.className()).removeIf(entry -> entry.type == pluginDesc.type());
+        });
+        unloadablePlugins.values().forEach(entries -> entries.forEach(entry -> {
+            // Emit a non-loadable row, since all the loadable rows showed up in the previous iteration.
+            // Two ManifestEntries may produce the same row if they have different URIs
+            rows.add(newRow(source, entry.className, entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests, aliases));
+        }));
+        return rows;
     }
 
-    private static void handlePlugin(
-            // fixed
+    private static Row newRow(PluginSource source, String className, PluginType type, String version, boolean loadable, Map<String, Set<ManifestEntry>> manifests, Map<String, List<String>> aliases) {
+        List<String> rowAliases = aliases.getOrDefault(className, Collections.emptyList());
+        boolean hasManifest = manifests.containsKey(className);
+        return new Row(source, className, type, version, rowAliases, loadable, hasManifest);
+    }
+
+    private static void runCommand(
             Config config,
-            // each location
-            PluginSource source,
-            // each plugin
-            String pluginName,
-            String pluginVersion,
-            List<String> aliases,
-            PluginType pluginType,
-            boolean loadable,
-            boolean hasManifest
+            Map<PluginSource, Map<String, Set<ManifestEntry>>> manifests,
+            Map<PluginSource, PluginScanResult> plugins,
+            Map<PluginSource, Set<Row>> rows
     ) {
-        Path pluginLocation = source.location();
+        beginCommand(config);
+        for (Map.Entry<PluginSource, Set<Row>> entry : rows.entrySet()) {
+            for (Row row : entry.getValue()) {
+                handlePlugin(config, row);
+            }
+        }
+        endCommand(config, manifests, plugins, rows);
+    }
+
+    private static void beginCommand(Config config) {
         if (config.command == Command.LIST) {
-            String firstAlias = aliases.size() > 0 ? aliases.get(0) : "null";
-            String secondAlias = aliases.size() > 1 ? aliases.get(1) : "null";
-            String pluginInfo = Stream.of(
-                    pluginName,
+            listTablePrint(config, LIST_TABLE_COLUMN_COUNT,
+                    "pluginName",
+                    "firstAlias",
+                    "secondAlias",
+                    "pluginVersion",
+                    "pluginType",
+                    "isLoadable",
+                    "hasManifest",
+                    "pluginLocation" // last because it is least important and most repetitive
+            );
+        }
+    }
+
+    private static void handlePlugin(Config config, Row row) {
+        Path pluginLocation = row.source.location();
+        if (config.command == Command.LIST) {
+            String firstAlias = row.aliases.size() > 0 ? row.aliases.get(0) : "null";
+            String secondAlias = row.aliases.size() > 1 ? row.aliases.get(1) : "null";
+            listTablePrint(config, LIST_TABLE_COLUMN_COUNT,
+                    row.className,
                     firstAlias,
                     secondAlias,
-                    pluginVersion,
-                    pluginType,
-                    loadable,
-                    hasManifest,
+                    row.version,
+                    row.type,
+                    row.loadable,
+                    row.hasManifest,
                     pluginLocation // last because it is least important and most repetitive
-            ).map(Objects::toString).collect(Collectors.joining("\t"));
-            config.out.println(pluginInfo);
+            );
         }
     }
 
-    private static void endCommand(Config config) {
-
+    private static void endCommand(
+            Config config,
+            Map<PluginSource, Map<String, Set<ManifestEntry>>> manifests,
+            Map<PluginSource, PluginScanResult> plugins,
+            Map<PluginSource, Set<Row>> rows) {
+        if (config.command == Command.LIST) {
+            // end the table with an empty line
+            config.out.println();
+            listTablePrint(config, LIST_SUMMARY_COLUMN_COUNT,
+                    "totalPlugins", // Total units of work
+                    "loadable",
+                    "hasManifest",
+                    "pluginLocation"
+            );
+            for (Map.Entry<PluginSource, Set<Row>> entry : rows.entrySet()) {
+                PluginSource source = entry.getKey();
+                int totalCount = entry.getValue().size();
+                AtomicInteger pluginCount = new AtomicInteger();
+                plugins.get(source).forEach(desc -> pluginCount.incrementAndGet());
+                int manifestCount = 0;
+                for (Set<ManifestEntry> manifestEntries : manifests.get(source).values()) {
+                    manifestCount += manifestEntries.stream()
+                            // If a plugin has multiple ManifestEntries for a single type, ignore the duplicates.
+                            .map(manifestEntry -> manifestEntry.type)
+                            .collect(Collectors.toSet()).size();
+                }
+                listTablePrint(config, LIST_SUMMARY_COLUMN_COUNT,
+                        totalCount,
+                        pluginCount,
+                        manifestCount,
+                        source.location()
+                );
+            }
+        }
     }
 
-    private static PluginScanResult discoverPlugins(PluginSource source) {
-        PluginScanResult serviceLoadResult = new ServiceLoaderScanner().discoverPlugins(Collections.singleton(source));
-        PluginScanResult reflectiveResult = new ReflectionScanner().discoverPlugins(Collections.singleton(source));
+    private static void listTablePrint(Config config, int length, Object... args) {
+        if (length != args.length) {
+            throw new IllegalArgumentException("Table must have exactly " + length + " columns");
+        }
+        config.out.println(Stream.of(args)
+                .map(Objects::toString)
+                .collect(Collectors.joining("\t")));
+    }
+
+    private static PluginScanResult discoverPlugins(PluginSource source, ReflectionScanner reflectionScanner, ServiceLoaderScanner serviceLoaderScanner) {
+        PluginScanResult serviceLoadResult = serviceLoaderScanner.discoverPlugins(Collections.singleton(source));
+        PluginScanResult reflectiveResult = reflectionScanner.discoverPlugins(Collections.singleton(source));
         return new PluginScanResult(Arrays.asList(serviceLoadResult, reflectiveResult));
     }
 
