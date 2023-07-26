@@ -63,6 +63,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -578,7 +579,8 @@ public class OffsetMetadataManagerTest {
         // the group transitions to stable.
         context.groupMetadataManager.rescheduleGenericGroupMemberHeartbeat(group, member);
 
-        // Advance time by half of the session timeout.
+        // Advance time by half of the session timeout. No timeouts are
+        // expired.
         assertEquals(Collections.emptyList(), context.sleep(5000 / 2));
 
         // Commit.
@@ -599,8 +601,16 @@ public class OffsetMetadataManagerTest {
                 ))
         );
 
-        // Advance time by half of the session timeout.
+        // Advance time by half of the session timeout. No timeouts are
+        // expired.
         assertEquals(Collections.emptyList(), context.sleep(5000 / 2));
+
+        // Advance time by half of the session timeout again. The timeout should
+        // expire and the member is removed from the group.
+        List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> timeouts =
+            context.sleep(5000 / 2);
+        assertEquals(1, timeouts.size());
+        assertFalse(group.hasMemberId(member.memberId()));
     }
 
     @Test
