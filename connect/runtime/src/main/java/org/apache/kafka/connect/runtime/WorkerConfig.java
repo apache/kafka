@@ -139,7 +139,7 @@ public class WorkerConfig extends AbstractConfig {
             + "* " + HYBRID_FAIL.name() + ": Discover plugins reflectively and by ServiceLoader. "
             + "Plugins which are not discoverable by ServiceLoader will cause worker startup to fail.\n"
             + "* " + SERVICE_LOAD.name() + ": Discover plugins only by ServiceLoader. Faster startup than other modes. "
-            + "Plugins which are not discoverable by ServiceLoader will not be found or usable.";
+            + "Plugins which are not discoverable by ServiceLoader may not be usable.";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
     protected static final String CONFIG_PROVIDERS_DOC =
