@@ -305,21 +305,7 @@ public class OffsetMetadataManagerTest {
         );
 
         // Add member.
-        group.add(new GenericGroupMember(
-            "member",
-            Optional.of("new-instance-id"),
-            "client-id",
-            "host",
-            5000,
-            5000,
-            "consumer",
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-                Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                    .setName("range")
-                    .setMetadata(new byte[0])
-                ).iterator()
-            )
-        ));
+        group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
         group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
@@ -350,10 +336,13 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
             "foo",
             true
         );
+
+        // Add member without static id.
+        group.add(mkGenericMember("member", Optional.empty()));
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
@@ -386,21 +375,7 @@ public class OffsetMetadataManagerTest {
         );
 
         // Add member with static id.
-        group.add(new GenericGroupMember(
-            "member",
-            Optional.of("new-instance-id"),
-            "client-id",
-            "host",
-            5000,
-            5000,
-            "consumer",
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-                Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                    .setName("range")
-                    .setMetadata(new byte[0])
-                ).iterator()
-            )
-        ));
+        group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
@@ -433,21 +408,7 @@ public class OffsetMetadataManagerTest {
         );
 
         // Add member.
-        group.add(new GenericGroupMember(
-            "member",
-            Optional.of("new-instance-id"),
-            "client-id",
-            "host",
-            5000,
-            5000,
-            "consumer",
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-                Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                    .setName("range")
-                    .setMetadata(new byte[0])
-                ).iterator()
-            )
-        ));
+        group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
         group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
@@ -484,21 +445,7 @@ public class OffsetMetadataManagerTest {
         );
 
         // Add member.
-        group.add(new GenericGroupMember(
-            "member",
-            Optional.of("new-instance-id"),
-            "client-id",
-            "host",
-            5000,
-            5000,
-            "consumer",
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-                Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                    .setName("range")
-                    .setMetadata(new byte[0])
-                ).iterator()
-            )
-        ));
+        group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
         group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
@@ -533,21 +480,7 @@ public class OffsetMetadataManagerTest {
         );
 
         // Add member.
-        group.add(new GenericGroupMember(
-            "member",
-            Optional.of("new-instance-id"),
-            "client-id",
-            "host",
-            5000,
-            5000,
-            "consumer",
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-                Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                    .setName("range")
-                    .setMetadata(new byte[0])
-                ).iterator()
-            )
-        ));
+        group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
         group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
@@ -1073,6 +1006,7 @@ public class OffsetMetadataManagerTest {
     public void testReplayWithTombstone() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
+        // Verify replay adds the offset the map.
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
             100L,
             OptionalInt.empty(),
@@ -1081,12 +1015,14 @@ public class OffsetMetadataManagerTest {
             OptionalLong.empty()
         ));
 
+        // Create a tombstone record and replay it to delete the record.
         context.replay(RecordHelpers.newOffsetCommitTombstoneRecord(
             "foo",
             "bar",
             0
         ));
 
+        // Verify that the offset is gone.
         assertNull(context.offsetMetadataManager.offset("foo", new TopicPartition("bar", 0)));
     }
 
@@ -1109,5 +1045,26 @@ public class OffsetMetadataManagerTest {
             groupId,
             new TopicPartition(topic, partition)
         ));
+    }
+
+    private GenericGroupMember mkGenericMember(
+        String memberId,
+        Optional<String> groupInstanceId
+    ) {
+        return new GenericGroupMember(
+            memberId,
+            groupInstanceId,
+            "client-id",
+            "host",
+            5000,
+            5000,
+            "consumer",
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+                Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName("range")
+                    .setMetadata(new byte[0])
+                ).iterator()
+            )
+        );
     }
 }

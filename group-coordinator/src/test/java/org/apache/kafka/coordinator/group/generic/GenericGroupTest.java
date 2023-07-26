@@ -996,9 +996,8 @@ public class GenericGroupTest {
         assertThrows(UnknownMemberIdException.class,
             () -> group.validateOffsetCommit("member-id", "unknown", -1));
 
-        // The generation id does is invalid.
-        assertThrows(
-            IllegalGenerationException.class,
+        // The generation id is invalid.
+        assertThrows(IllegalGenerationException.class,
             () -> group.validateOffsetCommit("member-id", "instance-id", 0));
 
         // Group is in prepare rebalance state.

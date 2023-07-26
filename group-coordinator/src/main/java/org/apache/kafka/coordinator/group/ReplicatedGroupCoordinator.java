@@ -218,7 +218,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
     }
 
     /**
-     * Handled a OffsetCommit request.
+     * Handles a OffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual OffsetCommit request.

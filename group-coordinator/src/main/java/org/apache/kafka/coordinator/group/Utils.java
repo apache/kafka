@@ -23,7 +23,7 @@ public class Utils {
     private Utils() {}
 
     /**
-     * @return An OptionalInt containing the value iif the value is different from
+     * @return An OptionalInt containing the value iff the value is different from
      * the sentinel (or default) value -1.
      */
     public static OptionalInt ofSentinel(int value) {
@@ -31,7 +31,7 @@ public class Utils {
     }
 
     /**
-     * @return An OptionalLong containing the value iif the value is different from
+     * @return An OptionalLong containing the value iff the value is different from
      * the sentinel (or default) value -1.
      */
     public static OptionalLong ofSentinel(long value) {
