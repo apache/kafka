@@ -518,7 +518,11 @@ public class PluginsTest {
     public void testHybridWarnNoPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, empty, empty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")));
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            // These log messages must contain the config name, it is referenced in the documentation.
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
         }
     }
 
@@ -526,7 +530,11 @@ public class PluginsTest {
     public void testHybridWarnWithPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, nonEmpty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN") && !e.getMessage().contains(missingPluginClass)));
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && !e.getMessage().contains(missingPluginClass)
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
         }
     }
 
@@ -534,7 +542,11 @@ public class PluginsTest {
     public void testHybridWarnMissingPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, empty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN") && e.getMessage().contains(missingPluginClass)));
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && e.getMessage().contains(missingPluginClass)
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
         }
     }
 
@@ -542,7 +554,10 @@ public class PluginsTest {
     public void testHybridFailNoPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, empty, empty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")));
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
         }
     }
 
@@ -550,7 +565,11 @@ public class PluginsTest {
     public void testHybridFailWithPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, nonEmpty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN") && !e.getMessage().contains(missingPluginClass)));
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && !e.getMessage().contains(missingPluginClass)
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
         }
     }
 
