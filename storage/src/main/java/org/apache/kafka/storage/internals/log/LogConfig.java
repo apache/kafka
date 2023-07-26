@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
@@ -30,8 +31,11 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -230,6 +234,55 @@ public class LogConfig extends AbstractConfig {
         FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
 
+    private static final String DEFAULT_LOG_DIR = "/tmp/kafka-logs";
+    private static final String LOG_CONFIG_PREFIX = "log.";
+    private static final String LOG_DIR_PROP = LOG_CONFIG_PREFIX + "dir";
+    private static final String LOG_DIRS_PROP = LOG_CONFIG_PREFIX + "dirs";
+
+    private static final String NODE_ID_PROP = "node.id";
+    private static final String BROKER_ID_PROP = "broker.id";
+    private static final String MAX_RESERVED_BROKER_ID_PROP = "reserved.broker.max.id";
+
+    private static final int DEFAULT_EMPTY_NODE_ID = -1;
+
+    private static final String METADATA_LOG_DIR_PROP = "metadata.log.dir";
+
+    private static final String PROCESS_ROLES_PROP = "process.roles";
+
+    private static final String INTER_BROKER_PROTOCOL_VERSION_PROP = "inter.broker.protocol.version";
+
+    private static final String BROKER_ID_GENERATION_ENABLE_PROP = "broker.id.generation.enable";
+
+    private static final String ZOOKEEPER_CONNECT_PROP = "zookeeper.connect";
+
+    private static final String INTER_BROKER_PROTOCOL_VERSION_PROP_DEFAULT_VALUE = MetadataVersion.latest().version();
+    private static final String LOG_DIR_DOC = "The directory in which the log data is kept (supplemental for " + LOG_DIR_PROP + " property)";
+    private static final String METADATA_LOG_DIR_DOC = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
+        "If it is not set, the metadata log is placed in the first log directory from log.dirs.";
+    private static final String INTER_BROKER_PROTOCOL_VERSION_DOC = "Specify which version of the inter-broker protocol will be used.\n" +
+        " This is typically bumped after all brokers were upgraded to a new version.\n" +
+        " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check MetadataVersion for the full list.";
+
+    private static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIRS_PROP + " is used.";
+
+    private static final String BROKER_ID_DOC = "The broker id for this server. If unset, a unique broker id will be generated." +
+        "To avoid conflicts between ZooKeeper generated broker id's and user configured broker id's, generated broker ids " +
+        "start from " + MAX_RESERVED_BROKER_ID_PROP + " + 1.";
+
+    private static final String NODE_ID_DOC = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
+        "This is required configuration when running in KRaft mode.";
+    private static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
+        "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters.";
+
+    private static final String BROKER_ID_GENERATION_ENABLE_DOC = "Enable automatic broker id generation on the server. When enabled the value configured for $MaxReservedBrokerIdProp should be reviewed.";
+
+    private static final String MAX_RESERVED_BROKER_ID_DOC = "Max number that can be used for a broker.id";
+    private static final String ZK_CONNECT_DOC = "Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the " +
+        "host and port of a ZooKeeper server. To allow connecting through other ZooKeeper nodes when that ZooKeeper machine is " +
+        "down you can also specify multiple hosts in the form <code>hostname1:port1,hostname2:port2,hostname3:port3</code>.\n" +
+        "The server can also have a ZooKeeper chroot path as part of its ZooKeeper connection string which puts its data under some path in the global ZooKeeper namespace. " +
+        "For example to give a chroot path of <code>/chroot/path</code> you would give the connection string as <code>hostname1:port1,hostname2:port2,hostname3:port3/chroot/path</code>.";
+
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
         "the leader side. The list should describe a set of replicas in the form " +
         "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
@@ -297,6 +350,16 @@ public class LogConfig extends AbstractConfig {
                 ThrottledReplicaListValidator.INSTANCE, MEDIUM, FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
             .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW,
                 TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC)
+            .define(LOG_DIRS_PROP, STRING, null, HIGH, LOG_DIRS_DOC)
+            .define(LOG_DIR_PROP, STRING, DEFAULT_LOG_DIR, HIGH, LOG_DIR_DOC)
+            .define(METADATA_LOG_DIR_PROP, STRING, null, HIGH, METADATA_LOG_DIR_DOC)
+            .define(INTER_BROKER_PROTOCOL_VERSION_PROP, STRING, INTER_BROKER_PROTOCOL_VERSION_PROP_DEFAULT_VALUE, new MetadataVersionValidator(), MEDIUM, INTER_BROKER_PROTOCOL_VERSION_DOC)
+            .define(NODE_ID_PROP, INT, DEFAULT_EMPTY_NODE_ID, null, HIGH, NODE_ID_DOC)
+            .define(BROKER_ID_PROP, INT, -1, HIGH, BROKER_ID_DOC)
+            .define(MAX_RESERVED_BROKER_ID_PROP, INT, 1000, atLeast(0), MEDIUM, MAX_RESERVED_BROKER_ID_DOC)
+            .define(PROCESS_ROLES_PROP, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, PROCESS_ROLES_DOC)
+            .define(ZOOKEEPER_CONNECT_PROP, STRING, null, HIGH, ZK_CONNECT_DOC)
+            .define(BROKER_ID_GENERATION_ENABLE_PROP, BOOLEAN, true, MEDIUM, BROKER_ID_GENERATION_ENABLE_DOC)
             .defineInternal(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
                 MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
             .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
@@ -331,6 +394,15 @@ public class LogConfig extends AbstractConfig {
     public final int minInSyncReplicas;
     public final String compressionType;
     public final boolean preallocate;
+    public final String interBrokerProtocolVersion;
+    public int nodeId;
+    public int brokerId;
+    public final String logDirs;
+    public final String logDir;
+    public Set<String> processRoles;
+    public boolean brokerIdGenerationEnable;
+    public int maxReservedBrokerId;
+    public String zkConnect;
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details regarding the deprecation */
     @Deprecated
@@ -389,8 +461,23 @@ public class LogConfig extends AbstractConfig {
         this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
-
+        this.interBrokerProtocolVersion = getString(INTER_BROKER_PROTOCOL_VERSION_PROP);
+        this.brokerId = getInt(BROKER_ID_PROP);
+        this.maxReservedBrokerId = getInt(MAX_RESERVED_BROKER_ID_PROP);
+        this.nodeId = getInt(LogConfig.NODE_ID_PROP);
+        this.brokerIdGenerationEnable = getBoolean(BROKER_ID_GENERATION_ENABLE_PROP);
+        this.logDirs = getString(LOG_DIRS_PROP);
+        this.logDir = getString(LOG_DIR_PROP);
+        processRoles = parseProcessRoles();
+        this.zkConnect = getString(ZOOKEEPER_CONNECT_PROP);
         remoteLogConfig = new RemoteLogConfig(this, retentionMs, retentionSize);
+    }
+
+    public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs, boolean validateConfig) {
+        this(LogConfig.populateSynonyms(props), overriddenConfigs);
+        if (validateConfig) {
+            validateOtherConfig();
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -496,6 +583,133 @@ public class LogConfig extends AbstractConfig {
         validateNames(props);
         Map<?, ?> valueMaps = CONFIG.parse(props);
         validateValues(valueMaps);
+    }
+
+    public void validateOtherConfig() {
+        if (requiresZookeeper()) {
+            if (zkConnect == null) {
+                throw new ConfigException("Missing required configuration `" + ZOOKEEPER_CONNECT_PROP + "` which has no default value.");
+            }
+            if (brokerIdGenerationEnable) {
+                require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id");
+            } else {
+                require(brokerId >= 0, "broker.id must be greater than or equal to 0");
+            }
+        } else {
+            // KRaft-based metadata quorum
+            if (nodeId < 0) {
+                throw new ConfigException("Missing configuration `" + NODE_ID_PROP + "` which is required " +
+                    "when `process.roles` is defined (i.e. when running in KRaft mode).");
+            }
+        }
+    }
+
+    public static void require(boolean requirement, String message) {
+        if (!requirement) {
+            throw new IllegalArgumentException("requirement failed: " + message);
+        }
+    }
+
+    private static final String QUORUM_PREFIX = "controller.quorum.";
+    private static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
+    private static final String CONTROLLER_LISTENER_NAMES_PROP = "controller.listener.names";
+
+
+    String metadataLogDir = getString(METADATA_LOG_DIR_PROP);
+
+    public String getInterBrokerProtocolVersionString() {
+        return getString(INTER_BROKER_PROTOCOL_VERSION_PROP);
+    }
+    public int getNodeId() {
+        return getInt(NODE_ID_PROP);
+    }
+
+    public static String getLogDirsProp() {
+        return LOG_DIRS_PROP;
+    }
+
+    public static String getProcessRolesProp() {
+        return PROCESS_ROLES_PROP;
+    }
+
+    public static String getNodeIdProp() {
+        return NODE_ID_PROP;
+    }
+
+    public static String getQuorumVotersProp() {
+        return QUORUM_VOTERS_CONFIG;
+    }
+
+    public static String getControllerListenerNamesProp() {
+        return CONTROLLER_LISTENER_NAMES_PROP;
+    }
+
+    public static String getMetadataLogDirProp() {
+        return METADATA_LOG_DIR_PROP;
+    }
+
+    public Set<String> parseProcessRoles() {
+        List<String> roles = getList(PROCESS_ROLES_PROP);
+
+        Set<String> distinctRoles = new HashSet<>();
+        for (String role : roles) {
+            switch (role) {
+                case "broker":
+                    distinctRoles.add("BrokerRole");
+                    break;
+                case "controller":
+                    distinctRoles.add("ControllerRole");
+                    break;
+                default:
+                    throw new ConfigException("Unknown process role '" + role + "'" +
+                        " (only 'broker' and 'controller' are allowed roles)");
+            }
+        }
+
+        if (distinctRoles.size() != roles.size()) {
+            throw new ConfigException("Duplicate role names found in '" + PROCESS_ROLES_PROP + "': " + roles);
+        }
+
+        return distinctRoles;
+    }
+
+
+    public String getMetadataLogDir() {
+        if (metadataLogDir != null) {
+            return metadataLogDir;
+        } else {
+            return getLogDirs().get(0);
+        }
+    }
+
+    public List<String> getLogDirs() {
+        return parseCsvList(logDirs != null ? logDirs : logDir);
+    }
+    public static List<String> parseCsvList(String csvList) {
+        if (csvList == null || csvList.isEmpty())
+            return new ArrayList<>();
+        else
+            return Arrays.stream(csvList.split("\\s*,\\s*"))
+                .filter(v -> !v.equals(""))
+                .collect(Collectors.toList());
+    }
+
+    public boolean requiresZookeeper() {
+        return processRoles.isEmpty();
+    }
+
+    public static Map<Object, Object> populateSynonyms(Map<?, ?> input) {
+        Map<Object, Object> output = new HashMap<>(input);
+        Object brokerId = output.get(LogConfig.BROKER_ID_PROP);
+        Object nodeId = output.get(LogConfig.NODE_ID_PROP);
+
+        if (brokerId == null && nodeId != null) {
+            output.put(LogConfig.BROKER_ID_PROP, nodeId);
+        } else if (brokerId != null && nodeId == null) {
+            output.put(LogConfig.NODE_ID_PROP, brokerId);
+        }
+
+        return output;
     }
 
     public static void main(String[] args) {
