@@ -370,11 +370,13 @@ public class RecordHelpers {
      * Creates a GroupMetadata record.
      *
      * @param group              The generic group.
+     * @param assignment         The generic group assignment.
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static Record newGroupMetadataRecord(
         GenericGroup group,
+        Map<String, byte[]> assignment,
         MetadataVersion metadataVersion
     ) {
         List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>(group.allMembers().size());
@@ -384,10 +386,10 @@ public class RecordHelpers {
                 throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol.");
             }
 
-            byte[] assignment = member.assignment();
-            if (assignment == null) {
+            byte[] memberAssignment = assignment.get(member.memberId());
+            if (memberAssignment == null) {
                 throw new IllegalStateException("Attempted to write member " + member.memberId() +
-                    " of group + " + group.groupId() + " with no assignment.");
+                    " of group " + group.groupId() + " with no assignment.");
             }
 
             members.add(
@@ -399,7 +401,7 @@ public class RecordHelpers {
                     .setSessionTimeout(member.sessionTimeoutMs())
                     .setGroupInstanceId(member.groupInstanceId().orElse(null))
                     .setSubscription(subscription)
-                    .setAssignment(assignment)
+                    .setAssignment(memberAssignment)
             );
         });
 
