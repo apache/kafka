@@ -22,6 +22,8 @@ import java.util.List;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
@@ -69,12 +71,38 @@ public final class AssignmentTestUtils {
     public static final UUID UUID_8 = uuidForInt(8);
     public static final UUID UUID_9 = uuidForInt(9);
 
-    public static final TopicPartition TP_0_0 = new TopicPartition("topic0", 0);
-    public static final TopicPartition TP_0_1 = new TopicPartition("topic0", 1);
-    public static final TopicPartition TP_0_2 = new TopicPartition("topic0", 2);
-    public static final TopicPartition TP_1_0 = new TopicPartition("topic1", 0);
-    public static final TopicPartition TP_1_1 = new TopicPartition("topic1", 1);
-    public static final TopicPartition TP_1_2 = new TopicPartition("topic1", 2);
+    public static final String RACK_0 = "rock0";
+    public static final String RACK_1 = "rock1";
+    public static final String RACK_2 = "rock2";
+    public static final String RACK_3 = "rock3";
+    public static final String RACK_4 = "rock4";
+
+    public static final Node NODE_0 = new Node(0, "node0", 1, RACK_0);
+    public static final Node NODE_1 = new Node(1, "node1", 1, RACK_1);
+    public static final Node NODE_2 = new Node(2, "node2", 1, RACK_2);
+    public static final Node NODE_3 = new Node(2, "node2", 1, RACK_3);
+    public static final Node NO_RACK_NODE = new Node(3, "node3", 1);
+
+    public static final Node[] REPLICA_0 = new Node[] {NODE_0, NODE_1};
+    public static final Node[] REPLICA_1 = new Node[] {NODE_1, NODE_2};
+    public static final Node[] REPLICA_2 = new Node[] {NODE_0, NODE_2};
+    public static final Node[] REPLICA_3 = new Node[] {NODE_1, NODE_3};
+
+    public static final String TP_0_NAME = "topic0";
+    public static final String TP_1_NAME = "topic1";
+
+    public static final TopicPartition TP_0_0 = new TopicPartition(TP_0_NAME, 0);
+    public static final TopicPartition TP_0_1 = new TopicPartition(TP_0_NAME, 1);
+    public static final TopicPartition TP_0_2 = new TopicPartition(TP_0_NAME, 2);
+    public static final TopicPartition TP_1_0 = new TopicPartition(TP_1_NAME, 0);
+    public static final TopicPartition TP_1_1 = new TopicPartition(TP_1_NAME, 1);
+    public static final TopicPartition TP_1_2 = new TopicPartition(TP_1_NAME, 2);
+
+    public static final PartitionInfo PI_0_0 = new PartitionInfo(TP_0_NAME, 0, NODE_0, REPLICA_0, REPLICA_0);
+    public static final PartitionInfo PI_0_1 = new PartitionInfo(TP_0_NAME, 1, NODE_1, REPLICA_1, REPLICA_1);
+    public static final PartitionInfo PI_1_0 = new PartitionInfo(TP_1_NAME, 0, NODE_2, REPLICA_2, REPLICA_2);
+    public static final PartitionInfo PI_1_1 = new PartitionInfo(TP_1_NAME, 1, NODE_3, REPLICA_3, REPLICA_3);
+    public static final PartitionInfo PI_1_2 = new PartitionInfo(TP_1_NAME, 2, NODE_0, REPLICA_0, REPLICA_0);
 
     public static final TaskId TASK_0_0 = new TaskId(0, 0);
     public static final TaskId TASK_0_1 = new TaskId(0, 1);
