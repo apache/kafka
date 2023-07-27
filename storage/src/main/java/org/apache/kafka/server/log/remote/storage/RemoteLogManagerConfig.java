@@ -231,13 +231,13 @@ public final class RemoteLogManagerConfig {
                   .defineInternal(LOG_LOCAL_RETENTION_MS_PROP,
                           LONG,
                           DEFAULT_LOG_LOCAL_RETENTION_MS,
-                          atLeast(-2),
+                          atLeast(DEFAULT_LOG_LOCAL_RETENTION_MS),
                           MEDIUM,
                           LOG_LOCAL_RETENTION_MS_DOC)
                   .defineInternal(LOG_LOCAL_RETENTION_BYTES_PROP,
                           LONG,
                           DEFAULT_LOG_LOCAL_RETENTION_BYTES,
-                          atLeast(-2),
+                          atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
                           MEDIUM,
                           LOG_LOCAL_RETENTION_BYTES_DOC);
     }
