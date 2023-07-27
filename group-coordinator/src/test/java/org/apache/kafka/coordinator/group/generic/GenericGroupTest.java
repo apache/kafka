@@ -18,6 +18,11 @@ package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
@@ -954,6 +959,71 @@ public class GenericGroupTest {
 
         assertTrue(group.maybeElectNewJoinedLeader());
         assertTrue(group.isLeader(memberId));
+    }
+
+    @Test
+    public void testValidateOffsetCommit() {
+        // A call from the admin client without any parameters should pass.
+        group.validateOffsetCommit("", "", -1);
+
+        // Add a member.
+        group.add(new GenericGroupMember(
+            "member-id",
+            Optional.of("instance-id"),
+            "",
+            "",
+            100,
+            100,
+            "consumer",
+            new JoinGroupRequestProtocolCollection(Collections.singletonList(
+                new JoinGroupRequestProtocol()
+                    .setName("roundrobin")
+                    .setMetadata(new byte[0])).iterator())
+        ));
+
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+
+        // No parameters and the group is not empty.
+        assertThrows(UnknownMemberIdException.class,
+            () -> group.validateOffsetCommit("", "", -1));
+
+        // The member id does not exist.
+        assertThrows(UnknownMemberIdException.class,
+            () -> group.validateOffsetCommit("unknown", "unknown", -1));
+
+        // The instance id does not exist.
+        assertThrows(UnknownMemberIdException.class,
+            () -> group.validateOffsetCommit("member-id", "unknown", -1));
+
+        // The generation id is invalid.
+        assertThrows(IllegalGenerationException.class,
+            () -> group.validateOffsetCommit("member-id", "instance-id", 0));
+
+        // Group is in prepare rebalance state.
+        assertThrows(RebalanceInProgressException.class,
+            () -> group.validateOffsetCommit("member-id", "instance-id", 1));
+
+        // Group transitions to stable.
+        group.transitionTo(STABLE);
+
+        // This should work.
+        group.validateOffsetCommit("member-id", "instance-id", 1);
+
+        // Replace static member.
+        group.replaceStaticMember("instance-id", "member-id", "new-member-id");
+
+        // The old instance id should be fenced.
+        assertThrows(FencedInstanceIdException.class,
+            () -> group.validateOffsetCommit("member-id", "instance-id", 1));
+
+        // Remove member and transitions to dead.
+        group.remove("new-instance-id");
+        group.transitionTo(DEAD);
+
+        // This should fail with CoordinatorNotAvailableException.
+        assertThrows(CoordinatorNotAvailableException.class,
+            () -> group.validateOffsetCommit("member-id", "new-instance-id", 1));
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {

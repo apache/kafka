@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.server.util.MockTime;
 import org.junit.jupiter.api.Test;
 
 import java.util.OptionalInt;
@@ -70,5 +72,65 @@ public class OffsetAndMetadataTest {
             1234L,
             OptionalLong.of(5678L)
         ), OffsetAndMetadata.fromRecord(record));
+    }
+
+    @Test
+    public void testFromRequest() {
+        MockTime time = new MockTime();
+
+        OffsetCommitRequestData.OffsetCommitRequestPartition partition =
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100L)
+                .setCommittedLeaderEpoch(-1)
+                .setCommittedMetadata(null)
+                .setCommitTimestamp(-1L);
+
+        assertEquals(
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.empty(),
+                "",
+                time.milliseconds(),
+                OptionalLong.empty()
+            ), OffsetAndMetadata.fromRequest(
+                partition,
+                time.milliseconds(),
+                OptionalLong.empty()
+            )
+        );
+
+        partition
+            .setCommittedLeaderEpoch(10)
+            .setCommittedMetadata("hello")
+            .setCommitTimestamp(1234L);
+
+        assertEquals(
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.of(10),
+                "hello",
+                1234L,
+                OptionalLong.empty()
+            ), OffsetAndMetadata.fromRequest(
+                partition,
+                time.milliseconds(),
+                OptionalLong.empty()
+            )
+        );
+
+        assertEquals(
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.of(10),
+                "hello",
+                1234L,
+                OptionalLong.of(5678L)
+            ), OffsetAndMetadata.fromRequest(
+                partition,
+                time.milliseconds(),
+                OptionalLong.of(5678L)
+            )
+        );
     }
 }
