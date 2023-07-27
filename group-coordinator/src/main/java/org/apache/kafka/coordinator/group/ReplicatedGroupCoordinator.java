@@ -21,6 +21,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -181,12 +183,42 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
     }
 
+    /**
+     * Handles a JoinGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual JoinGroup request.
+     *
+     * @return A Result containing the JoinGroup response and
+     *         a list of records to update the state machine.
+     */
     public CoordinatorResult<Void, Record> genericGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         return groupMetadataManager.genericGroupJoin(
+            context,
+            request,
+            responseFuture
+        );
+    }
+
+    /**
+     * Handles a SyncGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual SyncGroup request.
+     *
+     * @return A Result containing the SyncGroup response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<Void, Record> genericGroupSync(
+        RequestContext context,
+        SyncGroupRequestData request,
+        CompletableFuture<SyncGroupResponseData> responseFuture
+    ) {
+        return groupMetadataManager.genericGroupSync(
             context,
             request,
             responseFuture
