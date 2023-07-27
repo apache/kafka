@@ -505,7 +505,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         .withSnapshotRegistry(snapshotRegistry)
                         .withTime(time)
                         .withTimer(timer)
-                        .withTopicPartition(tp)
                         .build();
                     break;
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -73,7 +72,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         private final GroupCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
-        private TopicPartition topicPartition;
         private Time time;
         private CoordinatorTimer<Void, Record> timer;
 
@@ -116,14 +114,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         }
 
         @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withTopicPartition(
-            TopicPartition topicPartition
-        ) {
-            this.topicPartition = topicPartition;
-            return this;
-        }
-
-        @Override
         public GroupCoordinatorShard build() {
             if (logContext == null) logContext = new LogContext();
             if (config == null)
@@ -134,15 +124,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
-            if (topicPartition == null)
-                throw new IllegalArgumentException("TopicPartition must be set.");
 
             GroupMetadataManager groupMetadataManager = new GroupMetadataManager.Builder()
                 .withLogContext(logContext)
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withTimer(timer)
-                .withTopicPartition(topicPartition)
                 .withAssignors(config.consumerGroupAssignors)
                 .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
                 .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)

@@ -339,7 +339,6 @@ public class GroupMetadataManagerTest {
                     timer,
                     snapshotRegistry,
                     new GroupMetadataManager.Builder()
-                        .withTopicPartition(groupMetadataTopicPartition)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
                         .withTime(time)

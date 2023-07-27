@@ -92,7 +92,6 @@ public class OffsetMetadataManagerTest {
                     .withSnapshotRegistry(snapshotRegistry)
                     .withLogContext(logContext)
                     .withMetadataImage(metadataImage)
-                    .withTopicPartition(new TopicPartition("__consumer_offsets", 0))
                     .withAssignors(Collections.singletonList(new RangeAssignor()))
                     .build();
 
