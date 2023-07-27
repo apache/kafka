@@ -70,7 +70,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @param <S> The type of the state machine.
  * @param <U> The type of the record.
  */
-public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoCloseable {
+public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements AutoCloseable {
 
     /**
      * Builder to create a CoordinatorRuntime.
@@ -78,7 +78,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      * @param <S> The type of the state machine.
      * @param <U> The type of the record.
      */
-    public static class Builder<S extends Coordinator<U>, U> {
+    public static class Builder<S extends CoordinatorShard<U>, U> {
         private String logPrefix;
         private LogContext logContext;
         private CoordinatorEventProcessor eventProcessor;

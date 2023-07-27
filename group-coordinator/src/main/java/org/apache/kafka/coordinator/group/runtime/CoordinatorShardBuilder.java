@@ -23,12 +23,12 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 
 /**
- * A builder to build a {@link Coordinator} replicated state machine.
+ * A builder to build a {@link CoordinatorShard} replicated state machine.
  *
  * @param <S> The type of the coordinator.
  * @param <U> The record type.
  */
-public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
+public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
 
     /**
      * Sets the snapshot registry used to back all the timeline
@@ -38,7 +38,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withSnapshotRegistry(
+    CoordinatorShardBuilder<S, U> withSnapshotRegistry(
         SnapshotRegistry snapshotRegistry
     );
 
@@ -49,7 +49,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withLogContext(
+    CoordinatorShardBuilder<S, U> withLogContext(
         LogContext logContext
     );
 
@@ -59,7 +59,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withTopicPartition(
+    CoordinatorShardBuilder<S, U> withTopicPartition(
         TopicPartition topicPartition
     );
 
@@ -70,7 +70,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withTime(
+    CoordinatorShardBuilder<S, U> withTime(
         Time time
     );
 
@@ -81,7 +81,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withTimer(
+    CoordinatorShardBuilder<S, U> withTimer(
         CoordinatorTimer<Void, U> timer
     );
 

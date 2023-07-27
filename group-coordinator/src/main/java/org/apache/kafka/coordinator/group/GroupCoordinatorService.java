@@ -133,8 +133,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
-            CoordinatorBuilderSupplier<ReplicatedGroupCoordinator, Record> supplier = () ->
-                new ReplicatedGroupCoordinator.Builder(config);
+            CoordinatorBuilderSupplier<GroupCoordinatorShard, Record> supplier = () ->
+                new GroupCoordinatorShard.Builder(config);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
@@ -142,8 +142,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 config.numThreads
             );
 
-            CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime =
-                new CoordinatorRuntime.Builder<ReplicatedGroupCoordinator, Record>()
+            CoordinatorRuntime<GroupCoordinatorShard, Record> runtime =
+                new CoordinatorRuntime.Builder<GroupCoordinatorShard, Record>()
                     .withTime(time)
                     .withTimer(timer)
                     .withLogPrefix(logPrefix)
@@ -176,7 +176,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * The coordinator runtime.
      */
-    private final CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime;
+    private final CoordinatorRuntime<GroupCoordinatorShard, Record> runtime;
 
     /**
      * Boolean indicating whether the coordinator is active or not.
@@ -198,7 +198,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     GroupCoordinatorService(
         LogContext logContext,
         GroupCoordinatorConfig config,
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime
     ) {
         this.log = logContext.logger(CoordinatorLoader.class);
         this.config = config;
