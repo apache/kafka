@@ -157,9 +157,9 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     }
 
     @Override
-    public long remoteLogSize(TopicIdPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
+    public long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException {
         long remoteLogSize = 0L;
-        RemoteLogMetadataCache remoteLogMetadataCache = getRemoteLogMetadataCache(topicPartition);
+        RemoteLogMetadataCache remoteLogMetadataCache = getRemoteLogMetadataCache(topicIdPartition);
         Iterator<RemoteLogSegmentMetadata> remoteLogSegmentMetadataIterator = remoteLogMetadataCache.listAllRemoteLogSegments();
         while (remoteLogSegmentMetadataIterator.hasNext()) {
             RemoteLogSegmentMetadata remoteLogSegmentMetadata = remoteLogSegmentMetadataIterator.next();

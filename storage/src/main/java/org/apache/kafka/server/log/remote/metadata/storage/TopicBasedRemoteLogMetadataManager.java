@@ -327,7 +327,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     @Override
-    public long remoteLogSize(TopicIdPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
+    public long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException {
         long remoteLogSize = 0L;
         // This is a simple-to-understand but not the most optimal solution.
         // The TopicBasedRemoteLogMetadataManager's remote metadata store is file-based. During design discussions
@@ -335,7 +335,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         // we reached a consensus that sequential iteration over files on the local file system is performant enough.
         // Should this stop being the case, the remote log size could be calculated by incrementing/decrementing
         // counters during API calls for a more performant implementation.
-        Iterator<RemoteLogSegmentMetadata> remoteLogSegmentMetadataIterator = remotePartitionMetadataStore.listRemoteLogSegments(topicPartition, leaderEpoch);
+        Iterator<RemoteLogSegmentMetadata> remoteLogSegmentMetadataIterator = remotePartitionMetadataStore.listRemoteLogSegments(topicIdPartition, leaderEpoch);
         while (remoteLogSegmentMetadataIterator.hasNext()) {
             RemoteLogSegmentMetadata remoteLogSegmentMetadata = remoteLogSegmentMetadataIterator.next();
             remoteLogSize += remoteLogSegmentMetadata.segmentSizeInBytes();
