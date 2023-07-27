@@ -69,6 +69,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -633,5 +634,47 @@ public class KRaftMigrationDriverTest {
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
             assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
         });
+    }
+
+    @Test
+    public void testBeginMigrationOnce() throws Exception {
+        AtomicInteger migrationBeginCalls = new AtomicInteger(0);
+        NoOpRecordConsumer recordConsumer = new NoOpRecordConsumer() {
+            @Override
+            public void beginMigration() {
+                migrationBeginCalls.incrementAndGet();
+            }
+        };
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder().setBrokersInZk(1, 2, 3).build();
+        MockFaultHandler faultHandler = new MockFaultHandler("testTwoMigrateMetadataEvents");
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setZkRecordConsumer(recordConsumer)
+            .setPropagator(metadataPropagator)
+            .setFaultHandler(faultHandler);
+        try (KRaftMigrationDriver driver = builder.build()) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+
+            driver.start();
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                    "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+            assertEquals(1, migrationBeginCalls.get());
+        }
     }
 }
