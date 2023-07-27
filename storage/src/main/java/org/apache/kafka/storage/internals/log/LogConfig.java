@@ -105,27 +105,11 @@ public class LogConfig extends AbstractConfig {
         private final boolean remoteStorageEnable;
         private final long localRetentionMs;
         private final long localRetentionBytes;
-        private final long retentionMs;
-        private final long retentionBytes;
 
-        private RemoteLogConfig(LogConfig config, long retentionMs, long retentionBytes) {
+        private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-            this.retentionMs = retentionMs;
-            this.retentionBytes = retentionBytes;
-        }
-
-        public boolean remoteStorageEnable() {
-            return remoteStorageEnable;
-        }
-
-        public long localRetentionMs() {
-            return localRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : localRetentionMs;
-        }
-
-        public long localRetentionBytes() {
-            return localRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionBytes : localRetentionBytes;
         }
     }
 
@@ -369,7 +353,7 @@ public class LogConfig extends AbstractConfig {
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
-        remoteLogConfig = new RemoteLogConfig(this, retentionMs, retentionSize);
+        remoteLogConfig = new RemoteLogConfig(this);
     }
 
     @SuppressWarnings("deprecation")
@@ -401,6 +385,18 @@ public class LogConfig extends AbstractConfig {
             return segmentSize;
         else
             return 0;
+    }
+
+    public boolean remoteStorageEnable() {
+        return remoteLogConfig.remoteStorageEnable;
+    }
+
+    public long localRetentionMs() {
+        return remoteLogConfig.localRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : remoteLogConfig.localRetentionMs;
+    }
+
+    public long localRetentionBytes() {
+        return remoteLogConfig.localRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionSize : remoteLogConfig.localRetentionBytes;
     }
 
     public String overriddenConfigsAsLoggableString() {
