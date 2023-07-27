@@ -59,6 +59,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +72,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.GroupMetadataManagerTest.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupEpochRecord;
@@ -194,7 +196,7 @@ public class RecordHelpersTest {
                             .setPartitionMetadata(mkListOfPartitionRacks(20)))),
                 (short) 0));
 
-        assertEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
+        assertRecordEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
             "group-id",
             subscriptionMetadata
         ));
@@ -212,6 +214,50 @@ public class RecordHelpersTest {
 
         assertEquals(expectedRecord, newGroupSubscriptionMetadataTombstoneRecord(
             "group-id"
+        ));
+    }
+
+    @Test
+    public void testEmptyPartitionMetadataWhenRacksUnavailableGroupSubscriptionMetadataRecord() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
+
+        subscriptionMetadata.put("foo", new TopicMetadata(
+            fooTopicId,
+            "foo",
+            10,
+            Collections.emptyMap()));
+        subscriptionMetadata.put("bar", new TopicMetadata(
+            barTopicId,
+            "bar",
+            20,
+            Collections.emptyMap()));
+
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new ConsumerGroupPartitionMetadataKey()
+                    .setGroupId("group-id"),
+                (short) 4
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupPartitionMetadataValue()
+                    .setTopics(Arrays.asList(
+                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
+                            .setTopicId(fooTopicId)
+                            .setTopicName("foo")
+                            .setNumPartitions(10)
+                            .setPartitionMetadata(Collections.emptyList()),
+                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
+                            .setTopicId(barTopicId)
+                            .setTopicName("bar")
+                            .setNumPartitions(20)
+                            .setPartitionMetadata(Collections.emptyList()))),
+                (short) 0));
+
+        assertRecordEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
+            "group-id",
+            subscriptionMetadata
         ));
     }
 
@@ -760,22 +806,37 @@ public class RecordHelpersTest {
         assertEquals(expectedRecord, record);
     }
 
+    // For the purpose of testing let:
+    //  a) Number of replicas for each partition = 2
+    //  b) Number of racks available in the cluster = 4
+
+    /**
+     * Creates a list of values to be added to the record.
+     *
+     * @param numPartitions The number of partitions for the topic.
+     */
     public static List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
         List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
         for (int i = 0; i < numPartitions; i++) {
+            List<String> racks = new ArrayList<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4));
             partitionRacks.add(
                 new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
                     .setPartition(i)
-                    .setRacks(Collections.emptyList())
+                    .setRacks(racks)
             );
         }
         return partitionRacks;
     }
 
+    /**
+     * Creates a map of partitions to racks.
+     *
+     * @param numPartitions The number of partitions for the topic.
+     */
     public static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions ; i++) {
-          partitionRacks.put(i, Collections.emptySet());
+        for (int i = 0; i < numPartitions; i++) {
+            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4)));
         }
         return partitionRacks;
     }

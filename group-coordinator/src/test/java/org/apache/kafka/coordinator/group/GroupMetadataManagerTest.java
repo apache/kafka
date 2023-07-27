@@ -168,20 +168,29 @@ public class GroupMetadataManagerTest {
             String topicName,
             int numPartitions
         ) {
+            // For the purpose of testing let:
+            // a) Number of replicas for each partition = 2
+            // b) Number of brokers available in the cluster = 4
             delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
             for (int i = 0; i < numPartitions; i++) {
                 delta.replay(new PartitionRecord()
                     .setTopicId(topicId)
-                    .setPartitionId(i));
+                    .setPartitionId(i)
+                    .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
             }
             return this;
         }
 
-        public MetadataImageBuilder addRack(
-            int brokerId,
-            String rack
-        ) {
-            delta.replay(new RegisterBrokerRecord().setBrokerId(brokerId).setRack(rack));
+        /**
+         * Add rack Ids for 4 broker Ids.
+         *
+         * For the purpose of testing, each broker is mapped
+         * to a rack Id with the broker Id as a suffix.
+         */
+        public MetadataImageBuilder addRacks() {
+            for (int i = 0 ; i < 4 ; i ++) {
+                delta.replay(new RegisterBrokerRecord().setBrokerId(i).setRack("rack" + i));
+            }
             return this;
         }
 
@@ -996,6 +1005,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
                 .build())
             .build();
 
@@ -1085,6 +1095,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -1186,6 +1197,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -1331,6 +1343,7 @@ public class GroupMetadataManagerTest {
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .addTopic(zarTopicId, zarTopicName, 1)
+                .addRacks()
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -1421,6 +1434,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -1866,6 +1880,7 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -2233,6 +2248,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
                 .build())
             .build();
 
@@ -2266,6 +2282,7 @@ public class GroupMetadataManagerTest {
             .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -2376,6 +2393,7 @@ public class GroupMetadataManagerTest {
             .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -2706,6 +2724,7 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
                 .build())
             .build();
 
@@ -2780,6 +2799,7 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
                 .build())
             .build();
 
@@ -2845,6 +2865,7 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
+                .addRacks()
                 .build())
             .build();
 
@@ -3084,6 +3105,7 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
+                .addRacks()
                 .build())
             .build();
 
@@ -5273,7 +5295,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.LEADER_NOT_AVAILABLE, Errors.LEADER_NOT_AVAILABLE);
     }
 
-    private <T> void assertUnorderedListEquals(
+    public static <T> void assertUnorderedListEquals(
         List<T> expected,
         List<T> actual
     ) {
@@ -5353,7 +5375,7 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    private void assertRecordEquals(
+    public static void assertRecordEquals(
         Record expected,
         Record actual
     ) {
@@ -5368,7 +5390,7 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    private void assertApiMessageAndVersionEquals(
+    public static void assertApiMessageAndVersionEquals(
         ApiMessageAndVersion expected,
         ApiMessageAndVersion actual
     ) {
@@ -5398,12 +5420,60 @@ public class GroupMetadataManagerTest {
                 fromTopicPartitions(actualValue.partitionsPendingRevocation()));
             assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
                 fromTopicPartitions(actualValue.partitionsPendingAssignment()));
-        } else {
-            assertEquals(expected.message(), actual.message());
+        } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
+            // The order of the racks stored in PartitionMetadata of ConsumerGroupPartitionMetadataValue is not
+            // always guaranteed. Therefore, we need a special comparator.
+            ConsumerGroupPartitionMetadataValue expectedValue =
+                (ConsumerGroupPartitionMetadataValue) expected.message();
+            ConsumerGroupPartitionMetadataValue actualValue =
+                (ConsumerGroupPartitionMetadataValue) actual.message();
+
+            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> expectedTopicMetadataList =
+                expectedValue.topics();
+            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> actualTopicMetadataList =
+                actualValue.topics();
+
+            if (expectedTopicMetadataList.size() != actualTopicMetadataList.size()) {
+                fail("Topic metadata lists have different sizes");
+            }
+
+            for (int i = 0; i < expectedValue.topics().size(); i++) {
+                ConsumerGroupPartitionMetadataValue.TopicMetadata expectedTopicMetadata =
+                    expectedTopicMetadataList.get(i);
+                ConsumerGroupPartitionMetadataValue.TopicMetadata actualTopicMetadata =
+                    actualTopicMetadataList.get(i);
+
+                assertEquals(expectedTopicMetadata.topicId(), actualTopicMetadata.topicId());
+                assertEquals(expectedTopicMetadata.topicName(), actualTopicMetadata.topicName());
+                assertEquals(expectedTopicMetadata.numPartitions(), actualTopicMetadata.numPartitions());
+
+                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> expectedPartitionMetadataList =
+                    expectedTopicMetadata.partitionMetadata();
+                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> actualPartitionMetadataList =
+                    actualTopicMetadata.partitionMetadata();
+
+                // If the list is empty, rack information wasn't available for any replica of
+                // the partition and hence, the entry wasn't added to the record.
+                if (expectedPartitionMetadataList.size() != actualPartitionMetadataList.size()) {
+                    fail("Partition metadata lists have different sizes");
+                } else if (!expectedPartitionMetadataList.isEmpty() && !actualPartitionMetadataList.isEmpty()) {
+                    for (int j = 0; j < expectedTopicMetadata.numPartitions(); j++) {
+                        ConsumerGroupPartitionMetadataValue.PartitionMetadata expectedPartitionMetadata =
+                            expectedPartitionMetadataList.get(j);
+                        ConsumerGroupPartitionMetadataValue.PartitionMetadata actualPartitionMetadata =
+                            actualPartitionMetadataList.get(j);
+
+                        assertEquals(expectedPartitionMetadata.partition(), actualPartitionMetadata.partition());
+                        assertUnorderedListEquals(expectedPartitionMetadata.racks(), actualPartitionMetadata.racks());
+                    }
+                } else {
+                    assertEquals(expected.message(), actual.message());
+                }
+            }
         }
     }
 
-    private Map<Uuid, Set<Integer>> fromTopicPartitions(
+    private static Map<Uuid, Set<Integer>> fromTopicPartitions(
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
     ) {
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();

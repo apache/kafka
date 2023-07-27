@@ -31,11 +31,11 @@ import java.util.Set;
 @InterfaceStability.Unstable
 public interface SubscribedTopicDescriber {
     /**
-     * The number of partitions for the given topic ID.
+     * The number of partitions for the given topic Id.
      *
      * @param topicId   Uuid corresponding to the topic.
-     * @return The number of partitions corresponding to the given topic ID,
-     *         or -1 if the topic ID does not exist.
+     * @return The number of partitions corresponding to the given topic Id,
+     *         or -1 if the topic Id does not exist.
      */
     int numPartitions(Uuid topicId);
 
@@ -45,7 +45,7 @@ public interface SubscribedTopicDescriber {
      * @param topicId   Uuid corresponding to the partition's topic.
      * @param partition Partition number within topic.
      * @return The set of racks corresponding to the replicas of the topics partition.
-     *         If the topic ID does not exist, an empty set is returned
+     *         If the topic Id does not exist, an empty set is returned
      */
     Set<String> racksForPartition(Uuid topicId, int partition);
 }

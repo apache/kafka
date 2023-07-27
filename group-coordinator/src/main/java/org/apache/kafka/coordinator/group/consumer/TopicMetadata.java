@@ -46,8 +46,8 @@ public class TopicMetadata {
     private final int numPartitions;
 
     /**
-     * Map of every partition to a set of its rackIds.
-     * If the rack information is unavailable, this is an empty map.
+     * Map of every partition Id to a set of its rack Ids, if they exist.
+     * If rack information is unavailable for all partitions, this is an empty map.
      */
     private final Map<Integer, Set<String>> partitionRacks;
 
@@ -57,19 +57,19 @@ public class TopicMetadata {
         int numPartitions,
         Map<Integer, Set<String>> partitionRacks
     ) {
-            this.id = Objects.requireNonNull(id);
-            this.partitionRacks = Objects.requireNonNull(partitionRacks);
-            if (Uuid.ZERO_UUID.equals(id)) {
-                throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
-            }
-            this.name = Objects.requireNonNull(name);
-            if (name.isEmpty()) {
-                throw new IllegalArgumentException("Topic name cannot be empty.");
-            }
-            this.numPartitions = numPartitions;
-            if (numPartitions < 0) {
-                throw new IllegalArgumentException("Number of partitions cannot be negative.");
-            }
+        this.id = Objects.requireNonNull(id);
+        if (Uuid.ZERO_UUID.equals(id)) {
+            throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
+        }
+        this.name = Objects.requireNonNull(name);
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("Topic name cannot be empty.");
+        }
+        this.numPartitions = numPartitions;
+        if (numPartitions < 0) {
+            throw new IllegalArgumentException("Number of partitions cannot be negative.");
+        }
+        this.partitionRacks = Objects.requireNonNull(partitionRacks);
     }
 
     /**
@@ -94,8 +94,8 @@ public class TopicMetadata {
     }
 
     /**
-     * @return Every partition mapped to the set of corresponding rack Ids of its replicas.
-     *         An empty map is returned if no rack information is available.
+     * @return Every partition mapped to the set of corresponding available rack Ids of its replicas.
+     *         An empty map is returned if rack information is unavailable for all partitions.
      */
     public Map<Integer, Set<String>> partitionRacks() {
         return this.partitionRacks;
@@ -136,7 +136,7 @@ public class TopicMetadata {
     public static TopicMetadata fromRecord(
         ConsumerGroupPartitionMetadataValue.TopicMetadata record
     ) {
-        // Converting the data type from a list stored in the record to a map.
+        // Converting the data type from a list stored in the record to a map for the topic metadata.
         Map<Integer, Set<String>> partitionRacks = new HashMap<>();
         for (ConsumerGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionMetadata()) {
             partitionRacks.put(
@@ -149,6 +149,6 @@ public class TopicMetadata {
             record.topicId(),
             record.topicName(),
             record.numPartitions(),
-            partitionRacks.isEmpty() ? Collections.emptyMap() : partitionRacks);
+            partitionRacks);
     }
 }

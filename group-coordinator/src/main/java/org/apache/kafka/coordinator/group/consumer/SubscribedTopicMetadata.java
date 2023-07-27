@@ -30,7 +30,7 @@ import java.util.Set;
  */
 public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
     /**
-     * The topic IDs mapped to their corresponding {@link TopicMetadata}
+     * The topic Ids mapped to their corresponding {@link TopicMetadata}
      * object, which contains topic and partition metadata.
      */
     Map<Uuid, TopicMetadata> topicMetadata;
@@ -40,30 +40,30 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
     }
 
     /**
-     * The number of partitions for the given topic ID.
+     * The number of partitions for the given topic Id.
      *
      * @param topicId   Uuid corresponding to the topic.
-     * @return The number of partitions corresponding to the given topic ID,
-     *         or -1 if the topic ID does not exist.
+     * @return The number of partitions corresponding to the given topic Id,
+     *         or -1 if the topic Id does not exist.
      */
     @Override
     public int numPartitions(Uuid topicId) {
-        return this.topicMetadata.containsKey(topicId) ? this.topicMetadata.get(topicId).numPartitions() : -1;
+        TopicMetadata topic = this.topicMetadata.get(topicId);
+        return topic == null ? -1 : topic.numPartitions();
     }
 
     /**
      * Returns all the available racks associated with the replicas of the given partition.
      *
      * @param topicId   Uuid corresponding to the partition's topic.
-     * @param partition Partition number within topic.
+     * @param partition Partition Id within topic.
      * @return The set of racks corresponding to the replicas of the topics partition.
-     *         If the topic ID does not exist, an empty set is returned
+     *         If the topic Id does not exist, an empty set is returned
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        return this.topicMetadata.containsKey(topicId) ?
-            this.topicMetadata.get(topicId).partitionRacks().get(partition) :
-            Collections.emptySet();
+        TopicMetadata topic = this.topicMetadata.get(topicId);
+        return topic == null ? Collections.emptySet() : topic.partitionRacks().get(partition);
     }
 
     @Override

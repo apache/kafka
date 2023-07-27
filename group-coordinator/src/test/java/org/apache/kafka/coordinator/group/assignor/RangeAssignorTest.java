@@ -111,23 +111,18 @@ public class RangeAssignorTest {
     @Test
     public void testFirstAssignmentTwoConsumersTwoTopicsSameSubscriptions() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic3Uuid,
-            new TopicMetadata(
-                topic3Uuid,
-                topic3Name,
-                2,
-                createPartitionMetadata(2)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic3Uuid, new TopicMetadata(
+            topic3Uuid,
+            topic3Name,
+            2,
+            createPartitionMetadata(2)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -168,32 +163,24 @@ public class RangeAssignorTest {
     @Test
     public void testFirstAssignmentThreeConsumersThreeTopicsDifferentSubscriptions() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic2Uuid,
-            new TopicMetadata(
-                topic2Uuid,
-                topic2Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic3Uuid,
-            new TopicMetadata(
-                topic3Uuid,
-                topic3Name,
-                2,
-                createPartitionMetadata(2)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic3Uuid, new TopicMetadata(
+            topic3Uuid,
+            topic3Name,
+            2,
+            createPartitionMetadata(2)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -245,23 +232,18 @@ public class RangeAssignorTest {
     @Test
     public void testFirstAssignmentNumConsumersGreaterThanNumPartitions() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic3Uuid,
-            new TopicMetadata(
-                topic3Uuid,
-                topic3Name,
-                2,
-                createPartitionMetadata(2)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic3Uuid, new TopicMetadata(
+            topic3Uuid,
+            topic3Name,
+            2,
+            createPartitionMetadata(2)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -313,23 +295,18 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentNumConsumersGreaterThanNumPartitionsWhenOneConsumerAdded() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                2,
-                createPartitionMetadata(2)
-            )
-        );
-
-        topicMetadata.put(topic2Uuid,
-            new TopicMetadata(
-                topic2Uuid,
-                topic2Name,
-                2,
-                createPartitionMetadata(2)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            2,
+            createPartitionMetadata(2)
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            2,
+            createPartitionMetadata(2)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -391,23 +368,18 @@ public class RangeAssignorTest {
     public void testReassignmentWhenOnePartitionAddedForTwoConsumersTwoTopics() {
         // Simulating adding a partition - originally T1 -> 3 Partitions and T2 -> 3 Partitions
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                4,
-                createPartitionMetadata(4)
-            )
-        );
-
-        topicMetadata.put(topic2Uuid,
-            new TopicMetadata(
-                topic2Uuid,
-                topic2Name,
-                4,
-                createPartitionMetadata(4)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            4,
+            createPartitionMetadata(4)
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            4,
+            createPartitionMetadata(4)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -458,23 +430,18 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentWhenOneConsumerAddedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic2Uuid,
-            new TopicMetadata(
-                topic2Uuid,
-                topic2Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            3,
+            createPartitionMetadata(3)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -539,23 +506,18 @@ public class RangeAssignorTest {
     public void testReassignmentWhenOneConsumerAddedAndOnePartitionAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         // Add a new partition to topic 1, initially T1 -> 3 partitions
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                4,
-                createPartitionMetadata(4)
-            )
-        );
-
-        topicMetadata.put(topic2Uuid,
-            new TopicMetadata(
-                topic2Uuid,
-                topic2Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            4,
+            createPartitionMetadata(4)
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            3,
+            createPartitionMetadata(3)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -618,23 +580,18 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentWhenOneConsumerRemovedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic2Uuid,
-            new TopicMetadata(
-                topic2Uuid,
-                topic2Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            3,
+            createPartitionMetadata(3)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -669,32 +626,24 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentWhenMultipleSubscriptionsRemovedAfterInitialAssignmentWithThreeConsumersTwoTopics() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid,
-            new TopicMetadata(
-                topic1Uuid,
-                topic1Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic2Uuid,
-            new TopicMetadata(
-                topic2Uuid,
-                topic2Name,
-                3,
-                createPartitionMetadata(3)
-            )
-        );
-
-        topicMetadata.put(topic3Uuid,
-            new TopicMetadata(
-                topic3Uuid,
-                topic3Name,
-                2,
-                createPartitionMetadata(2)
-            )
-        );
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            3,
+            createPartitionMetadata(3)
+        ));
+        topicMetadata.put(topic3Uuid, new TopicMetadata(
+            topic3Uuid,
+            topic3Name,
+            2,
+            createPartitionMetadata(2)
+        ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 

@@ -425,9 +425,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 1.
         assertEquals(
             mkMap(
-                mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())
-                )
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
@@ -443,9 +441,7 @@ public class ConsumerGroupTest {
         // It should return foo now.
         assertEquals(
             mkMap(
-                mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())
-                )
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
@@ -469,12 +465,8 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())
-                ),
-                mkEntry("bar",
-                    new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap())
-                )
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
@@ -490,12 +482,8 @@ public class ConsumerGroupTest {
         // It should return foo and bar.
         assertEquals(
             mkMap(
-                mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())
-                ),
-                mkEntry("bar",
-                    new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap())
-                )
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
@@ -508,9 +496,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account removal of member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())
-                )
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 member2,
@@ -523,9 +509,7 @@ public class ConsumerGroupTest {
         // Removing member1 results in returning bar.
         assertEquals(
             mkMap(
-                mkEntry("bar",
-                    new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap())
-                )
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 member1,
@@ -538,15 +522,9 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())
-                ),
-                mkEntry("bar",
-                    new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap())
-                ),
-                mkEntry("zar",
-                    new TopicMetadata(zarTopicId, "zar", 3, Collections.emptyMap())
-                )
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap())),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
@@ -562,15 +540,9 @@ public class ConsumerGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo",
-                    new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())
-                ),
-                mkEntry("bar",
-                    new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap())
-                ),
-                mkEntry("zar",
-                    new TopicMetadata(zarTopicId, "zar", 3, Collections.emptyMap())
-                )
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, Collections.emptyMap())),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, Collections.emptyMap())),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, Collections.emptyMap()))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,

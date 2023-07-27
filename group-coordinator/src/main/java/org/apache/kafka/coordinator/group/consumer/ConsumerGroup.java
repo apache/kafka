@@ -458,7 +458,8 @@ public class ConsumerGroup implements Group {
                         // Only add the rack if it is available for the broker/replica.
                         rackOptional.ifPresent(racks::add);
                     }
-                    // If no rack information is available for any replica of this partition, store an empty map.
+                    // If rack information is unavailable for all replicas of this partition,
+                    // no entry will be stored for it in the map.
                     if (!racks.isEmpty())
                         partitionRacks.put(partition, racks);
                 });
@@ -467,7 +468,7 @@ public class ConsumerGroup implements Group {
                     topicImage.id(),
                     topicImage.name(),
                     topicImage.partitions().size(),
-                    partitionRacks.isEmpty() ? Collections.emptyMap() : partitionRacks)
+                    partitionRacks)
                 );
             }
         });

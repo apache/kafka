@@ -21,7 +21,10 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetada
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -30,10 +33,12 @@ public class TopicMetadataTest {
     @Test
     public void testAttributes() {
         Uuid topicId = Uuid.randomUuid();
-        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, Collections.emptyMap());
+        Map<Integer, Set<String>> partitionRacks = mkMapOfPartitionRacks(15);
+        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, partitionRacks);
         assertEquals(topicId, topicMetadata.id());
         assertEquals("foo", topicMetadata.name());
         assertEquals(15, topicMetadata.numPartitions());
+        assertEquals(partitionRacks, topicMetadata.partitionRacks());
     }
 
     @Test
