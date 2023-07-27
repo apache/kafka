@@ -311,7 +311,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         // offsets present in the global offsets topic, instead of indicating to the task that no offsets can be found.
         CompletableFuture<Void> offsetWriteFuture = CompletableFuture.completedFuture(null);
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-            offsetWriteFuture.thenApply((v) -> {
+            offsetWriteFuture.thenApply(v -> {
                 Future<Void> secondaryWriteFuture = secondaryStore.set(tombstoneOffsets, new FutureCallback<>());
                 try {
                     if (exactlyOnce) {
