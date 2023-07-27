@@ -22,9 +22,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
@@ -35,11 +38,16 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.CommonNameLoggingTrustManager;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.NeverExpiringX509Certificate;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
+import org.bouncycastle.util.io.pem.PemWriter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -205,8 +213,8 @@ public class DefaultSslEngineFactoryTest {
     @BeforeAll
     public void setUpOnce() throws CertificateException, NoSuchAlgorithmException {
         chainWithValidEndCertificate = generateKeyChainIncludingCA(false, true);
-        chainWithExpiredEndCertificate = generateKeyChainIncludingCA(false, true);
-        chainWithInvalidEndCertificate = generateKeyChainIncludingCA(true, false);
+        chainWithExpiredEndCertificate = generateKeyChainIncludingCA(true, true);
+        chainWithInvalidEndCertificate = generateKeyChainIncludingCA(false, false);
     }
 
     @BeforeEach
@@ -405,8 +413,9 @@ public class DefaultSslEngineFactoryTest {
                 assertDoesNotThrow(() -> cert.verify(signingKey));
                 assertDoesNotThrow(() -> wrappedCert.verify(signingKey));
             } else {
-                assertThrows(SignatureException.class, () -> cert.verify(signingKey));
-                assertThrows(SignatureException.class, () -> wrappedCert.verify(signingKey));
+                Exception origException = assertThrows(SignatureException.class, () -> cert.verify(signingKey));
+                Exception testException = assertThrows(SignatureException.class, () -> wrappedCert.verify(signingKey));
+                assert (origException.getMessage().equals(testException.getMessage()));
             }
             // Test timing now, starting with "now"
             Date dateNow = new Date();
@@ -432,16 +441,18 @@ public class DefaultSslEngineFactoryTest {
                 assertDoesNotThrow(() -> cert.checkValidity(dateRecentPast));
                 assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
             } else {
-                // Cert was already valid
-                assertThrows(CertificateException.class, () -> cert.checkValidity(dateRecentPast));
-                assertThrows(CertificateException.class,
+                // Cert not valid yet
+                Exception origException = assertThrows(CertificateException.class, () -> cert.checkValidity(dateRecentPast));
+                Exception testException = assertThrows(CertificateException.class,
                         () -> wrappedCert.checkValidity(dateRecentPast));
+                assert (origException.getMessage().equals(testException.getMessage()));
             }
             // Test with (days+1) before now. Both certificates were not yet valid, thus both checks
             // must throw
             Date datePast = new Date(System.currentTimeMillis() - (days + 2) * 24 * 60 * 60 * 1000);
-            assertThrows(CertificateException.class, () -> cert.checkValidity(datePast));
-            assertThrows(CertificateException.class, () -> wrappedCert.checkValidity(datePast));
+            Exception origException = assertThrows(CertificateException.class, () -> cert.checkValidity(datePast));
+            Exception testException = assertThrows(CertificateException.class, () -> wrappedCert.checkValidity(datePast));
+            assert (origException.getMessage().equals(testException.getMessage()));
             // Test with "days+2" after now.
             // Cert is not valid anymore. The original class must throw
             Date dateFuture =
@@ -452,6 +463,118 @@ public class DefaultSslEngineFactoryTest {
             // The NeverExpiringX509Certificate will report any expired certificate as still valid
             assertDoesNotThrow(() -> wrappedCert.checkValidity(dateFuture));
         }
+    }
+
+    public static X509TrustManager getX509TrustManager(TrustManagerFactory tmf) throws Exception {
+        for (TrustManager trustManager: tmf.getTrustManagers()) {
+                if (trustManager instanceof X509TrustManager) {
+                    return (X509TrustManager) trustManager;
+                }
+            }
+            throw new Exception("Unable to find X509TrustManager");
+    }
+
+    @Test
+    public void testCommonNameLoggingTrustManager() throws Exception {
+        X509Certificate endCert = chainWithValidEndCertificate[0];
+        X509Certificate intermediateCert = chainWithValidEndCertificate[1];
+        X509Certificate caCert = chainWithValidEndCertificate[2];
+        X509Certificate[] chainWithoutCa = new X509Certificate[2];
+        chainWithoutCa[0] = endCert;
+        chainWithoutCa[1] = intermediateCert;
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("CA", caCert);
+
+        //KeyStore trustStore = factory.truststore();
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        tmf.init(trustStore);
+        final X509TrustManager origTrustManager = getX509TrustManager(tmf);
+
+        CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+        assertDoesNotThrow(() -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+        assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+        assertDoesNotThrow(() -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+        assertDoesNotThrow(() -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+        assertArrayEquals(origTrustManager.getAcceptedIssuers(), testTrustManager.getAcceptedIssuers());
+    }
+
+    @Test
+    public void testCommonNameLoggingTrustManagerWithInvalidEndCert() throws Exception {
+        X509Certificate endCert = chainWithInvalidEndCertificate[0];
+        X509Certificate intermediateCert = chainWithInvalidEndCertificate[1];
+        X509Certificate caCert = chainWithInvalidEndCertificate[2];
+        X509Certificate[] chainWithoutCa = new X509Certificate[2];
+        chainWithoutCa[0] = endCert;
+        chainWithoutCa[1] = intermediateCert;
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("CA", caCert);
+
+        //KeyStore trustStore = factory.truststore();
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        tmf.init(trustStore);
+        final X509TrustManager origTrustManager = getX509TrustManager(tmf);
+
+        CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+        Exception origException = assertThrows(CertificateException.class, () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+        Exception testException = assertThrows(CertificateException.class, () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+        assert (origException.getMessage().equals(testException.getMessage()));
+        origException = assertThrows(CertificateException.class, () -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+        testException = assertThrows(CertificateException.class, () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+        assert (origException.getMessage().equals(testException.getMessage()));
+        assertArrayEquals(origTrustManager.getAcceptedIssuers(), testTrustManager.getAcceptedIssuers());
+    }
+
+    @Test
+    public void testCommonNameLoggingTrustManagerWithExpiredEndCert() throws Exception {
+        X509Certificate endCert = chainWithExpiredEndCertificate[0];
+        X509Certificate intermediateCert = chainWithExpiredEndCertificate[1];
+        X509Certificate caCert = chainWithExpiredEndCertificate[2];
+        X509Certificate[] chainWithoutCa = new X509Certificate[2];
+        chainWithoutCa[0] = endCert;
+        chainWithoutCa[1] = intermediateCert;
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("CA", caCert);
+
+        //KeyStore trustStore = factory.truststore();
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        tmf.init(trustStore);
+        final X509TrustManager origTrustManager = getX509TrustManager(tmf);
+
+        CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+        Exception origException = assertThrows(CertificateException.class, () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+        Exception testException = assertThrows(CertificateException.class, () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+        assert (origException.getMessage().equals(testException.getMessage()));
+        origException = assertThrows(CertificateException.class, () -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+        testException = assertThrows(CertificateException.class, () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+        assert (origException.getMessage().equals(testException.getMessage()));
+        assertArrayEquals(origTrustManager.getAcceptedIssuers(), testTrustManager.getAcceptedIssuers());
+    }
+
+    @Test
+    public void testSortChainAnWrapEndCertificate() {
+        X509Certificate endCert = chainWithExpiredEndCertificate[0];
+        X509Certificate intermediateCert = chainWithExpiredEndCertificate[1];
+        X509Certificate caCert = chainWithExpiredEndCertificate[2];
+        // Check that the order is unchanged for an already sorted certificate chain (starting with end certificate)
+        X509Certificate[] chainWithoutCaInOrder = new X509Certificate[2];
+        chainWithoutCaInOrder[0] = endCert;
+        chainWithoutCaInOrder[1] = intermediateCert;
+        X509Certificate[] sortedChain = assertDoesNotThrow(() ->CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithoutCaInOrder));
+        assert(sortedChain[0].getSubjectX500Principal().equals(endCert.getSubjectX500Principal()) && 
+            sortedChain[1].getSubjectX500Principal().equals(intermediateCert.getSubjectX500Principal()));
+        // Check that the order is changed for an unsorted certificate chain such that it starts with end certificate
+        X509Certificate[] chainWithoutCaOutOfOrder = new X509Certificate[2];
+        chainWithoutCaOutOfOrder[0] = intermediateCert;
+        chainWithoutCaOutOfOrder[1] = endCert;
+        sortedChain = assertDoesNotThrow(() ->CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithoutCaOutOfOrder));
+        assert(sortedChain[0].getSubjectX500Principal().equals(endCert.getSubjectX500Principal()) && 
+            sortedChain[1].getSubjectX500Principal().equals(intermediateCert.getSubjectX500Principal()));
     }
 
     /**
@@ -471,23 +594,23 @@ public class DefaultSslEngineFactoryTest {
         X509Certificate[] certs = new X509Certificate[3];
         int endCertDaysValidBeforeNow = 1;
         // If using 0 or a negative value, the generated certificate will be expired
-        int endCertDaysValidAfterNow = expired ? 0 : +1;
+        int endCertDaysValidAfterNow = expired ? 0 : 1;
         // Generate root CA
-        certs[2] = TestSslUtils.generateSignedCertificate("CN=CA, L=London, C=GB", keyPairs[2], 365,
-                365, null, null, "SHA512withRSA");
-        certs[1] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA, L=London, C=GB",
-                keyPairs[1], 365, 365, certs[2].getIssuerX500Principal().getName(), keyPairs[2],
-                "SHA512withRSA");
+        certs[2] = TestSslUtils.generateSignedCertificate("CN=CA", keyPairs[2], 365,
+                365, null, null, "SHA512withRSA", true, false, false);
+        certs[1] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA",
+                keyPairs[1], 365, 365, certs[2].getSubjectX500Principal().getName(), keyPairs[2],
+                "SHA512withRSA", true, false, false);
         if (endCertValid) {
             // Generate a valid end certificate, i.e. one that is signed by our intermediate CA
-            certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0],
+            certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka", keyPairs[0],
                     endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
-                    certs[1].getIssuerX500Principal().getName(), keyPairs[1], "SHA512withRSA");
+                    certs[1].getSubjectX500Principal().getName(), keyPairs[1], "SHA512withRSA", false, true, true);
         } else {
             // Generate an invalid end certificate, by creating a self-signed one.
-            certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka, L=London, C=GB", keyPairs[0],
+            certs[0] = TestSslUtils.generateSignedCertificate("C=GB, L=London, CN=kafka", keyPairs[0],
                     endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
-                    null, null, "SHA512withRSA");
+                    null, null, "SHA512withRSA", false, true, true);
         }
         return certs;
     }

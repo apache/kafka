@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
+import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERT61String;
@@ -30,9 +31,12 @@ import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
+import org.bouncycastle.asn1.x509.KeyPurposeId;
+import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -134,9 +138,9 @@ public class TestSslUtils {
      */
     public static X509Certificate generateSignedCertificate(String dn, KeyPair keyPair,
             int daysBeforeNow, int daysAfterNow, String issuer, KeyPair parentKeyPair,
-            String algorithm) throws CertificateException {
+            String algorithm, boolean isCA, boolean isServerCert, boolean isClientCert) throws CertificateException {
         return new CertificateBuilder(0, algorithm).generateSignedCertificate(dn, keyPair,
-                daysBeforeNow, daysAfterNow, issuer, parentKeyPair);
+                daysBeforeNow, daysAfterNow, issuer, parentKeyPair, isCA, isServerCert, isClientCert);
     }
 
     public static KeyPair generateKeyPair(String algorithm) throws NoSuchAlgorithmException {
@@ -489,11 +493,11 @@ public class TestSslUtils {
          * @throws CertificateException
          */
         public X509Certificate generateSignedCertificate(String dn, KeyPair keyPair,
-                int daysBeforeNow, int daysAfterNow, String issuer, KeyPair parentKeyPair)
+                int daysBeforeNow, int daysAfterNow, String issuer, KeyPair parentKeyPair, boolean isCA, boolean isServerCert, boolean isClientCert)
                 throws CertificateException {
             X500Name issuerOrDn = (issuer != null) ? new X500Name(issuer) : new X500Name(dn);
             return generateSignedCertificate(new X500Name(dn), keyPair, daysBeforeNow, daysAfterNow,
-                    issuerOrDn, parentKeyPair);
+                    issuerOrDn, parentKeyPair, isCA, isServerCert, isClientCert);
         }
 
         /**
@@ -509,7 +513,7 @@ public class TestSslUtils {
          * @throws CertificateException
          */
         public X509Certificate generateSignedCertificate(X500Name dn, KeyPair keyPair,
-                int daysBeforeNow, int daysAfterNow, X500Name issuer, KeyPair parentKeyPair)
+                int daysBeforeNow, int daysAfterNow, X500Name issuer, KeyPair parentKeyPair, boolean isCA, boolean isServerCert, boolean isClientCert)
                 throws CertificateException {
             try {
                 Security.addProvider(new BouncyCastleProvider());
@@ -543,9 +547,24 @@ public class TestSslUtils {
                 X500Name issuerOrDn = (issuer != null) ? issuer : dn;
                 X509v3CertificateBuilder v3CertGen =
                         new X509v3CertificateBuilder(issuerOrDn, sn, from, to, dn, subPubKeyInfo);
-
+                if (isCA) {
+                    v3CertGen.addExtension(Extension.basicConstraints, true, new BasicConstraints(isCA));
+                }
+                if (isServerCert || isClientCert) {
+                    ASN1EncodableVector purposes = new ASN1EncodableVector();
+                    if (isServerCert) 
+                    {
+                        purposes.add(KeyPurposeId.id_kp_serverAuth);
+                    }
+                    if (isClientCert) {
+                        purposes.add(KeyPurposeId.id_kp_clientAuth);
+                    }
+                    v3CertGen.addExtension(Extension.extendedKeyUsage, false, new DERSequence(purposes));
+                }
                 if (subjectAltName != null)
+                {
                     v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);
+                }
                 X509CertificateHolder certificateHolder = v3CertGen.build(sigGen);
                 return new JcaX509CertificateConverter().setProvider("BC")
                         .getCertificate(certificateHolder);

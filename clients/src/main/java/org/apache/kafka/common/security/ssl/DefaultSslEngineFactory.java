@@ -669,7 +669,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             } catch (CertificateException e) {
                 origException = e;
                 try {
-                    X509Certificate[] wrappedChain = sortChainAnWrapLeafCertificate(chain);
+                    X509Certificate[] wrappedChain = sortChainAnWrapEndCertificate(chain);
                     this.origTm.checkClientTrusted(wrappedChain, authType);
                     // No exception occurred this time. The certificate is invalid due to being expired, but otherwise valid.
                     String commonName = wrappedChain[0].getSubjectX500Principal().toString();
@@ -686,48 +686,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             }
         }
 
-        /**
-         * This method sorts the certificate chain from leaf to root certificate and wraps the leaf certificate to make it "never-expireing"
-         * @param origChain The original (unsorted) certificate chain
-         * @return The sorted and wrapped certificate chain
-         * @throws CertificateException
-         * @throws NoSuchAlgorithmException
-         */
-        private X509Certificate[] sortChainAnWrapLeafCertificate(X509Certificate[] origChain) throws CertificateException, NoSuchAlgorithmException {
-            // Find the leaf certificate by looking at all issuers and find the one not referred to by any other certificate
-            HashMap<X500Principal, X509Certificate> usedCertificatesMap = new HashMap<>();
-            for (X509Certificate cert: origChain) {
-                X500Principal issuerPrincipal = cert.getIssuerX500Principal();
-                usedCertificatesMap.put(issuerPrincipal, cert);
-            }
-            // Expect certificate chain to be broken, e.g. containing multiple leaf certificates
-            HashSet<X509Certificate> leafCertificates = new HashSet<>();
-            for (X509Certificate cert: origChain) {
-                X500Principal subjectPrincipal = cert.getSubjectX500Principal();
-                if (!usedCertificatesMap.containsKey(subjectPrincipal)) {
-                    leafCertificates.add(cert);
-                }
-            }
-            // There should be exactly one leaf certificate
-            if (leafCertificates.size() != 1) {
-                throw new CertificateException("Multiple leaf certificates in chain");
-            }
-            X509Certificate leafCertificate = leafCertificates.iterator().next();
-            X509Certificate[] wrappedChain = new X509Certificate[origChain.length];
-            // Add the wrapped certificate as first element in the new certificate chain array
-            wrappedChain[0] = new NeverExpiringX509Certificate(leafCertificate);
-            // Add all other (potential) certificates in order of dependencies (result will be sorted from leaf certificate to last intermediate/root certificate)
-            for (int i = 1; i < origChain.length; i++) {
-                X500Principal siblingCertificateIssuer = wrappedChain[i - 1].getIssuerX500Principal();
-                if (usedCertificatesMap.containsKey(siblingCertificateIssuer)) {
-                    wrappedChain[i] = usedCertificatesMap.get(siblingCertificateIssuer);
-                } else {
-                    throw new CertificateException("Certificate chain contains certificates not belonging to the chain");
-                }
-            }
-            return wrappedChain;
-        }
-
         @Override
         public void checkServerTrusted(X509Certificate[] chain, String authType)
                 throws CertificateException {
@@ -738,7 +696,59 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         public X509Certificate[] getAcceptedIssuers() {
             return this.origTm.getAcceptedIssuers();
         }
-    }
+        
+       /**
+         * This method sorts the certificate chain from end to root certificate and wraps the end certificate to make it "never-expireing"
+         * @param origChain The original (unsorted) certificate chain
+         * @return The sorted and wrapped certificate chain
+         * @throws CertificateException
+         * @throws NoSuchAlgorithmException
+         */
+        public static X509Certificate[] sortChainAnWrapEndCertificate(X509Certificate[] origChain) throws CertificateException, NoSuchAlgorithmException {
+            // Find the end certificate by looking at all issuers and find the one not referred to by any other certificate
+            // There might be multiple end certificates if the chain is invalid!
+            // Create a map from principal to certificate
+            HashMap<X500Principal, X509Certificate> principalToCertMap = new HashMap<>();
+            // First, create a map from principal of issuer (!) to certificate for easily finding the right certificates
+            HashMap<X500Principal, X509Certificate> issuedbyPrincipalToCertificatesMap = new HashMap<>();
+            for (X509Certificate cert: origChain) {
+                X500Principal principal = cert.getSubjectX500Principal();
+                X500Principal issuerPrincipal = cert.getIssuerX500Principal();
+                if (issuerPrincipal.equals(principal)) {
+                    // self-signed certificate in chain! This should not happen
+                    throw new CertificateException("Self-signed certificate in chain!");
+                }
+                issuedbyPrincipalToCertificatesMap.put(issuerPrincipal, cert);
+                principalToCertMap.put(principal, cert);
+            }
+            // Thus, expect certificate chain to be broken, e.g. containing multiple enbd certificates
+            HashSet<X509Certificate> endCertificates = new HashSet<>();
+            for (X509Certificate cert: origChain) {
+                X500Principal subjectPrincipal = cert.getSubjectX500Principal();
+                if (!issuedbyPrincipalToCertificatesMap.containsKey(subjectPrincipal)) {
+                    // We found a certificate which is not an issuer of another certificate. We consider it to be an end certificate
+                    endCertificates.add(cert);
+                }
+            }
+            // There should be exactly one end certificate
+            if (endCertificates.size() != 1) {
+                throw new CertificateException("Multiple end certificates in chain");
+            }
+            X509Certificate endCertificate = endCertificates.iterator().next();
+            X509Certificate[] wrappedChain = new X509Certificate[origChain.length];
+            // Add the wrapped certificate as first element in the new certificate chain array
+            wrappedChain[0] = new NeverExpiringX509Certificate(endCertificate);
+            // Add all other (potential) certificates in order of dependencies (result will be sorted from end certificate to last intermediate/root certificate)
+            for (int i = 1; i < origChain.length; i++) {
+                X500Principal siblingCertificateIssuer = wrappedChain[i - 1].getIssuerX500Principal();
+                if (principalToCertMap.containsKey(siblingCertificateIssuer)) {
+                    wrappedChain[i] = principalToCertMap.get(siblingCertificateIssuer);
+                } else {
+                    throw new CertificateException("Certificate chain contains certificates not belonging to the chain");
+                }
+            }
+            return wrappedChain;
+        }    }
 
     static class NeverExpiringX509Certificate extends X509Certificate {
 
