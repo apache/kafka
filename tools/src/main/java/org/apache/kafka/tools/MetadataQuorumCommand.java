@@ -29,7 +29,6 @@ import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.util.ToolsUtils;
 
 import java.io.File;
 import java.io.IOException;

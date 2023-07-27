@@ -173,6 +173,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
+    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 
@@ -493,7 +494,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         new OffsetCommitRequestData()
           .setGroupId(group)
           .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-          .setGenerationId(1)
+          .setGenerationIdOrMemberEpoch(1)
           .setTopics(Collections.singletonList(
             new OffsetCommitRequestData.OffsetCommitRequestTopic()
               .setName(topic)

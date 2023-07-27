@@ -37,6 +37,8 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -72,6 +74,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
@@ -95,6 +98,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -348,7 +352,8 @@ public class AbstractWorkerSourceTaskTest {
         StringConverter stringConverter = new StringConverter();
         SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
-        createWorkerTask(stringConverter, testConverter, stringConverter);
+        createWorkerTask(stringConverter, testConverter, stringConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
+                Collections::emptyList);
 
         expectSendRecord(null);
         expectTopicCreation(TOPIC);
@@ -689,6 +694,28 @@ public class AbstractWorkerSourceTaskTest {
         verify(transformationChain, times(2)).apply(eq(record3));
     }
 
+    @Test
+    public void testErrorReportersConfigured() {
+        RetryWithToleranceOperator retryWithToleranceOperator = mock(RetryWithToleranceOperator.class);
+        List<ErrorReporter> errorReporters = Collections.singletonList(mock(ErrorReporter.class));
+        createWorkerTask(keyConverter, valueConverter, headerConverter, retryWithToleranceOperator, () -> errorReporters);
+        workerTask.initializeAndStart();
+
+        ArgumentCaptor<List<ErrorReporter>> errorReportersCapture = ArgumentCaptor.forClass(List.class);
+        verify(retryWithToleranceOperator).reporters(errorReportersCapture.capture());
+        assertEquals(errorReporters, errorReportersCapture.getValue());
+    }
+
+    @Test
+    public void testErrorReporterConfigurationExceptionPropagation() {
+        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
+                () -> {
+                    throw new ConnectException("Failed to create error reporters");
+                }
+        );
+        assertThrows(ConnectException.class, () -> workerTask.initializeAndStart());
+    }
+
     private void expectSendRecord(Headers headers) {
         if (headers != null)
             expectConvertHeadersAndKeyValue(headers, TOPIC);
@@ -799,15 +826,16 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(keyConverter, valueConverter, headerConverter);
+        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR, Collections::emptyList);
     }
 
-    private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+    private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
+                                  RetryWithToleranceOperator retryWithToleranceOperator, Supplier<List<ErrorReporter>> errorReportersSupplier) {
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
                 sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
-                statusBackingStore, Runnable::run) {
+                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
+                statusBackingStore, Runnable::run, errorReportersSupplier) {
             @Override
             protected void prepareToInitializeTask() {
             }

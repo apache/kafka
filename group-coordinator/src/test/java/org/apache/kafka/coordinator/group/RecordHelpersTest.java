@@ -40,6 +40,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
@@ -48,6 +50,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
@@ -55,10 +58,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -467,6 +473,8 @@ public class RecordHelpersTest {
             time
         );
 
+        Map<String, byte[]> assignment = new HashMap<>();
+
         expectedMembers.forEach(member -> {
             JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
             protocols.add(new JoinGroupRequestProtocol()
@@ -482,13 +490,16 @@ public class RecordHelpersTest {
                 member.sessionTimeout(),
                 "consumer",
                 protocols,
-                member.assignment()
+                GenericGroupMember.EMPTY_ASSIGNMENT
             ));
+
+            assignment.put(member.memberId(), member.assignment());
         });
 
         group.initNextGeneration();
         Record groupMetadataRecord = RecordHelpers.newGroupMetadataRecord(
             group,
+            assignment,
             metadataVersion
         );
 
@@ -554,6 +565,7 @@ public class RecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
+                Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
             ));
     }
@@ -604,6 +616,7 @@ public class RecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
+                Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
             ));
     }
@@ -647,5 +660,108 @@ public class RecordHelpersTest {
         );
 
         assertEquals(expectedRecord, groupMetadataRecord);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testNewOffsetCommitRecord(MetadataVersion metadataVersion) {
+        OffsetCommitKey key = new OffsetCommitKey()
+            .setGroup("group-id")
+            .setTopic("foo")
+            .setPartition(1);
+        OffsetCommitValue value = new OffsetCommitValue()
+            .setOffset(100L)
+            .setLeaderEpoch(10)
+            .setMetadata("metadata")
+            .setCommitTimestamp(1234L)
+            .setExpireTimestamp(-1L);
+
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                key,
+                (short) 1),
+            new ApiMessageAndVersion(
+                value,
+                metadataVersion.offsetCommitValueVersion(false)
+            )
+        );
+
+        assertEquals(expectedRecord, RecordHelpers.newOffsetCommitRecord(
+            "group-id",
+            "foo",
+            1,
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.of(10),
+                "metadata",
+                1234L,
+                OptionalLong.empty()),
+            metadataVersion
+        ));
+
+        value.setLeaderEpoch(-1);
+
+        assertEquals(expectedRecord, RecordHelpers.newOffsetCommitRecord(
+            "group-id",
+            "foo",
+            1,
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.empty(),
+                "metadata",
+                1234L,
+                OptionalLong.empty()),
+            metadataVersion
+        ));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testNewOffsetCommitRecordWithExpireTimestamp(MetadataVersion metadataVersion) {
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup("group-id")
+                    .setTopic("foo")
+                    .setPartition(1),
+                (short) 1),
+            new ApiMessageAndVersion(
+                new OffsetCommitValue()
+                    .setOffset(100L)
+                    .setLeaderEpoch(10)
+                    .setMetadata("metadata")
+                    .setCommitTimestamp(1234L)
+                    .setExpireTimestamp(5678L),
+                (short) 1 // When expire timestamp is set, it is always version 1.
+            )
+        );
+
+        assertEquals(expectedRecord, RecordHelpers.newOffsetCommitRecord(
+            "group-id",
+            "foo",
+            1,
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.of(10),
+                "metadata",
+                1234L,
+                OptionalLong.of(5678L)),
+            metadataVersion
+        ));
+    }
+
+    @Test
+    public void testNewOffsetCommitTombstoneRecord() {
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup("group-id")
+                    .setTopic("foo")
+                    .setPartition(1),
+                (short) 1),
+            null);
+
+        Record record = RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
+        assertEquals(expectedRecord, record);
     }
 }

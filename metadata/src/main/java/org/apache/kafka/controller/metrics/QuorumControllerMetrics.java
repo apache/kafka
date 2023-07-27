@@ -45,7 +45,11 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
     private final static MetricName ZK_WRITE_BEHIND_LAG = getMetricName(
-            "KafkaController", "ZKWriteBehindLag");
+        "KafkaController", "ZkWriteBehindLag");
+    private final static MetricName ZK_WRITE_SNAPSHOT_TIME_MS = getMetricName(
+        "KafkaController", "ZkWriteSnapshotTimeMs");
+    private final static MetricName ZK_WRITE_DELTA_TIME_MS = getMetricName(
+        "KafkaController", "ZkWriteDeltaTimeMs");
     private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
@@ -54,6 +58,14 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "KafkaController", "LastAppliedRecordTimestamp");
     private final static MetricName LAST_APPLIED_RECORD_LAG_MS = getMetricName(
         "KafkaController", "LastAppliedRecordLagMs");
+    private final static MetricName TIMED_OUT_BROKER_HEARTBEAT_COUNT = getMetricName(
+        "KafkaController", "TimedOutBrokerHeartbeatCount");
+    private final static MetricName EVENT_QUEUE_OPERATIONS_STARTED_COUNT = getMetricName(
+        "KafkaController", "EventQueueOperationsStartedCount");
+    private final static MetricName EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT = getMetricName(
+        "KafkaController", "EventQueueOperationsTimedOutCount");
+    private final static MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
+        "KafkaController", "NewActiveControllersCount");
 
     private final Optional<MetricsRegistry> registry;
     private volatile boolean active;
@@ -63,7 +75,13 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong dualWriteOffset = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
+    private final Consumer<Long> zkWriteSnapshotTimeHandler;
+    private final Consumer<Long> zkWriteDeltaTimeHandler;
+
     private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
+    private final AtomicLong operationsStarted = new AtomicLong(0);
+    private final AtomicLong operationsTimedOut = new AtomicLong(0);
+    private final AtomicLong newActiveControllers = new AtomicLong(0);
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
@@ -77,7 +95,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     public QuorumControllerMetrics(
         Optional<MetricsRegistry> registry,
         Time time,
-        boolean zkMigrationState
+        boolean zkMigrationEnabled
     ) {
         this.registry = registry;
         this.active = false;
@@ -113,8 +131,32 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return time.milliseconds() - lastAppliedRecordTimestamp();
             }
         }));
+        registry.ifPresent(r -> r.newGauge(TIMED_OUT_BROKER_HEARTBEAT_COUNT, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return timedOutHeartbeats();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(EVENT_QUEUE_OPERATIONS_STARTED_COUNT, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return operationsStarted();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return operationsTimedOut();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(NEW_ACTIVE_CONTROLLERS_COUNT, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return newActiveControllers();
+            }
+        }));
 
-        if (zkMigrationState) {
+        if (zkMigrationEnabled) {
             registry.ifPresent(r -> r.newGauge(ZK_WRITE_BEHIND_LAG, new Gauge<Long>() {
                 @Override
                 public Long value() {
@@ -124,6 +166,11 @@ public class QuorumControllerMetrics implements AutoCloseable {
                     else return lastCommittedRecordOffset() - dualWriteOffset();
                 }
             }));
+            this.zkWriteSnapshotTimeHandler = newHistogram(ZK_WRITE_SNAPSHOT_TIME_MS, true);
+            this.zkWriteDeltaTimeHandler = newHistogram(ZK_WRITE_DELTA_TIME_MS, true);
+        } else {
+            this.zkWriteSnapshotTimeHandler = __ -> { };
+            this.zkWriteDeltaTimeHandler = __ -> { };
         }
     }
 
@@ -141,6 +188,14 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public void updateEventQueueProcessingTime(long durationMs) {
         eventQueueProcessingTimeUpdater.accept(durationMs);
+    }
+
+    public void updateZkWriteSnapshotTimeMs(long durationMs) {
+        zkWriteSnapshotTimeHandler.accept(durationMs);
+    }
+
+    public void updateZkWriteDeltaTimeMs(long durationMs) {
+        zkWriteDeltaTimeHandler.accept(durationMs);
     }
 
     public void setLastAppliedRecordOffset(long offset) {
@@ -176,15 +231,35 @@ public class QuorumControllerMetrics implements AutoCloseable {
     }
 
     public void incrementTimedOutHeartbeats() {
-        timedOutHeartbeats.addAndGet(1);
-    }
-
-    public void setTimedOutHeartbeats(long heartbeats) {
-        timedOutHeartbeats.set(heartbeats);
+        timedOutHeartbeats.incrementAndGet();
     }
 
     public long timedOutHeartbeats() {
         return timedOutHeartbeats.get();
+    }
+
+    public void incrementOperationsStarted() {
+        operationsStarted.incrementAndGet();
+    }
+
+    public long operationsStarted() {
+        return operationsStarted.get();
+    }
+
+    public void incrementOperationsTimedOut() {
+        operationsTimedOut.incrementAndGet();
+    }
+
+    public long operationsTimedOut() {
+        return operationsTimedOut.get();
+    }
+
+    public void incrementNewActiveControllers() {
+        newActiveControllers.incrementAndGet();
+    }
+
+    public long newActiveControllers() {
+        return newActiveControllers.get();
     }
 
     @Override
@@ -197,7 +272,13 @@ public class QuorumControllerMetrics implements AutoCloseable {
             LAST_COMMITTED_RECORD_OFFSET,
             LAST_APPLIED_RECORD_TIMESTAMP,
             LAST_APPLIED_RECORD_LAG_MS,
-            ZK_WRITE_BEHIND_LAG
+            TIMED_OUT_BROKER_HEARTBEAT_COUNT,
+            EVENT_QUEUE_OPERATIONS_STARTED_COUNT,
+            EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT,
+            NEW_ACTIVE_CONTROLLERS_COUNT,
+            ZK_WRITE_BEHIND_LAG,
+            ZK_WRITE_SNAPSHOT_TIME_MS,
+            ZK_WRITE_DELTA_TIME_MS
         ).forEach(r::removeMetric));
     }
 
