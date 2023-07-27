@@ -30,7 +30,8 @@ class StandbyTaskAssignorFactory {
                                       final RackAwareTaskAssignor rackAwareTaskAssignor) {
         if (!configs.rackAwareAssignmentTags.isEmpty()) {
             return new ClientTagAwareStandbyTaskAssignor();
-        } else if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+        } else if (rackAwareTaskAssignor != null) {
+            // racksForProcess should be populated if rackAwareTaskAssignor isn't null
             final Map<UUID, String> racksForProcess = rackAwareTaskAssignor.racksForProcess();
             return new ClientTagAwareStandbyTaskAssignor(
                 (processId, clientState) -> mkMap(mkEntry("rack", racksForProcess.get(processId))),

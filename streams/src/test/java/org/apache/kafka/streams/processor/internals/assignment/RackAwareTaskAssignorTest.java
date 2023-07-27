@@ -224,6 +224,21 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
+    public void shouldPopulateRacksForProcess() {
+        // Throws since process1 doesn't have rackId
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+            getClusterForTopic0(),
+            getTaskTopicPartitionMapForTask0(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
+            mockInternalTopicManager,
+            new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
+        );
+        final Map<UUID, String> racksForProcess = assignor.racksForProcess();
+        assertEquals(mkMap(mkEntry(UUID_1, RACK_1)), racksForProcess);
+    }
+
+    @Test
     public void shouldThrowWhenRackDiffersInSameProcess() {
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
 
