@@ -398,7 +398,6 @@ public class LeaderEpochFileCache {
         }
     }
 
-    // Visible for testing
     public List<EpochEntry> epochEntries() {
         lock.readLock().lock();
         try {

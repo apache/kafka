@@ -1530,10 +1530,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def size: Long = localLog.segments.sizeInBytes
 
   /**
-   * The size of the log in bytes for segments with offsets >= localLogStartOffset. Any segment with
-   * offset < localLogStartOffset is considered invalid since it should not be in the local log.
+   * The log size in bytes for all segments that are only in local log but not yet in remote log.
    */
-  def validLocalLogSegmentsSize: Long = UnifiedLog.sizeInBytes(logSegments.filter(_.baseOffset >= localLogStartOffset()))
+  def onlyLocalLogSegmentsSize: Long = UnifiedLog.sizeInBytes(logSegments.filter(_.baseOffset >= highestOffsetInRemoteStorage))
 
   /**
    * The offset of the next message that will be appended to the log

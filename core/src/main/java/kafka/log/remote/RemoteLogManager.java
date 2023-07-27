@@ -904,45 +904,30 @@ public class RemoteLogManager implements Closeable {
             final UnifiedLog log = logOptional.get();
             final Option<LeaderEpochFileCache> leaderEpochCacheOption = log.leaderEpochCache();
             if (leaderEpochCacheOption.isEmpty()) {
+                logger.debug("No leader epoch cache available for partition: {}", topicIdPartition);
                 return;
             }
 
-            final long retentionSize = log.config().retentionSize;
-            final boolean checkSizeRetention = retentionSize > -1;
-
-            final long retentionMs = log.config().retentionMs;
-            final boolean checkTimestampRetention = retentionMs > -1;
-
-            // Iterate once
-            //  - to build the log size of segments with base-offset < local-log-start-offset
-            //  - to collect all the epochs of remote log segments
-            // These values can be cached and updated in RLMTask for this topic partition without computing in each
-            // iteration. But the logic can become little complex and need to cover different scenarios to avoid any
-            // leaks. We can have a followup to improve it by maintaining these values through both copying and deletion.
             final Set<Integer> epochsSet = new HashSet<>();
-            long totalSizeEarlierToLocalLogStartOffset = 0L;
-            long localLogStartOffset = log.localLogStartOffset();
             while (segmentMetadataIter.hasNext()) {
                 RemoteLogSegmentMetadata segmentMetadata = segmentMetadataIter.next();
                 epochsSet.addAll(segmentMetadata.segmentLeaderEpochs().keySet());
-
-                if (checkSizeRetention && segmentMetadata.endOffset() < localLogStartOffset) {
-                    totalSizeEarlierToLocalLogStartOffset += segmentMetadata.segmentSizeInBytes();
-                }
             }
 
             // All the leader epochs in sorted order that exists in remote storage
             final List<Integer> remoteLeaderEpochs = new ArrayList<>(epochsSet);
             Collections.sort(remoteLeaderEpochs);
 
-            Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(checkSizeRetention, retentionSize, log, totalSizeEarlierToLocalLogStartOffset);
-            Optional<RetentionTimeData> retentionTimeData = checkTimestampRetention
-                    ? Optional.of(new RetentionTimeData(retentionMs, time.milliseconds() - retentionMs))
-                    : Optional.empty();
+            LeaderEpochFileCache leaderEpochCache = leaderEpochCacheOption.get();
+            List<EpochEntry> epochEntries = leaderEpochCache.epochEntries();
+            Optional<EpochEntry> earliestEpochEntryOptional = leaderEpochCache.earliestEntry();
+
+            Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(log.config().retentionSize, log.onlyLocalLogSegmentsSize(), epochEntries);
+            Optional<RetentionTimeData> retentionTimeData = buildRetentionTimeData(log.config().retentionMs);
             RemoteLogRetentionHandler remoteLogRetentionHandler = new RemoteLogRetentionHandler(retentionSizeData, retentionTimeData);
 
-            LeaderEpochFileCache leaderEpochCache = leaderEpochCacheOption.get();
-            Iterator<EpochEntry> epochEntryIterator = leaderEpochCache.epochEntries().iterator();
+            Iterator<EpochEntry> epochEntryIterator = epochEntries.iterator();
+
             boolean isSegmentDeleted = true;
             while (isSegmentDeleted && epochEntryIterator.hasNext()) {
                 EpochEntry epochEntry = epochEntryIterator.next();
@@ -963,7 +948,6 @@ public class RemoteLogManager implements Closeable {
 
             // Remove the remote log segments whose segment-leader-epochs are lesser than the earliest-epoch known
             // to the leader. This will remove the unreferenced segments in the remote storage.
-            Optional<EpochEntry> earliestEpochEntryOptional = leaderEpochCache.earliestEntry();
             if (earliestEpochEntryOptional.isPresent()) {
                 EpochEntry earliestEpochEntry = earliestEpochEntryOptional.get();
                 Iterator<Integer> epochsToClean = remoteLeaderEpochs.stream().filter(x -> x < earliestEpochEntry.epoch).iterator();
@@ -984,14 +968,24 @@ public class RemoteLogManager implements Closeable {
             remoteLogRetentionHandler.logStartOffset.ifPresent(offset -> handleLogStartOffsetUpdate(topicIdPartition.topicPartition(), offset));
         }
 
-        private Optional<RetentionSizeData> buildRetentionSizeData(boolean checkSizeRetention,
-                                                                   long retentionSize,
-                                                                   UnifiedLog log,
-                                                                   long totalSizeEarlierToLocalLogStartOffset) {
-            if (checkSizeRetention) {
+        private Optional<RetentionTimeData> buildRetentionTimeData(long retentionMs) {
+            return retentionMs > -1
+                    ? Optional.of(new RetentionTimeData(retentionMs, time.milliseconds() - retentionMs))
+                    : Optional.empty();
+        }
+
+        private Optional<RetentionSizeData> buildRetentionSizeData(long retentionSize,
+                                                                   long onlyLocalLogSegmentsSize,
+                                                                   List<EpochEntry> epochEntries) throws RemoteStorageException {
+            if (retentionSize > -1) {
+                long remoteLogSizeBytes = 0L;
+                for (EpochEntry epochEntry : epochEntries) {
+                    remoteLogSizeBytes += remoteLogMetadataManager.remoteLogSize(topicIdPartition, epochEntry.epoch);
+                }
+
                 // This is the total size of segments in local log that have their base-offset > local-log-start-offset
                 // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
-                long totalSize = log.validLocalLogSegmentsSize() + totalSizeEarlierToLocalLogStartOffset;
+                long totalSize = onlyLocalLogSegmentsSize + remoteLogSizeBytes;
                 if (totalSize > retentionSize) {
                     long remainingBreachedSize = totalSize - retentionSize;
                     RetentionSizeData retentionSizeData = new RetentionSizeData(retentionSize, remainingBreachedSize);
