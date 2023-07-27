@@ -301,7 +301,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         if (migrationState.equals(expectedState)) {
             return true;
         } else {
-            log.debug("Expected driver state {} but found {}. Not running this event {}.",
+            log.info("Expected driver state {} but found {}. Not running this event {}.",
                 expectedState, migrationState, this.getClass().getSimpleName());
             return false;
         }
