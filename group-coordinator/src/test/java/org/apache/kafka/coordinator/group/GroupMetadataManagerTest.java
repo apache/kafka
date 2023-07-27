@@ -193,7 +193,7 @@ public class GroupMetadataManagerTest {
          * to a rack Id with the broker Id as a suffix.
          */
         public MetadataImageBuilder addRacks() {
-            for (int i = 0 ; i < 4 ; i ++) {
+            for (int i = 0; i < 4; i++) {
                 delta.replay(new RegisterBrokerRecord().setBrokerId(i).setRack("rack" + i));
             }
             return this;
