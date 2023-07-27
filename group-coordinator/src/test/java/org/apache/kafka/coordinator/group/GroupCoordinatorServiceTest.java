@@ -91,6 +91,7 @@ public class GroupCoordinatorServiceTest {
             Integer.MAX_VALUE,
             Collections.singletonList(new RangeAssignor()),
             1000,
+            4096,
             Integer.MAX_VALUE,
             3000,
             5 * 60 * 1000,

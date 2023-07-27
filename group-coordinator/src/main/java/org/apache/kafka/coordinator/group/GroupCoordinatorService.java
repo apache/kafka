@@ -50,6 +50,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -492,9 +493,49 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        // For backwards compatibility, we support offset commits for the empty groupId.
+        if (request.groupId() == null) {
+            return CompletableFuture.completedFuture(OffsetCommitRequest.getErrorResponse(
+                request,
+                Errors.INVALID_GROUP_ID
+            ));
+        }
+
+        return runtime.scheduleWriteOperation(
+            "commit-offset",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.commitOffset(context, request)
+        ).exceptionally(exception -> {
+            if (exception instanceof UnknownTopicOrPartitionException ||
+                exception instanceof NotEnoughReplicasException) {
+                return OffsetCommitRequest.getErrorResponse(
+                    request,
+                    Errors.COORDINATOR_NOT_AVAILABLE
+                );
+            }
+
+            if (exception instanceof NotLeaderOrFollowerException ||
+                exception instanceof KafkaStorageException) {
+                return OffsetCommitRequest.getErrorResponse(
+                    request,
+                    Errors.NOT_COORDINATOR
+                );
+            }
+
+            if (exception instanceof RecordTooLargeException ||
+                exception instanceof RecordBatchTooLargeException ||
+                exception instanceof InvalidFetchSizeException) {
+                return OffsetCommitRequest.getErrorResponse(
+                    request,
+                    Errors.INVALID_COMMIT_OFFSET_SIZE
+                );
+            }
+
+            return OffsetCommitRequest.getErrorResponse(
+                request,
+                Errors.forException(exception)
+            );
+        });
     }
 
     /**

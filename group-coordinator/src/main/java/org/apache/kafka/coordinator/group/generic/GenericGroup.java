@@ -17,6 +17,10 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -736,6 +740,84 @@ public class GenericGroup implements Group {
     public String generateMemberId(String clientId, Optional<String> groupInstanceId) {
         return groupInstanceId.map(s -> s + MEMBER_ID_DELIMITER + UUID.randomUUID())
             .orElseGet(() -> clientId + MEMBER_ID_DELIMITER + UUID.randomUUID());
+    }
+
+    /**
+     * Validates that (1) the group instance id exists and is mapped to the member id
+     * if the group instance id is provided; and (2) the member id exists in the group.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param operation         The operation.
+     *
+     * @throws UnknownMemberIdException
+     * @throws FencedInstanceIdException
+     */
+    public void validateMember(
+        String memberId,
+        String groupInstanceId,
+        String operation
+    ) throws UnknownMemberIdException, FencedInstanceIdException {
+        if (groupInstanceId != null) {
+            String existingMemberId = staticMemberId(groupInstanceId);
+            if (existingMemberId == null) {
+                throw Errors.UNKNOWN_MEMBER_ID.exception();
+            } else if (!existingMemberId.equals(memberId)) {
+                log.info("Request memberId={} for static member with groupInstanceId={} " +
+                         "is fenced by existing memberId={} during operation {}",
+                    memberId, groupInstanceId, existingMemberId, operation);
+                throw Errors.FENCED_INSTANCE_ID.exception();
+            }
+        }
+
+        if (!hasMemberId(memberId)) {
+            throw Errors.UNKNOWN_MEMBER_ID.exception();
+        }
+    }
+
+    /**
+     * Validates the OffsetCommit request.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param generationId      The generation id.
+     */
+    @Override
+    public void validateOffsetCommit(
+        String memberId,
+        String groupInstanceId,
+        int generationId
+    ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
+        if (isInState(DEAD)) {
+            throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
+        }
+
+        if (generationId < 0 && isInState(EMPTY)) {
+            // When the generation id is -1, the request comes from either the admin client
+            // or a consumer which does not use the group management facility. In this case,
+            // the request can commit offsets if the group is empty.
+            return;
+        }
+
+        if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
+            validateMember(memberId, groupInstanceId, "offset-commit");
+
+            if (generationId != this.generationId) {
+                throw Errors.ILLEGAL_GENERATION.exception();
+            }
+        } else if (!isInState(EMPTY)) {
+            // If the request does not contain the member id and the generation id (version 0),
+            // offset commits are only accepted when the group is empty.
+            throw Errors.UNKNOWN_MEMBER_ID.exception();
+        }
+
+        if (isInState(COMPLETING_REBALANCE)) {
+            // We should not receive a commit request if the group has not completed rebalance;
+            // but since the consumer's member.id and generation is valid, it means it has received
+            // the latest group generation information from the JoinResponse.
+            // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
+            throw Errors.REBALANCE_IN_PROGRESS.exception();
+        }
     }
 
     /**
