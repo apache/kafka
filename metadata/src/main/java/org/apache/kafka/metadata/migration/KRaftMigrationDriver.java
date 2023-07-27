@@ -470,11 +470,16 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
+            if (migrationState.equals(MigrationDriverState.INACTIVE)) {
+                // No need to log anything if this node is not the active controller
+                completionHandler.accept(null);
+                return;
+            }
+
             if (!migrationState.allowDualWrite()) {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                         "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 completionHandler.accept(null);
-                wakeup();
                 return;
             }
 
