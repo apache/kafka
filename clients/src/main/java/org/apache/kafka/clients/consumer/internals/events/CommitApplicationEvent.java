@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 

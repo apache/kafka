@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 
