@@ -271,11 +271,13 @@ public class RemoteLogSegmentLifecycleTest {
             throws RemoteStorageException {
         // cache.listRemoteLogSegments(leaderEpoch) should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> segmentsIter = remoteLogSegmentLifecycleManager.listRemoteLogSegments(leaderEpoch);
-        Assertions.assertTrue(segmentsIter.hasNext() && Objects.equals(segmentsIter.next(), expectedSegment));
+        Assertions.assertTrue(segmentsIter.hasNext());
+        Assertions.assertEquals(expectedSegment, segmentsIter.next());
 
         // cache.listAllRemoteLogSegments() should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> allSegmentsIter = remoteLogSegmentLifecycleManager.listAllRemoteLogSegments();
-        Assertions.assertTrue(allSegmentsIter.hasNext() && Objects.equals(allSegmentsIter.next(), expectedSegment));
+        Assertions.assertTrue(allSegmentsIter.hasNext());
+        Assertions.assertEquals(expectedSegment, allSegmentsIter.next());
     }
 
     @ParameterizedTest(name = "remoteLogSegmentLifecycleManager = {0}")
@@ -285,7 +287,7 @@ public class RemoteLogSegmentLifecycleTest {
         try {
             remoteLogSegmentLifecycleManager.initialize(topicIdPartition);
 
-                // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
+            // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L, -1L, BROKER_ID_0,
@@ -417,7 +419,7 @@ public class RemoteLogSegmentLifecycleTest {
      * This is passed to {@link #testRemoteLogSegmentLifeCycle(RemoteLogSegmentLifecycleManager)} to test
      * {@code RemoteLogMetadataCache} for several lifecycle operations.
      * <p>
-     * This starts a Kafka cluster with {@link #initialize(Set)} with {@link #brokerCount()} no of servers. It also
+     * This starts a Kafka cluster with {@link #initialize(Set, boolean)} )} with {@link #brokerCount()} no of servers. It also
      * creates the remote log metadata topic required for {@code TopicBasedRemoteLogMetadataManager}. This cluster will
      * be stopped by invoking {@link #close()}.
      */
@@ -428,38 +430,48 @@ public class RemoteLogSegmentLifecycleTest {
         @Override
         public synchronized void initialize(TopicIdPartition topicIdPartition) {
             this.topicIdPartition = topicIdPartition;
-            super.initialize(Collections.singleton(topicIdPartition));
+            super.initialize(Collections.singleton(topicIdPartition), true);
         }
 
         @Override
         public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
-            topicBasedRlmm().addRemoteLogSegmentMetadata(segmentMetadata);
+            try {
+                // Wait until the segment is added successfully.
+                remoteLogMetadataManager().addRemoteLogSegmentMetadata(segmentMetadata).get();
+            } catch (Exception e) {
+                throw new RemoteStorageException(e);
+            }
         }
 
         @Override
         public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate) throws RemoteStorageException {
-            topicBasedRlmm().updateRemoteLogSegmentMetadata(segmentMetadataUpdate);
+            try {
+                // Wait until the segment is updated successfully.
+                remoteLogMetadataManager().updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
+            } catch (Exception e) {
+                throw new RemoteStorageException(e);
+            }
         }
 
         @Override
         public Optional<Long> highestOffsetForEpoch(int leaderEpoch) throws RemoteStorageException {
-            return topicBasedRlmm().highestOffsetForEpoch(topicIdPartition, leaderEpoch);
+            return remoteLogMetadataManager().highestOffsetForEpoch(topicIdPartition, leaderEpoch);
         }
 
         @Override
         public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch,
                                                                            long offset) throws RemoteStorageException {
-            return topicBasedRlmm().remoteLogSegmentMetadata(topicIdPartition, leaderEpoch, offset);
+            return remoteLogMetadataManager().remoteLogSegmentMetadata(topicIdPartition, leaderEpoch, offset);
         }
 
         @Override
         public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(int leaderEpoch) throws RemoteStorageException {
-            return topicBasedRlmm().listRemoteLogSegments(topicIdPartition, leaderEpoch);
+            return remoteLogMetadataManager().listRemoteLogSegments(topicIdPartition, leaderEpoch);
         }
 
         @Override
         public Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments() throws RemoteStorageException {
-            return topicBasedRlmm().listRemoteLogSegments(topicIdPartition);
+            return remoteLogMetadataManager().listRemoteLogSegments(topicIdPartition);
         }
 
         @Override
@@ -467,10 +479,6 @@ public class RemoteLogSegmentLifecycleTest {
             tearDown();
         }
 
-        @Override
-        public int brokerCount() {
-            return 3;
-        }
     }
 
     /**
@@ -488,13 +496,12 @@ public class RemoteLogSegmentLifecycleTest {
         }
 
         @Override
-        public Optional<Long> highestOffsetForEpoch(int epoch) throws RemoteStorageException {
+        public Optional<Long> highestOffsetForEpoch(int epoch) {
             return metadataCache.highestOffsetForEpoch(epoch);
         }
 
         @Override
-        public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch,
-                                                                           long offset) throws RemoteStorageException {
+        public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch, long offset) {
             return metadataCache.remoteLogSegmentMetadata(leaderEpoch, offset);
         }
 
@@ -509,7 +516,7 @@ public class RemoteLogSegmentLifecycleTest {
         }
 
         @Override
-        public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
+        public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) {
             metadataCache.addCopyInProgressSegment(segmentMetadata);
         }
     }

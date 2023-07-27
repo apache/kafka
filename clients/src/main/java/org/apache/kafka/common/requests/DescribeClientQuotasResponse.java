@@ -71,6 +71,11 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public DescribeClientQuotasResponseData data() {
         return data;
     }

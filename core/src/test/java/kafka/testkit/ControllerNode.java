@@ -27,7 +27,7 @@ public class ControllerNode implements TestKitNode {
             return this;
         }
 
-        public Builder setMetadataDirectory() {
+        public Builder setMetadataDirectory(String metadataDirectory) {
             this.metadataDirectory = metadataDirectory;
             return this;
         }

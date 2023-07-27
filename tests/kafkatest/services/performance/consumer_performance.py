@@ -23,7 +23,7 @@ from kafkatest.version import DEV_BRANCH, V_2_0_0, LATEST_0_10_0
 
 class ConsumerPerformanceService(PerformanceService):
     """
-        See ConsumerPerformance.scala as the source of truth on these settings, but for reference:
+        See ConsumerPerformance tool as the source of truth on these settings, but for reference:
 
         "zookeeper" "The connection string for the zookeeper connection in the form host:port. Multiple URLS can
                      be given to allow fail-over. This option is only used with the old consumer."

@@ -17,18 +17,25 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.BinaryNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-
+import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(120)
@@ -76,5 +83,38 @@ public final class MessageUtilTest {
                 new RawTaggedField(2, new byte[] {})),
             Arrays.asList(new RawTaggedField(1, new byte[] {1}),
                 new RawTaggedField(2, new byte[] {}))));
+    }
+
+    @Test
+    public void testConstants() {
+        assertEquals(MessageUtil.UNSIGNED_SHORT_MAX, 0xFFFF);
+        assertEquals(MessageUtil.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
+    }
+
+    @Test
+    public void testBinaryNode() throws IOException {
+        byte[] expected = new byte[] {5, 2, 9, 4, 1, 8, 7, 0, 3, 6};
+        StringWriter writer = new StringWriter();
+        ObjectMapper mapper = new ObjectMapper();
+
+        mapper.writeTree(mapper.createGenerator(writer), new BinaryNode(expected));
+
+        JsonNode textNode = mapper.readTree(writer.toString());
+
+        assertTrue(textNode.isTextual(), String.format("Expected a JSON string but was: %s", textNode.toString()));
+        byte[] actual = MessageUtil.jsonNodeToBinary(textNode, "Test base64 JSON string");
+        assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void testInvalidBinaryNode() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> MessageUtil.jsonNodeToBinary(new IntNode(42), "Test int to binary")
+        );
+        assertThrows(
+            UncheckedIOException.class,
+            () -> MessageUtil.jsonNodeToBinary(new TextNode("This is not base64!"), "Test non-base64 to binary")
+        );
     }
 }

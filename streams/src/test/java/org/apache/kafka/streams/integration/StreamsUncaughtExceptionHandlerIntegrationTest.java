@@ -18,7 +18,10 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -26,15 +29,16 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -44,11 +48,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -63,14 +67,18 @@ import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.St
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
+import static java.util.Arrays.asList;
 
 @Category(IntegrationTest.class)
 @SuppressWarnings("deprecation") //Need to call the old handler, will remove those calls when the old handler is removed
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
 
@@ -83,33 +91,26 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     public static void closeCluster() {
         CLUSTER.stop();
     }
+
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @Rule
-    public TestName testName = new TestName();
+    public final TestName testName = new TestName();
 
-    private static String inputTopic;
-    private static StreamsBuilder builder;
-    private static Properties properties;
-    private static List<String> processorValueCollector;
-    private static String appId = "";
+    private final String testId = safeUniqueTestName(getClass(), testName);
+    private final String appId = "appId_" + testId;
+    private final String inputTopic = "input" + testId;
+    private final String inputTopic2 = "input2" + testId;
+    private final String outputTopic = "output" + testId;
+    private final String outputTopic2 = "output2" + testId;
+    private final StreamsBuilder builder = new StreamsBuilder();
+    private final List<String> processorValueCollector = new ArrayList<>();
     private static AtomicBoolean throwError = new AtomicBoolean(true);
 
-    @Before
-    public void setup() {
-        final String testId = safeUniqueTestName(getClass(), testName);
-        appId = "appId_" + testId;
-        inputTopic = "input" + testId;
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
+    private final Properties properties = basicProps();
 
-        builder  = new StreamsBuilder();
-
-        processorValueCollector = new ArrayList<>();
-
-        final KStream<String, String> stream = builder.stream(inputTopic);
-        stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
-
-        properties  = mkObjectProperties(
+    private Properties basicProps() {
+        return mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
@@ -122,18 +123,25 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         );
     }
 
+    @Before
+    public void setup() {
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, inputTopic2, outputTopic, outputTopic2);
+        final KStream<String, String> stream = builder.stream(inputTopic);
+        stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
+    }
+
     @After
     public void teardown() throws IOException {
         purgeLocalStreamsState(properties);
     }
 
     @Test
-    public void shouldShutdownThreadUsingOldHandler() throws InterruptedException {
+    public void shouldShutdownThreadUsingOldHandler() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final AtomicInteger counter = new AtomicInteger(0);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> counter.incrementAndGet());
 
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            startApplicationAndWaitUntilRunning(kafkaStreams);
             produceMessages(0L, inputTopic, "A");
 
             // should call the UncaughtExceptionHandler in current thread
@@ -148,13 +156,13 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldShutdownClient() throws InterruptedException {
+    public void shouldShutdownClient() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
 
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            startApplicationAndWaitUntilRunning(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
@@ -164,28 +172,33 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldReplaceThreads() throws InterruptedException {
+    public void shouldReplaceThreads() throws Exception {
         testReplaceThreads(2);
     }
 
     @Test
-    public void shouldReplaceSingleThread() throws InterruptedException {
+    public void shouldReplaceThreadsWithoutJavaHandler() throws Exception {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> fail("exception thrown"));
+        testReplaceThreads(2);
+    }
+
+    @Test
+    public void shouldReplaceSingleThread() throws Exception {
         testReplaceThreads(1);
     }
 
     @Test
-    public void shouldShutdownMultipleThreadApplication() throws InterruptedException {
+    public void shouldShutdownMultipleThreadApplication() throws Exception {
         testShutdownApplication(2);
     }
 
     @Test
-    public void shouldShutdownSingleThreadApplication() throws InterruptedException {
+    public void shouldShutdownSingleThreadApplication() throws Exception {
         testShutdownApplication(1);
     }
 
     @Test
-    public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread() throws InterruptedException {
-        builder  = new StreamsBuilder();
+    public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread() throws Exception {
         builder.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.persistentKeyValueStore("globalStore"),
@@ -193,7 +206,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 Serdes.String(),
                 CLUSTER.time
             ),
-            inputTopic,
+            inputTopic2,
             Consumed.with(Serdes.String(), Serdes.String()),
             () -> new ShutdownProcessor(processorValueCollector)
         );
@@ -203,14 +216,94 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD);
 
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            startApplicationAndWaitUntilRunning(kafkaStreams);
 
-            produceMessages(0L, inputTopic, "A");
+            produceMessages(0L, inputTopic2, "A");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
 
+    }
+
+    @Test
+    public void shouldEmitSameRecordAfterFailover() throws Exception {
+        properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L);
+        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
+
+        final AtomicBoolean shouldThrow = new AtomicBoolean(true);
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(inputTopic, Materialized.as("test-store"))
+            .toStream()
+            .map((key, value) -> {
+                if (shouldThrow.compareAndSet(true, false)) {
+                    throw new RuntimeException("Kaboom");
+                } else {
+                    return new KeyValue<>(key, value);
+                }
+            })
+            .to(outputTopic);
+        builder.stream(inputTopic2).to(outputTopic2);
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
+            startApplicationAndWaitUntilRunning(kafkaStreams);
+
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                inputTopic,
+                asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                0L);
+
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                inputTopic2,
+                asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                0L);
+
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerDeserializer.class,
+                    StringDeserializer.class
+                ),
+                outputTopic,
+                asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                )
+            );
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerDeserializer.class,
+                    StringDeserializer.class
+                ),
+                outputTopic2,
+                asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                )
+            );
+        }
     }
 
     private void produceMessages(final long timestamp, final String streamOneInput, final String msg) {
@@ -242,7 +335,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
     }
 
-    private void testShutdownApplication(final int numThreads) throws InterruptedException {
+    private void testShutdownApplication(final int numThreads) throws Exception {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
 
         final Topology topology = builder.build();
@@ -254,17 +347,16 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
             kafkaStreams2.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
 
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams1);
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams2);
+            startApplicationAndWaitUntilRunning(asList(kafkaStreams1, kafkaStreams2));
 
             produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Arrays.asList(kafkaStreams1, kafkaStreams2), KafkaStreams.State.ERROR, DEFAULT_DURATION);
+            waitForApplicationState(asList(kafkaStreams1, kafkaStreams2), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
     }
 
-    private void testReplaceThreads(final int numThreads) throws InterruptedException {
+    private void testReplaceThreads(final int numThreads) throws Exception {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
@@ -276,7 +368,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 }
                 return REPLACE_THREAD;
             });
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            startApplicationAndWaitUntilRunning(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
             TestUtils.waitForCondition(() -> count.get() == numThreads, "finished replacing threads");

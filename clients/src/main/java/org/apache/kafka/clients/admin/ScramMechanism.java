@@ -23,6 +23,11 @@ import java.util.Arrays;
  * Representation of a SASL/SCRAM Mechanism.
  *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554: Add Broker-side SCRAM Config API</a>
+ *
+ * This code is duplicated in org.apache.kafka.common.security.scram.internals.ScramMechanism.
+ * The type field in both files must match and must not change. The type field
+ * is used both for passing ScramCredentialUpsertion and for the internal
+ * UserScramCredentialRecord. Do not change the type field.
  */
 public enum ScramMechanism {
     UNKNOWN((byte) 0),
@@ -49,7 +54,7 @@ public enum ScramMechanism {
      *
      * @param mechanismName the SASL SCRAM mechanism name
      * @return the corresponding SASL SCRAM mechanism enum, otherwise {@link #UNKNOWN}
-     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
+     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4">
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
     public static ScramMechanism fromMechanismName(String mechanismName) {
@@ -62,7 +67,7 @@ public enum ScramMechanism {
     /**
      *
      * @return the corresponding SASL SCRAM mechanism name
-     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
+     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4">
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
     public String mechanismName() {

@@ -18,7 +18,7 @@ import kafka.api.GroupAuthorizerIntegrationTest._
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -29,8 +29,11 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -40,11 +43,12 @@ object GroupAuthorizerIntegrationTest {
 
   val BrokerListenerName = "BROKER"
   val ClientListenerName = "CLIENT"
+  val ControllerListenerName = "CONTROLLER"
 
   class GroupPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context.listenerName match {
-        case BrokerListenerName => BrokerPrincipal
+        case BrokerListenerName | ControllerListenerName => BrokerPrincipal
         case ClientListenerName => ClientPrincipal
         case listenerName => throw new IllegalArgumentException(s"No principal mapped to listener $listenerName")
       }
@@ -63,9 +67,25 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   def brokerPrincipal: KafkaPrincipal = BrokerPrincipal
   def clientPrincipal: KafkaPrincipal = ClientPrincipal
 
+  override def kraftControllerConfigs(): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs()
+    controllerConfigs.foreach(addNodeProperties)
+    controllerConfigs
+  }
+
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    addNodeProperties(properties)
+  }
+
+  private def addNodeProperties(properties: Properties): Unit = {
+    if (isKRaftTest()) {
+      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
+    } else {
+      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+    }
+
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
@@ -75,15 +95,16 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
 
     // Allow inter-broker communication
-    TestUtils.addAndVerifyAcls(servers.head,
+    addAndVerifyAcls(
       Set(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, principal = BrokerPrincipal)),
-      new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL))
+      new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    )
 
-    TestUtils.createOffsetsTopic(zkClient, servers)
+    createOffsetsTopic(interBrokerListenerName)
   }
 
   private def createAcl(aclOperation: AclOperation,
@@ -92,12 +113,13 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     new AccessControlEntry(principal.toString, WildcardHost, aclOperation, aclPermissionType)
   }
 
-  @Test
-  def testUnauthorizedProduceAndConsume(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUnauthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition("topic", 0)
 
-    createTopic(topic)
+    createTopic(topic, listenerName = interBrokerListenerName)
 
     val producer = createProducer()
     val produceException = assertThrows(classOf[ExecutionException],
@@ -112,22 +134,25 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 
-  @Test
-  def testAuthorizedProduceAndConsume(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition("topic", 0)
 
-    createTopic(topic)
+    createTopic(topic, listenerName = interBrokerListenerName)
 
-    TestUtils.addAndVerifyAcls(servers.head,
+    addAndVerifyAcls(
       Set(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW)),
-      new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
+      new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
+    )
     val producer = createProducer()
     producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
 
-    TestUtils.addAndVerifyAcls(servers.head,
+    addAndVerifyAcls(
       Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
-      new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
+      new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
+    )
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(topicPartition).asJava)
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)

@@ -18,16 +18,15 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.image.node.TopicsImageByNameNode;
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.server.util.TranslatedValueMapView;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
-
 
 /**
  * Represents the topics in the metadata image.
@@ -35,27 +34,34 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class TopicsImage {
-    public static final TopicsImage EMPTY =
-        new TopicsImage(Collections.emptyMap(), Collections.emptyMap());
+    public static final TopicsImage EMPTY =  new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
 
-    private final Map<Uuid, TopicImage> topicsById;
-    private final Map<String, TopicImage> topicsByName;
+    private final ImmutableMap<Uuid, TopicImage> topicsById;
+    private final ImmutableMap<String, TopicImage> topicsByName;
 
-    public TopicsImage(Map<Uuid, TopicImage> topicsById,
-                       Map<String, TopicImage> topicsByName) {
-        this.topicsById = Collections.unmodifiableMap(topicsById);
-        this.topicsByName = Collections.unmodifiableMap(topicsByName);
+    public TopicsImage(
+        ImmutableMap<Uuid, TopicImage> topicsById,
+        ImmutableMap<String, TopicImage> topicsByName
+    ) {
+        this.topicsById = topicsById;
+        this.topicsByName = topicsByName;
+    }
+
+    public TopicsImage including(TopicImage topic) {
+        return new TopicsImage(
+            this.topicsById.updated(topic.id(), topic),
+            this.topicsByName.updated(topic.name(), topic));
     }
 
     public boolean isEmpty() {
         return topicsById.isEmpty() && topicsByName.isEmpty();
     }
 
-    public Map<Uuid, TopicImage> topicsById() {
+    public ImmutableMap<Uuid, TopicImage> topicsById() {
         return topicsById;
     }
 
-    public Map<String, TopicImage> topicsByName() {
+    public ImmutableMap<String, TopicImage> topicsByName() {
         return topicsByName;
     }
 
@@ -73,9 +79,9 @@ public final class TopicsImage {
         return topicsByName.get(name);
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) {
-        for (TopicImage topicImage : topicsById.values()) {
-            topicImage.write(out);
+    public void write(ImageWriter writer, ImageWriterOptions options) {
+        for (Map.Entry<Uuid, TopicImage> entry : topicsById.entrySet()) {
+            entry.getValue().write(writer, options);
         }
     }
 
@@ -92,12 +98,26 @@ public final class TopicsImage {
         return Objects.hash(topicsById, topicsByName);
     }
 
+    /**
+     * Expose a view of this TopicsImage as a map from topic names to IDs.
+     *
+     * Like TopicsImage itself, this map is immutable.
+     */
+    public Map<String, Uuid> topicNameToIdView() {
+        return new TranslatedValueMapView<>(topicsByName, image -> image.id());
+    }
+
+    /**
+     * Expose a view of this TopicsImage as a map from IDs to names.
+     *
+     * Like TopicsImage itself, this map is immutable.
+     */
+    public Map<Uuid, String> topicIdToNameView() {
+        return new TranslatedValueMapView<>(topicsById, image -> image.name());
+    }
+
     @Override
     public String toString() {
-        return "TopicsImage(topicsById=" + topicsById.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ", topicsByName=" + topicsByName.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new TopicsImageByNameNode(this).stringify();
     }
 }

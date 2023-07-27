@@ -26,7 +26,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException}
 import org.apache.kafka.common.utils.Utils
-
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
 
 object PartitionMetadataFile {
@@ -44,8 +44,7 @@ object PartitionMetadataFile {
   }
 
   class PartitionMetadataReadBuffer[T](location: String,
-                                       reader: BufferedReader,
-                                       version: Int) extends Logging {
+                                       reader: BufferedReader) extends Logging {
     def read(): PartitionMetadata = {
       def malformedLineException(line: String) =
         new IOException(s"Malformed line in checkpoint file ($location): '$line'")
@@ -141,7 +140,7 @@ class PartitionMetadataFile(val file: File,
       try {
         val reader = Files.newBufferedReader(path)
         try {
-          val partitionBuffer = new PartitionMetadataReadBuffer(file.getAbsolutePath, reader, CurrentVersion)
+          val partitionBuffer = new PartitionMetadataReadBuffer(file.getAbsolutePath, reader)
           partitionBuffer.read()
         } finally {
           reader.close()

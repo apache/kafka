@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -35,6 +36,7 @@ import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -104,13 +106,33 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        assertThrows(NullPointerException.class, () -> theStore.range(null, "to"));
+    public void shouldReturnValueOnRangeNullFromKey() {
+        stubOneUnderlying.put("0", "zero");
+        stubOneUnderlying.put("1", "one");
+        stubOneUnderlying.put("2", "two");
+
+        final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>("0", "zero"));
+        expectedContents.add(new KeyValue<>("1", "one"));
+
+        try (final KeyValueIterator<String, String> iterator = theStore.range(null, "1")) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        assertThrows(NullPointerException.class, () -> theStore.range("from", null));
+    public void shouldReturnValueOnRangeNullToKey() {
+        stubOneUnderlying.put("0", "zero");
+        stubOneUnderlying.put("1", "one");
+        stubOneUnderlying.put("2", "two");
+
+        final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>("1", "one"));
+        expectedContents.add(new KeyValue<>("2", "two"));
+
+        try (final KeyValueIterator<String, String> iterator = theStore.range("1", null)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
     }
 
     @Test
@@ -124,13 +146,33 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnReverseRangeNullFromKey() {
-        assertThrows(NullPointerException.class, () -> theStore.reverseRange(null, "to"));
+    public void shouldReturnValueOnReverseRangeNullFromKey() {
+        stubOneUnderlying.put("0", "zero");
+        stubOneUnderlying.put("1", "one");
+        stubOneUnderlying.put("2", "two");
+
+        final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>("1", "one"));
+        expectedContents.add(new KeyValue<>("0", "zero"));
+
+        try (final KeyValueIterator<String, String> iterator = theStore.reverseRange(null, "1")) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnReverseRangeNullToKey() {
-        assertThrows(NullPointerException.class, () -> theStore.reverseRange("from", null));
+    public void shouldReturnValueOnReverseRangeNullToKey() {
+        stubOneUnderlying.put("0", "zero");
+        stubOneUnderlying.put("1", "one");
+        stubOneUnderlying.put("2", "two");
+
+        final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>("2", "two"));
+        expectedContents.add(new KeyValue<>("1", "one"));
+
+        try (final KeyValueIterator<String, String> iterator = theStore.reverseRange("1", null)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
     }
 
     @Test
@@ -482,5 +524,4 @@ public class CompositeReadOnlyKeyValueStoreTest {
             storeName
         );
     }
-
 }

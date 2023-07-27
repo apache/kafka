@@ -16,10 +16,10 @@
  */
 package kafka.server
 
-import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 
 class BaseFetchRequestTest extends BaseRequestTest {
 
-  protected var producer: KafkaProducer[String, String] = null
+  protected var producer: KafkaProducer[String, String] = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.FetchMaxBytes, Int.MaxValue.toString)
@@ -46,37 +46,46 @@ class BaseFetchRequestTest extends BaseRequestTest {
     super.tearDown()
   }
 
-  protected def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                   offsetMap: Map[TopicPartition, Long],
-                                   version: Short): FetchRequest = {
-    val topicIds = getTopicIds().asJava
-    FetchRequest.Builder.forConsumer(version, Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap), topicIds)
-      .setMaxBytes(maxResponseBytes).build()
+  protected def createConsumerFetchRequest(
+    maxResponseBytes: Int,
+    maxPartitionBytes: Int,
+    topicPartitions: Seq[TopicPartition],
+    offsetMap: Map[TopicPartition, Long],
+    version: Short,
+    maxWaitMs: Int = Int.MaxValue,
+    minBytes: Int = 0,
+    rackId: String = ""
+  ): FetchRequest = {
+    FetchRequest.Builder.forConsumer(version, maxWaitMs, minBytes, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
+      .setMaxBytes(maxResponseBytes)
+      .rackId(rackId)
+      .build()
   }
 
   protected def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                    offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
+      partitionMap.put(tp,
+        new FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
         Optional.empty()))
     }
     partitionMap
   }
 
-  protected def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
-    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(leaderId))
+  protected def sendFetchRequest(brokerId: Int, request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(brokerId))
   }
 
   protected def initProducer(): Unit = {
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
   protected def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
     val topics = (0 until numTopics).map(t => s"topic$t")
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
       val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 2,

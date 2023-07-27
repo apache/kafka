@@ -52,11 +52,11 @@ public class Checkpoint {
     public static final Schema HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY, Type.INT16));
 
-    private String consumerGroupId;
-    private TopicPartition topicPartition;
-    private long upstreamOffset;
-    private long downstreamOffset;
-    private String metadata;
+    private final String consumerGroupId;
+    private final TopicPartition topicPartition;
+    private final long upstreamOffset;
+    private final long downstreamOffset;
+    private final String metadata;
 
     public Checkpoint(String consumerGroupId, TopicPartition topicPartition, long upstreamOffset,
             long downstreamOffset, String metadata) {
@@ -94,7 +94,7 @@ public class Checkpoint {
     @Override
     public String toString() {
         return String.format("Checkpoint{consumerGroupId=%s, topicPartition=%s, "
-            + "upstreamOffset=%d, downstreamOffset=%d, metatadata=%s}",
+            + "upstreamOffset=%d, downstreamOffset=%d, metadata=%s}",
             consumerGroupId, topicPartition, upstreamOffset, downstreamOffset, metadata);
     }
 

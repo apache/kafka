@@ -103,8 +103,8 @@ public class ClientMetrics {
     }
 
     public static void addTopologyDescriptionMetric(final StreamsMetricsImpl streamsMetrics,
-                                                    final String topologyDescription) {
-        streamsMetrics.addClientLevelImmutableMetric(
+                                                    final Gauge<String> topologyDescription) {
+        streamsMetrics.addClientLevelMutableMetric(
             TOPOLOGY_DESCRIPTION,
             TOPOLOGY_DESCRIPTION_DESCRIPTION,
             RecordingLevel.INFO,

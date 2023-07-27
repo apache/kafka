@@ -102,7 +102,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalState(0, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L));
         state.leaderStateOrThrow().updateReplicaState(1, 0, new LogOffsetMetadata(5L));
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
@@ -144,7 +144,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
         state.transitionToFollower(2, 1);
-        assertEquals("follower", getMetric(metrics, "current-state").metricValue());
+        assertEquals("observer", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-epoch").metricValue());
@@ -190,25 +190,75 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordPollIdleRatio() throws IOException {
+    public void shouldRecordPollIdleRatio() {
         QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
+        // First recording is discarded (in order to align the interval of measurement)
+        raftMetrics.updatePollStart(time.milliseconds());
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // Idle for 100ms
         raftMetrics.updatePollStart(time.milliseconds());
         time.sleep(100L);
         raftMetrics.updatePollEnd(time.milliseconds());
-        time.sleep(900L);
-        raftMetrics.updatePollStart(time.milliseconds());
 
-        assertEquals(0.1, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
-
+        // Busy for 100ms
         time.sleep(100L);
+
+        // Idle for 200ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(200L);
         raftMetrics.updatePollEnd(time.milliseconds());
-        time.sleep(100L);
-        raftMetrics.updatePollStart(time.milliseconds());
 
-        assertEquals(0.3, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
+        assertEquals(0.75, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
+
+        // Busy for 100ms
+        time.sleep(100L);
+
+        // Idle for 75ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(75L);
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // Idle for 25ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(25L);
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // Idle for 0ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        assertEquals(0.5, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
+
+        // Busy for 40ms
+        time.sleep(40);
+
+        // Idle for 60ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(60);
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // Busy for 10ms
+        time.sleep(10);
+
+        // Begin idle time for 5ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(5);
+
+        // Measurement arrives before poll end, so we have 40ms busy time and 60ms idle.
+        // The subsequent interval time is not counted until the next measurement.
+        assertEquals(0.6, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
+
+        // More idle time for 5ms
+        time.sleep(5);
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // The measurement includes the interval beginning at the last recording.
+        // This counts 10ms of busy time and 5ms + 5ms = 10ms of idle time.
+        assertEquals(0.5, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
     }
 
     @Test

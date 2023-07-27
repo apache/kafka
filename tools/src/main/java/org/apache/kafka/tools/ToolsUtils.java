@@ -19,11 +19,13 @@ package org.apache.kafka.tools;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 
+import java.io.PrintStream;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 public class ToolsUtils {
-
     /**
      * print out the metrics in alphabetical order
      * @param metrics   the metrics to be printed out
@@ -51,5 +53,50 @@ public class ToolsUtils {
                 System.out.println(String.format(outputFormat, entry.getKey(), entry.getValue()));
             }
         }
+    }
+
+    private static void appendColumnValue(
+        StringBuilder rowBuilder,
+        String value,
+        int length
+    ) {
+        int padLength = length - value.length();
+        rowBuilder.append(value);
+        for (int i = 0; i < padLength; i++)
+            rowBuilder.append(' ');
+    }
+
+    private static void printRow(
+        List<Integer> columnLengths,
+        List<String> row,
+        PrintStream out
+    ) {
+        StringBuilder rowBuilder = new StringBuilder();
+        for (int i = 0; i < row.size(); i++) {
+            Integer columnLength = columnLengths.get(i);
+            String columnValue = row.get(i);
+            appendColumnValue(rowBuilder, columnValue, columnLength);
+            rowBuilder.append('\t');
+        }
+        out.println(rowBuilder);
+    }
+
+    public static void prettyPrintTable(
+        List<String> headers,
+        List<List<String>> rows,
+        PrintStream out
+    ) {
+        List<Integer> columnLengths = headers.stream()
+            .map(String::length)
+            .collect(Collectors.toList());
+
+        for (List<String> row : rows) {
+            for (int i = 0; i < headers.size(); i++) {
+                columnLengths.set(i, Math.max(columnLengths.get(i), row.get(i).length()));
+            }
+        }
+
+        printRow(columnLengths, headers, out);
+        rows.forEach(row -> printRow(columnLengths, row, out));
     }
 }

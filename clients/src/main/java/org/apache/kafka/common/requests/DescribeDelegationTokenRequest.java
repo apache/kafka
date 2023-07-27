@@ -71,7 +71,7 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new DescribeDelegationTokenResponse(throttleTimeMs, Errors.forException(e));
+        return new DescribeDelegationTokenResponse(version(), throttleTimeMs, Errors.forException(e));
     }
 
     public static DescribeDelegationTokenRequest parse(ByteBuffer buffer, short version) {

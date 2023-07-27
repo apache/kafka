@@ -1,0 +1,48 @@
+#!/bin/bash
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Hacky workaround for https://github.com/gradle/gradle/issues/3777
+# There is currently no configurable timeout, so we retry builds jenkins when we can't get a lock on the zinc compiler cache
+# Hopefully we can remove this in the future, but this will save us from having to manually rebuild for the time being.
+# Example:
+# [2021-10-19T17:25:07.234Z] * What went wrong:
+# [2021-10-19T17:25:07.234Z] Execution failed for task ':streams:streams-scala:compileScala'.
+# [2021-10-19T17:25:07.234Z] > Timeout waiting to lock zinc-1.3.5_2.13.6_8 compiler cache (/home/jenkins/.gradle/caches/7.0.2/zinc-1.3.5_2.13.6_8). It is currently in use by another Gradle instance.
+# [2021-10-19T17:25:07.234Z]   Owner PID: 3999
+# [2021-10-19T17:25:07.234Z]   Our PID: 3973
+# [2021-10-19T17:25:07.234Z]   Owner Operation: 
+# [2021-10-19T17:25:07.234Z]   Our operation: 
+# [2021-10-19T17:25:07.234Z]   Lock file: /home/jenkins/.gradle/caches/7.0.2/zinc-1.3.5_2.13.6_8/zinc-1.3.5_2.13.6_8.lock
+
+set -uf -o pipefail
+mkdir -p logs
+retryable=1
+while [[ "$retryable" != 0 ]]; do
+	retryable=0
+
+	"$@" 2>&1 | tee logs/buildoutput.log
+	commandReturnCode=$?
+
+	if [ $commandReturnCode -ne 0 ]; then
+		if grep "Timeout waiting to lock zinc" logs/buildoutput.log; then
+			retryable=1
+			echo 'Retrying due to zinc lock timeout'
+			continue
+		else
+			exit $commandReturnCode
+		fi
+	fi
+done

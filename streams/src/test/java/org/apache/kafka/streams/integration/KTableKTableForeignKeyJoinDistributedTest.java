@@ -32,16 +32,15 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -54,9 +53,10 @@ import java.util.function.Predicate;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 public class KTableKTableForeignKeyJoinDistributedTest {
     private static final int NUM_BROKERS = 1;
     private static final String LEFT_TABLE = "left_table";
@@ -64,22 +64,18 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     private static final String OUTPUT = "output-topic";
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
     private static final Properties CONSUMER_CONFIG = new Properties();
-
-    @Rule
-    public TestName testName = new TestName();
-
 
     private static final String INPUT_TOPIC = "input-topic";
 
@@ -89,7 +85,7 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     private volatile boolean client1IsOk = false;
     private volatile boolean client2IsOk = false;
 
-    @Before
+    @BeforeEach
     public void setupTopics() throws InterruptedException {
         CLUSTER.createTopic(LEFT_TABLE, 1, 1);
         CLUSTER.createTopic(RIGHT_TABLE, 1, 1);
@@ -122,7 +118,7 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
 
-    @After
+    @AfterEach
     public void after() {
         client1.close();
         client2.close();
@@ -130,8 +126,8 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         quietlyCleanStateAfterTest(CLUSTER, client2);
     }
 
-    public Properties getStreamsConfiguration() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    public Properties getStreamsConfiguration(final TestInfo testInfo) {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -161,9 +157,9 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     }
 
     @Test
-    public void shouldBeInitializedWithDefaultSerde() throws Exception {
-        final Properties streamsConfiguration1 = getStreamsConfiguration();
-        final Properties streamsConfiguration2 = getStreamsConfiguration();
+    public void shouldBeInitializedWithDefaultSerde(final TestInfo testInfo) throws Exception {
+        final Properties streamsConfiguration1 = getStreamsConfiguration(testInfo);
+        final Properties streamsConfiguration2 = getStreamsConfiguration(testInfo);
 
         //Each streams client needs to have it's own StreamsBuilder in order to simulate
         //a truly distributed run

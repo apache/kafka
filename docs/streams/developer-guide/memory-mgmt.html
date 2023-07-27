@@ -150,9 +150,10 @@ props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);</code></pre>
     Serdes.String(),
     Serdes.Long())
   .withCachingEnabled();</code></pre>
+      <p>Record caches are not supported for <a class="reference internal" href="processor-api.html#streams-developer-guide-state-store-versioned"><span class="std std-ref">versioned state stores</span></a>.</p>
     </div>
     <div class="section" id="rocksdb">
-      <h2><a class="toc-backref" href="#id3">RocksDB</a><a class="headerlink" href="#rocksdb" title="Permalink to this headline"></a></h2>
+      <span id="streams-developer-guide-memory-management-rocksdb"></span><h2><a class="toc-backref" href="#id3">RocksDB</a><a class="headerlink" href="#rocksdb" title="Permalink to this headline"></a></h2>
       <p> Each instance of RocksDB allocates off-heap memory for a block cache, index and filter blocks, and memtable (write buffer). Critical configs (for RocksDB version 4.1.0) include
         <code class="docutils literal"><span class="pre">block_cache_size</span></code>, <code class="docutils literal"><span class="pre">write_buffer_size</span></code> and <code class="docutils literal"><span class="pre">max_write_buffer_number</span></code>.  These can be specified through the
         <code class="docutils literal"><span class="pre">rocksdb.config.setter</span></code> configuration.</p>
@@ -195,14 +196,14 @@ $ export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so”
    }
 }</code></pre>
       <div>
-        <sup id="fn1">1. INDEX_FILTER_BLOCK_RATIO can be used to set a fraction of the block cache to set aside for "high priority" (aka index and filter) blocks, preventing them from being evicted by data blocks. See the full signature of the <a class="reference external" href="https://github.com/facebook/rocksdb/blob/master/java/src/main/java/org/rocksdb/LRUCache.java#L72">LRUCache constructor</a>.
-          NOTE: the boolean parameter in the cache constructor lets you control whether the cache should enforce a strict memory limit by failing the read or iteration in the rare cases where it might go larger than its capacity. Due to a
-          <a class="reference external" href="https://github.com/facebook/rocksdb/issues/6247">bug in RocksDB</a>, this option cannot be used
-          if the write buffer memory is also counted against the cache. If you set this to true, you should NOT pass the cache in to the <code>WriteBufferManager</code> and just control the write buffer and cache memory separately.</sup>
+        <sup id="fn1">1. INDEX_FILTER_BLOCK_RATIO can be used to set a fraction of the block cache to set aside for "high priority" (aka index and filter) blocks, preventing them from being evicted by data blocks.
+          The boolean parameter in the cache constructor lets you control whether the cache should enforce a strict memory limit by failing the read or iteration in the rare cases where it might go larger than its capacity.
+          See the full signature of the LRUCache constructor <a class="reference external" href="https://github.com/facebook/rocksdb/blob/master/java/src/main/java/org/rocksdb/LRUCache.java#L72">here</a>.
+        </sup>
         <br>
         <sup id="fn2">2. This must be set in order for INDEX_FILTER_BLOCK_RATIO to take effect (see footnote 1) as described in the <a class="reference external" href="https://github.com/facebook/rocksdb/wiki/Block-Cache#caching-index-and-filter-blocks">RocksDB docs</a></sup>
         <br>
-        <sup id="fn3">3. You may want to modify the default <a class="reference external" href="https://github.com/apache/kafka/blob/2.3/streams/src/main/java/org/apache/kafka/streams/state/internals/RocksDBStore.java#L79">block size</a> per these instructions from the <a class="reference external" href="https://github.com/facebook/rocksdb/wiki/Memory-usage-in-RocksDB#indexes-and-filter-blocks">RocksDB GitHub</a>. A larger block size means index blocks will be smaller, but the cached data blocks may contain more cold data that would otherwise be evicted.
+        <sup id="fn3">3. You may want to modify the default <a class="reference external" href="https://github.com/apache/kafka/blob/2.3/streams/src/main/java/org/apache/kafka/streams/state/internals/RocksDBStore.java#L79">block size</a> per these instructions from the <a class="reference external" href="https://github.com/facebook/rocksdb/wiki/Memory-usage-in-RocksDB#indexes-and-filter-blocks">RocksDB docs</a>. A larger block size means index blocks will be smaller, but the cached data blocks may contain more cold data that would otherwise be evicted.
           <br>
           <dl class="docutils">
             <dt>Note:</dt>

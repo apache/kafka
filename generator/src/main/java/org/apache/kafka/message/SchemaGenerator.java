@@ -250,6 +250,12 @@ final class SchemaGenerator {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");
             }
             return "Type.UINT16";
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.UNSIGNED_INT32";
         } else if (type instanceof FieldType.Int32FieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (nullable) {
@@ -311,10 +317,7 @@ final class SchemaGenerator {
                         fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
-            if (nullable) {
-                throw new RuntimeException("Type " + type + " cannot be nullable.");
-            }
-            return String.format("%s.SCHEMA_%d", type.toString(),
+            return String.format("%s.SCHEMA_%d", type,
                 floorVersion(type.toString(), version));
         } else {
             throw new RuntimeException("Unsupported type " + type);

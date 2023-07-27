@@ -33,6 +33,7 @@ import static org.apache.kafka.common.config.TopicConfig.RETENTION_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfigTest.MOCK_PLUGINS;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
@@ -47,6 +48,8 @@ import static org.junit.Assert.assertTrue;
 public class SourceConnectorConfigTest {
 
     private static final String FOO_CONNECTOR = "foo-source";
+    private static final String TOPIC_CREATION_GROUP_1 = "group1";
+    private static final String TOPIC_CREATION_GROUP_2 = "group2";
     private static final short DEFAULT_REPLICATION_FACTOR = -1;
     private static final int DEFAULT_PARTITIONS = -1;
 
@@ -62,6 +65,16 @@ public class SourceConnectorConfigTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(DEFAULT_REPLICATION_FACTOR));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(DEFAULT_PARTITIONS));
         return props;
+    }
+
+    @Test
+    public void shouldNotFailWithExplicitlySpecifiedDefaultTopicCreationGroup() {
+        Map<String, String> props = defaultConnectorProps();
+        props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", DEFAULT_TOPIC_CREATION_GROUP,
+            TOPIC_CREATION_GROUP_1, TOPIC_CREATION_GROUP_2));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, "1");
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, "1");
+        SourceConnectorConfig config = new SourceConnectorConfig(MOCK_PLUGINS, props, true);
     }
 
     @Test

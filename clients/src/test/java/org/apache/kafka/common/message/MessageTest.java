@@ -24,6 +24,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
@@ -96,14 +97,26 @@ public final class MessageTest {
 
     @Test
     public void testAddPartitionsToTxnVersions() throws Exception {
-        testAllMessageRoundTrips(new AddPartitionsToTxnRequestData().
-                setTransactionalId("blah").
-                setProducerId(0xbadcafebadcafeL).
-                setProducerEpoch((short) 30000).
-                setTopics(new AddPartitionsToTxnTopicCollection(singletonList(
+        AddPartitionsToTxnRequestData v3AndBelowData = new AddPartitionsToTxnRequestData().
+                setV3AndBelowTransactionalId("blah").
+                setV3AndBelowProducerId(0xbadcafebadcafeL).
+                setV3AndBelowProducerEpoch((short) 30000).
+                setV3AndBelowTopics(new AddPartitionsToTxnTopicCollection(singletonList(
                         new AddPartitionsToTxnTopic().
                                 setName("Topic").
-                                setPartitions(singletonList(1))).iterator())));
+                                setPartitions(singletonList(1))).iterator()));
+        testDuplication(v3AndBelowData);
+        testAllMessageRoundTripsUntilVersion((short) 3, v3AndBelowData);
+
+        AddPartitionsToTxnRequestData data = new AddPartitionsToTxnRequestData().
+                setTransactions(new AddPartitionsToTxnTransactionCollection(singletonList(
+                       new AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction().
+                              setTransactionalId("blah").
+                              setProducerId(0xbadcafebadcafeL).
+                              setProducerEpoch((short) 30000).
+                              setTopics(v3AndBelowData.v3AndBelowTopics())).iterator()));
+        testDuplication(data);
+        testAllMessageRoundTripsFromVersion((short) 4, data);
     }
 
     @Test
@@ -263,7 +276,7 @@ public final class MessageTest {
                 .setGroupId("groupId")
                 .setMemberId(memberId)
                 .setTopics(new ArrayList<>())
-                .setGenerationId(15);
+                .setGenerationIdOrMemberEpoch(15);
         testAllMessageRoundTripsFromVersion((short) 1, request.get());
         testAllMessageRoundTripsFromVersion((short) 1, request.get().setGroupInstanceId(null));
         testAllMessageRoundTripsFromVersion((short) 7, request.get().setGroupInstanceId(instanceId));
@@ -469,7 +482,7 @@ public final class MessageTest {
             OffsetCommitRequestData requestData = request.get();
             if (version < 1) {
                 requestData.setMemberId("");
-                requestData.setGenerationId(-1);
+                requestData.setGenerationIdOrMemberEpoch(-1);
             }
 
             if (version != 1) {
@@ -1032,6 +1045,12 @@ public final class MessageTest {
         }
     }
 
+    private void testAllMessageRoundTripsUntilVersion(short untilVersion, Message message) throws Exception {
+        for (short version = message.lowestSupportedVersion(); version <= untilVersion; version++) {
+            testEquivalentMessageRoundTrip(version, message);
+        }
+    }
+
     private void testMessageRoundTrip(short version, Message message, Message expected) throws Exception {
         testByteBufferRoundTrip(version, message, expected);
     }
@@ -1159,6 +1178,22 @@ public final class MessageTest {
         createTopics.unknownTaggedFields().add(field1000);
         verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
         verifyWriteSucceeds((short) 6, createTopics);
+    }
+
+    @Test
+    public void testLongTaggedString() throws Exception {
+        char[] chars = new char[1024];
+        Arrays.fill(chars, 'a');
+        String longString = new String(chars);
+        SimpleExampleMessageData message = new SimpleExampleMessageData()
+                .setMyString(longString);
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        short version = 1;
+        int size = message.size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        message.write(byteBufferAccessor, cache, version);
+        assertEquals(size, buf.position());
     }
 
     private void verifyWriteRaisesNpe(short version, Message message) {

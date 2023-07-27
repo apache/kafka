@@ -41,17 +41,15 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -64,22 +62,24 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 @SuppressWarnings("deprecation")
 public class MetricsIntegrationTest {
-
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -91,6 +91,7 @@ public class MetricsIntegrationTest {
     private static final String STREAM_THREAD_NODE_METRICS = "stream-thread-metrics";
     private static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
     private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
+    private static final String STREAM_TOPIC_METRICS = "stream-topic-metrics";
     private static final String STREAM_CACHE_NODE_METRICS = "stream-record-cache-metrics";
 
     private static final String IN_MEMORY_KVSTORE_TAG_KEY = "in-memory-state-id";
@@ -191,8 +192,11 @@ public class MetricsIntegrationTest {
     private static final String TASK_CREATED_TOTAL = "task-created-total";
     private static final String TASK_CLOSED_RATE = "task-closed-rate";
     private static final String TASK_CLOSED_TOTAL = "task-closed-total";
+    private static final String BLOCKED_TIME_TOTAL = "blocked-time-ns-total";
+    private static final String THREAD_START_TIME = "thread-start-time";
     private static final String ACTIVE_PROCESS_RATIO = "active-process-ratio";
     private static final String ACTIVE_BUFFER_COUNT = "active-buffer-count";
+
     private static final String SKIPPED_RECORDS_RATE = "skipped-records-rate";
     private static final String SKIPPED_RECORDS_TOTAL = "skipped-records-total";
     private static final String RECORD_LATENESS_AVG = "record-lateness-avg";
@@ -211,6 +215,10 @@ public class MetricsIntegrationTest {
     private static final String RECORD_E2E_LATENCY_AVG = "record-e2e-latency-avg";
     private static final String RECORD_E2E_LATENCY_MIN = "record-e2e-latency-min";
     private static final String RECORD_E2E_LATENCY_MAX = "record-e2e-latency-max";
+    private static final String BYTES_CONSUMED_TOTAL = "bytes-consumed-total";
+    private static final String RECORDS_CONSUMED_TOTAL = "records-consumed-total";
+    private static final String BYTES_PRODUCED_TOTAL = "bytes-produced-total";
+    private static final String RECORDS_PRODUCED_TOTAL = "records-produced-total";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
@@ -232,15 +240,12 @@ public class MetricsIntegrationTest {
 
     private String appId;
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() throws InterruptedException {
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
         CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         appId = "app-" + safeTestName;
 
         streamsConfiguration = new Properties();
@@ -249,12 +254,11 @@ public class MetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
-    @After
+    @AfterEach
     public void after() throws InterruptedException {
         CLUSTER.deleteTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
     }
@@ -354,6 +358,7 @@ public class MetricsIntegrationTest {
         checkThreadLevelMetrics();
         checkTaskLevelMetrics();
         checkProcessorNodeLevelMetrics();
+        checkTopicLevelMetrics();
         checkKeyValueStoreMetrics(IN_MEMORY_KVSTORE_TAG_KEY);
         checkKeyValueStoreMetrics(ROCKSDB_KVSTORE_TAG_KEY);
         checkKeyValueStoreMetrics(IN_MEMORY_LRUCACHE_TAG_KEY);
@@ -503,6 +508,8 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, TASK_CREATED_TOTAL, NUM_THREADS);
         checkMetricByName(listMetricThread, TASK_CLOSED_RATE, NUM_THREADS);
         checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, BLOCKED_TIME_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, THREAD_START_TIME, NUM_THREADS);
     }
 
     private void checkTaskLevelMetrics() {
@@ -536,6 +543,18 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_AVG, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
+    }
+
+    private void checkTopicLevelMetrics() {
+        final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().group().equals(STREAM_TOPIC_METRICS))
+            .collect(Collectors.toList());
+        final int numberOfSourceTopics = 4;
+        final int numberOfSinkTopics = 4;
+        checkMetricByName(listMetricProcessor, BYTES_CONSUMED_TOTAL, numberOfSourceTopics);
+        checkMetricByName(listMetricProcessor, RECORDS_CONSUMED_TOTAL, numberOfSourceTopics);
+        checkMetricByName(listMetricProcessor, BYTES_PRODUCED_TOTAL, numberOfSinkTopics);
+        checkMetricByName(listMetricProcessor, RECORDS_PRODUCED_TOTAL, numberOfSinkTopics);
     }
 
     private void checkKeyValueStoreMetrics(final String tagKey) {
@@ -728,9 +747,9 @@ public class MetricsIntegrationTest {
         final List<Metric> metrics = listMetric.stream()
             .filter(m -> m.metricName().name().equals(metricName))
             .collect(Collectors.toList());
-        Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to " + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
+        assertEquals(numMetric, metrics.size(), "Size of metrics of type:'" + metricName + "' must be equal to " + numMetric + " but it's equal to " + metrics.size());
         for (final Metric m : metrics) {
-            Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
+            assertNotNull(m.metricValue(), "Metric:'" + m.metricName() + "' must be not null");
         }
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.sink;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.Collection;
 import java.util.Map;
@@ -29,8 +30,8 @@ import java.util.Map;
  * from those partitions. As records are fetched from Kafka, they will be passed to the sink task using the
  * {@link #put(Collection)} API, which should either write them to the downstream system or batch them for
  * later writing. Periodically, Connect will call {@link #flush(Map)} to ensure that batched records are
- * actually pushed to the downstream system..
- *
+ * actually pushed to the downstream system.
+ * <p>
  * Below we describe the lifecycle of a SinkTask.
  *
  * <ol>
@@ -48,7 +49,7 @@ import java.util.Map;
  *     the new assignment will be opened using {@link #open(Collection)}.</li>
  *     <li><b>Shutdown:</b> When the task needs to be shutdown, Connect will close active partitions (if there
  *     are any) and stop the task using {@link #stop()}</li>
-  * </ol>
+ * </ol>
  *
  */
 public abstract class SinkTask implements Task {
@@ -88,38 +89,51 @@ public abstract class SinkTask implements Task {
     public abstract void start(Map<String, String> props);
 
     /**
-     * Put the records in the sink. Usually this should send the records to the sink asynchronously
-     * and immediately return.
-     *
+     * Put the records in the sink. This should either write them to the downstream system or batch them for
+     * later writing. If this method returns before the records are written to the downstream system, the task must
+     * implement {@link #flush(Map)} or {@link #preCommit(Map)} to ensure that offsets are only committed for records
+     * that have been written to the downstream system (hence avoiding data loss during failures).
+     * <p>
      * If this operation fails, the SinkTask may throw a {@link org.apache.kafka.connect.errors.RetriableException} to
      * indicate that the framework should attempt to retry the same call again. Other exceptions will cause the task to
      * be stopped immediately. {@link SinkTaskContext#timeout(long)} can be used to set the maximum time before the
      * batch will be retried.
      *
-     * @param records the set of records to send
+     * @param records the collection of records to send
      */
     public abstract void put(Collection<SinkRecord> records);
 
     /**
      * Flush all records that have been {@link #put(Collection)} for the specified topic-partitions.
      *
-     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
-     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
-     *                       passed to {@link #put}.
+     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}, provided for
+     *                       convenience but could also be determined by tracking all offsets included in the
+     *                       {@link SinkRecord}s passed to {@link #put}. Note that the topic, partition and offset
+     *                       here correspond to the original Kafka topic partition and offset, before any
+     *                       {@link Transformation transformations} have been applied. These can be tracked by the task
+     *                       through the {@link SinkRecord#originalTopic()}, {@link SinkRecord#originalKafkaPartition()}
+     *                       and {@link SinkRecord#originalKafkaOffset()} methods.
      */
     public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
     }
 
     /**
      * Pre-commit hook invoked prior to an offset commit.
+     * <p>
+     * The default implementation simply invokes {@link #flush(Map)} and is thus able to assume all {@code currentOffsets}
+     * are safe to commit.
      *
-     * The default implementation simply invokes {@link #flush(Map)} and is thus able to assume all {@code currentOffsets} are safe to commit.
+     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}, provided for
+     *                       convenience but could also be determined by tracking all offsets included in the
+     *                       {@link SinkRecord}s passed to {@link #put}. Note that the topic, partition and offset
+     *                       here correspond to the original Kafka topic partition and offset, before any
+     *                       {@link Transformation transformations} have been applied. These can be tracked by the task
+     *                       through the {@link SinkRecord#originalTopic()}, {@link SinkRecord#originalKafkaPartition()}
+     *                       and {@link SinkRecord#originalKafkaOffset()} methods.
      *
-     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
-     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
-     *                       passed to {@link #put}.
-     *
-     * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are safe to commit.
+     * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are
+     *         safe to commit. Note that the returned topic-partition to offsets map should use the original Kafka
+     *         topic partitions and offsets instead of the transformed values.
      */
     public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
         flush(currentOffsets);
@@ -127,9 +141,13 @@ public abstract class SinkTask implements Task {
     }
 
     /**
-     * The SinkTask use this method to create writers for newly assigned partitions in case of partition
+     * The SinkTask uses this method to create writers for newly assigned partitions in case of partition
      * rebalance. This method will be called after partition re-assignment completes and before the SinkTask starts
-     * fetching data. Note that any errors raised from this method will cause the task to stop.
+     * fetching data. Any errors raised from this method will cause the task to stop.
+     * <p>
+     * Note that the topic partitions here correspond to the original Kafka topic partitions, before any
+     * {@link Transformation transformations} have been applied.
+     *
      * @param partitions The list of partitions that are now assigned to the task (may include
      *                   partitions previously assigned to the task)
      */
@@ -145,11 +163,15 @@ public abstract class SinkTask implements Task {
     }
 
     /**
-     * The SinkTask use this method to close writers for partitions that are no
+     * The SinkTask uses this method to close writers for partitions that are no
      * longer assigned to the SinkTask. This method will be called before a rebalance operation starts
      * and after the SinkTask stops fetching data. After being closed, Connect will not write
-     * any records to the task until a new set of partitions has been opened. Note that any errors raised
+     * any records to the task until a new set of partitions has been opened. Any errors raised
      * from this method will cause the task to stop.
+     * <p>
+     * Note that the topic partitions here correspond to the original Kafka topic partitions, before any
+     * {@link Transformation transformations} have been applied.
+     *
      * @param partitions The list of partitions that should be closed
      */
     public void close(Collection<TopicPartition> partitions) {

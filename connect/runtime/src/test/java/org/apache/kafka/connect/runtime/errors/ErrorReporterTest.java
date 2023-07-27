@@ -31,15 +31,12 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.easymock.EasyMock;
-import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -58,14 +55,17 @@ import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ER
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_TOPIC;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_STAGE;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_TASK_ID;
-import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore("javax.management.*")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ErrorReporterTest {
 
     private static final String TOPIC = "test-topic";
@@ -109,12 +109,10 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andThrow(new RuntimeException());
-        replay(producer);
-
-        // since topic name is empty, this method should be a NOOP.
-        // if it attempts to log to the DLQ via the producer, the send mock will throw a RuntimeException.
+        // since topic name is empty, this method should be a NOOP and producer.send() should
+        // not be called.
         deadLetterQueueReporter.report(context);
+        verifyNoMoreInteractions(producer);
     }
 
     @Test
@@ -124,12 +122,11 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
-        replay(producer);
+        when(producer.send(any(), any())).thenReturn(metadata);
 
         deadLetterQueueReporter.report(context);
 
-        PowerMock.verifyAll();
+        verify(producer, times(1)).send(any(), any());
     }
 
     @Test
@@ -139,28 +136,12 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata).times(2);
-        replay(producer);
+        when(producer.send(any(), any())).thenReturn(metadata);
 
         deadLetterQueueReporter.report(context);
         deadLetterQueueReporter.report(context);
 
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testDLQReportAndReturnFuture() {
-        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
-            producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
-
-        ProcessingContext context = processingContext();
-
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
-        replay(producer);
-
-        deadLetterQueueReporter.report(context);
-
-        PowerMock.verifyAll();
+        verify(producer, times(2)).send(any(), any());
     }
 
     @Test
@@ -168,13 +149,8 @@ public class ErrorReporterTest {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
             producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
 
-        producer.close();
-        EasyMock.expectLastCall();
-        replay(producer);
-
         deadLetterQueueReporter.close();
-
-        PowerMock.verifyAll();
+        verify(producer).close();
     }
 
     @Test

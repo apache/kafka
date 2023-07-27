@@ -88,8 +88,8 @@ public interface ReplicatedLog extends AutoCloseable {
         Optional<OffsetAndEpoch> earliestSnapshotId = earliestSnapshotId();
         if (earliestSnapshotId.isPresent() &&
             ((offset < startOffset()) ||
-             (offset == startOffset() && epoch != earliestSnapshotId.get().epoch) ||
-             (epoch < earliestSnapshotId.get().epoch))
+             (offset == startOffset() && epoch != earliestSnapshotId.get().epoch()) ||
+             (epoch < earliestSnapshotId.get().epoch()))
         ) {
             /* Send a snapshot if the leader has a snapshot at the log start offset and
              * 1. the fetch offset is less than the log start offset or
@@ -108,7 +108,7 @@ public interface ReplicatedLog extends AutoCloseable {
         } else {
             OffsetAndEpoch endOffsetAndEpoch = endOffsetForEpoch(epoch);
 
-            if (endOffsetAndEpoch.epoch != epoch || endOffsetAndEpoch.offset < offset) {
+            if (endOffsetAndEpoch.epoch() != epoch || endOffsetAndEpoch.offset() < offset) {
                 return ValidOffsetAndEpoch.diverging(endOffsetAndEpoch);
             } else {
                 return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(offset, epoch));
@@ -184,18 +184,15 @@ public interface ReplicatedLog extends AutoCloseable {
 
     /**
      * Flush the current log to disk.
+     *
+     * @param forceFlushActiveSegment Whether to force flush the active segment. Should be `true` during close; otherwise false.
      */
-    void flush();
+    void flush(boolean forceFlushActiveSegment);
 
     /**
      * Possibly perform cleaning of snapshots and logs
      */
     boolean maybeClean();
-
-    /**
-     * Get the last offset which has been flushed to disk.
-     */
-    long lastFlushedOffset();
 
     /**
      * Return the topic partition associated with the log.
@@ -215,15 +212,15 @@ public interface ReplicatedLog extends AutoCloseable {
      */
     default long truncateToEndOffset(OffsetAndEpoch endOffset) {
         final long truncationOffset;
-        int leaderEpoch = endOffset.epoch;
+        int leaderEpoch = endOffset.epoch();
         if (leaderEpoch == 0) {
-            truncationOffset = Math.min(endOffset.offset, endOffset().offset);
+            truncationOffset = Math.min(endOffset.offset(), endOffset().offset);
         } else {
             OffsetAndEpoch localEndOffset = endOffsetForEpoch(leaderEpoch);
-            if (localEndOffset.epoch == leaderEpoch) {
-                truncationOffset = Math.min(localEndOffset.offset, endOffset.offset);
+            if (localEndOffset.epoch() == leaderEpoch) {
+                truncationOffset = Math.min(localEndOffset.offset(), endOffset.offset());
             } else {
-                truncationOffset = localEndOffset.offset;
+                truncationOffset = localEndOffset.offset();
             }
         }
 
@@ -262,7 +259,7 @@ public interface ReplicatedLog extends AutoCloseable {
      * the quorum leader.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot if it doesn't already exists
+     * @return a writable snapshot if it doesn't already exist
      */
     Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId);
 
@@ -290,7 +287,7 @@ public interface ReplicatedLog extends AutoCloseable {
      /**
       * Returns the latest snapshot id if one exists.
       *
-      * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
+      * @return an Optional snapshot id of the latest snapshot if one exists, otherwise returns an
       *         empty Optional
       */
     Optional<OffsetAndEpoch> latestSnapshotId();

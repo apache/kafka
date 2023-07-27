@@ -156,6 +156,10 @@ public final class MessageGenerator {
 
     static final String DOUBLE_NODE_CLASS = "com.fasterxml.jackson.databind.node.DoubleNode";
 
+    static final long UNSIGNED_INT_MAX = 4294967295L;
+
+    static final int UNSIGNED_SHORT_MAX = 65535;
+
     /**
      * The Jackson serializer we use for JSON objects.
      */

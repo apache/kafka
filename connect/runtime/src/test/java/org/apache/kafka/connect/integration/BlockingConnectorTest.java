@@ -27,7 +27,7 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -42,9 +42,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.function.ThrowingRunnable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,14 +56,16 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
@@ -77,9 +81,9 @@ public class BlockingConnectorTest {
     private static final String NORMAL_CONNECTOR_NAME = "normal-connector";
     private static final String TEST_TOPIC = "normal-topic";
     private static final int NUM_RECORDS_PRODUCED = 100;
-    private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(60);
-    private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
-    private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
+    private static final long CONNECTOR_BLOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long RECORD_TRANSFER_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long REDUCED_REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
     private static final String CONNECTOR_INITIALIZE_WITH_TASK_CONFIGS = "Connector::initializeWithTaskConfigs";
@@ -113,8 +117,6 @@ public class BlockingConnectorTest {
 
     @Before
     public void setup() throws Exception {
-        // Artificially reduce the REST request timeout so that these don't take forever
-        ConnectorsResource.setRequestTimeout(REST_REQUEST_TIMEOUT);
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
@@ -127,13 +129,9 @@ public class BlockingConnectorTest {
         // start the clusters
         connect.start();
 
-        // wait for the Connect REST API to become available. necessary because of the reduced REST
-        // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
-        // if the worker is still getting on its feet.
-        waitForCondition(
-            () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
-            CONNECT_WORKER_STARTUP_TIMEOUT,
-            "Worker did not complete startup in time"
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                NUM_WORKERS,
+                "Initial group of workers did not start in time"
         );
     }
 
@@ -141,14 +139,13 @@ public class BlockingConnectorTest {
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
-        ConnectorsResource.resetRequestTimeout();
         Block.resetBlockLatch();
     }
 
     @Test
     public void testBlockInConnectorValidate() throws Exception {
         log.info("Starting test testBlockInConnectorValidate");
-        assertThrows(ConnectRestException.class, () -> createConnectorWithBlock(ValidateBlockingConnector.class, CONNECTOR_VALIDATE));
+        assertRequestTimesOut("create connector that blocks during validation", () -> createConnectorWithBlock(ValidateBlockingConnector.class, CONNECTOR_VALIDATE));
         // Will NOT assert that connector has failed, since the request should fail before it's even created
 
         // Connector should already be blocked so this should return immediately, but check just to
@@ -162,7 +159,7 @@ public class BlockingConnectorTest {
     @Test
     public void testBlockInConnectorConfig() throws Exception {
         log.info("Starting test testBlockInConnectorConfig");
-        assertThrows(ConnectRestException.class, () -> createConnectorWithBlock(ConfigBlockingConnector.class, CONNECTOR_CONFIG));
+        assertRequestTimesOut("create connector that blocks while getting config", () -> createConnectorWithBlock(ConfigBlockingConnector.class, CONNECTOR_CONFIG));
         // Will NOT assert that connector has failed, since the request should fail before it's even created
 
         // Connector should already be blocked so this should return immediately, but check just to
@@ -328,8 +325,28 @@ public class BlockingConnectorTest {
 
     private void verifyNormalConnector() throws InterruptedException {
         waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-        normalConnectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
-        normalConnectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
+        normalConnectorHandle.awaitRecords(RECORD_TRANSFER_TIMEOUT_MS);
+        normalConnectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
+    }
+
+    private void assertRequestTimesOut(String requestDescription, ThrowingRunnable request) {
+        // Artificially reduce the REST request timeout so that these don't take 90 seconds
+        connect.requestTimeout(REDUCED_REST_REQUEST_TIMEOUT);
+        ConnectRestException exception = assertThrows(
+                "Should have failed to " + requestDescription,
+                ConnectRestException.class, request
+        );
+        assertEquals(
+                "Should have gotten 500 error from trying to " + requestDescription,
+                Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode()
+        );
+        assertTrue(
+                "Should have gotten timeout message from trying to " + requestDescription
+                        + "; instead, message was: " + exception.getMessage(),
+                exception.getMessage().contains("Request timed out")
+        );
+        // Reset the REST request timeout so that other requests aren't impacted
+        connect.requestTimeout(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }
 
     private static class Block {
@@ -351,7 +368,7 @@ public class BlockingConnectorTest {
                 );
         }
 
-        public static void waitForBlock() throws InterruptedException {
+        public static void waitForBlock() throws InterruptedException, TimeoutException {
             synchronized (Block.class) {
                 if (blockLatch == null) {
                     throw new IllegalArgumentException("No connector has been created yet");
@@ -359,7 +376,9 @@ public class BlockingConnectorTest {
             }
 
             log.debug("Waiting for connector to block");
-            blockLatch.await();
+            if (!blockLatch.await(CONNECTOR_BLOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                throw new TimeoutException("Timed out waiting for connector to block.");
+            }
             log.debug("Connector should now be blocked");
         }
 
@@ -388,10 +407,6 @@ public class BlockingConnectorTest {
                 }
                 blockLatch = new CountDownLatch(1);
             }
-        }
-
-        public Map<String, String> taskConfig() {
-            return Collections.singletonMap(BLOCK_CONFIG, block);
         }
 
         public void maybeBlockOn(String block) {
@@ -561,11 +576,6 @@ public class BlockingConnectorTest {
         }
 
         @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            return super.validate(connectorConfigs);
-        }
-
-        @Override
         public ConfigDef config() {
             return Block.config();
         }
@@ -683,11 +693,6 @@ public class BlockingConnectorTest {
 
         @Override
         public void stop() {
-        }
-
-        @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            return super.validate(connectorConfigs);
         }
 
         @Override

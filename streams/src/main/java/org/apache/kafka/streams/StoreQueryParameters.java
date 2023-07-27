@@ -30,7 +30,7 @@ public class StoreQueryParameters<T> {
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
-    private StoreQueryParameters(final String storeName, final QueryableStoreType<T>  queryableStoreType, final Integer partition, final boolean staleStores) {
+    protected StoreQueryParameters(final String storeName, final QueryableStoreType<T>  queryableStoreType, final Integer partition, final boolean staleStores) {
         this.storeName = storeName;
         this.queryableStoreType = queryableStoreType;
         this.partition = partition;

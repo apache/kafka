@@ -197,7 +197,7 @@ public class MirrorClientTest {
     @Test
     public void testIdentityReplicationTopicSource() {
         MirrorClient client = new FakeMirrorClient(
-            identityReplicationPolicy("primary"), Arrays.asList());
+            identityReplicationPolicy("primary"), Collections.emptyList());
         assertEquals("topic1", client.replicationPolicy()
             .formatRemoteTopic("primary", "topic1"));
         assertEquals("primary", client.replicationPolicy()

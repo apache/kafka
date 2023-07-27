@@ -19,7 +19,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -28,9 +27,9 @@ import java.util.concurrent.ExecutionException;
 
 @InterfaceStability.Evolving
 public class DescribeTransactionsResult {
-    private final Map<CoordinatorKey, KafkaFutureImpl<TransactionDescription>> futures;
+    private final Map<CoordinatorKey, KafkaFuture<TransactionDescription>> futures;
 
-    DescribeTransactionsResult(Map<CoordinatorKey, KafkaFutureImpl<TransactionDescription>> futures) {
+    DescribeTransactionsResult(Map<CoordinatorKey, KafkaFuture<TransactionDescription>> futures) {
         this.futures = futures;
     }
 
@@ -66,7 +65,7 @@ public class DescribeTransactionsResult {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
             .thenApply(nil -> {
                 Map<String, TransactionDescription> results = new HashMap<>(futures.size());
-                for (Map.Entry<CoordinatorKey, KafkaFutureImpl<TransactionDescription>> entry : futures.entrySet()) {
+                for (Map.Entry<CoordinatorKey, KafkaFuture<TransactionDescription>> entry : futures.entrySet()) {
                     try {
                         results.put(entry.getKey().idValue, entry.getValue().get());
                     } catch (InterruptedException | ExecutionException e) {

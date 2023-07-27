@@ -69,12 +69,12 @@ public class DescribeConsumerGroupsHandlerTest {
     @Test
     public void testBuildRequest() {
         DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
-        DescribeGroupsRequest request = handler.buildRequest(1, keys).build();
+        DescribeGroupsRequest request = handler.buildBatchedRequest(1, keys).build();
         assertEquals(2, request.data().groups().size());
         assertFalse(request.data().includeAuthorizedOperations());
 
         handler = new DescribeConsumerGroupsHandler(true, logContext);
-        request = handler.buildRequest(1, keys).build();
+        request = handler.buildBatchedRequest(1, keys).build();
         assertEquals(2, request.data().groups().size());
         assertTrue(request.data().includeAuthorizedOperations());
     }

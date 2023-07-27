@@ -28,6 +28,8 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -62,6 +64,8 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
     static StateStore getReadWriteStore(final StateStore store) {
         if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
+        } else if (store instanceof VersionedKeyValueStore) {
+            return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
@@ -150,6 +154,35 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
 
         TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
             super(inner);
+        }
+    }
+
+    static class VersionedKeyValueStoreReadWriteDecorator<K, V>
+        extends AbstractReadWriteDecorator<VersionedKeyValueStore<K, V>, K, V>
+        implements VersionedKeyValueStore<K, V> {
+
+        VersionedKeyValueStoreReadWriteDecorator(final VersionedKeyValueStore<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        public long put(final K key, final V value, final long timestamp) {
+            return wrapped().put(key, value, timestamp);
+        }
+
+        @Override
+        public VersionedRecord<V> delete(final K key, final long timestamp) {
+            return wrapped().delete(key, timestamp);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key) {
+            return wrapped().get(key);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
+            return wrapped().get(key, asOfTimestamp);
         }
     }
 
@@ -257,6 +290,12 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
             return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final long earliestSessionEndTime,
+                                                               final long latestSessionEndTime) {
+            return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
         }
 
         @Override

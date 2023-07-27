@@ -26,16 +26,16 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.when
 
 import scala.collection._
 import scala.concurrent.duration.Duration
@@ -69,10 +69,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
-      .anyTimes()
-    EasyMock.replay(zkClient)
+    when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
+      .thenReturn(Some(numPartitions))
 
     serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
     serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
@@ -209,9 +207,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: JoinGroupCallback): Unit = {
-      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false, "clientId", "clientHost",
-       DefaultRebalanceTimeout, DefaultSessionTimeout,
-       protocolType, protocols, responseCallback)
+      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false,
+        supportSkippingAssignment = false, "clientId", "clientHost", DefaultRebalanceTimeout,
+        DefaultSessionTimeout, protocolType, protocols, responseCallback)
       replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
@@ -285,8 +283,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
+      val offsets = immutable.Map(tip -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, offsets, responseCallback)
       replicaManager.tryCompleteActions()
@@ -299,14 +297,13 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val offsets = immutable.Map(new TopicIdPartition(Uuid.randomUuid(), 0, "topic") -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       val producerId = 1000L
       val producerEpoch : Short = 2
       // When transaction offsets are appended to the log, transactions may be scheduled for
       // completion. Since group metadata locks are acquired for transaction completion, include
       // this in the callback to test that there are no deadlocks.
-      def callbackWithTxnCompletion(errors: Map[TopicPartition, Errors]): Unit = {
+      def callbackWithTxnCompletion(errors: Map[TopicIdPartition, Errors]): Unit = {
         val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
         groupCoordinator.groupManager.scheduleHandleTxnCompletion(producerId,
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
@@ -375,8 +372,8 @@ object GroupCoordinatorConcurrencyTest {
   type HeartbeatCallback = Errors => Unit
   type OffsetFetchCallbackParams = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData])
   type OffsetFetchCallback = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) => Unit
-  type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
-  type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
+  type CommitOffsetCallbackParams = Map[TopicIdPartition, Errors]
+  type CommitOffsetCallback = Map[TopicIdPartition, Errors] => Unit
   type LeaveGroupCallbackParams = LeaveGroupResult
   type LeaveGroupCallback = LeaveGroupResult => Unit
   type CompleteTxnCallbackParams = Errors
@@ -391,7 +388,7 @@ object GroupCoordinatorConcurrencyTest {
   class Group(val groupId: String, nMembers: Int,
       groupCoordinator: GroupCoordinator, replicaManager: TestReplicaManager) {
     val groupPartitionId = groupCoordinator.partitionFor(groupId)
-    groupCoordinator.groupManager.addPartitionOwnership(groupPartitionId)
+    groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
     val members = (0 until nMembers).map { i =>
       new GroupMember(this, groupPartitionId, i == 0)
     }

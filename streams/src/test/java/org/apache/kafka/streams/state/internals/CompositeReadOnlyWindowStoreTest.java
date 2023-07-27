@@ -25,10 +25,11 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,14 +40,17 @@ import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class CompositeReadOnlyWindowStoreTest {
 
     private static final long WINDOW_SIZE = 30_000;
@@ -80,29 +84,22 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("my-key", "my-value", 0L);
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
-        try (final WindowStoreIterator<String> iterator =
-                 windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
-            final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
-
-            assertEquals(
+        assertEquals(
                 asList(new KeyValue<>(0L, "my-value"), new KeyValue<>(10L, "my-later-value")),
-                results);
-        }
+                StreamsTestUtils.toList(windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L)))
+        );
     }
+
 
     @Test
     public void shouldBackwardFetchValuesFromWindowStore() {
         underlyingWindowStore.put("my-key", "my-value", 0L);
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
-        try (final WindowStoreIterator<String> iterator =
-                 windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
-            final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
-
-            assertEquals(
+        assertEquals(
                 asList(new KeyValue<>(10L, "my-later-value"), new KeyValue<>(0L, "my-value")),
-                results);
-        }
+                StreamsTestUtils.toList(windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L)))
+        );
     }
 
     @Test
@@ -179,10 +176,9 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject()))
-            .andThrow(new InvalidStateStoreException("store is unavailable"));
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any()))
+            .thenThrow(new InvalidStateStoreException("store is unavailable"));
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -195,10 +191,9 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalanceWhenBackwards() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject()))
-            .andThrow(new InvalidStateStoreException("store is unavailable"));
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any()))
+            .thenThrow(new InvalidStateStoreException("store is unavailable"));
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -246,9 +241,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyBackwardIteratorAlwaysReturnsFalse() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -264,9 +258,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyIteratorAlwaysReturnsFalse() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -282,9 +275,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyBackwardIteratorPeekNextKeyShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -299,9 +291,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyIteratorPeekNextKeyShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -316,9 +307,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyIteratorNextShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -333,9 +323,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyBackwardIteratorNextShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -358,6 +347,97 @@ public class CompositeReadOnlyWindowStoreTest {
             StreamsTestUtils.toList(windowStore.fetch("a", "b", ofEpochMilli(0), ofEpochMilli(10)));
         assertThat(results, equalTo(Arrays.asList(
             KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+    }
+
+    @Test
+    public void shouldFetchKeyRangeAcrossStoresWithNullKeyTo() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        secondUnderlying.put("c", "c", 10L);
+        final List<KeyValue<Windowed<String>, String>> results =
+            StreamsTestUtils.toList(windowStore.fetch("a", null, ofEpochMilli(0), ofEpochMilli(10)));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
+            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"))));
+    }
+
+    @Test
+    public void shouldFetchKeyRangeAcrossStoresWithNullKeyFrom() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        secondUnderlying.put("c", "c", 10L);
+        final List<KeyValue<Windowed<String>, String>> results =
+            StreamsTestUtils.toList(windowStore.fetch(null, "c", ofEpochMilli(0), ofEpochMilli(10)));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
+            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"))));
+    }
+
+    @Test
+    public void shouldFetchKeyRangeAcrossStoresWithNullKeyFromKeyTo() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        secondUnderlying.put("c", "c", 10L);
+        final List<KeyValue<Windowed<String>, String>> results =
+            StreamsTestUtils.toList(windowStore.fetch(null, null, ofEpochMilli(0), ofEpochMilli(10)));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
+            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"))));
+    }
+
+    @Test
+    public void shouldBackwardFetchKeyRangeAcrossStoresWithNullKeyTo() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        secondUnderlying.put("c", "c", 10L);
+        final List<KeyValue<Windowed<String>, String>> results =
+            StreamsTestUtils.toList(windowStore.backwardFetch("a", null, ofEpochMilli(0), ofEpochMilli(10)));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
+            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+    }
+
+    @Test
+    public void shouldBackwardFetchKeyRangeAcrossStoresWithNullKeyFrom() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        secondUnderlying.put("c", "c", 10L);
+        final List<KeyValue<Windowed<String>, String>> results =
+            StreamsTestUtils.toList(windowStore.backwardFetch(null, "c", ofEpochMilli(0), ofEpochMilli(10)));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
+            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")
+            )));
+    }
+
+    @Test
+    public void shouldBackwardFetchKeyRangeAcrossStoresWithNullKeyFromKeyTo() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        secondUnderlying.put("c", "c", 10L);
+        final List<KeyValue<Windowed<String>, String>> results =
+            StreamsTestUtils.toList(windowStore.backwardFetch(null, null, ofEpochMilli(0), ofEpochMilli(10)));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
             KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
     }
 
@@ -444,15 +524,4 @@ public class CompositeReadOnlyWindowStoreTest {
     public void shouldThrowNPEIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> windowStore.fetch(null, ofEpochMilli(0), ofEpochMilli(0)));
     }
-
-    @Test
-    public void shouldThrowNPEIfFromKeyIsNull() {
-        assertThrows(NullPointerException.class, () -> windowStore.fetch(null, "a", ofEpochMilli(0), ofEpochMilli(0)));
-    }
-
-    @Test
-    public void shouldThrowNPEIfToKeyIsNull() {
-        assertThrows(NullPointerException.class, () -> windowStore.fetch("a", null, ofEpochMilli(0), ofEpochMilli(0)));
-    }
-
 }

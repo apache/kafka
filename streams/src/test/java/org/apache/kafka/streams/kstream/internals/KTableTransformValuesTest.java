@@ -34,6 +34,8 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -64,6 +66,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
@@ -87,7 +90,7 @@ public class KTableTransformValuesTest {
     @Mock(MockType.NICE)
     private KTableImpl<String, String, String> parent;
     @Mock(MockType.NICE)
-    private InternalProcessorContext context;
+    private InternalProcessorContext<String, Change<String>> context;
     @Mock(MockType.NICE)
     private KTableValueGetterSupplier<String, String> parentGetterSupplier;
     @Mock(MockType.NICE)
@@ -145,7 +148,7 @@ public class KTableTransformValuesTest {
         final NoOpValueTransformerWithKeySupplier<String, String> transformer = new NoOpValueTransformerWithKeySupplier<>();
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, transformer, null);
-        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
+        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
 
         processor.init(context);
 
@@ -157,14 +160,14 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
-        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
+        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
-        context.forward("Key", new Change<>("Key->newValue!", null));
+        context.forward(new Record<>("Key", new Change<>("Key->newValue!", null), 0));
         expectLastCall();
         replay(context);
 
-        processor.process("Key", new Change<>("newValue", "oldValue"));
+        processor.process(new Record<>("Key", new Change<>("newValue", "oldValue"), 0));
 
         verify(context);
     }
@@ -178,14 +181,14 @@ public class KTableTransformValuesTest {
         replay(parent);
 
         transformValues.enableSendingOldValues(true);
-        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
+        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
-        context.forward("Key", new Change<>("Key->newValue!", "Key->oldValue!"));
+        context.forward(new Record<>("Key", new Change<>("Key->newValue!", "Key->oldValue!"), 0));
         expectLastCall();
         replay(context);
 
-        processor.process("Key", new Change<>("newValue", "oldValue"));
+        processor.process(new Record<>("Key", new Change<>("newValue", "oldValue"), 0));
 
         verify(context);
     }
@@ -301,7 +304,7 @@ public class KTableTransformValuesTest {
         expectLastCall();
         replay(mockSupplier, transformer);
 
-        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
+        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.close();
 
         verify(transformer);
@@ -437,11 +440,9 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "ignored1", 15L);
         inputTopic.pipeInput("A", "ignored2", 10L);
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "0", 15),
+        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "0", 15),
-                new KeyValueTimestamp<>("A", "3", 15)));
+                new KeyValueTimestamp<>("A", "3", 15))));
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
@@ -466,11 +467,9 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
-                 new KeyValueTimestamp<>("A", "0", 15),
-                 new KeyValueTimestamp<>("A", "2", 15),
-                 new KeyValueTimestamp<>("A", "0", 15),
-                 new KeyValueTimestamp<>("A", "3", 15)));
+        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
+                new KeyValueTimestamp<>("A", "2", 15),
+                new KeyValueTimestamp<>("A", "3", 15))));
     }
 
     private ArrayList<KeyValueTimestamp<String, String>> output() {

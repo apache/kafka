@@ -50,6 +50,7 @@ public class KStreamSplitTest {
     private final Predicate<Integer, String> isMultipleOfThree = (key, value) -> (key % 3) == 0;
     private final Predicate<Integer, String> isMultipleOfFive = (key, value) -> (key % 5) == 0;
     private final Predicate<Integer, String> isMultipleOfSeven = (key, value) -> (key % 7) == 0;
+    private final Predicate<Integer, String> isNegative = (key, value) -> key < 0;
     private final KStream<Integer, String> source = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
 
     @Test
@@ -68,14 +69,14 @@ public class KStreamSplitTest {
             final TestOutputTopic<Integer, String> x2 = driver.createOutputTopic("x2", new IntegerDeserializer(), new StringDeserializer());
             final TestOutputTopic<Integer, String> x3 = driver.createOutputTopic("x3", new IntegerDeserializer(), new StringDeserializer());
             final TestOutputTopic<Integer, String> x5 = driver.createOutputTopic("x5", new IntegerDeserializer(), new StringDeserializer());
-            assertEquals(Arrays.asList("V2", "V4", "V6"), x2.readValuesToList());
+            assertEquals(Arrays.asList("V0", "V2", "V4", "V6"), x2.readValuesToList());
             assertEquals(Arrays.asList("V3"), x3.readValuesToList());
             assertEquals(Arrays.asList("V5"), x5.readValuesToList());
         });
     }
 
     private void withDriver(final Consumer<TopologyTestDriver> test) {
-        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
+        final int[] expectedKeys = new int[]{-1, 0, 1, 2, 3, 4, 5, 6, 7};
         final Topology topology = builder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
@@ -104,25 +105,29 @@ public class KStreamSplitTest {
                         // "foo-bar"
                         .branch(isEven, Branched.as("bar"))
                         // no entry: a Consumer is provided
-                        .branch(isMultipleOfThree, Branched.withConsumer(ks -> {
-                        }))
+                        .branch(isMultipleOfThree, Branched.withConsumer(ks -> { }))
                         // no entry: chain function returns null
                         .branch(isMultipleOfFive, Branched.withFunction(ks -> null))
-                        // "foo-4": name defaults to the branch position
+                        // "foo-4": chain function returns non-null value
+                        .branch(isNegative, Branched.withFunction(ks -> ks))
+                        // "foo-5": name defaults to the branch position
                         .branch(isMultipleOfSeven)
                         // "foo-0": "0" is the default name for the default branch
                         .defaultBranch();
-        assertEquals(3, branches.size());
-        branches.get("foo-bar").to("foo-bar");
-        branches.get("foo-4").to("foo-4");
-        branches.get("foo-0").to("foo-0");
+        assertEquals(4, branches.size());
+        // direct the branched streams into different topics named with branch name
+        for (final Map.Entry<String, KStream<Integer, String>> branch: branches.entrySet()) {
+            branch.getValue().to(branch.getKey());
+        }
         builder.build();
 
         withDriver(driver -> {
             final TestOutputTopic<Integer, String> even = driver.createOutputTopic("foo-bar", new IntegerDeserializer(), new StringDeserializer());
-            final TestOutputTopic<Integer, String> x7 = driver.createOutputTopic("foo-4", new IntegerDeserializer(), new StringDeserializer());
+            final TestOutputTopic<Integer, String> negative = driver.createOutputTopic("foo-4", new IntegerDeserializer(), new StringDeserializer());
+            final TestOutputTopic<Integer, String> x7 = driver.createOutputTopic("foo-5", new IntegerDeserializer(), new StringDeserializer());
             final TestOutputTopic<Integer, String> defaultBranch = driver.createOutputTopic("foo-0", new IntegerDeserializer(), new StringDeserializer());
-            assertEquals(Arrays.asList("V2", "V4", "V6"), even.readValuesToList());
+            assertEquals(Arrays.asList("V0", "V2", "V4", "V6"), even.readValuesToList());
+            assertEquals(Arrays.asList("V-1"), negative.readValuesToList());
             assertEquals(Arrays.asList("V7"), x7.readValuesToList());
             assertEquals(Arrays.asList("V1"), defaultBranch.readValuesToList());
         });
@@ -130,14 +135,15 @@ public class KStreamSplitTest {
 
     @Test
     public void testBranchingWithNoTerminalOperation() {
+        final String outputTopicName = "output";
         source.split()
-                .branch(isEven, Branched.withConsumer(ks -> ks.to("output")))
-                .branch(isMultipleOfFive, Branched.withConsumer(ks -> ks.to("output")));
+                .branch(isEven, Branched.withConsumer(ks -> ks.to(outputTopicName)))
+                .branch(isMultipleOfFive, Branched.withConsumer(ks -> ks.to(outputTopicName)));
         builder.build();
         withDriver(driver -> {
             final TestOutputTopic<Integer, String> outputTopic =
-                    driver.createOutputTopic("output", new IntegerDeserializer(), new StringDeserializer());
-            assertEquals(Arrays.asList("V2", "V4", "V5", "V6"), outputTopic.readValuesToList());
+                    driver.createOutputTopic(outputTopicName, new IntegerDeserializer(), new StringDeserializer());
+            assertEquals(Arrays.asList("V0", "V2", "V4", "V5", "V6"), outputTopic.readValuesToList());
         });
     }
 }

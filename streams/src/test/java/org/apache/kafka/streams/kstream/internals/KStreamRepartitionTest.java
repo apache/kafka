@@ -35,32 +35,33 @@ import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockRunner;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.util.Optional;
+import java.util.Collections;
 
-import static org.easymock.EasyMock.anyInt;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("deprecation")
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KStreamRepartitionTest {
     private final String inputTopic = "input-topic";
 
@@ -76,11 +77,11 @@ public class KStreamRepartitionTest {
     @Test
     public void shouldInvokePartitionerWhenSet() {
         final int[] expectedKeys = new int[]{0, 1};
-        final StreamPartitioner<Integer, String> streamPartitionerMock = EasyMock.mock(StreamPartitioner.class);
+        @SuppressWarnings("unchecked")
+        final StreamPartitioner<Integer, String> streamPartitionerMock = mock(StreamPartitioner.class);
 
-        expect(streamPartitionerMock.partition(anyString(), eq(0), eq("X0"), anyInt())).andReturn(1).times(1);
-        expect(streamPartitionerMock.partition(anyString(), eq(1), eq("X1"), anyInt())).andReturn(1).times(1);
-        replay(streamPartitionerMock);
+        when(streamPartitionerMock.partitions(anyString(), eq(0), eq("X0"), anyInt())).thenReturn(Optional.of(Collections.singleton(1)));
+        when(streamPartitionerMock.partitions(anyString(), eq(1), eq("X1"), anyInt())).thenReturn(Optional.of(Collections.singleton(1)));
 
         final String repartitionOperationName = "test";
         final Repartitioned<Integer, String> repartitioned = Repartitioned
@@ -112,7 +113,8 @@ public class KStreamRepartitionTest {
             assertTrue(testOutputTopic.readRecordsToList().isEmpty());
         }
 
-        verify(streamPartitionerMock);
+        verify(streamPartitionerMock).partitions(anyString(), eq(0), eq("X0"), anyInt());
+        verify(streamPartitionerMock).partitions(anyString(), eq(1), eq("X1"), anyInt());
     }
 
     @Test

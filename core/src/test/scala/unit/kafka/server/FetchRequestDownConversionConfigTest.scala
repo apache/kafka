@@ -18,25 +18,29 @@ package kafka.server
 
 import java.util
 import java.util.{Optional, Properties}
-import kafka.log.LogConfig
-import kafka.utils.TestUtils
+import kafka.network.RequestMetrics.{MessageConversionsTimeMs, TemporaryMemoryBytes}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
 class FetchRequestDownConversionConfigTest extends BaseRequestTest {
-  private var producer: KafkaProducer[String, String] = null
-  override def brokerCount: Int = 1
+  private var producer: KafkaProducer[String, String] = _
+  override def brokerCount: Int = 2
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     initProducer()
   }
 
@@ -53,7 +57,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   }
 
   private def initProducer(): Unit = {
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
@@ -61,20 +65,25 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
                            configs: Map[String, String] = Map.empty, topicSuffixStart: Int = 0): Map[TopicPartition, Int] = {
     val topics = (0 until numTopics).map(t => s"topic${t + topicSuffixStart}")
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 1.toString)
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
-      val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 1,
-        topicConfig = topicConfig)
+      val partitionToLeader = createTopic(
+        topic,
+        numPartitions = numPartitions,
+        replicationFactor = 2,
+        topicConfig = topicConfig
+      )
       partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader }
     }.toMap
   }
 
   private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
+                                 topicIds: Map[String, Uuid],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L,
+      partitionMap.put(tp, new FetchRequest.PartitionData(topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID), offsetMap.getOrElse(tp, 0), 0L,
         maxPartitionBytes, Optional.empty()))
     }
     partitionMap
@@ -95,7 +104,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(1, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions), topicIds.asJava).build(1)
+      topicPartitions, topicIds.toMap)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
     topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -112,7 +121,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions), topicIds.asJava).build()
+      topicPartitions, topicIds.toMap)).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion)
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -129,7 +138,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions), topicIds.asJava).build(12)
+      topicPartitions, topicIds.toMap)).build(12)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 12)
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -139,56 +148,123 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
    * Tests that "message.downconversion.enable" can be set at topic level, and its configuration is obeyed for client
    * fetch requests.
    */
-  @Test
-  def testV1FetchWithTopicLevelOverrides(): Unit = {
-    // create topics with default down-conversion configuration (i.e. conversion disabled)
-    val conversionDisabledTopicsMap = createTopics(numTopics = 5, numPartitions = 1, topicSuffixStart = 0)
-    val conversionDisabledTopicPartitions = conversionDisabledTopicsMap.keySet.toSeq
-
-    // create topics with down-conversion configuration enabled
-    val topicConfig = Map(LogConfig.MessageDownConversionEnableProp -> "true")
-    val conversionEnabledTopicsMap = createTopics(numTopics = 5, numPartitions = 1, topicConfig, topicSuffixStart = 5)
-    val conversionEnabledTopicPartitions = conversionEnabledTopicsMap.keySet.toSeq
-
-    val allTopics = conversionDisabledTopicPartitions ++ conversionEnabledTopicPartitions
-    val leaderId = conversionDisabledTopicsMap.head._2
-    val topicIds = servers.head.kafkaController.controllerContext.topicIds
-    val topicNames = topicIds.map(_.swap)
-
-    allTopics.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
-    val fetchRequest = FetchRequest.Builder.forConsumer(1, Int.MaxValue, 0, createPartitionMap(1024,
-      allTopics), topicIds.asJava).build(1)
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-
-    val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
-    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponseData.get(tp).errorCode)))
-    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testV1FetchFromConsumer(quorum: String): Unit = {
+    testV1Fetch(isFollowerFetch = false)
   }
 
   /**
    * Tests that "message.downconversion.enable" has no effect on fetch requests from replicas.
    */
-  @Test
-  def testV1FetchFromReplica(): Unit = {
-    // create topics with default down-conversion configuration (i.e. conversion disabled)
-    val conversionDisabledTopicsMap = createTopics(numTopics = 5, numPartitions = 1, topicSuffixStart = 0)
-    val conversionDisabledTopicPartitions = conversionDisabledTopicsMap.keySet.toSeq
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testV1FetchFromReplica(quorum: String): Unit = {
+    testV1Fetch(isFollowerFetch = true)
+  }
 
-    // create topics with down-conversion configuration enabled
-    val topicConfig = Map(LogConfig.MessageDownConversionEnableProp -> "true")
-    val conversionEnabledTopicsMap = createTopics(numTopics = 5, numPartitions = 1, topicConfig, topicSuffixStart = 5)
-    val conversionEnabledTopicPartitions = conversionEnabledTopicsMap.keySet.toSeq
+  def testV1Fetch(isFollowerFetch: Boolean): Unit = {
+    val fetchRequest = "request=Fetch"
+    val fetchTemporaryMemoryBytesMetricName = s"$TemporaryMemoryBytes,$fetchRequest"
+    val fetchMessageConversionsTimeMsMetricName = s"$MessageConversionsTimeMs,$fetchRequest"
+    val initialFetchMessageConversionsPerSec = TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)
+    val initialFetchMessageConversionsTimeMs = TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName)
+    val initialFetchTemporaryMemoryBytes = TestUtils.metersCount(fetchTemporaryMemoryBytesMetricName)
+    val topicWithDownConversionEnabled = "foo"
+    val topicWithDownConversionDisabled = "bar"
+    val replicaIds = brokers.map(_.config.brokerId)
+    val leaderId = replicaIds.head
+    val followerId = replicaIds.last
 
-    val allTopicPartitions = conversionDisabledTopicPartitions ++ conversionEnabledTopicPartitions
-    val topicIds = servers.head.kafkaController.controllerContext.topicIds
-    val topicNames = topicIds.map(_.swap)
-    val leaderId = conversionDisabledTopicsMap.head._2
+    val admin = createAdminClient()
 
-    allTopicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic, "key", "value")).get())
-    val fetchRequest = FetchRequest.Builder.forReplica(1, 1, Int.MaxValue, 0,
-      createPartitionMap(1024, allTopicPartitions), topicIds.asJava).build()
+    val topicWithDownConversionDisabledId = TestUtils.createTopicWithAdminRaw(
+      admin,
+      topicWithDownConversionDisabled,
+      replicaAssignment = Map(0 -> replicaIds)
+    )
+
+    val topicConfig = new Properties
+    topicConfig.put(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, "true")
+    val topicWithDownConversionEnabledId = TestUtils.createTopicWithAdminRaw(
+      admin,
+      topicWithDownConversionEnabled,
+      replicaAssignment = Map(0 -> replicaIds),
+      topicConfig = topicConfig
+    )
+
+    val partitionWithDownConversionEnabled = new TopicPartition(topicWithDownConversionEnabled, 0)
+    val partitionWithDownConversionDisabled = new TopicPartition(topicWithDownConversionDisabled, 0)
+
+    val allTopicPartitions = Seq(
+      partitionWithDownConversionEnabled,
+      partitionWithDownConversionDisabled
+    )
+
+    allTopicPartitions.foreach { tp =>
+      producer.send(new ProducerRecord(tp.topic, "key", "value")).get()
+    }
+
+    val topicIdMap = Map(
+      topicWithDownConversionEnabled -> topicWithDownConversionEnabledId,
+      topicWithDownConversionDisabled -> topicWithDownConversionDisabledId
+    )
+
+    val fetchResponseData = sendFetch(
+      leaderId,
+      allTopicPartitions,
+      topicIdMap,
+      fetchVersion = 1,
+      replicaIdOpt = if (isFollowerFetch) Some(followerId) else None
+    )
+
+    def error(tp: TopicPartition): Errors = {
+      Errors.forCode(fetchResponseData.get(tp).errorCode)
+    }
+
+    def verifyMetrics(): Unit = {
+      TestUtils.waitUntilTrue(() => TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec) > initialFetchMessageConversionsPerSec,
+        s"The `FetchMessageConversionsPerSec` metric count is not incremented after 5 seconds. " +
+          s"init: $initialFetchMessageConversionsPerSec final: ${TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)}", 5000)
+
+      TestUtils.waitUntilTrue(() => TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName) > initialFetchMessageConversionsTimeMs,
+        s"The `MessageConversionsTimeMs` in fetch request metric count is not incremented after 5 seconds. " +
+          s"init: $initialFetchMessageConversionsTimeMs final: ${TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName)}", 5000)
+
+      TestUtils.waitUntilTrue(() => TestUtils.metersCount(fetchTemporaryMemoryBytesMetricName) > initialFetchTemporaryMemoryBytes,
+        s"The `TemporaryMemoryBytes` in fetch request metric count is not incremented after 5 seconds. " +
+          s"init: $initialFetchTemporaryMemoryBytes final: ${TestUtils.metersCount(fetchTemporaryMemoryBytesMetricName)}", 5000)
+    }
+
+    assertEquals(Errors.NONE, error(partitionWithDownConversionEnabled))
+    if (isFollowerFetch) {
+      assertEquals(Errors.NONE, error(partitionWithDownConversionDisabled))
+    } else {
+      assertEquals(Errors.UNSUPPORTED_VERSION, error(partitionWithDownConversionDisabled))
+    }
+
+    verifyMetrics()
+  }
+
+  private def sendFetch(
+    leaderId: Int,
+    partitions: Seq[TopicPartition],
+    topicIdMap: Map[String, Uuid],
+    fetchVersion: Short,
+    replicaIdOpt: Option[Int]
+  ): util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData] = {
+    val topicNameMap = topicIdMap.map(_.swap)
+    val partitionMap = createPartitionMap(1024, partitions, topicIdMap)
+
+    val fetchRequest = replicaIdOpt.map { replicaId =>
+      FetchRequest.Builder.forReplica(fetchVersion, replicaId, -1, Int.MaxValue, 0, partitionMap)
+        .build(fetchVersion)
+    }.getOrElse {
+      FetchRequest.Builder.forConsumer(fetchVersion, Int.MaxValue, 0, partitionMap)
+        .build(fetchVersion)
+    }
+
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-    val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
-    allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
+    fetchResponse.responseData(topicNameMap.asJava, fetchVersion)
   }
 }

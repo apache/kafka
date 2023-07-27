@@ -97,8 +97,8 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         final TimestampedKeyValueStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
@@ -108,9 +108,9 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         final TimestampedKeyValueStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
@@ -154,17 +154,34 @@ public class TimestampedKeyValueStoreBuilderTest {
     }
 
     @Test
-    public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime()));
+    public void shouldNotThrowNullPointerIfKeySerdeIsNull() {
+        reset(supplier);
+        expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope").anyTimes();
+        replay(supplier);
+
+        // does not throw
+        new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
     @Test
-    public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime()));
+    public void shouldNotThrowNullPointerIfValueSerdeIsNull() {
+        reset(supplier);
+        expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope").anyTimes();
+        replay(supplier);
+
+        // does not throw
+        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
     @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
+        reset(supplier);
+        expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope").anyTimes();
+        replay(supplier);
+
         assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 

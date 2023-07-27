@@ -316,30 +316,49 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void disconnect(String nodeId) {
-        if (connectionStates.isDisconnected(nodeId))
+        if (connectionStates.isDisconnected(nodeId)) {
+            log.debug("Client requested disconnect from node {}, which is already disconnected", nodeId);
             return;
+        }
 
+        log.info("Client requested disconnect from node {}", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
-
-        cancelInFlightRequests(nodeId, now, abortedSends);
-
+        cancelInFlightRequests(nodeId, now, abortedSends, false);
         connectionStates.disconnected(nodeId, now);
-
-        if (log.isTraceEnabled()) {
-            log.trace("Manually disconnected from {}. Aborted in-flight requests: {}.", nodeId, inFlightRequests);
-        }
     }
 
-    private void cancelInFlightRequests(String nodeId, long now, Collection<ClientResponse> responses) {
+    private void cancelInFlightRequests(String nodeId,
+                                        long now,
+                                        Collection<ClientResponse> responses,
+                                        boolean timedOut) {
         Iterable<InFlightRequest> inFlightRequests = this.inFlightRequests.clearAll(nodeId);
         for (InFlightRequest request : inFlightRequests) {
-            log.trace("Cancelled request {} {} with correlation id {} due to node {} being disconnected",
-                    request.header.apiKey(), request.request, request.header.correlationId(), nodeId);
+            if (log.isDebugEnabled()) {
+                log.debug("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
+                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, request timeout: {}ms): {}",
+                    request.header.apiKey(), request.header.correlationId(), nodeId,
+                    request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
+                    request.requestTimeoutMs, request.request);
+            } else {
+                log.info("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
+                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, request timeout: {}ms)",
+                    request.header.apiKey(), request.header.correlationId(), nodeId,
+                    request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
+                    request.requestTimeoutMs);
+            }
 
             if (!request.isInternalRequest) {
-                if (responses != null)
-                    responses.add(request.disconnected(now, null));
+                if (responses != null) {
+                    ClientResponse clientResponse;
+
+                    if (timedOut)
+                        clientResponse = request.timedOut(now);
+                    else
+                        clientResponse = request.disconnected(now);
+
+                    responses.add(clientResponse);
+                }
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
             }
@@ -355,9 +374,10 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void close(String nodeId) {
+        log.info("Client requested connection close from node {}", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
-        cancelInFlightRequests(nodeId, now, null);
+        cancelInFlightRequests(nodeId, now, null, false);
         connectionStates.remove(nodeId);
     }
 
@@ -745,6 +765,34 @@ public class NetworkClient implements KafkaClient {
                                       String nodeId,
                                       long now,
                                       ChannelState disconnectState) {
+        processDisconnection(responses, nodeId, now, disconnectState, false);
+    }
+
+    /**
+     * Post process disconnection of a node
+     *
+     * @param responses The list of responses to update
+     * @param nodeId Id of the node to be disconnected
+     * @param now The current time
+     */
+    private void processTimeoutDisconnection(List<ClientResponse> responses, String nodeId, long now) {
+        processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE, true);
+    }
+
+    /**
+     * Post process disconnection of a node
+     *
+     * @param responses The list of responses to update
+     * @param nodeId Id of the node to be disconnected
+     * @param now The current time
+     * @param disconnectState The state of the disconnected channel
+     * @param timedOut {@code true} if the connection is disconnected because of a timeout (request or connection)
+     */
+    private void processDisconnection(List<ClientResponse> responses,
+                                      String nodeId,
+                                      long now,
+                                      ChannelState disconnectState,
+                                      boolean timedOut) {
         connectionStates.disconnected(nodeId, now);
         apiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
@@ -769,7 +817,7 @@ public class NetworkClient implements KafkaClient {
                 break; // Disconnections in other states are logged at debug level in Selector
         }
 
-        cancelInFlightRequests(nodeId, now, responses);
+        cancelInFlightRequests(nodeId, now, responses, timedOut);
         metadataUpdater.handleServerDisconnect(now, nodeId, Optional.ofNullable(disconnectState.exception()));
     }
 
@@ -785,8 +833,8 @@ public class NetworkClient implements KafkaClient {
         for (String nodeId : nodeIds) {
             // close connection to the node
             this.selector.close(nodeId);
-            log.debug("Disconnecting from node {} due to request timeout.", nodeId);
-            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
+            log.info("Disconnecting from node {} due to request timeout.", nodeId);
+            processTimeoutDisconnection(responses, nodeId, now);
         }
     }
 
@@ -807,12 +855,12 @@ public class NetworkClient implements KafkaClient {
         List<String> nodes = connectionStates.nodesWithConnectionSetupTimeout(now);
         for (String nodeId : nodes) {
             this.selector.close(nodeId);
-            log.debug(
+            log.info(
                 "Disconnecting from node {} due to socket connection setup timeout. " +
                 "The timeout value is {} ms.",
                 nodeId,
                 connectionStates.connectionSetupTimeoutMs(nodeId));
-            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
+            processTimeoutDisconnection(responses, nodeId, now);
         }
     }
 
@@ -906,12 +954,15 @@ public class NetworkClient implements KafkaClient {
             }
             return;
         }
-        NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.data().apiKeys());
+        NodeApiVersions nodeVersionInfo = new NodeApiVersions(
+            apiVersionsResponse.data().apiKeys(),
+            apiVersionsResponse.data().supportedFeatures(),
+            apiVersionsResponse.data().zkMigrationReady());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
-        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
+        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, ZK migration ready: {}, API versions: {}.",
                 node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
-                apiVersionsResponse.data().supportedFeatures(), nodeVersionInfo);
+                apiVersionsResponse.data().supportedFeatures(), apiVersionsResponse.data().zkMigrationReady(), nodeVersionInfo);
     }
 
     /**
@@ -923,7 +974,7 @@ public class NetworkClient implements KafkaClient {
     private void handleDisconnections(List<ClientResponse> responses, long now) {
         for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
             String node = entry.getKey();
-            log.debug("Node {} disconnected.", node);
+            log.info("Node {} disconnected.", node);
             processDisconnection(responses, node, now, entry.getValue());
         }
     }
@@ -938,7 +989,6 @@ public class NetworkClient implements KafkaClient {
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
             if (discoverBrokerVersions) {
-                this.connectionStates.checkingApiVersions(node);
                 nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
                 log.debug("Completed connection to node {}. Fetching API versions.", node);
             } else {
@@ -955,6 +1005,11 @@ public class NetworkClient implements KafkaClient {
             String node = entry.getKey();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
                 log.debug("Initiating API versions fetch from node {}.", node);
+                // We transition the connection to the CHECKING_API_VERSIONS state only when
+                // the ApiVersionsRequest is queued up to be sent out. Without this, the client
+                // could remain in the CHECKING_API_VERSIONS state forever if the channel does
+                // not before ready.
+                this.connectionStates.checkingApiVersions(node);
                 ApiVersionsRequest.Builder apiVersionRequestBuilder = entry.getValue();
                 ClientRequest clientRequest = newClientRequest(node, apiVersionRequestBuilder, now, true);
                 doSend(clientRequest, true, now);
@@ -1251,14 +1306,28 @@ public class NetworkClient implements KafkaClient {
             this.sendTimeMs = sendTimeMs;
         }
 
+        public long timeElapsedSinceSendMs(long currentTimeMs) {
+            return Math.max(0, currentTimeMs - sendTimeMs);
+        }
+
+        public long timeElapsedSinceCreateMs(long currentTimeMs) {
+            return Math.max(0, currentTimeMs - createdTimeMs);
+        }
+
         public ClientResponse completed(AbstractResponse response, long timeMs) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
                     false, null, null, response);
         }
 
-        public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException) {
+        public ClientResponse timedOut(long timeMs) {
+            // A timed out request is considered disconnected as well
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
-                    true, null, authenticationException, null);
+                    true, true, null, null, null);
+        }
+
+        public ClientResponse disconnected(long timeMs) {
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
+                    true, null, null, null);
         }
 
         @Override

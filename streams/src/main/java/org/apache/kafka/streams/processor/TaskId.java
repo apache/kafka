@@ -47,21 +47,21 @@ public class TaskId implements Comparable<TaskId> {
     public final int partition;
 
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
-    private final String namedTopology;
+    private final String topologyName;
 
     public TaskId(final int topicGroupId, final int partition) {
         this(topicGroupId, partition, null);
     }
 
-    public TaskId(final int topicGroupId, final int partition, final String namedTopology) {
+    public TaskId(final int topicGroupId, final int partition, final String topologyName) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
-        if (namedTopology != null && namedTopology.length() == 0) {
+        if (topologyName != null && topologyName.length() == 0) {
             LOG.warn("Empty string passed in for task's namedTopology, since NamedTopology name cannot be empty, we "
                          + "assume this task does not belong to a NamedTopology and downgrade this to null");
-            this.namedTopology = null;
+            this.topologyName = null;
         } else {
-            this.namedTopology = namedTopology;
+            this.topologyName = topologyName;
         }
     }
 
@@ -76,13 +76,13 @@ public class TaskId implements Comparable<TaskId> {
     /**
      * Experimental feature -- will return null
      */
-    public String namedTopology() {
-        return namedTopology;
+    public String topologyName() {
+        return topologyName;
     }
 
     @Override
     public String toString() {
-        return namedTopology != null ? namedTopology + NAMED_TOPOLOGY_DELIMITER + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
+        return topologyName != null ? topologyName + NAMED_TOPOLOGY_DELIMITER + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
     }
 
     /**
@@ -162,26 +162,26 @@ public class TaskId implements Comparable<TaskId> {
             return false;
         }
 
-        if (namedTopology != null && taskId.namedTopology != null) {
-            return namedTopology.equals(taskId.namedTopology);
+        if (topologyName != null && taskId.topologyName != null) {
+            return topologyName.equals(taskId.topologyName);
         } else {
-            return namedTopology == null && taskId.namedTopology == null;
+            return topologyName == null && taskId.topologyName == null;
         }
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicGroupId, partition, namedTopology);
+        return Objects.hash(topicGroupId, partition, topologyName);
     }
 
     @Override
     public int compareTo(final TaskId other) {
-        if (namedTopology != null && other.namedTopology != null) {
-            final int comparingNamedTopologies = namedTopology.compareTo(other.namedTopology);
+        if (topologyName != null && other.topologyName != null) {
+            final int comparingNamedTopologies = topologyName.compareTo(other.topologyName);
             if (comparingNamedTopologies != 0) {
                 return comparingNamedTopologies;
             }
-        } else if (namedTopology != null || other.namedTopology != null) {
+        } else if (topologyName != null || other.topologyName != null) {
             LOG.error("Tried to compare this = {} with other = {}, but only one had a valid named topology", this, other);
             throw new IllegalStateException("Can't compare a TaskId with a namedTopology to one without");
         }

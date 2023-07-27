@@ -93,16 +93,21 @@ public class DescribeGroupsResponse extends AbstractResponse {
         final String protocolType,
         final String protocol,
         final List<DescribedGroupMember> members,
-        final int authorizedOperations) {
-        DescribedGroup groupMetadata = new DescribedGroup();
-        groupMetadata.setGroupId(groupId)
+        final int authorizedOperations
+    ) {
+        return new DescribedGroup()
+            .setGroupId(groupId)
             .setErrorCode(error.code())
             .setGroupState(state)
             .setProtocolType(protocolType)
             .setProtocolData(protocol)
             .setMembers(members)
             .setAuthorizedOperations(authorizedOperations);
-        return  groupMetadata;
+    }
+
+    public static DescribedGroup groupError(String groupId, Errors error) {
+        return groupMetadata(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
+            DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), AUTHORIZED_OPERATIONS_OMITTED);
     }
 
     @Override
@@ -115,6 +120,11 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public static final String UNKNOWN_STATE = "";
     public static final String UNKNOWN_PROTOCOL_TYPE = "";
     public static final String UNKNOWN_PROTOCOL = "";
@@ -125,19 +135,6 @@ public class DescribeGroupsResponse extends AbstractResponse {
         data.groups().forEach(describedGroup ->
             updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode())));
         return errorCounts;
-    }
-
-    public static DescribedGroup forError(String groupId, Errors error) {
-        return groupMetadata(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
-                DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), AUTHORIZED_OPERATIONS_OMITTED);
-    }
-
-    public static DescribeGroupsResponse fromError(int throttleTimeMs, Errors error, List<String> groupIds) {
-        DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
-        describeGroupsResponseData.setThrottleTimeMs(throttleTimeMs);
-        for (String groupId : groupIds)
-            describeGroupsResponseData.groups().add(DescribeGroupsResponse.forError(groupId, error));
-        return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
     public static DescribeGroupsResponse parse(ByteBuffer buffer, short version) {

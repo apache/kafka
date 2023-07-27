@@ -17,14 +17,14 @@
 
 package kafka.server
 
-import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters._
 class FetchRequestMaxBytesTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
-  private var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  private var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
   private val testTopic = "testTopic"
   private val testTopicPartition = new TopicPartition(testTopic, 0)
   private val messages = IndexedSeq(
@@ -58,9 +58,9 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers))
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    producer = TestUtils.createProducer(bootstrapServers())
   }
 
   @AfterEach
@@ -77,7 +77,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
 
   private def createTopics(): Unit = {
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 1.toString)
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     createTopic(testTopic,
                 numPartitions = 1, 
                 replicationFactor = 1,
@@ -115,7 +115,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
     val response = sendFetchRequest(0,
       FetchRequest.Builder.forConsumer(3, Int.MaxValue, 0,
         Map(testTopicPartition ->
-          new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava, getTopicIds().asJava).build(3))
+          new PartitionData(Uuid.ZERO_UUID, fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(3))
     val records = FetchResponse.recordsOrFail(response.responseData(getTopicNames().asJava, 3).get(testTopicPartition)).records()
     assertNotNull(records)
     val recordsList = records.asScala.toList

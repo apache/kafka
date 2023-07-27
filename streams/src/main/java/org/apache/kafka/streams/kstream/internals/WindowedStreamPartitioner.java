@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-
-import static org.apache.kafka.common.utils.Utils.toPositive;
 
 public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Windowed<K>, V> {
 
@@ -42,10 +40,13 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
     @Override
+    @Deprecated
     public Integer partition(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
+        // for windowed key, the key bytes should never be null
         final byte[] keyBytes = serializer.serializeBaseKey(topic, windowedKey);
 
-        // hash the keyBytes to choose a partition
-        return toPositive(Utils.murmur2(keyBytes)) % numPartitions;
+        // stick with the same built-in partitioner util functions that producer used
+        // to make sure its behavior is consistent with the producer
+        return BuiltInPartitioner.partitionForKey(keyBytes, numPartitions);
     }
 }

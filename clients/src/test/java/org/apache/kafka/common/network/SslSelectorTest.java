@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import java.nio.channels.SelectionKey;
+import java.security.GeneralSecurityException;
 import javax.net.ssl.SSLEngine;
 
 import org.apache.kafka.common.config.SecurityConfig;
@@ -43,11 +44,9 @@ import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.Security;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,25 +60,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
-public class SslSelectorTest extends SelectorTest {
+public abstract class SslSelectorTest extends SelectorTest {
 
     private Map<String, Object> sslClientConfigs;
 
     @BeforeEach
     public void setUp() throws Exception {
-        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
 
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
         this.server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         this.server.start();
         this.time = new MockTime();
-        sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
+        sslClientConfigs = createSslClientConfigs(trustStoreFile);
         LogContext logContext = new LogContext();
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
     }
+
+    protected abstract Map<String, Object> createSslClientConfigs(File trustStoreFile) throws GeneralSecurityException, IOException;
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -89,18 +90,12 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     @Override
-    public SecurityProtocol securityProtocol() {
-        return SecurityProtocol.PLAINTEXT;
-    }
-
-    @Override
     protected Map<String, Object> clientConfigs() {
         return sslClientConfigs;
     }
 
     @Test
     public void testConnectionWithCustomKeyManager() throws Exception {
-
         TestProviderCreator testProviderCreator = new TestProviderCreator();
 
         int requestSize = 100 * 1024;
@@ -125,10 +120,7 @@ public class SslSelectorTest extends SelectorTest {
         Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
 
         selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
-        while (!selector.connected().contains(node))
-            selector.poll(10000L);
-        while (!selector.isChannelReady(node))
-            selector.poll(10000L);
+        NetworkTestUtils.waitForChannelReady(selector, node);
 
         selector.send(createSend(node, request));
 
@@ -249,35 +241,6 @@ public class SslSelectorTest extends SelectorTest {
         verifySelectorEmpty();
     }
 
-    /**
-     * Renegotiation is not supported since it is potentially unsafe and it has been removed in TLS 1.3
-     */
-    @Test
-    public void testRenegotiationFails() throws Exception {
-        String node = "0";
-        // create connections
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        // send echo requests and receive responses
-        while (!selector.isChannelReady(node)) {
-            selector.poll(1000L);
-        }
-        selector.send(createSend(node, node + "-" + 0));
-        selector.poll(0L);
-        server.renegotiate();
-        selector.send(createSend(node, node + "-" + 1));
-        long expiryTime = System.currentTimeMillis() + 2000;
-
-        List<String> disconnected = new ArrayList<>();
-        while (!disconnected.contains(node) && System.currentTimeMillis() < expiryTime) {
-            selector.poll(10);
-            disconnected.addAll(selector.disconnected().keySet());
-        }
-        assertTrue(disconnected.contains(node), "Renegotiation should cause disconnection");
-
-    }
-
     @Override
     @Test
     public void testMuteOnOOM() throws Exception {
@@ -286,7 +249,7 @@ public class SslSelectorTest extends SelectorTest {
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         //the initial channel builder is for clients, we need a server one
         String tlsProtocol = "TLSv1.2";
-        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
         Map<String, Object> sslServerConfigs = new TestSslUtils.SslConfigsBuilder(Mode.SERVER)
                 .tlsProtocol(tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -294,7 +257,7 @@ public class SslSelectorTest extends SelectorTest {
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext());
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+                new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -383,7 +346,7 @@ public class SslSelectorTest extends SelectorTest {
 
         @Override
         protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
-                                                        ChannelMetadataRegistry metadataRegistry) throws IOException {
+                                                        ChannelMetadataRegistry metadataRegistry) {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket());
             TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, metadataRegistry);
@@ -399,7 +362,7 @@ public class SslSelectorTest extends SelectorTest {
             boolean muteSocket = false;
 
             public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
-                                         ChannelMetadataRegistry metadataRegistry) throws IOException {
+                                         ChannelMetadataRegistry metadataRegistry) {
                 super(channelId, key, sslEngine, metadataRegistry);
                 transportLayers.put(channelId, this);
             }
@@ -417,7 +380,7 @@ public class SslSelectorTest extends SelectorTest {
 
             // Leave one byte in network read buffer so that some buffered bytes are present,
             // but not enough to make progress on a read.
-            void truncateReadBuffer() throws Exception {
+            void truncateReadBuffer() {
                 netReadBuffer().position(1);
                 appReadBuffer().position(0);
                 muteSocket = true;

@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData.OpData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
@@ -117,6 +118,7 @@ public class AlterClientQuotasRequest extends AbstractRequest {
 
     @Override
     public AlterClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        Errors error = Errors.forException(e);
         List<AlterClientQuotasResponseData.EntryData> responseEntries = new ArrayList<>();
         for (EntryData entryData : data.entries()) {
             List<AlterClientQuotasResponseData.EntityData> responseEntities = new ArrayList<>();
@@ -125,7 +127,10 @@ public class AlterClientQuotasRequest extends AbstractRequest {
                     .setEntityType(entityData.entityType())
                     .setEntityName(entityData.entityName()));
             }
-            responseEntries.add(new AlterClientQuotasResponseData.EntryData().setEntity(responseEntities));
+            responseEntries.add(new AlterClientQuotasResponseData.EntryData()
+                .setEntity(responseEntities)
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message()));
         }
         AlterClientQuotasResponseData responseData = new AlterClientQuotasResponseData()
                 .setThrottleTimeMs(throttleTimeMs)

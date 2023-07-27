@@ -16,15 +16,13 @@
  */
 package kafka.server
 
-import java.util.Collections
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.common.metrics.{KafkaMetricsContext, MetricConfig, Metrics, MetricsReporter, Sensor}
+import org.apache.kafka.common.utils.Time
+
+import java.util
 import java.util.concurrent.TimeUnit
 
-import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, MetricConfig, Metrics, MetricsReporter, Sensor}
-import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metadata.VersionRange
-
-import scala.jdk.CollectionConverters._
 
 trait Server {
   def startup(): Unit
@@ -52,9 +50,8 @@ object Server {
     time: Time,
     metricsContext: KafkaMetricsContext
   ): Metrics = {
-    val defaultReporters = initializeDefaultReporters(config)
     val metricConfig = buildMetricsConfig(config)
-    new Metrics(metricConfig, defaultReporters, time, true, metricsContext)
+    new Metrics(metricConfig, new util.ArrayList[MetricsReporter](), time, true, metricsContext)
   }
 
   def buildMetricsConfig(
@@ -83,23 +80,9 @@ object Server {
     new KafkaMetricsContext(MetricsPrefix, contextLabels)
   }
 
-  private def initializeDefaultReporters(
-    config: KafkaConfig
-  ): java.util.List[MetricsReporter] = {
-    val jmxReporter = new JmxReporter()
-    jmxReporter.configure(config.originals)
-
-    val reporters = new java.util.ArrayList[MetricsReporter]
-    reporters.add(jmxReporter)
-    reporters
-  }
-
   sealed trait ProcessStatus
   case object SHUTDOWN extends ProcessStatus
   case object STARTING extends ProcessStatus
   case object STARTED extends ProcessStatus
   case object SHUTTING_DOWN extends ProcessStatus
-
-  val SUPPORTED_FEATURES = Collections.
-    unmodifiableMap[String, VersionRange](Map[String, VersionRange]().asJava)
 }

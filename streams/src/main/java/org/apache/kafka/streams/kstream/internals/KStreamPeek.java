@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 
-class KStreamPeek<K, V> implements ProcessorSupplier<K, V, K, V> {
+class KStreamPeek<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
 
     private final ForeachAction<K, V> action;
 
@@ -31,13 +31,13 @@ class KStreamPeek<K, V> implements ProcessorSupplier<K, V, K, V> {
     }
 
     @Override
-    public Processor<K, V, K, V> get() {
+    public FixedKeyProcessor<K, V, V> get() {
         return new KStreamPeekProcessor();
     }
 
-    private class KStreamPeekProcessor extends ContextualProcessor<K, V, K, V> {
+    private class KStreamPeekProcessor extends ContextualFixedKeyProcessor<K, V, V> {
         @Override
-        public void process(final Record<K, V> record) {
+        public void process(final FixedKeyRecord<K, V> record) {
             action.apply(record.key(), record.value());
             context().forward(record);
         }

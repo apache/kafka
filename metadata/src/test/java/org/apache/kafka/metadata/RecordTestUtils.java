@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -25,16 +27,22 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.util.MockRandom;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,21 +56,112 @@ public class RecordTestUtils {
      * Replay a list of records.
      *
      * @param target                The object to invoke the replay function on.
-     * @param recordsAndVersions    A list of batches of records.
+     * @param recordsAndVersions    A list of records.
      */
     public static void replayAll(Object target,
                                  List<ApiMessageAndVersion> recordsAndVersions) {
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
-                Method method = target.getClass().getMethod("replay", record.getClass());
-                method.invoke(target, record);
-            } catch (NoSuchMethodException e) {
-                // ignore
+                try {
+                    Method method = target.getClass().getMethod("replay", record.getClass());
+                    method.invoke(target, record);
+                } catch (NoSuchMethodException e) {
+                    try {
+                        Method method = target.getClass().getMethod("replay",
+                            record.getClass(),
+                            Optional.class);
+                        method.invoke(target, record, Optional.empty());
+                    } catch (NoSuchMethodException t) {
+                        try {
+                            Method method = target.getClass().getMethod("replay",
+                                record.getClass(),
+                                long.class);
+                            method.invoke(target, record, 0L);
+                        } catch (NoSuchMethodException i) {
+                            // ignore
+                        }
+                    }
+                }
             } catch (InvocationTargetException e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException(e.getCause());
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public static void replayOne(
+        Object target,
+        ApiMessageAndVersion recordAndVersion
+    ) {
+        replayAll(target, Collections.singletonList(recordAndVersion));
+    }
+
+    public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {
+        private final Supplier<I> emptyImageSupplier;
+        private final Function<I, D> deltaUponImageCreator;
+
+        public TestThroughAllIntermediateImagesLeadingToFinalImageHelper(
+            Supplier<I> emptyImageSupplier, Function<I, D> deltaUponImageCreator
+        ) {
+            this.emptyImageSupplier = Objects.requireNonNull(emptyImageSupplier);
+            this.deltaUponImageCreator = Objects.requireNonNull(deltaUponImageCreator);
+        }
+
+        public I getEmptyImage() {
+            return this.emptyImageSupplier.get();
+        }
+
+        public D createDeltaUponImage(I image) {
+            return this.deltaUponImageCreator.apply(image);
+        }
+
+        @SuppressWarnings("unchecked")
+        public I createImageByApplyingDelta(D delta) {
+            try {
+                try {
+                    Method method = delta.getClass().getMethod("apply");
+                    return (I) method.invoke(delta);
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e.getCause());
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public void test(I finalImage, List<ApiMessageAndVersion> fromRecords) {
+            for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {
+                // create first image from first numRecordsForfirstImage records
+                D delta = createDeltaUponImage(getEmptyImage());
+                RecordTestUtils.replayAll(delta, fromRecords.subList(0, numRecordsForfirstImage));
+                I firstImage = createImageByApplyingDelta(delta);
+                // for all possible further batch sizes, apply as many batches as it takes to get to the final image
+                int remainingRecords = fromRecords.size() - numRecordsForfirstImage;
+                if (remainingRecords == 0) {
+                    assertEquals(finalImage, firstImage);
+                } else {
+                    // for all possible further batch sizes...
+                    for (int maxRecordsForSuccessiveBatches = 1; maxRecordsForSuccessiveBatches <= remainingRecords; ++maxRecordsForSuccessiveBatches) {
+                        I latestIntermediateImage = firstImage;
+                        // ... apply as many batches as it takes to get to the final image
+                        int numAdditionalBatches = (int) Math.ceil(remainingRecords * 1.0 / maxRecordsForSuccessiveBatches);
+                        for (int additionalBatchNum = 0; additionalBatchNum < numAdditionalBatches; ++additionalBatchNum) {
+                            // apply up to maxRecordsForSuccessiveBatches records on top of the latest intermediate image
+                            // to obtain the next intermediate image.
+                            delta = createDeltaUponImage(latestIntermediateImage);
+                            int applyFromIndex = numRecordsForfirstImage + additionalBatchNum * maxRecordsForSuccessiveBatches;
+                            int applyToIndex = Math.min(fromRecords.size(), applyFromIndex + maxRecordsForSuccessiveBatches);
+                            RecordTestUtils.replayAll(delta, fromRecords.subList(applyFromIndex, applyToIndex));
+                            latestIntermediateImage = createImageByApplyingDelta(delta);
+                        }
+                        // The final intermediate image received should be the expected final image
+                        assertEquals(finalImage, latestIntermediateImage);
+                    }
+                }
             }
         }
     }
@@ -153,12 +252,16 @@ public class RecordTestUtils {
     /**
      * Create a batch reader for testing.
      *
-     * @param lastOffset    The last offset of the given list of records.
-     * @param records       The records.
-     * @return              A batch reader which will return the given records.
+     * @param lastOffset the last offset of the given list of records
+     * @param appendTimestamp the append timestamp for the batches created
+     * @param records the records
+     * @return a batch reader which will return the given records
      */
-    public static BatchReader<ApiMessageAndVersion>
-            mockBatchReader(long lastOffset, List<ApiMessageAndVersion> records) {
+    public static BatchReader<ApiMessageAndVersion> mockBatchReader(
+        long lastOffset,
+        long appendTimestamp,
+        List<ApiMessageAndVersion> records
+    ) {
         List<Batch<ApiMessageAndVersion>> batches = new ArrayList<>();
         long offset = lastOffset - records.size() + 1;
         Iterator<ApiMessageAndVersion> iterator = records.iterator();
@@ -166,7 +269,7 @@ public class RecordTestUtils {
         assertTrue(iterator.hasNext()); // At least one record is required
         while (true) {
             if (!iterator.hasNext() || curRecords.size() >= 2) {
-                batches.add(Batch.data(offset, 0, 0, sizeInBytes(curRecords), curRecords));
+                batches.add(Batch.data(offset, 0, appendTimestamp, sizeInBytes(curRecords), curRecords));
                 if (!iterator.hasNext()) {
                     break;
                 }
@@ -186,5 +289,12 @@ public class RecordTestUtils {
             size += MetadataRecordSerde.INSTANCE.recordSize(record, cache);
         }
         return size;
+    }
+
+    public static ApiMessageAndVersion testRecord(int index) {
+        MockRandom random = new MockRandom(index);
+        return new ApiMessageAndVersion(
+            new TopicRecord().setName("test" + index).
+            setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
     }
 }

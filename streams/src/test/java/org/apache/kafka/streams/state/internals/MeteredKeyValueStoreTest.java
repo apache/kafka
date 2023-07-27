@@ -178,7 +178,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
-        final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.namedTopology());
+        final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.topologyName());
         expect(context.changelogFor(STORE_NAME)).andReturn(null);
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
     }
@@ -225,7 +225,7 @@ public class MeteredKeyValueStoreTest {
             STORE_LEVEL_GROUP,
             THREAD_ID_TAG_KEY,
             threadId,
-            taskId.toString(),
+            taskId,
             STORE_TYPE,
             STORE_NAME
         )));

@@ -18,17 +18,18 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.Map.Entry;
-
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Represents changes to a topic in the metadata image.
@@ -47,6 +48,14 @@ public final class TopicDelta {
 
     public Map<Integer, PartitionRegistration> partitionChanges() {
         return partitionChanges;
+    }
+
+    public Map<Integer, PartitionRegistration> newPartitions() {
+        return partitionChanges
+            .entrySet()
+            .stream()
+            .filter(entry -> !image.partitions().containsKey(entry.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     public String name() {
@@ -92,44 +101,74 @@ public final class TopicDelta {
         return new TopicImage(image.name(), image.id(), newPartitions);
     }
 
-    /**
-     * Find the partitions that we are now leading, whose partition epoch has changed.
-     *
-     * @param brokerId  The broker id.
-     * @return          A list of (partition ID, partition registration) entries.
-     */
-    public List<Entry<Integer, PartitionRegistration>> newLocalLeaders(int brokerId) {
-        List<Entry<Integer, PartitionRegistration>> results = new ArrayList<>();
+    public boolean hasPartitionsWithAssignmentChanges() {
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            if (entry.getValue().leader == brokerId) {
-                PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (prevPartition == null ||
-                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
-                    results.add(entry);
-                }
-            }
+            int partitionId = entry.getKey();
+            // New Partition.
+            if (!image.partitions().containsKey(partitionId))
+                return true;
+            PartitionRegistration previousPartition = image.partitions().get(partitionId);
+            PartitionRegistration currentPartition = entry.getValue();
+            if (!previousPartition.hasSameAssignment(currentPartition))
+                return true;
         }
-        return results;
+        return false;
     }
 
     /**
-     * Find the partitions that we are now following, whose partition epoch has changed.
+     * Find the partitions that have change based on the replica given.
      *
-     * @param brokerId  The broker id.
-     * @return          A list of (partition ID, partition registration) entries.
+     * The changes identified are:
+     *   1. partitions for which the broker is not a replica anymore
+     *   2. partitions for which the broker is now the leader
+     *   3. partitions for which the broker is now a follower
+     *
+     * @param brokerId the broker id
+     * @return the list of partitions which the broker should remove, become leader or become follower.
      */
-    public List<Entry<Integer, PartitionRegistration>> newLocalFollowers(int brokerId) {
-        List<Entry<Integer, PartitionRegistration>> results = new ArrayList<>();
+    public LocalReplicaChanges localChanges(int brokerId) {
+        Set<TopicPartition> deletes = new HashSet<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
+
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            if (entry.getValue().leader != brokerId &&
-                    Replicas.contains(entry.getValue().replicas, brokerId)) {
+            if (!Replicas.contains(entry.getValue().replicas, brokerId)) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (prevPartition == null ||
-                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
-                    results.add(entry);
+                if (prevPartition != null && Replicas.contains(prevPartition.replicas, brokerId)) {
+                    deletes.add(new TopicPartition(name(), entry.getKey()));
+                }
+            } else if (entry.getValue().leader == brokerId) {
+                PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
+                if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
+                    leaders.put(
+                        new TopicPartition(name(), entry.getKey()),
+                        new LocalReplicaChanges.PartitionInfo(id(), entry.getValue())
+                    );
+                    topicIds.putIfAbsent(name(), id());
+                }
+            } else if (
+                entry.getValue().leader != brokerId &&
+                Replicas.contains(entry.getValue().replicas, brokerId)
+            ) {
+                PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
+                if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
+                    followers.put(
+                        new TopicPartition(name(), entry.getKey()),
+                        new LocalReplicaChanges.PartitionInfo(id(), entry.getValue())
+                    );
+                    topicIds.putIfAbsent(name(), id());
                 }
             }
         }
-        return results;
+
+        return new LocalReplicaChanges(deletes, leaders, followers, topicIds);
+    }
+
+    @Override
+    public String toString() {
+        return "TopicDelta(" +
+            "partitionChanges=" + partitionChanges +
+            ')';
     }
 }

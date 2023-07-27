@@ -16,14 +16,14 @@
  */
 package kafka.admin
 
-import java.io.{File, PrintWriter}
+import java.io.File
 import java.util.Properties
 import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
@@ -36,9 +36,9 @@ import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
-class AclCommandTest extends ZooKeeperTestHarness with Logging {
+class AclCommandTest extends QuorumTestHarness with Logging {
 
   var servers: Seq[KafkaServer] = Seq()
 
@@ -54,13 +54,15 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private val GroupResources = Set(new ResourcePattern(GROUP, "testGroup-1", LITERAL), new ResourcePattern(GROUP, "testGroup-2", LITERAL))
   private val TransactionalIdResources = Set(new ResourcePattern(TRANSACTIONAL_ID, "t0", LITERAL), new ResourcePattern(TRANSACTIONAL_ID, "t1", LITERAL))
   private val TokenResources = Set(new ResourcePattern(DELEGATION_TOKEN, "token1", LITERAL), new ResourcePattern(DELEGATION_TOKEN, "token2", LITERAL))
+  private val UserResources = Set(new ResourcePattern(USER, "User:test-user1", LITERAL), new ResourcePattern(USER, "User:test-user2", LITERAL))
 
   private val ResourceToCommand = Map[Set[ResourcePattern], Array[String]](
     TopicResources -> Array("--topic", "test-1", "--topic", "test-2"),
     Set(ClusterResource) -> Array("--cluster"),
     GroupResources -> Array("--group", "testGroup-1", "--group", "testGroup-2"),
     TransactionalIdResources -> Array("--transactional-id", "t0", "--transactional-id", "t1"),
-    TokenResources -> Array("--delegation-token", "token1", "--delegation-token", "token2")
+    TokenResources -> Array("--delegation-token", "token1", "--delegation-token", "token2"),
+    UserResources -> Array("--user-principal", "User:test-user1", "--user-principal", "User:test-user2")
   )
 
   private val ResourceToOperations = Map[Set[ResourcePattern], (Set[AclOperation], Array[String])](
@@ -72,7 +74,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
         "--operation", "AlterConfigs", "--operation", "IdempotentWrite", "--operation", "Alter", "--operation", "Describe")),
     GroupResources -> (Set(READ, DESCRIBE, DELETE), Array("--operation", "Read", "--operation", "Describe", "--operation", "Delete")),
     TransactionalIdResources -> (Set(DESCRIBE, WRITE), Array("--operation", "Describe", "--operation", "Write")),
-    TokenResources -> (Set(DESCRIBE), Array("--operation", "Describe"))
+    TokenResources -> (Set(DESCRIBE), Array("--operation", "Describe")),
+    UserResources -> (Set(CREATE_TOKENS, DESCRIBE_TOKENS), Array("--operation", "CreateTokens", "--operation", "DescribeTokens"))
   )
 
   private def ProducerResourceToAcls(enableIdempotence: Boolean = false) = Map[Set[ResourcePattern], Set[AccessControlEntry]](
@@ -102,8 +105,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private var adminArgs: Array[String] = _
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
     brokerProps.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
@@ -172,7 +175,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private def assertOutputContains(prefix: String, resources: Set[ResourcePattern], resourceCmd: Array[String], output: String): Unit = {
     resources.foreach { resource =>
       val resourceType = resource.resourceType.toString
-      (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filter(!_.startsWith("--"))).foreach { name =>
+      (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filterNot(_.startsWith("--"))).foreach { name =>
         val expected = s"$prefix for resource `ResourcePattern(resourceType=$resourceType, name=$name, patternType=LITERAL)`:"
         assertTrue(output.contains(expected), s"Substring $expected not in output:\n$output")
       }
@@ -192,10 +195,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testAclCliWithClientId(): Unit = {
-    val adminClientConfig = TestUtils.tempFile()
-    val pw = new PrintWriter(adminClientConfig)
-    pw.println("client.id=my-client")
-    pw.close()
+    val adminClientConfig = TestUtils.tempFile("client.id=my-client")
 
     createServer(Some(adminClientConfig))
 

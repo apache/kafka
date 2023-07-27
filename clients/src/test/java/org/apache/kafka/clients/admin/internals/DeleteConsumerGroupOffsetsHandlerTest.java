@@ -59,7 +59,7 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
     @Test
     public void testBuildRequest() {
         DeleteConsumerGroupOffsetsHandler handler = new DeleteConsumerGroupOffsetsHandler(groupId, tps, logContext);
-        OffsetDeleteRequest request = handler.buildRequest(1, singleton(CoordinatorKey.byGroupId(groupId))).build();
+        OffsetDeleteRequest request = handler.buildBatchedRequest(1, singleton(CoordinatorKey.byGroupId(groupId))).build();
         assertEquals(groupId, request.data().groupId());
         assertEquals(2, request.data().topics().size());
         assertEquals(2, request.data().topics().find("t0").partitions().size());

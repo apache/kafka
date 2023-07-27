@@ -91,8 +91,8 @@ public interface SegmentedBytesStore extends StateStore {
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
-     * @param from the beginning of the time slot from which to search
-     * @param to   the end of the time slot from which to search
+     * @param from the beginning of the time slot from which to search (inclusive)
+     * @param to   the end of the time slot from which to search (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if null is used for any key
@@ -210,9 +210,10 @@ public interface SegmentedBytesStore extends StateStore {
          * @param binaryKeyTo   the last key in the range
          * @param from          starting time range
          * @param to            ending time range
+         * @param forward       forward or backward
          * @return
          */
-        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to);
+        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to, final boolean forward);
 
         /**
          * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations to determine

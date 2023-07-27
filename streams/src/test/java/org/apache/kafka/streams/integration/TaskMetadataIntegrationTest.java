@@ -28,6 +28,8 @@ import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -38,9 +40,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -58,6 +60,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category(IntegrationTest.class)
 public class TaskMetadataIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
 
@@ -70,7 +74,6 @@ public class TaskMetadataIntegrationTest {
     public static void closeCluster() {
         CLUSTER.stop();
     }
-    public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @Rule
     public TestName testName = new TestName();
@@ -83,7 +86,6 @@ public class TaskMetadataIntegrationTest {
     private AtomicBoolean process;
     private AtomicBoolean commit;
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setup() {
         final String testId = safeUniqueTestName(getClass(), testName);
@@ -115,7 +117,7 @@ public class TaskMetadataIntegrationTest {
     @Test
     public void shouldReportCorrectCommittedOffsetInformation() {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), DEFAULT_DURATION);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
             assertThat(taskMetadata.committedOffsets().size(), equalTo(1));
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
@@ -141,7 +143,7 @@ public class TaskMetadataIntegrationTest {
     @Test
     public void shouldReportCorrectEndOffsetInformation() {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), DEFAULT_DURATION);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
             assertThat(taskMetadata.endOffsets().size(), equalTo(1));
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
@@ -185,18 +187,15 @@ public class TaskMetadataIntegrationTest {
                 timestamp);
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private class PauseProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
+    private class PauseProcessor extends ContextualProcessor<String, String, Void, Void> {
         @Override
-        public void process(final String key, final String value) {
+        public void process(final Record<String, String> record) {
             while (!process.get()) {
                 try {
                     wait(100);
                 } catch (final InterruptedException e) {
-
                 }
             }
-            context().forward(key, value);
             if (commit.get()) {
                 context().commit();
             }

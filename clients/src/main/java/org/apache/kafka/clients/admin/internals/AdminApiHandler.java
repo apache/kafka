@@ -17,13 +17,16 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public interface AdminApiHandler<K, V> {
 
@@ -33,16 +36,18 @@ public interface AdminApiHandler<K, V> {
     String apiName();
 
     /**
-     * Build the request. The set of keys are derived by {@link AdminApiDriver}
-     * during the lookup stage as the set of keys which all map to the same
-     * destination broker.
+     * Build the requests necessary for the given keys. The set of keys is derived by
+     * {@link AdminApiDriver} during the lookup stage as the set of keys which all map
+     * to the same destination broker. Handlers can choose to issue a single request for
+     * all of the provided keys (see {@link Batched}, issue one request per key (see
+     * {@link Unbatched}, or implement their own custom grouping logic if necessary.
      *
      * @param brokerId the target brokerId for the request
      * @param keys the set of keys that should be handled by this request
      *
-     * @return a builder for the request containing the given keys
+     * @return a collection of {@link RequestAndKeys} for the requests containing the given keys
      */
-    AbstractRequest.Builder<?> buildRequest(int brokerId, Set<K> keys);
+    Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys);
 
     /**
      * Callback that is invoked when a request returns successfully.
@@ -65,6 +70,23 @@ public interface AdminApiHandler<K, V> {
      * @return result indicating key completion, failure, and unmapping
      */
     ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response);
+
+    /**
+     * Callback that is invoked when a fulfillment request hits an UnsupportedVersionException.
+     * Keys for which the exception cannot be handled and the request shouldn't be retried must be mapped
+     * to an error and returned. The request will then be retried for the remainder of the keys.
+     *
+     * @return The failure mappings for the keys for which the exception cannot be handled and the
+     * request shouldn't be retried. If the exception cannot be handled all initial keys will be in
+     * the returned map.
+     */
+    default Map<K, Throwable> handleUnsupportedVersionException(
+        int brokerId,
+        UnsupportedVersionException exception,
+        Set<K> keys
+    ) {
+        return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
+    }
 
     /**
      * Get the lookup strategy that is responsible for finding the brokerId
@@ -122,4 +144,54 @@ public interface AdminApiHandler<K, V> {
         }
     }
 
+    class RequestAndKeys<K> {
+        public final AbstractRequest.Builder<?> request;
+        public final Set<K> keys;
+
+        public RequestAndKeys(AbstractRequest.Builder<?> request, Set<K> keys) {
+            this.request = request;
+            this.keys = keys;
+        }
+    }
+
+    /**
+     * An {@link AdminApiHandler} that will group multiple keys into a single request when possible.
+     * Keys will be grouped together whenever they target the same broker. This type of handler
+     * should be used when interacting with broker APIs that can act on multiple keys at once, such
+     * as describing or listing transactions.
+     */
+    abstract class Batched<K, V> implements AdminApiHandler<K, V> {
+        abstract AbstractRequest.Builder<?> buildBatchedRequest(int brokerId, Set<K> keys);
+
+        @Override
+        public final Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys) {
+            return Collections.singleton(new RequestAndKeys<>(buildBatchedRequest(brokerId, keys), keys));
+        }
+    }
+
+    /**
+     * An {@link AdminApiHandler} that will create one request per key, not performing any grouping based
+     * on the targeted broker. This type of handler should only be used for broker APIs that do not accept
+     * multiple keys at once, such as initializing a transactional producer.
+     */
+    abstract class Unbatched<K, V> implements AdminApiHandler<K, V> {
+        abstract AbstractRequest.Builder<?> buildSingleRequest(int brokerId, K key);
+        abstract ApiResult<K, V> handleSingleResponse(Node broker, K key, AbstractResponse response);
+
+        @Override
+        public final Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys) {
+            return keys.stream()
+                .map(key -> new RequestAndKeys<>(buildSingleRequest(brokerId, key), Collections.singleton(key)))
+                .collect(Collectors.toSet());
+        }
+
+        @Override
+        public final ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response) {
+            if (keys.size() != 1) {
+                throw new IllegalArgumentException("Unbatched admin handler should only be required to handle responses for a single key at a time");
+            }
+            K key = keys.iterator().next();
+            return handleSingleResponse(broker, key, response);
+        }
+    }
 }

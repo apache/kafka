@@ -40,8 +40,7 @@ public class StringSerde implements RecordSerde<String> {
 
     @Override
     public String read(Readable input, int size) {
-        byte[] data = new byte[size];
-        input.readArray(data);
+        byte[] data = input.readArray(size);
         return Utils.utf8(data);
     }
 

@@ -56,8 +56,8 @@ public interface FuturePurgatory<T extends Comparable<T>> {
     CompletableFuture<Long> await(T threshold, long maxWaitTimeMs);
 
     /**
-     * Complete awaiting futures whose associated values are larger than the given threshold value.
-     * The completion callbacks will be triggered from the calling thread.
+     * Complete awaiting futures whose threshold value from {@link FuturePurgatory#await} are smaller
+     * than the given threshold value. The completion callbacks will be triggered from the calling thread.
      *
      * @param value         the threshold value used to determine which futures can be completed
      * @param currentTimeMs the current time in milliseconds that will be passed to

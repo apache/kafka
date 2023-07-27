@@ -82,15 +82,15 @@ public class StreamsSmokeTest {
         switch (command) {
             case "run":
                 // this starts the driver (data generation and result verification)
-                final int numKeys = 10;
-                final int maxRecordsPerKey = 500;
+                final int numKeys = 20;
+                final int maxRecordsPerKey = 1000;
                 if (disableAutoTerminate) {
                     generatePerpetually(kafka, numKeys, maxRecordsPerKey);
                 } else {
-                    // slow down data production to span 30 seconds so that system tests have time to
+                    // slow down data production so that system tests have time to
                     // do their bounces, etc.
                     final Map<String, Set<Integer>> allData =
-                        generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(30));
+                        generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(90));
                     SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;

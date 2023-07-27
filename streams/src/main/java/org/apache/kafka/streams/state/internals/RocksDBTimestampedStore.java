@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -37,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -140,6 +138,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 }
                 try {
                     db.put(newColumnFamily, wOptions, key, valueWithTimestamp);
+                    StoreQueryUtils.updatePosition(position, context);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while putting key/value into store " + name, e);
@@ -192,7 +191,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+        public ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                      final Bytes to,
                                                      final boolean forward) {
             return new RocksDBDualCFRangeIterator(
@@ -222,7 +221,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> all(final boolean forward) {
+        public ManagedKeyValueIterator<Bytes, byte[]> all(final boolean forward) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(newColumnFamily);
             final RocksIterator innerIterNoTimestamp = db.newIterator(oldColumnFamily);
             if (forward) {
@@ -236,8 +235,8 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-            final Bytes to = Bytes.increment(prefix);
+        public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
+            final Bytes to = incrementWithoutOverflow(prefix);
             return new RocksDBDualCFRangeIterator(
                 name,
                 db.newIterator(newColumnFamily),
@@ -262,14 +261,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
-                                           final WriteBatch batch) throws RocksDBException {
-            for (final KeyValue<byte[], byte[]> record : records) {
-                addToBatch(record.key, record.value, batch);
-            }
-        }
-
-        @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
                                final WriteBatch batch) throws RocksDBException {
@@ -290,7 +281,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     }
 
     private class RocksDBDualCFIterator extends AbstractIterator<KeyValue<Bytes, byte[]>>
-        implements KeyValueIterator<Bytes, byte[]> {
+        implements ManagedKeyValueIterator<Bytes, byte[]> {
 
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
@@ -307,6 +298,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         private byte[] nextWithTimestamp;
         private byte[] nextNoTimestamp;
         private KeyValue<Bytes, byte[]> next;
+        private Runnable closeCallback = null;
 
         RocksDBDualCFIterator(final String storeName,
                               final RocksIterator iterWithTimestamp,
@@ -391,7 +383,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public synchronized void close() {
-            openIterators.remove(this);
+            if (closeCallback == null) {
+                throw new IllegalStateException("RocksDBDualCFIterator expects close callback to be set immediately upon creation");
+            }
+            closeCallback.run();
+
             iterNoTimestamp.close();
             iterWithTimestamp.close();
             open = false;
@@ -403,6 +399,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 throw new NoSuchElementException();
             }
             return next.key;
+        }
+
+        @Override
+        public void onClose(final Runnable closeCallback) {
+            this.closeCallback = closeCallback;
         }
     }
 
@@ -426,19 +427,23 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             this.forward = forward;
             this.toInclusive = toInclusive;
             if (forward) {
-                iterWithTimestamp.seek(from.get());
-                iterNoTimestamp.seek(from.get());
-                rawLastKey = to.get();
-                if (rawLastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + to);
+                if (from == null) {
+                    iterWithTimestamp.seekToFirst();
+                    iterNoTimestamp.seekToFirst();
+                } else {
+                    iterWithTimestamp.seek(from.get());
+                    iterNoTimestamp.seek(from.get());
                 }
+                rawLastKey = to == null ? null : to.get();
             } else {
-                iterWithTimestamp.seekForPrev(to.get());
-                iterNoTimestamp.seekForPrev(to.get());
-                rawLastKey = from.get();
-                if (rawLastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + from);
+                if (to == null) {
+                    iterWithTimestamp.seekToLast();
+                    iterNoTimestamp.seekToLast();
+                } else {
+                    iterWithTimestamp.seekForPrev(to.get());
+                    iterNoTimestamp.seekForPrev(to.get());
                 }
+                rawLastKey = from == null ? null : from.get();
             }
         }
 
@@ -448,9 +453,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
             if (next == null) {
                 return allDone();
+            } else if (rawLastKey == null) {
+                //null means range endpoint is open
+                return next;
             } else {
                 if (forward) {
-
                     if (comparator.compare(next.key.get(), rawLastKey) < 0) {
                         return next;
                     } else if (comparator.compare(next.key.get(), rawLastKey) == 0) {

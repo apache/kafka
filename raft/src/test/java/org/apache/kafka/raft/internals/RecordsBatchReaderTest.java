@@ -100,7 +100,8 @@ class RecordsBatchReaderTest {
             serde,
             bufferSupplier,
             MAX_BATCH_BYTES,
-            closeListener
+            closeListener,
+            true
         );
 
         for (TestBatch<String> batch : expectedBatches) {

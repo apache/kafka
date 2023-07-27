@@ -30,16 +30,12 @@ public class StateTracker {
 
     /**
      * Change the current state.
-     * <p>
-     * This method is synchronized to ensure that all state changes are captured correctly and in the same order.
-     * Synchronization is acceptable since it is assumed that state changes will be relatively infrequent.
      *
      * @param newState the current state; may not be null
      * @param now      the current time in milliseconds
      */
-    public synchronized void changeState(State newState, long now) {
-        // JDK8: remove synchronization by using lastState.getAndUpdate(oldState->oldState.newState(newState, now));
-        lastState.set(lastState.get().newState(newState, now));
+    public void changeState(State newState, long now) {
+        lastState.getAndUpdate(oldState -> oldState.newState(newState, now));
     }
 
     /**
@@ -73,6 +69,7 @@ public class StateTracker {
         private final long unassignedTotalTimeMs;
         private final long runningTotalTimeMs;
         private final long pausedTotalTimeMs;
+        private final long stoppedTotalTimeMs;
         private final long failedTotalTimeMs;
         private final long destroyedTotalTimeMs;
         private final long restartingTotalTimeMs;
@@ -81,16 +78,17 @@ public class StateTracker {
          * The initial StateChange instance before any state has changed.
          */
         StateChange() {
-            this(null, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+            this(null, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
         }
 
-        StateChange(State state, long startTime, long unassignedTotalTimeMs, long runningTotalTimeMs,
-                            long pausedTotalTimeMs, long failedTotalTimeMs, long destroyedTotalTimeMs, long restartingTotalTimeMs) {
+        StateChange(State state, long startTime, long unassignedTotalTimeMs, long runningTotalTimeMs, long pausedTotalTimeMs,
+                            long stoppedTotalTimeMs, long failedTotalTimeMs, long destroyedTotalTimeMs, long restartingTotalTimeMs) {
             this.state = state;
             this.startTime = startTime;
             this.unassignedTotalTimeMs = unassignedTotalTimeMs;
             this.runningTotalTimeMs = runningTotalTimeMs;
             this.pausedTotalTimeMs = pausedTotalTimeMs;
+            this.stoppedTotalTimeMs  = stoppedTotalTimeMs;
             this.failedTotalTimeMs = failedTotalTimeMs;
             this.destroyedTotalTimeMs = destroyedTotalTimeMs;
             this.restartingTotalTimeMs = restartingTotalTimeMs;
@@ -106,7 +104,7 @@ public class StateTracker {
          */
         public StateChange newState(State state, long now) {
             if (this.state == null) {
-                return new StateChange(state, now, 0L, 0L, 0L, 0L, 0L, 0L);
+                return new StateChange(state, now, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
             }
             if (state == this.state) {
                 return this;
@@ -114,6 +112,7 @@ public class StateTracker {
             long unassignedTime = this.unassignedTotalTimeMs;
             long runningTime = this.runningTotalTimeMs;
             long pausedTime = this.pausedTotalTimeMs;
+            long stoppedTime = this.stoppedTotalTimeMs;
             long failedTime = this.failedTotalTimeMs;
             long destroyedTime = this.destroyedTotalTimeMs;
             long restartingTime = this.restartingTotalTimeMs;
@@ -128,6 +127,9 @@ public class StateTracker {
                 case PAUSED:
                     pausedTime += duration;
                     break;
+                case STOPPED:
+                    stoppedTime += duration;
+                    break;
                 case FAILED:
                     failedTime += duration;
                     break;
@@ -138,7 +140,7 @@ public class StateTracker {
                     restartingTime += duration;
                     break;
             }
-            return new StateChange(state, now, unassignedTime, runningTime, pausedTime, failedTime, destroyedTime, restartingTime);
+            return new StateChange(state, now, unassignedTime, runningTime, pausedTime, stoppedTime, failedTime, destroyedTime, restartingTime);
         }
 
         /**
@@ -163,6 +165,9 @@ public class StateTracker {
                     break;
                 case PAUSED:
                     durationDesired += pausedTotalTimeMs;
+                    break;
+                case STOPPED:
+                    durationDesired += stoppedTotalTimeMs;
                     break;
                 case FAILED:
                     durationDesired += failedTotalTimeMs;

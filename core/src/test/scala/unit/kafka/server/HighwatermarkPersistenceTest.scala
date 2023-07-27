@@ -16,20 +16,19 @@
 */
 package kafka.server
 
-import kafka.log._
 import java.io.File
-
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
-import java.util.concurrent.atomic.AtomicBoolean
-
+import kafka.utils.TestUtils
 import kafka.cluster.Partition
 import kafka.server.metadata.MockConfigRepository
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChannel}
 
 class HighwatermarkPersistenceTest {
 
@@ -39,7 +38,7 @@ class HighwatermarkPersistenceTest {
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
       logDirs = config.logDirs.map(new File(_)),
-      cleanerConfig = CleanerConfig())
+      cleanerConfig = new CleanerConfig(true))
   }
 
   val logDirFailureChannels = configs map { config =>
@@ -63,9 +62,16 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler,
-      logManagers.head, new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = scheduler,
+      logManager = logManagers.head,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
+      logDirFailureChannel = logDirFailureChannels.head,
+      alterPartitionManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -78,10 +84,12 @@ class HighwatermarkPersistenceTest {
       partition0.setLog(log0, isFutureLog = false)
 
       partition0.updateAssignmentAndIsr(
-        assignment = Seq(configs.head.brokerId, configs.last.brokerId),
+        replicas = Seq(configs.head.brokerId, configs.last.brokerId),
+        isLeader = true,
         isr = Set(configs.head.brokerId),
         addingReplicas = Seq.empty,
-        removingReplicas = Seq.empty
+        removingReplicas = Seq.empty,
+        leaderRecoveryState = LeaderRecoveryState.RECOVERED
       )
 
       replicaManager.checkpointHighWatermarks()
@@ -112,9 +120,16 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, None,
-      scheduler, logManagers.head, new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = scheduler,
+      logManager = logManagers.head,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
+      logDirFailureChannel = logDirFailureChannels.head,
+      alterPartitionManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

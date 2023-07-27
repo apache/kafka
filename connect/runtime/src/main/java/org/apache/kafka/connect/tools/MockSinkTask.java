@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.tools;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -66,11 +64,6 @@ public class MockSinkTask extends SinkTask {
             }
             setTimeout();
         }
-    }
-
-    @Override
-    public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
-
     }
 
     @Override

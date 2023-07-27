@@ -17,7 +17,7 @@
   "apiKey": 57,
   "type": "response",
   "name": "UpdateFeaturesResponse",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

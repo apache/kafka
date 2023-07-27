@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
@@ -38,7 +39,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private OptionalInt claimedEpoch = OptionalInt.empty();
     private long lastOffsetSnapshotted = -1;
 
-    private int handleSnapshotCalls = 0;
+    private int handleLoadSnapshotCalls = 0;
 
     public ReplicatedCounter(
         int nodeId,
@@ -61,10 +62,13 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
         int epoch = claimedEpoch.getAsInt();
         uncommitted += 1;
-        Long offset = client.scheduleAppend(epoch, singletonList(uncommitted));
-        if (offset != null) {
+        try {
+            long offset = client.scheduleAppend(epoch, singletonList(uncommitted));
             log.debug("Scheduled append of record {} with epoch {} at offset {}",
                 uncommitted, epoch, offset);
+        } catch (NotLeaderException e) {
+            log.info("Appending failed, transition to resigned", e);
+            client.resign(epoch);
         }
     }
 
@@ -87,7 +91,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     if (nextCommitted != committed + 1) {
                         throw new AssertionError(
                             String.format(
-                                "Expected next committed value to be %s, but instead found %s on node %s",
+                                "Expected next committed value to be %d, but instead found %d on node %d",
                                 committed + 1,
                                 nextCommitted,
                                 nodeId
@@ -103,16 +107,15 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             }
             log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
-            if (lastOffsetSnapshotted + snapshotDelayInRecords  < lastCommittedOffset) {
+            if (lastOffsetSnapshotted + snapshotDelayInRecords < lastCommittedOffset) {
                 log.debug(
-                    "Generating new snapshot with committed offset {} and epoch {} since the previoud snapshot includes {}",
+                    "Generating new snapshot with committed offset {} and epoch {} since the previous snapshot includes {}",
                     lastCommittedOffset,
                     lastCommittedEpoch,
                     lastOffsetSnapshotted
                 );
                 Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(
-                    lastCommittedOffset,
-                    lastCommittedEpoch,
+                    new OffsetAndEpoch(lastCommittedOffset + 1, lastCommittedEpoch),
                     lastCommittedTimestamp);
                 if (snapshot.isPresent()) {
                     try {
@@ -132,7 +135,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleSnapshot(SnapshotReader<Integer> reader) {
+    public synchronized void handleLoadSnapshot(SnapshotReader<Integer> reader) {
         try {
             log.debug("Loading snapshot {}", reader.snapshotId());
             while (reader.hasNext()) {
@@ -154,7 +157,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                 }
             }
             lastOffsetSnapshotted = reader.lastContainedLogOffset();
-            handleSnapshotCalls += 1;
+            handleLoadSnapshotCalls += 1;
             log.debug("Finished loading snapshot. Set value: {}", committed);
         } finally {
             reader.close();
@@ -173,11 +176,11 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             uncommitted = -1;
             claimedEpoch = OptionalInt.empty();
         }
-        handleSnapshotCalls = 0;
+        handleLoadSnapshotCalls = 0;
     }
 
-    /** Use handleSnapshotCalls to verify leader is never asked to load snapshot */
-    public int handleSnapshotCalls() {
-        return handleSnapshotCalls;
+    /** Use handleLoadSnapshotCalls to verify leader is never asked to load snapshot */
+    public int handleLoadSnapshotCalls() {
+        return handleLoadSnapshotCalls;
     }
 }

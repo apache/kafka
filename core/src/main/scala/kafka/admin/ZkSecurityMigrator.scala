@@ -19,11 +19,12 @@ package kafka.admin
 
 import joptsimple.{ArgumentAcceptingOptionSpec, OptionSet}
 import kafka.server.KafkaConfig
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
+import kafka.utils.{Exit, Logging, ToolsUtils}
 import kafka.utils.Implicits._
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -70,7 +71,7 @@ object ZkSecurityMigrator extends Logging {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val opts = new ZkSecurityMigratorOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, usageMessage)
+    CommandLineUtils.maybePrintHelpOrVersion(opts, usageMessage)
 
     // Must have either SASL or TLS mutual authentication enabled to use this tool.
     // Instantiate the client config we will use so that we take into account config provided via the CLI option
@@ -99,13 +100,13 @@ object ZkSecurityMigrator extends Logging {
         info("zookeeper.acl option is unsecure")
         false
       case _ =>
-        CommandLineUtils.printUsageAndDie(opts.parser, usageMessage)
+        ToolsUtils.printUsageAndExit(opts.parser, usageMessage)
     }
     val zkUrl = opts.options.valueOf(opts.zkUrlOpt)
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
-      Int.MaxValue, Time.SYSTEM, zkClientConfig = Some(zkClientConfig))
+      Int.MaxValue, Time.SYSTEM, zkClientConfig = zkClientConfig, name = "ZkSecurityMigrator")
     val enablePathCheck = opts.options.has(opts.enablePathCheckOpt)
     val migrator = new ZkSecurityMigrator(zkClient)
     migrator.run(enablePathCheck)

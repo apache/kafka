@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -29,6 +30,11 @@ import java.util.List;
 
 
 public final class MessageUtil {
+
+    public static final long UNSIGNED_INT_MAX = 4294967295L;
+
+    public static final int UNSIGNED_SHORT_MAX = 65535;
+
     /**
      * Copy a byte buffer into an array.  This will not affect the buffer's
      * position or mark.
@@ -87,9 +93,18 @@ public final class MessageUtil {
 
     public static int jsonNodeToUnsignedShort(JsonNode node, String about) {
         int value = jsonNodeToInt(node, about);
-        if (value < 0 || value > 65535) {
+        if (value < 0 || value > UNSIGNED_SHORT_MAX) {
             throw new RuntimeException(about + ": value " + value +
                 " does not fit in a 16-bit unsigned integer.");
+        }
+        return value;
+    }
+
+    public static long jsonNodeToUnsignedInt(JsonNode node, String about) {
+        long value = jsonNodeToLong(node, about);
+        if (value < 0 || value > UNSIGNED_INT_MAX) {
+            throw new RuntimeException(about + ": value " + value +
+                    " does not fit in a 32-bit unsigned integer.");
         }
         return value;
     }
@@ -147,14 +162,15 @@ public final class MessageUtil {
     }
 
     public static byte[] jsonNodeToBinary(JsonNode node, String about) {
-        if (!node.isBinary()) {
-            throw new RuntimeException(about + ": expected Base64-encoded binary data.");
-        }
         try {
             byte[] value = node.binaryValue();
+            if (value == null) {
+                throw new IllegalArgumentException(about + ": expected Base64-encoded binary data.");
+            }
+
             return value;
         } catch (IOException e) {
-            throw new RuntimeException(about + ": unable to retrieve Base64-encoded binary data", e);
+            throw new UncheckedIOException(about + ": unable to retrieve Base64-encoded binary data", e);
         }
     }
 

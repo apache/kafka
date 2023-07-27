@@ -19,16 +19,17 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
-
+import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Implicits._
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
@@ -46,6 +47,10 @@ case class ProduceMetadata(produceRequiredAcks: Short,
   override def toString = s"[requiredAcks: $produceRequiredAcks, partitionStatus: $produceStatus]"
 }
 
+object DelayedProduce {
+  private final val logger = Logger(classOf[DelayedProduce])
+}
+
 /**
  * A delayed produce operation that can be created by the replica manager and watched
  * in the produce operation purgatory
@@ -56,6 +61,8 @@ class DelayedProduce(delayMs: Long,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                      lockOpt: Option[Lock] = None)
   extends DelayedOperation(delayMs, lockOpt) {
+
+  override lazy val logger = DelayedProduce.logger
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
@@ -74,11 +81,12 @@ class DelayedProduce(delayMs: Long,
    * The delayed produce operation can be completed if every partition
    * it produces to is satisfied by one of the following:
    *
-   * Case A: This broker is no longer the leader: set an error in response
-   * Case B: This broker is the leader:
-   *   B.1 - If there was a local error thrown while checking if at least requiredAcks
+   * Case A: Replica not assigned to partition
+   * Case B: Replica is no longer the leader of this partition
+   * Case C: This broker is the leader:
+   *   C.1 - If there was a local error thrown while checking if at least requiredAcks
    *         replicas have caught up to this operation: set an error in response
-   *   B.2 - Otherwise, set the response with no error.
+   *   C.2 - Otherwise, set the response with no error.
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
@@ -95,7 +103,7 @@ class DelayedProduce(delayMs: Long,
             partition.checkEnoughReplicasReachOffset(status.requiredOffset)
         }
 
-        // Case B.1 || B.2
+        // Case B || C.1 || C.2
         if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
           status.responseStatus.error = error
@@ -103,7 +111,7 @@ class DelayedProduce(delayMs: Long,
       }
     }
 
-    // check if every partition has satisfied at least one of case A or B
+    // check if every partition has satisfied at least one of case A, B or C
     if (!produceMetadata.produceStatus.values.exists(_.acksPending))
       forceComplete()
     else
@@ -128,15 +136,16 @@ class DelayedProduce(delayMs: Long,
   }
 }
 
-object DelayedProduceMetrics extends KafkaMetricsGroup {
+object DelayedProduceMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedProduceMetrics.getClass)
 
-  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  private val aggregateExpirationMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 
   private val partitionExpirationMeterFactory = (key: TopicPartition) =>
-    newMeter("ExpiresPerSec",
+    metricsGroup.newMeter("ExpiresPerSec",
              "requests",
              TimeUnit.SECONDS,
-             tags = Map("topic" -> key.topic, "partition" -> key.partition.toString))
+             Map("topic" -> key.topic, "partition" -> key.partition.toString).asJava)
   private val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
 
   def recordExpiration(partition: TopicPartition): Unit = {
@@ -144,4 +153,3 @@ object DelayedProduceMetrics extends KafkaMetricsGroup {
     partitionExpirationMeters.getAndMaybePut(partition).mark()
   }
 }
-

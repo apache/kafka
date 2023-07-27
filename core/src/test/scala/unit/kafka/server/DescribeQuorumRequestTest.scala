@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.io.IOException
-
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
@@ -26,12 +25,13 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, DescribeQuorumRequest, DescribeQuorumResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
+@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")
@@ -54,30 +54,50 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testDescribeQuorum(): Unit = {
-    val request = new DescribeQuorumRequest.Builder(
-      singletonRequest(KafkaRaftServer.MetadataPartition)
-    ).build()
+    for (version <- ApiKeys.DESCRIBE_QUORUM.allVersions.asScala) {
+      val request = new DescribeQuorumRequest.Builder(
+        singletonRequest(KafkaRaftServer.MetadataPartition)
+      ).build(version.toShort)
+      val response = connectAndReceive[DescribeQuorumResponse](request)
 
-    val response = connectAndReceive[DescribeQuorumResponse](request)
+      assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
+      assertEquals(1, response.data.topics.size)
 
-    assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
-    assertEquals(1, response.data.topics.size)
+      val topicData = response.data.topics.get(0)
+      assertEquals(KafkaRaftServer.MetadataTopic, topicData.topicName)
+      assertEquals(1, topicData.partitions.size)
 
-    val topicData = response.data.topics.get(0)
-    assertEquals(KafkaRaftServer.MetadataTopic, topicData.topicName)
-    assertEquals(1, topicData.partitions.size)
+      val partitionData = topicData.partitions.get(0)
+      assertEquals(KafkaRaftServer.MetadataPartition.partition, partitionData.partitionIndex)
+      assertEquals(Errors.NONE, Errors.forCode(partitionData.errorCode))
+      assertTrue(partitionData.leaderEpoch > 0)
 
-    val partitionData = topicData.partitions.get(0)
-    assertEquals(KafkaRaftServer.MetadataPartition.partition, partitionData.partitionIndex)
-    assertEquals(Errors.NONE, Errors.forCode(partitionData.errorCode))
-    assertTrue(partitionData.leaderEpoch > 0)
+      val leaderId = partitionData.leaderId
+      assertTrue(leaderId > 0)
+      assertTrue(partitionData.leaderEpoch() > 0)
+      assertTrue(partitionData.highWatermark() > 0)
 
-    val leaderId = partitionData.leaderId
-    assertTrue(leaderId > 0)
+      val leaderState = partitionData.currentVoters.asScala.find(_.replicaId == leaderId)
+        .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
+      assertTrue(leaderState.logEndOffset > 0)
 
-    val leaderState = partitionData.currentVoters.asScala.find(_.replicaId == leaderId)
-      .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
-    assertTrue(leaderState.logEndOffset > 0)
+      val voterData = partitionData.currentVoters.asScala
+      assertEquals(cluster.controllerIds().asScala, voterData.map(_.replicaId).toSet);
+
+      val observerData = partitionData.observers.asScala
+      assertEquals(cluster.brokerIds().asScala, observerData.map(_.replicaId).toSet);
+
+      (voterData ++ observerData).foreach { state =>
+        assertTrue(0 < state.logEndOffset)
+        if (version == 0) {
+          assertEquals(-1, state.lastFetchTimestamp)
+          assertEquals(-1, state.lastCaughtUpTimestamp)
+        } else {
+          assertNotEquals(-1, state.lastFetchTimestamp)
+          assertNotEquals(-1, state.lastCaughtUpTimestamp)
+        }
+      }
+    }
   }
 
   private def connectAndReceive[T <: AbstractResponse](

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -42,8 +43,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -76,6 +79,8 @@ public class ProcessorStateManager implements StateManager {
         // could be used for both active restoration and standby
         private final StateRestoreCallback restoreCallback;
 
+        private final CommitCallback commitCallback;
+
         // record converters used for restoration and standby
         private final RecordConverter recordConverter;
 
@@ -95,8 +100,10 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
-        private StateStoreMetadata(final StateStore stateStore) {
+        private StateStoreMetadata(final StateStore stateStore,
+                                   final CommitCallback commitCallback) {
             this.stateStore = stateStore;
+            this.commitCallback = commitCallback;
             this.restoreCallback = null;
             this.recordConverter = null;
             this.changelogPartition = null;
@@ -107,6 +114,7 @@ public class ProcessorStateManager implements StateManager {
         private StateStoreMetadata(final StateStore stateStore,
                                    final TopicPartition changelogPartition,
                                    final StateRestoreCallback restoreCallback,
+                                   final CommitCallback commitCallback,
                                    final RecordConverter recordConverter) {
             if (restoreCallback == null) {
                 throw new IllegalStateException("Log enabled store should always provide a restore callback upon registration");
@@ -115,6 +123,7 @@ public class ProcessorStateManager implements StateManager {
             this.stateStore = stateStore;
             this.changelogPartition = changelogPartition;
             this.restoreCallback = restoreCallback;
+            this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
         }
@@ -161,12 +170,13 @@ public class ProcessorStateManager implements StateManager {
     private final OffsetCheckpoint checkpointFile;
 
     private TaskType taskType;
+    private final boolean stateUpdaterEnabled;
 
-    public static String storeChangelogTopic(final String applicationId, final String storeName, final String namedTopology) {
+    public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
-            return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+            return prefix + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
         } else {
-            return applicationId + "-" + namedTopology + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+            return prefix + "-" + namedTopology + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
         }
     }
 
@@ -180,7 +190,8 @@ public class ProcessorStateManager implements StateManager {
                                  final StateDirectory stateDirectory,
                                  final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
-                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
+                                 final Collection<TopicPartition> sourcePartitions,
+                                 final boolean stateUpdaterEnabled) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -189,6 +200,7 @@ public class ProcessorStateManager implements StateManager {
         this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
+        this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
@@ -200,7 +212,9 @@ public class ProcessorStateManager implements StateManager {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (stores.containsKey(store.name())) {
-                maybeRegisterStoreWithChangelogReader(store.name());
+                if (!stateUpdaterEnabled) {
+                    maybeRegisterStoreWithChangelogReader(store.name());
+                }
             } else {
                 store.init((StateStoreContext) processorContext, store);
             }
@@ -307,7 +321,9 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback,
+                              final CommitCallback commitCallback) {
         final String storeName = store.name();
 
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
@@ -333,14 +349,17 @@ public class ProcessorStateManager implements StateManager {
                 store,
                 getStorePartition(storeName),
                 stateRestoreCallback,
+                commitCallback,
                 converterForStore(store)) :
-            new StateStoreMetadata(store);
+            new StateStoreMetadata(store, commitCallback);
 
         // register the store first, so that if later an exception is thrown then eventually while we call `close`
         // on the state manager this state store would be closed as well
         stores.put(storeName, storeMetadata);
 
-        maybeRegisterStoreWithChangelogReader(storeName);
+        if (!stateUpdaterEnabled) {
+            maybeRegisterStoreWithChangelogReader(storeName);
+        }
 
         log.debug("Registered state store {} to its state manager", storeName);
     }
@@ -354,21 +373,22 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    Collection<TopicPartition> changelogPartitions() {
-        return changelogOffsets().keySet();
+    Set<TopicPartition> changelogPartitions() {
+        return Collections.unmodifiableSet(changelogOffsets().keySet());
     }
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+        final Collection<TopicPartition> partitionsToMarkAsCorrupted = new LinkedList<>(partitions);
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            if (partitions.contains(storeMetadata.changelogPartition)) {
+            if (partitionsToMarkAsCorrupted.contains(storeMetadata.changelogPartition)) {
                 storeMetadata.corrupted = true;
-                partitions.remove(storeMetadata.changelogPartition);
+                partitionsToMarkAsCorrupted.remove(storeMetadata.changelogPartition);
             }
         }
 
-        if (!partitions.isEmpty()) {
-            throw new IllegalStateException("Some partitions " + partitions + " are not contained in the store list of task " +
-                taskId + " marking as corrupted, this is not expected");
+        if (!partitionsToMarkAsCorrupted.isEmpty()) {
+            throw new IllegalStateException("Some partitions " + partitionsToMarkAsCorrupted + " are not contained in " +
+                "the store list of task " + taskId + " marking as corrupted, this is not expected");
         }
     }
 
@@ -523,7 +543,9 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        changelogReader.unregister(getAllChangelogTopicPartitions());
+        if (!stateUpdaterEnabled) {
+            changelogReader.unregister(getAllChangelogTopicPartitions());
+        }
 
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
@@ -562,8 +584,25 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
-        changelogReader.unregister(allChangelogs);
+        if (!stateUpdaterEnabled) {
+            final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
+            changelogReader.unregister(allChangelogs);
+        }
+
+        // when the state manager is recycled to be used, future writes may bypass its store's caching
+        // layer if they are from restoration, hence we need to clear the state store's caches just in case
+        // See KAFKA-14172 for details
+        if (!stores.isEmpty()) {
+            log.debug("Clearing all store caches registered in the state manager: {}", stores);
+            for (final StateStoreMetadata metadata : stores.values()) {
+                final StateStore store = metadata.stateStore;
+
+                if (store instanceof CachedStateStore) {
+                    ((CachedStateStore) store).clearCache();
+                }
+                log.trace("Cleared cache {}", store.name());
+            }
+        }
     }
 
     void transitionTaskType(final TaskType newType, final LogContext logContext) {
@@ -571,12 +610,8 @@ public class ProcessorStateManager implements StateManager {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");
         }
 
-        final TaskType oldType = taskType;
         taskType = newType;
         log = logContext.logger(ProcessorStateManager.class);
-        logPrefix = logContext.logPrefix();
-
-        log.debug("Transitioning state manager for {} task {} to {}", oldType, taskId, newType);
     }
 
     @Override
@@ -598,6 +633,18 @@ public class ProcessorStateManager implements StateManager {
         // checkpoint those stores that are only logged and persistent to the checkpoint file
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (storeMetadata.commitCallback != null && !storeMetadata.corrupted) {
+                try {
+                    storeMetadata.commitCallback.onCommit();
+                } catch (final IOException e) {
+                    throw new ProcessorStateException(
+                            format("%sException caught while trying to checkpoint store, " +
+                                    "changelog partition %s", logPrefix, storeMetadata.changelogPartition),
+                            e
+                    );
+                }
+            }
+
             // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
@@ -608,7 +655,7 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        log.debug("Writing checkpoint: {}", checkpointingOffsets);
+        log.debug("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
         try {
             checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {

@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -34,13 +36,20 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.Random;
+import java.util.SplittableRandom;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -84,7 +93,7 @@ public class ProducerPerformanceTest {
         Properties prop = ProducerPerformance.readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
 
         assertNotNull(prop);
-        assertEquals(5, prop.size());
+        assertEquals(6, prop.size());
     }
 
     @Test
@@ -100,6 +109,49 @@ public class ProducerPerformanceTest {
             "--producer-props", "bootstrap.servers=localhost:9000"};
         producerPerformanceSpy.start(args);
         verify(producerMock, times(5)).send(any(), any());
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testNumberOfSuccessfulSendAndClose() throws IOException {
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--throughput", "1",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(10)).send(any(), any());
+        assertEquals(10, producerPerformanceSpy.stats.totalCount());
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testNumberOfFailedSendAndClose() throws IOException {
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            producerPerformanceSpy.cb.onCompletion(null, new AuthorizationException("not authorized."));
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--throughput", "1",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(10)).send(any(), any());
+        assertEquals(0, producerPerformanceSpy.stats.currentWindowCount());
+        assertEquals(0, producerPerformanceSpy.stats.totalCount());
         verify(producerMock, times(1)).close();
     }
 
@@ -125,7 +177,7 @@ public class ProducerPerformanceTest {
         List<byte[]> payloadByteList = new ArrayList<>();
         payloadByteList.add(byteArray);
         byte[] payload = null;
-        Random random = new Random(0);
+        SplittableRandom random = new SplittableRandom(0);
 
         payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
         assertEquals(inputString, new String(payload));
@@ -136,7 +188,7 @@ public class ProducerPerformanceTest {
         Integer recordSize = 100;
         byte[] payload = new byte[recordSize];
         List<byte[]> payloadByteList = new ArrayList<>();
-        Random random = new Random(0);
+        SplittableRandom random = new SplittableRandom(0);
 
         payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
         for (byte b : payload) {
@@ -149,9 +201,57 @@ public class ProducerPerformanceTest {
         Integer recordSize = null;
         byte[] payload = null;
         List<byte[]> payloadByteList = new ArrayList<>();
-        Random random = new Random(0);
+        SplittableRandom random = new SplittableRandom(0);
 
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random));
         assertEquals("no payload File Path or record Size provided", thrown.getMessage());
+    }
+
+    @Test
+    public void testClientIdOverride()  throws Exception {
+        List<String> producerProps = Collections.singletonList("client.id=producer-1");
+
+        Properties prop = ProducerPerformance.readProps(producerProps, null, "1234", true);
+
+        assertNotNull(prop);
+        assertEquals("producer-1", prop.getProperty("client.id"));
+    }
+
+    @Test
+    public void testDefaultClientId() throws Exception {
+        List<String> producerProps = Collections.singletonList("acks=1");
+
+        Properties prop = ProducerPerformance.readProps(producerProps, null, "1234", true);
+
+        assertNotNull(prop);
+        assertEquals("perf-producer-client", prop.getProperty("client.id"));
+    }
+
+    @Test
+    public void testStatsInitializationWithLargeNumRecords() throws Exception {
+        long numRecords = Long.MAX_VALUE;
+        assertDoesNotThrow(() -> new ProducerPerformance.Stats(numRecords, 5000));
+    }
+
+    @Test
+    public void testStatsCorrectness() throws Exception {
+        ExecutorService singleThreaded = Executors.newSingleThreadExecutor();
+        final long numRecords = 1000000;
+        ProducerPerformance.Stats stats = new ProducerPerformance.Stats(numRecords, 5000);
+        for (long i = 0; i < numRecords; i++) {
+            final Callback callback = new ProducerPerformance.PerfCallback(0, 100, stats);
+            CompletableFuture.runAsync(() -> {
+                callback.onCompletion(null, null);
+            }, singleThreaded);
+        }
+
+        singleThreaded.shutdown();
+        final boolean success = singleThreaded.awaitTermination(60, TimeUnit.SECONDS);
+
+        assertTrue(success, "should have terminated");
+        assertEquals(numRecords, stats.totalCount());
+        assertEquals(numRecords, stats.iteration());
+        assertEquals(500000, stats.index());
+        assertEquals(1000000 * 100, stats.bytes());
     }
 }

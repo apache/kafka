@@ -21,7 +21,11 @@
   // The current implementation assumes that future versions will not break compatibility. When
   // it encounters a newer version, it parses it using the current format. This basically means
   // that new versions cannot remove or reorder any of the existing fields.
-  "validVersions": "0-1",
+
+  // Version 1 added the "OwnedPartitions" field to allow assigner know what partitions each member owned
+  // Version 2 added a new field "GenerationId" to indicate if the member has out-of-date ownedPartitions.
+  // Version 3 adds rack id to enable rack-aware assignment.
+  "validVersions": "0-3",
   "flexibleVersions": "none",
   "fields": [
     { "name": "Topics", "type": "[]string", "versions": "0+" },
@@ -32,6 +36,8 @@
         { "name": "Topic", "type": "string", "mapKey": true, "versions": "1+", "entityType": "topicName" },
         { "name": "Partitions", "type": "[]int32", "versions": "1+"}
       ]
-    }
+    },
+    { "name": "GenerationId", "type": "int32", "versions": "2+", "default": "-1", "ignorable": true },
+    { "name": "RackId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "ignorable": true }
   ]
 }

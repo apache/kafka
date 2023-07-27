@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
 import java.util.Objects;
 import org.apache.kafka.common.metrics.Sensor;
@@ -26,8 +28,8 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +78,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
     private class KTableSourceProcessor implements Processor<KIn, VIn, KIn, Change<VIn>> {
 
         private ProcessorContext<KIn, Change<VIn>> context;
-        private TimestampedKeyValueStore<KIn, VIn> store;
+        private KeyValueStoreWrapper<KIn, VIn> store;
         private TimestampedTupleForwarder<KIn, VIn> tupleForwarder;
         private Sensor droppedRecordsSensor;
 
@@ -88,9 +90,9 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(),
                 context.taskId().toString(), metrics);
             if (queryableName != null) {
-                store = context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.getStore(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -131,7 +133,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                                     + "topic=[{}] partition=[{}] offset=[{}].",
                                 store.name(),
                                 oldValueAndTimestamp.timestamp(), record.timestamp(),
-                                recordMetadata.topic(), recordMetadata.offset(), recordMetadata.partition()
+                                recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset() 
                             );
                         } else {
                             LOG.warn(
@@ -146,10 +148,13 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 } else {
                     oldValue = null;
                 }
-                store.put(record.key(), ValueAndTimestamp.make(record.value(), record.timestamp()));
-                tupleForwarder.maybeForward(record.key(), record.value(), oldValue);
+                final long putReturnCode = store.put(record.key(), record.value(), record.timestamp());
+                // if not put to store, do not forward downstream either
+                if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
+                    tupleForwarder.maybeForward(record.withValue(new Change<>(record.value(), oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
+                }
             } else {
-                context.forward(record.withValue(new Change<>(record.value(), null)));
+                context.forward(record.withValue(new Change<>(record.value(), null, true)));
             }
         }
     }

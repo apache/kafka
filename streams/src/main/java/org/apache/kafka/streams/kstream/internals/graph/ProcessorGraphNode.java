@@ -19,8 +19,6 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.Properties;
-
 /**
  * Used to represent any type of stateless operation:
  *
@@ -57,8 +55,7 @@ public class ProcessorGraphNode<K, V> extends GraphNode {
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
-
-        topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNodeNames());
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        processorParameters.addProcessorTo(topologyBuilder, parentNodeNames());
     }
 }

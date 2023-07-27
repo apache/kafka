@@ -35,26 +35,13 @@ public class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], 
     }
 
     @Override
-    public void apply(final byte[] key,
-                      final byte[] newValue,
-                      final byte[] oldValue,
-                      final long timestamp) {
-        forwarded.put(
-            keyDeserializer.deserialize(null, key),
-            new Change<>(
-                valueDeserializer.deserialize(null, newValue),
-                valueDeserializer.deserialize(null, oldValue)
-            )
-        );
-    }
-
-    @Override
     public void apply(final Record<byte[], Change<byte[]>> record) {
         forwarded.put(
             keyDeserializer.deserialize(null, record.key()),
             new Change<>(
                 valueDeserializer.deserialize(null, record.value().newValue),
-                valueDeserializer.deserialize(null, record.value().oldValue)
+                valueDeserializer.deserialize(null, record.value().oldValue),
+                record.value().isLatest
             )
         );
     }

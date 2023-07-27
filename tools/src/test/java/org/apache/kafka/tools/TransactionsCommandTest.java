@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTransactionsResult;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
@@ -78,7 +79,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TransactionsCommandTest {
 
-    private final MockExitProcedure exitProcedure = new MockExitProcedure();
+    private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
     private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     private final PrintStream out = new PrintStream(outputStream);
     private final MockTime time = new MockTime();
@@ -176,7 +177,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(3, table.size());
 
-        List<String> expectedHeaders = asList(TransactionsCommand.DescribeProducersCommand.HEADERS);
+        List<String> expectedHeaders = TransactionsCommand.DescribeProducersCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
         Set<List<String>> expectedRows = Utils.mkSet(
@@ -212,7 +213,7 @@ public class TransactionsCommandTest {
         assertEquals(4, table.size());
 
         // Assert expected headers
-        List<String> expectedHeaders = asList(TransactionsCommand.ListTransactionsCommand.HEADERS);
+        List<String> expectedHeaders = TransactionsCommand.ListTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
         Set<List<String>> expectedRows = Utils.mkSet(
@@ -271,7 +272,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(2, table.size());
 
-        List<String> expectedHeaders = asList(TransactionsCommand.DescribeTransactionsCommand.HEADERS);
+        List<String> expectedHeaders = TransactionsCommand.DescribeTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
         List<String> expectedRow = asList(
@@ -533,14 +534,15 @@ public class TransactionsCommandTest {
     ) {
         ListTopicsResult result = Mockito.mock(ListTopicsResult.class);
         Mockito.when(result.names()).thenReturn(completedFuture(topics));
-        Mockito.when(admin.listTopics()).thenReturn(result);
+        ListTopicsOptions listOptions = new ListTopicsOptions().listInternal(true);
+        Mockito.when(admin.listTopics(listOptions)).thenReturn(result);
     }
 
     private void expectDescribeTopics(
         Map<String, TopicDescription> descriptions
     ) {
         DescribeTopicsResult result = Mockito.mock(DescribeTopicsResult.class);
-        Mockito.when(result.all()).thenReturn(completedFuture(descriptions));
+        Mockito.when(result.allTopicNames()).thenReturn(completedFuture(descriptions));
         Mockito.when(admin.describeTopics(new ArrayList<>(descriptions.keySet()))).thenReturn(result);
     }
 
@@ -701,7 +703,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(1, table.size());
 
-        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
+        List<String> expectedHeaders = TransactionsCommand.FindHangingTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
     }
 
@@ -740,7 +742,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(1, table.size());
 
-        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
+        List<String> expectedHeaders = TransactionsCommand.FindHangingTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
     }
 
@@ -938,7 +940,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(2, table.size());
 
-        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
+        List<String> expectedHeaders = TransactionsCommand.FindHangingTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
         long durationMinutes = TimeUnit.MILLISECONDS.toMinutes(time.milliseconds() - lastTimestamp);
@@ -1046,27 +1048,14 @@ public class TransactionsCommandTest {
     }
 
     private void assertNormalExit() {
-        assertTrue(exitProcedure.hasExited);
-        assertEquals(0, exitProcedure.statusCode);
+        assertTrue(exitProcedure.hasExited());
+        assertEquals(0, exitProcedure.statusCode());
     }
 
     private void assertCommandFailure(String[] args) throws Exception {
         execute(args);
-        assertTrue(exitProcedure.hasExited);
-        assertEquals(1, exitProcedure.statusCode);
-    }
-
-    private static class MockExitProcedure implements Exit.Procedure {
-        private boolean hasExited = false;
-        private int statusCode;
-
-        @Override
-        public void execute(int statusCode, String message) {
-            if (!this.hasExited) {
-                this.hasExited = true;
-                this.statusCode = statusCode;
-            }
-        }
+        assertTrue(exitProcedure.hasExited());
+        assertEquals(1, exitProcedure.statusCode());
     }
 
 }

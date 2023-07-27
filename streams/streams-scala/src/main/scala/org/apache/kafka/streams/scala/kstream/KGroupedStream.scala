@@ -20,12 +20,12 @@ package kstream
 import org.apache.kafka.streams.kstream.internals.KTableImpl
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.kstream.{
+  KGroupedStream => KGroupedStreamJ,
+  KTable => KTableJ,
   SessionWindows,
   SlidingWindows,
   Window,
-  Windows,
-  KGroupedStream => KGroupedStreamJ,
-  KTable => KTableJ
+  Windows
 }
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   AggregatorFromFunction,
@@ -111,8 +111,9 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`
    */
-  def reduce(reducer: (V, V) => V,
-             named: Named)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def reduce(reducer: (V, V) => V, named: Named)(implicit
+    materialized: Materialized[K, V, ByteArrayKeyValueStore]
+  ): KTable[K, V] =
     new KTable(inner.reduce(reducer.asReducer, materialized))
 
   /**
@@ -125,8 +126,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
     new KTable(inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized))
 
@@ -141,8 +142,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
     new KTable(inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, named, materialized))
 

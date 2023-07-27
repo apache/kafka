@@ -31,7 +31,6 @@ import static org.junit.Assert.fail;
 
 
 public class ApiUtilsTest {
-
     // This is the maximum limit that Duration accepts but fails when it converts to milliseconds.
     private static final long MAX_ACCEPTABLE_DAYS_FOR_DURATION = 106751991167300L;
     // This is the maximum limit that Duration accepts and converts to milliseconds with out fail.

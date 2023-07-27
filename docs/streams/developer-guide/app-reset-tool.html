@@ -84,9 +84,14 @@
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       The Kafka Streams application ID
                                         (application.id).
---bootstrap-servers &lt;String: urls&gt;    Comma-separated list of broker urls with
-                                        format: HOST1:PORT1,HOST2:PORT2
-                                        (default: localhost:9092)
+--bootstrap-server &lt;String: server to  REQUIRED unless --bootstrap-servers
+                            connect to&gt;                            (deprecated) is specified. The server
+                                         (s) to connect to. The broker list
+                                         string in the form HOST1:PORT1,HOST2:
+                                         PORT2.
+--bootstrap-servers &lt;String: urls&gt;     DEPRECATED: Comma-separated list of
+                                         broker urls with format: HOST1:PORT1,
+                                         HOST2:PORT2 (default: localhost:9092)
 --by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
 --config-file &lt;String: file name&gt;     Property file containing configs to be
@@ -118,10 +123,6 @@
 --to-earliest                         Reset offsets to earliest offset.
 --to-latest                           Reset offsets to latest offset.
 --to-offset &lt;Long&gt;                    Reset offsets to a specific offset.
---zookeeper                           Zookeeper option is deprecated by
-                                        bootstrap.servers, as the reset tool
-                                        would no longer access Zookeeper
-                                        directly.
 --force                               Force removing members of the consumer group
                                       (intended to remove left-over members if
                                       long session timeout was configured).</code></pre>

@@ -18,80 +18,114 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
+import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
-import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_FEATURE_LEVEL_RECORD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
 public class FeaturesImageTest {
-    final static FeaturesImage IMAGE1;
-    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public final static FeaturesImage IMAGE1;
+    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
     final static FeaturesDelta DELTA1;
     final static FeaturesImage IMAGE2;
 
     static {
-        Map<String, VersionRange> map1 = new HashMap<>();
-        map1.put("foo", new VersionRange((short) 1, (short) 2));
-        map1.put("bar", new VersionRange((short) 1, (short) 1));
-        map1.put("baz", new VersionRange((short) 1, (short) 8));
-        IMAGE1 = new FeaturesImage(map1);
+        Map<String, Short> map1 = new HashMap<>();
+        map1.put("foo", (short) 2);
+        map1.put("bar", (short) 1);
+        map1.put("baz", (short) 8);
+        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latest(), ZkMigrationState.NONE);
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 3),
-            FEATURE_LEVEL_RECORD.highestSupportedVersion()));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveFeatureLevelRecord().
-            setName("bar"), REMOVE_FEATURE_LEVEL_RECORD.highestSupportedVersion()));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveFeatureLevelRecord().
-            setName("baz"), REMOVE_FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+            setName("foo").setFeatureLevel((short) 3),
+            (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("bar").setFeatureLevel((short) 0),
+            (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("baz").setFeatureLevel((short) 0),
+            (short) 0));
 
         DELTA1 = new FeaturesDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        Map<String, VersionRange> map2 = new HashMap<>();
-        map2.put("foo", new VersionRange((short) 1, (short) 3));
-        IMAGE2 = new FeaturesImage(map2);
+        Map<String, Short> map2 = new HashMap<>();
+        map2.put("foo", (short) 3);
+        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latest(), ZkMigrationState.NONE);
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(FeaturesImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(FeaturesImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(FeaturesImage image) throws Throwable {
-        MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer);
-        FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
-        RecordTestUtils.replayAllBatches(delta, writer.batches());
-        FeaturesImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
+    private static void testToImage(FeaturesImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(FeaturesImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(FeaturesImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image stopping each of the various intermediate images along the way
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> FeaturesImage.EMPTY,
+            FeaturesDelta::new
+        ).test(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(FeaturesImage image) {
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
+        return writer.records();
+    }
+
+    @Test
+    public void testEmpty() {
+        assertTrue(FeaturesImage.EMPTY.isEmpty());
+        assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
+            FeaturesImage.EMPTY.metadataVersion(), FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
+        assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
+            MetadataVersion.IBP_3_3_IV0, FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
+        assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
+            FeaturesImage.EMPTY.metadataVersion(), ZkMigrationState.MIGRATION).isEmpty());
     }
 }

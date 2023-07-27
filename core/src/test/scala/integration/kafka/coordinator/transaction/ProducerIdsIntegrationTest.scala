@@ -24,13 +24,16 @@ import kafka.test.junit.ClusterTestExtensions
 import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{InitProducerIdRequest, InitProducerIdResponse}
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
+import org.apache.kafka.server.common.MetadataVersion
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.stream.{Collectors, IntStream}
+import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -43,9 +46,9 @@ class ProducerIdsIntegrationTest {
   }
 
   @ClusterTests(Array(
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "2.8"),
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "3.0-IV0"),
-    new ClusterTest(clusterType = Type.KRAFT, brokers = 3, ibp = "3.0-IV0")
+    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),
+    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_0_IV0),
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
   ))
   def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
     verifyUniqueIds(clusterInstance)
@@ -60,27 +63,59 @@ class ProducerIdsIntegrationTest {
     clusterInstance.stop()
   }
 
-  private def verifyUniqueIds(clusterInstance: ClusterInstance): Unit = {
-    // Request enough PIDs from each broker to ensure each broker generates two PID blocks
-    val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
-      IntStream.range(0, 1001).parallel().mapToObj( _ => nextProducerId(broker, clusterInstance.clientListener()))
-    }).collect(Collectors.toList[Long]).asScala.toSeq
+  @ClusterTest(clusterType = Type.ZK, brokers = 1, autoStart = AutoStart.NO)
+  @Timeout(20)
+  def testHandleAllocateProducerIdsSingleRequestHandlerThread(clusterInstance: ClusterInstance): Unit = {
+    clusterInstance.config().serverProperties().put(KafkaConfig.NumIoThreadsProp, "1")
+    clusterInstance.start()
+    verifyUniqueIds(clusterInstance)
+    clusterInstance.stop()
+  }
 
-    assertEquals(3003, ids.size, "Expected exactly 3003 IDs")
-    assertEquals(ids.size, ids.distinct.size, "Found duplicate producer IDs")
+  @Disabled // TODO: Enable once producer id block size is configurable (KAFKA-15029)
+  @ClusterTest(clusterType = Type.ZK, brokers = 1, autoStart = AutoStart.NO)
+  def testMultipleAllocateProducerIdsRequest(clusterInstance: ClusterInstance): Unit = {
+    clusterInstance.config().serverProperties().put(KafkaConfig.NumIoThreadsProp, "2")
+    clusterInstance.start()
+    verifyUniqueIds(clusterInstance)
+    clusterInstance.stop()
+  }
+
+  private def verifyUniqueIds(clusterInstance: ClusterInstance): Unit = {
+    // Request enough PIDs from each broker to ensure each broker generates two blocks
+    val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
+      IntStream.range(0, 1001).parallel().mapToObj( _ =>
+        nextProducerId(broker, clusterInstance.clientListener())
+      )}).collect(Collectors.toList[Long]).asScala.toSeq
+
+    val brokerCount = clusterInstance.brokerIds.size
+    val expectedTotalCount = 1001 * brokerCount
+    assertEquals(expectedTotalCount, ids.size, s"Expected exactly $expectedTotalCount IDs")
+    assertEquals(expectedTotalCount, ids.distinct.size, "Found duplicate producer IDs")
   }
 
   private def nextProducerId(broker: SocketServer, listener: ListenerName): Long = {
-    val data = new InitProducerIdRequestData()
-      .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
-      .setProducerId(RecordBatch.NO_PRODUCER_ID)
-      .setTransactionalId(null)
-      .setTransactionTimeoutMs(10)
-    val request = new InitProducerIdRequest.Builder(data).build()
+    // Generating producer ids may fail while waiting for the initial block and also
+    // when the current block is full and waiting for the prefetched block.
+    val deadline = 5.seconds.fromNow
+    var shouldRetry = true
+    var response: InitProducerIdResponse = null
+    while(shouldRetry && deadline.hasTimeLeft()) {
+      val data = new InitProducerIdRequestData()
+        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+        .setProducerId(RecordBatch.NO_PRODUCER_ID)
+        .setTransactionalId(null)
+        .setTransactionTimeoutMs(10)
+      val request = new InitProducerIdRequest.Builder(data).build()
 
-    val response = IntegrationTestUtils.connectAndReceive[InitProducerIdResponse](request,
-      destination = broker,
-      listenerName = listener)
+      response = IntegrationTestUtils.connectAndReceive[InitProducerIdResponse](request,
+        destination = broker,
+        listenerName = listener)
+
+      shouldRetry = response.data.errorCode == Errors.COORDINATOR_LOAD_IN_PROGRESS.code
+    }
+    assertTrue(deadline.hasTimeLeft())
+    assertEquals(Errors.NONE.code, response.data.errorCode)
     response.data().producerId()
   }
 }

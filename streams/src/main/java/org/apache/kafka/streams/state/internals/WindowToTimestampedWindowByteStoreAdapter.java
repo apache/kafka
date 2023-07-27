@@ -21,6 +21,11 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -44,7 +49,7 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     public void put(final Bytes key,
                     final byte[] valueWithTimestamp,
                     final long windowStartTimestamp) {
-        store.put(key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp), windowStartTimestamp);
+        store.put(key, rawValue(valueWithTimestamp), windowStartTimestamp);
     }
 
     @Override
@@ -181,6 +186,28 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     @Override
     public boolean isOpen() {
         return store.isOpen();
+    }
+
+    @Override
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
+
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result = store.query(query, positionBound, config);
+        if (config.isCollectExecutionInfo()) {
+            final long end = System.nanoTime();
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " in " + (end - start) + "ns"
+            );
+        }
+        return result;
+    }
+
+    @Override
+    public Position getPosition() {
+        return store.getPosition();
     }
 
 

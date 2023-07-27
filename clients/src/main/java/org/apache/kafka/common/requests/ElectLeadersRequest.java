@@ -103,20 +103,22 @@ public class ElectLeadersRequest extends AbstractRequest {
         ApiError apiError = ApiError.fromThrowable(e);
         List<ReplicaElectionResult> electionResults = new ArrayList<>();
 
-        for (TopicPartitions topic : data.topicPartitions()) {
-            ReplicaElectionResult electionResult = new ReplicaElectionResult();
+        if (data.topicPartitions() != null) {
+            for (TopicPartitions topic : data.topicPartitions()) {
+                ReplicaElectionResult electionResult = new ReplicaElectionResult();
 
-            electionResult.setTopic(topic.topic());
-            for (Integer partitionId : topic.partitions()) {
-                PartitionResult partitionResult = new PartitionResult();
-                partitionResult.setPartitionId(partitionId);
-                partitionResult.setErrorCode(apiError.error().code());
-                partitionResult.setErrorMessage(apiError.message());
+                electionResult.setTopic(topic.topic());
+                for (Integer partitionId : topic.partitions()) {
+                    PartitionResult partitionResult = new PartitionResult();
+                    partitionResult.setPartitionId(partitionId);
+                    partitionResult.setErrorCode(apiError.error().code());
+                    partitionResult.setErrorMessage(apiError.message());
 
-                electionResult.partitionResult().add(partitionResult);
+                    electionResult.partitionResult().add(partitionResult);
+                }
+
+                electionResults.add(electionResult);
             }
-
-            electionResults.add(electionResult);
         }
 
         return new ElectLeadersResponse(throttleTimeMs, apiError.error().code(), electionResults, version());

@@ -50,6 +50,7 @@
                         <li><a class="reference internal" href="#fault-tolerant-state-stores" id="id5">Fault-tolerant State Stores</a></li>
                         <li><a class="reference internal" href="#enable-or-disable-fault-tolerance-of-state-stores-store-changelogs" id="id6">Enable or Disable Fault Tolerance of State Stores (Store Changelogs)</a></li>
                         <li><a class="reference internal" href="#timestamped-state-stores" id="id11">Timestamped State Stores</a></li>
+                        <li><a class="reference internal" href="#versioned-state-stores" id="id12">Versioned Key-Value State Stores</a></li>
                         <li><a class="reference internal" href="#implementing-custom-state-stores" id="id7">Implementing Custom State Stores</a></li>
                     </ul>
                 </li>
@@ -261,12 +262,17 @@
                                 space.</li>
                             <li>RocksDB settings can be fine-tuned, see
                                 <a class="reference internal" href="config-streams.html#streams-developer-guide-rocksdb-config"><span class="std std-ref">RocksDB configuration</span></a>.</li>
-                            <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore-java.lang.String-">store variants</a>:
-                                time window key-value store, session window key-value store.</li>
-                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore-java.lang.String-">persistentTimestampedKeyValueStore</a>
-                                when you need a  persistent key-(value/timestamp) store that supports put/get/delete and range queries.</li>
-                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore-java.lang.String-java.time.Duration-java.time.Duration-boolean-">persistentTimestampedWindowStore</a>
-                                when you need a persistent windowedKey-(value/timestamp) store.</li>
+                            <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)">store variants</a>:
+                                timestamped key-value store, versioned key-value store, time window key-value store, session window key-value store.</li>
+                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)">persistentTimestampedKeyValueStore</a>
+                                when you need a persistent key-(value/timestamp) store that supports put/get/delete and range queries.</li>
+                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)">persistentVersionedKeyValueStore</a>
+                                when you need a persistent, versioned key-(value/timestamp) store that supports put/get/delete and timestamped get operations.</li>
+                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)">persistentWindowStore</a>
+                                or <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)">persistentTimestampedWindowStore</a>
+                                when you need a persistent timeWindowedKey-value or timeWindowedKey-(value/timestamp) store, respectively.</li>
+                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStore(java.lang.String,java.time.Duration)">persistentSessionStore</a>
+                                when you need a persistent sessionWindowedKey-value store.</li>
                         </ul>
                             <pre class="line-numbers"><code class="language-java">// Creating a persistent key-value store:
 // here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;persistent-counts&quot;.
@@ -300,6 +306,7 @@ KeyValueStore&lt;String, Long&gt; countStore = countStoreSupplier.build();</code
                                 when you need a key-(value/timestamp) store that supports put/get/delete and range queries.</li>
                             <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html">TimestampedWindowStore</a>
                                 when you need to store windowedKey-(value/timestamp) pairs.</li>
+                            <li>There is no built-in in-memory, versioned key-value store at this time.</li>
                         </ul>
                             <pre class="line-numbers"><code class="language-java">// Creating an in-memory key-value store:
 // here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;inmemory-counts&quot;.
@@ -375,7 +382,7 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
   Stores.persistentKeyValueStore(&quot;Counts&quot;),
     Serdes.String(),
     Serdes.Long())
-  .withLoggingEnabled(changlogConfig); // enable changelogging, with custom changelog settings</code></pre>
+  .withLoggingEnabled(changelogConfig); // enable changelogging, with custom changelog settings</code></pre>
             </div>
             <div class="section" id="timestamped-state-stores">
                 <span id="streams-developer-guide-state-store-timestamps"></span><h3><a class="toc-backref" href="#id11">Timestamped State Stores</a><a class="headerlink" href="#timestamped-state-stores" title="Permalink to this headline"></a></h3>
@@ -396,12 +403,76 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                 </ul>
                 </p>
             </div>
+            <div class="section" id="versioned-state-stores">
+                <span id="streams-developer-guide-state-store-versioned"></span><h3><a class="toc-backref" href="#id12">Versioned Key-Value State Stores</a><a class="headerlink" href="#versioned-state-stores" title="Permalink to this headline"></a></h3>
+                <p>Versioned key-value state stores are available since Kafka Streams 3.5.
+                    Rather than storing a single record version (value and timestamp) per key,
+                    versioned state stores may store multiple record versions per key. This
+                    allows versioned state stores to support timestamped retrieval operations
+                    to return the latest record (per key) as of a specified timestamp.</p>
+                <p>You can create a persistent, versioned state store by passing a
+                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)">VersionedBytesStoreSupplier</a>
+                    to the
+                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#versionedKeyValueStoreBuilder(java.lang.String,java.time.Duration)">versionedKeyValueStoreBuilder</a>,
+                    or by implementing your own
+                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html">VersionedKeyValueStore</a>.</p>
+                <p>Each versioned store has an associated, fixed-duration <em>history retention</em>
+                    parameter which specifies long old record versions should be kept for.
+                    In particular, a versioned store guarantees to return accurate results for
+                    timestamped retrieval operations where the timestamp being queried is within
+                    history retention of the current observed stream time.</p>
+                <p>History retention also doubles as its <em>grace period</em>, which determines
+                    how far back in time out-of-order writes to the store will be accepted. A
+                    versioned store will not accept writes (inserts, updates, or deletions) if
+                    the timestamp associated with the write is older than the current observed
+                    stream time by more than the grace period. Stream time in this context is
+                    tracked per-partition, rather than per-key, which means it's important
+                    that grace period (i.e., history retention) be set high enough to
+                    accommodate a record with one key arriving out-of-order relative to a
+                    record for another key.</p>
+                <p>Because the memory footprint of versioned key-value stores is higher than
+                    that of non-versioned key-value stores, you may want to adjust your
+                    <a class="reference internal" href="memory-mgmt.html#streams-developer-guide-memory-management-rocksdb"><span class="std std-ref">RocksDB memory settings</span></a>
+                    accordingly. Benchmarking your application with versioned stores is also
+                    advised as performance is expected to be worse than when using non-versioned
+                    stores.</p>
+                <p>Versioned stores do not support caching or interactive queries at this time.
+                    Also, window stores and global tables may not be versioned.</p>
+                <b>Upgrade note:</b> Versioned state stores are opt-in only; no automatic
+                    upgrades from non-versioned to versioned stores will take place.
+                <p>Upgrades are supported from persistent, non-versioned key-value stores
+                    to persistent, versioned key-value stores as long as the original store
+                    has the same changelog topic format as the versioned store being upgraded
+                    to. Both persistent
+                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)">key-value stores</a>
+                    and <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)">timestamped key-value stores</a>
+                    share the same changelog topic format as
+                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)">persistent versioned key-value stores</a>,
+                    and therefore both are eligible for upgrades.</p>
+                <p>If you wish to upgrade an application using persistent, non-versioned
+                    key-value stores to use persistent, versioned key-value stores
+                    instead, you can perform the following procedure:</p>
+                <ul class="first simple">
+                    <li>Stop all application instances, and
+                        <a class="reference internal" href="app-reset-tool.html#streams-developer-guide-reset-local-environment"><span class="std std-ref">clear any local state directories</span></a>
+                        for the store(s) being upgraded.</li>
+                    <li>Update your application code to use versioned stores where desired.</li>
+                    <li>Update your changelog topic configs, for the relevant state stores,
+                        to set the value of <code class="docutils literal"><span class="pre">min.compaction.lag.ms</span></code>
+                        to be at least your desired history retention. History retention plus
+                        one day is recommended as buffer for the use of broker wall clock time
+                        during compaction.</li>
+                    <li>Restart your application instances and allow time for the versioned
+                        stores to rebuild state from changelog.</li>
+                </ul>
+                </p>
+            </div>
             <div class="section" id="implementing-custom-state-stores">
                 <span id="streams-developer-guide-state-store-custom"></span><h3><a class="toc-backref" href="#id7">Implementing Custom State Stores</a><a class="headerlink" href="#implementing-custom-state-stores" title="Permalink to this headline"></a></h3>
                 <p>You can use the <a class="reference internal" href="#streams-developer-guide-state-store-defining"><span class="std std-ref">built-in state store types</span></a> or  implement your own.
                     The primary interface to implement for the store is
                     <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStore</span></code>.  Kafka Streams also has a few extended interfaces such
-                    as <code class="docutils literal"><span class="pre">KeyValueStore</span></code>.</p>
+                    as <code class="docutils literal"><span class="pre">KeyValueStore</span></code> and <code class="docutils literal"><span class="pre">VersionedKeyValueStore</span></code>.</p>
                 <p>Note that your customized <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStore</span></code> implementation also needs to provide the logic on how to restore the state
                     via the <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateRestoreCallback</span></code> or <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.BatchingStateRestoreCallback</span></code> interface.
                     Details on how to instantiate these interfaces can be found in the <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/StateStore.html">javadocs</a>.</p>

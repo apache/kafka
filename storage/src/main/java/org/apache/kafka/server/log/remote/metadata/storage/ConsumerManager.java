@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -28,9 +27,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeoutException;
 
 /**
  * This class manages the consumer thread viz {@link ConsumerTask} that polls messages from the assigned metadata topic partitions.
@@ -38,6 +40,8 @@ import java.util.Set;
  * {@link TopicBasedRemoteLogMetadataManagerConfig#consumeWaitMs()}.
  */
 public class ConsumerManager implements Closeable {
+
+    public static final String COMMITTED_OFFSETS_FILE_NAME = "_rlmm_committed_offsets";
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerManager.class);
     private static final long CONSUME_RECHECK_INTERVAL_MS = 50L;
@@ -49,14 +53,23 @@ public class ConsumerManager implements Closeable {
 
     public ConsumerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
                            RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
-                           RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner,
+                           RemoteLogMetadataTopicPartitioner topicPartitioner,
                            Time time) {
         this.rlmmConfig = rlmmConfig;
         this.time = time;
 
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
-        consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, rlmmTopicPartitioner);
+        Path committedOffsetsPath = new File(rlmmConfig.logDir(), COMMITTED_OFFSETS_FILE_NAME).toPath();
+        consumerTask = new ConsumerTask(
+                consumer,
+                rlmmConfig.remoteLogMetadataTopicName(),
+                remotePartitionMetadataEventHandler,
+                topicPartitioner,
+                committedOffsetsPath,
+                time,
+                60_000L
+        );
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
 
@@ -64,48 +77,69 @@ public class ConsumerManager implements Closeable {
         try {
             // Start a thread to continuously consume records from topic partitions.
             consumerTaskThread.start();
+            log.info("RLMM Consumer task thread is started");
         } catch (Exception e) {
             throw new KafkaException("Error encountered while initializing and scheduling ConsumerTask thread", e);
         }
     }
 
     /**
-     * Wait until the consumption reaches the offset of the metadata partition for the given {@code recordMetadata}.
+     * Waits if necessary for the consumption to reach the {@code offset} of the given record
+     * at a certain {@code partition} of the metadata topic.
      *
      * @param recordMetadata record metadata to be checked for consumption.
+     * @throws TimeoutException if this method execution did not complete with in the wait time configured with
+     *                          property {@code TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP}.
      */
-    public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata) {
+    public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata) throws TimeoutException {
+        waitTillConsumptionCatchesUp(recordMetadata, rlmmConfig.consumeWaitMs());
+    }
+
+    /**
+     * Waits if necessary for the consumption to reach the partition/offset of the given {@code RecordMetadata}
+     *
+     * @param recordMetadata record metadata to be checked for consumption.
+     * @param timeoutMs      wait timeout in milliseconds
+     * @throws TimeoutException if this method execution did not complete with in the given {@code timeoutMs}.
+     */
+    public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
+                                             long timeoutMs) throws TimeoutException {
         final int partition = recordMetadata.partition();
+        final long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
+
+        log.info("Waiting until consumer is caught up with the target partition: [{}]", partition);
 
         // If the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.isPartitionAssigned(partition)) {
-            throw new KafkaException("This consumer is not subscribed to the target partition " + partition + " on which message is produced.");
+            throw new KafkaException("This consumer is not assigned to the target partition " + partition + ". " +
+                    "Partitions currently assigned: " + consumerTask.metadataPartitionsAssigned());
         }
 
         final long offset = recordMetadata.offset();
         long startTimeMs = time.milliseconds();
         while (true) {
+            log.debug("Checking if partition [{}] is up to date with offset [{}]", partition, offset);
             long receivedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
             if (receivedOffset >= offset) {
-                break;
+                return;
             }
 
-            log.debug("Committed offset [{}] for partition [{}], but the target offset: [{}],  Sleeping for [{}] to retry again",
-                    offset, partition, receivedOffset, CONSUME_RECHECK_INTERVAL_MS);
+            log.debug("Expected offset [{}] for partition [{}], but the committed offset: [{}],  Sleeping for [{}] to retry again",
+                    offset, partition, receivedOffset, consumeCheckIntervalMs);
 
-            if (time.milliseconds() - startTimeMs > rlmmConfig.consumeWaitMs()) {
-                log.warn("Committed offset for partition:[{}] is : [{}], but the target offset: [{}] ",
+            if (time.milliseconds() - startTimeMs > timeoutMs) {
+                log.warn("Expected offset for partition:[{}] is : [{}], but the committed offset: [{}] ",
                         partition, receivedOffset, offset);
                 throw new TimeoutException("Timed out in catching up with the expected offset by consumer.");
             }
 
-            time.sleep(CONSUME_RECHECK_INTERVAL_MS);
+            time.sleep(consumeCheckIntervalMs);
         }
     }
 
     @Override
     public void close() throws IOException {
-        // Consumer task will close the task and it internally closes all the resources including the consumer.
+        // Consumer task will close the task, and it internally closes all the resources including the consumer.
         Utils.closeQuietly(consumerTask, "ConsumerTask");
 
         // Wait until the consumer thread finishes.

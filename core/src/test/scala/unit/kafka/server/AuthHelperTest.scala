@@ -26,22 +26,22 @@ import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.easymock.EasyMock._
-import org.easymock.{EasyMock, IArgumentMatcher}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.argThat
+import org.mockito.ArgumentMatchers
+import org.mockito.Mockito.{mock, verify, when}
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class AuthHelperTest {
-  import AuthHelperTest._
 
   private val clientId = ""
 
   @Test
   def testAuthorize(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val authorizer: Authorizer = mock(classOf[Authorizer])
 
     val operation = AclOperation.WRITE
     val resourceType = ResourceType.TOPIC
@@ -56,23 +56,20 @@ class AuthHelperTest {
         1, true, true)
     )
 
-    EasyMock.expect(authorizer.authorize(requestContext, expectedActions.asJava))
-      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
-      .once()
-
-    EasyMock.replay(authorizer)
+    when(authorizer.authorize(requestContext, expectedActions.asJava))
+      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
     val result = new AuthHelper(Some(authorizer)).authorize(
       requestContext, operation, resourceType, resourceName)
 
-    verify(authorizer)
+    verify(authorizer).authorize(requestContext, expectedActions.asJava)
 
     assertEquals(true, result)
   }
 
   @Test
   def testFilterByAuthorized(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val authorizer: Authorizer = mock(classOf[Authorizer])
 
     val operation = AclOperation.WRITE
     val resourceType = ResourceType.TOPIC
@@ -94,19 +91,17 @@ class AuthHelperTest {
         1, true, true),
     )
 
-    EasyMock.expect(authorizer.authorize(
-      EasyMock.eq(requestContext), matchSameElements(expectedActions.asJava)
-    )).andAnswer { () =>
-      val actions = EasyMock.getCurrentArguments.apply(1).asInstanceOf[util.List[Action]].asScala
+    when(authorizer.authorize(
+      ArgumentMatchers.eq(requestContext), argThat((t: java.util.List[Action]) => t.containsAll(expectedActions.asJava))
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala
       actions.map { action =>
         if (Set(resourceName1, resourceName3).contains(action.resourcePattern.name))
           AuthorizationResult.ALLOWED
         else
           AuthorizationResult.DENIED
       }.asJava
-    }.once()
-
-    EasyMock.replay(authorizer)
+    }
 
     val result = new AuthHelper(Some(authorizer)).filterByAuthorized(
       requestContext,
@@ -116,27 +111,11 @@ class AuthHelperTest {
       Seq(resourceName1, resourceName2, resourceName1, resourceName3)
     )(identity)
 
-    verify(authorizer)
+    verify(authorizer).authorize(
+      ArgumentMatchers.eq(requestContext), argThat((t: java.util.List[Action]) => t.containsAll(expectedActions.asJava))
+    )
 
     assertEquals(Set(resourceName1, resourceName3), result)
-  }
-
-}
-
-object AuthHelperTest {
-
-  /**
-    * Similar to `EasyMock.eq`, but matches if both lists have the same elements irrespective of ordering.
-    */
-  def matchSameElements[T](list: java.util.List[T]): java.util.List[T] = {
-    EasyMock.reportMatcher(new IArgumentMatcher {
-      def matches(argument: Any): Boolean = argument match {
-        case l: java.util.List[_] => list.asScala.toSet == l.asScala.toSet
-        case _ => false
-      }
-      def appendTo(buffer: StringBuffer): Unit = buffer.append(s"list($list)")
-    })
-    null
   }
 
 }

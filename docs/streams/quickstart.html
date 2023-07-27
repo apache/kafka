@@ -33,8 +33,7 @@
         </div>
     </div>
 <p>
-  This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data. However, if you have already started Kafka and
-  ZooKeeper, feel free to skip the first two steps.
+  This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data. However, if you have already started Kafka, feel free to skip the first two steps.
 </p>
 
   <p>
@@ -98,19 +97,46 @@ Note that there are multiple downloadable Scala versions and we choose to use th
 <h4><a id="quickstart_streams_startserver" href="#quickstart_streams_startserver">Step 2: Start the Kafka server</a></h4>
 
 <p>
-Kafka uses <a href="https://zookeeper.apache.org/">ZooKeeper</a> so you need to first start a ZooKeeper server if you don't already have one. You can use the convenience script packaged with kafka to get a quick-and-dirty single-node ZooKeeper instance.
+  Apache Kafka can be started using ZooKeeper or KRaft. To get started with either configuration follow one of the sections below but not both.
 </p>
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/zookeeper-server-start.sh config/zookeeper.properties
-[2013-04-22 15:01:37,495] INFO Reading configuration from: config/zookeeper.properties (org.apache.zookeeper.server.quorum.QuorumPeerConfig)
-...</code></pre>
+<h5>
+  Kafka with ZooKeeper
+</h5>
 
-<p>Now start the Kafka server:</p>
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-server-start.sh config/server.properties
-[2013-04-22 15:01:47,028] INFO Verifying properties (kafka.utils.VerifiableProperties)
-[2013-04-22 15:01:47,051] INFO Property socket.send.buffer.bytes is overridden to 1048576 (kafka.utils.VerifiableProperties)
-...</code></pre>
+<p>
+  Run the following commands in order to start all services in the correct order:
+</p>
 
+<pre class="line-numbers"><code class="language-bash">&gt; bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
+
+<p>
+  Open another terminal session and run:
+</p>
+
+<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-server-start.sh config/server.properties</code></pre>
+
+<h5>
+  Kafka with KRaft
+</h5>
+
+<p>
+  Generate a Cluster UUID
+</p>
+
+<pre class="line-numbers"><code class="language-bash">&gt; KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
+
+<p>
+  Format Log Directories
+</p>
+
+<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties</code></pre>
+
+<p>
+  Start the Kafka Server
+</p>
+
+<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-server-start.sh config/kraft/server.properties</code></pre>
 
 <h4><a id="quickstart_streams_prepare" href="#quickstart_streams_prepare">Step 3: Prepare input topic and start Kafka producer</a></h4>
 
@@ -304,7 +330,7 @@ Looking beyond the scope of this concrete example, what Kafka Streams is doing h
 
 <h4><a id="quickstart_streams_stop" href="#quickstart_streams_stop">Step 6: Teardown the application</a></h4>
 
-<p>You can now stop the console consumer, the console producer, the Wordcount application, the Kafka broker and the ZooKeeper server in order via <b>Ctrl-C</b>.</p>
+<p>You can now stop the console consumer, the console producer, the Wordcount application, the Kafka broker and the ZooKeeper server (if one was started) in order via <b>Ctrl-C</b>.</p>
 
  <div class="pagination">
         <a href="/{{version}}/documentation/streams" class="pagination__btn pagination__btn__prev">Previous</a>

@@ -31,8 +31,8 @@ import java.util.List;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public class ChangeLoggingKeyValueBytesStore
-    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
-    implements KeyValueStore<Bytes, byte[]> {
+        extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
+        implements KeyValueStore<Bytes, byte[]> {
 
     InternalProcessorContext context;
 
@@ -62,7 +62,7 @@ public class ChangeLoggingKeyValueBytesStore
         if (wrapped() instanceof MemoryLRUCache) {
             ((MemoryLRUCache) wrapped()).setWhenEldestRemoved((key, value) -> {
                 // pass null to indicate removal
-                log(key, null);
+                log(key, null, context.timestamp());
             });
         }
     }
@@ -76,7 +76,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void put(final Bytes key,
                     final byte[] value) {
         wrapped().put(key, value);
-        log(key, value);
+        log(key, value, context.timestamp());
     }
 
     @Override
@@ -85,7 +85,7 @@ public class ChangeLoggingKeyValueBytesStore
         final byte[] previous = wrapped().putIfAbsent(key, value);
         if (previous == null) {
             // then it was absent
-            log(key, value);
+            log(key, value, context.timestamp());
         }
         return previous;
     }
@@ -94,7 +94,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         wrapped().putAll(entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
-            log(entry.key, entry.value);
+            log(entry.key, entry.value, context.timestamp());
         }
     }
 
@@ -107,7 +107,7 @@ public class ChangeLoggingKeyValueBytesStore
     @Override
     public byte[] delete(final Bytes key) {
         final byte[] oldValue = wrapped().delete(key);
-        log(key, null);
+        log(key, null, context.timestamp());
         return oldValue;
     }
 
@@ -138,8 +138,7 @@ public class ChangeLoggingKeyValueBytesStore
         return wrapped().reverseAll();
     }
 
-    void log(final Bytes key,
-             final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp());
+    void log(final Bytes key, final byte[] value, final long timestamp) {
+        context.logChange(name(), key, value, timestamp, wrapped().getPosition());
     }
 }

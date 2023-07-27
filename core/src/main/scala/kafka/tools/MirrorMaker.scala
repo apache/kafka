@@ -21,11 +21,8 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.CountDownLatch
-import java.util.regex.Pattern
 import java.util.{Collections, Properties}
-
 import kafka.consumer.BaseConsumerRecord
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
@@ -35,6 +32,9 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.server.util.TopicFilter.IncludeList
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.HashMap
@@ -61,14 +61,15 @@ import scala.util.{Failure, Success, Try}
  * @deprecated Since 3.0, use the Connect-based MirrorMaker instead (aka MM2).
  */
 @deprecated(message = "Use the Connect-based MirrorMaker instead (aka MM2).", since = "3.0")
-object MirrorMaker extends Logging with KafkaMetricsGroup {
+object MirrorMaker extends Logging {
+  private val metricsGroup = new KafkaMetricsGroup(MirrorMaker.getClass)
 
-  private[tools] var producer: MirrorMakerProducer = null
-  private var mirrorMakerThreads: Seq[MirrorMakerThread] = null
+  private[tools] var producer: MirrorMakerProducer = _
+  private var mirrorMakerThreads: Seq[MirrorMakerThread] = _
   private val isShuttingDown: AtomicBoolean = new AtomicBoolean(false)
   // Track the messages not successfully sent by mirror maker.
   private val numDroppedMessages: AtomicInteger = new AtomicInteger(0)
-  private var messageHandler: MirrorMakerMessageHandler = null
+  private var messageHandler: MirrorMakerMessageHandler = _
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
   @volatile private var exitingOnSendFailure: Boolean = false
@@ -78,7 +79,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   // If a message send failed after retries are exhausted. The offset of the messages will also be removed from
   // the unacked offset list to avoid offset commit being stuck on that offset. In this case, the offset of that
   // message was not really acked, but was skipped. This metric records the number of skipped offsets.
-  newGauge("MirrorMaker-numDroppedMessages", () => numDroppedMessages.get())
+  metricsGroup.newGauge("MirrorMaker-numDroppedMessages", () => numDroppedMessages.get())
 
   def main(args: Array[String]): Unit = {
 
@@ -86,7 +87,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     info("Starting mirror maker")
     try {
       val opts = new MirrorMakerOptions(args)
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to continuously copy data between two Kafka clusters.")
+      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to continuously copy data between two Kafka clusters.")
       opts.checkArgs()
     } catch {
       case ct: ControlThrowable => throw ct
@@ -185,7 +186,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   class MirrorMakerThread(consumerWrapper: ConsumerWrapper,
-                          val threadId: Int) extends Thread with Logging with KafkaMetricsGroup {
+                          val threadId: Int) extends Thread with Logging {
     private val threadName = "mirrormaker-thread-" + threadId
     private val shutdownLatch: CountDownLatch = new CountDownLatch(1)
     private var lastOffsetCommitMs = System.currentTimeMillis()
@@ -297,7 +298,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                                        customRebalanceListener: Option[ConsumerRebalanceListener],
                                        includeOpt: Option[String]) {
     val regex = includeOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports include."))
-    var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
+    var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = _
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
     // Visible for testing
@@ -308,7 +309,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val consumerRebalanceListener = new InternalRebalanceListener(this, customRebalanceListener)
       includeOpt.foreach { include =>
         try {
-          consumer.subscribe(Pattern.compile(IncludeList(include).regex), consumerRebalanceListener)
+          consumer.subscribe(new IncludeList(include).getPattern, consumerRebalanceListener)
         } catch {
           case pse: RuntimeException =>
             error(s"Invalid expression syntax: $include")

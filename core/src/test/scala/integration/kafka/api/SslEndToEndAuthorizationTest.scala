@@ -26,9 +26,11 @@ import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Java
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 object SslEndToEndAuthorizationTest {
+  val superuserCn = "super-user"
+
   class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     private val Pattern = "O=A (.*?),CN=(.*?)".r
 
@@ -37,8 +39,8 @@ object SslEndToEndAuthorizationTest {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val peerPrincipal = context.asInstanceOf[SslAuthenticationContext].session.getPeerPrincipal.getName
       peerPrincipal match {
-        case Pattern(name, _) =>
-          val principal = if (name == "server") name else peerPrincipal
+        case Pattern(name, cn) =>
+          val principal = if ((name == "server") || (cn == superuserCn)) "server" else peerPrincipal
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal)
         case _ =>
           KafkaPrincipal.ANONYMOUS
@@ -49,7 +51,7 @@ object SslEndToEndAuthorizationTest {
 
 class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
-  import kafka.api.SslEndToEndAuthorizationTest.TestPrincipalBuilder
+  import kafka.api.SslEndToEndAuthorizationTest.{TestPrincipalBuilder,superuserCn}
 
   override protected def securityProtocol = SecurityProtocol.SSL
   // Since there are other E2E tests that enable SSL, running this test with TLSv1.3 if supported
@@ -70,14 +72,22 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, s"O=A client,CN=$clientCn")
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   override def clientSecurityProps(certAlias: String): Properties = {
     val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
       certAlias, clientCn, clientSaslProperties, tlsProtocol)
+    props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
+    props
+  }
+  // This test doesn't really care about matching the SSL certificate to a particular principal
+  // We can override the CN and create a principal based on it or on the server SSL
+  override def superuserSecurityProps(certAlias: String): Properties = {
+    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
+      certAlias, superuserCn, clientSaslProperties, tlsProtocol)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }

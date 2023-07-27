@@ -60,8 +60,8 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 .setTopicIdPartition(
                         new RemoteLogSegmentMetadataRecord.TopicIdPartitionEntry()
                                 .setId(data.remoteLogSegmentId().topicIdPartition().topicId())
-                                .setName(data.remoteLogSegmentId().topicIdPartition().topicPartition().topic())
-                                .setPartition(data.remoteLogSegmentId().topicIdPartition().topicPartition().partition()))
+                                .setName(data.remoteLogSegmentId().topicIdPartition().topic())
+                                .setPartition(data.remoteLogSegmentId().topicIdPartition().partition()))
                 .setId(data.remoteLogSegmentId().id());
     }
 

@@ -51,10 +51,24 @@ import scala.jdk.CollectionConverters._
  * In some cases we expose a volatile variable which can be read from any thread, but only
  * written from the event queue thread.
  */
-class BrokerLifecycleManager(val config: KafkaConfig,
-                             val time: Time,
-                             val threadNamePrefix: Option[String]) extends Logging {
-  val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
+class BrokerLifecycleManager(
+  val config: KafkaConfig,
+  val time: Time,
+  val threadNamePrefix: String,
+  val isZkBroker: Boolean
+) extends Logging {
+
+  private def logPrefix(): String = {
+    val builder = new StringBuilder("[BrokerLifecycleManager")
+    builder.append(" id=").append(config.nodeId)
+    if (isZkBroker) {
+      builder.append(" isZkBroker=true")
+    }
+    builder.append("] ")
+    builder.toString()
+  }
+
+  val logContext = new LogContext(logPrefix())
 
   this.logIdent = logContext.logPrefix()
 
@@ -96,6 +110,11 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * metadata offset for the first time.
    */
   val initialCatchUpFuture = new CompletableFuture[Void]()
+
+  /**
+   * A future which is completed when the broker is unfenced for the first time.
+   */
+  val initialUnfenceFuture = new CompletableFuture[Void]()
 
   /**
    * A future which is completed when controlled shutdown is done.
@@ -166,12 +185,15 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * The channel manager, or null if this manager has not been started yet.  This variable
    * can only be read or written from the event queue thread.
    */
-  var _channelManager: BrokerToControllerChannelManager = _
+  private var _channelManager: BrokerToControllerChannelManager = _
 
   /**
    * The event queue.
    */
-  val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
+  private[server] val eventQueue = new KafkaEventQueue(time,
+    logContext,
+    threadNamePrefix + "lifecycle-manager-",
+    new ShutdownEvent())
 
   /**
    * Start the BrokerLifecycleManager.
@@ -189,13 +211,14 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }
 
-  def setReadyToUnfence(): Unit = {
+  def setReadyToUnfence(): CompletableFuture[Void] = {
     eventQueue.append(new SetReadyToUnfenceEvent())
+    initialUnfenceFuture
   }
 
-  def brokerEpoch(): Long = _brokerEpoch
+  def brokerEpoch: Long = _brokerEpoch
 
-  def state(): BrokerState = _state
+  def state: BrokerState = _state
 
   private class BeginControlledShutdownEvent extends EventQueue.Event {
     override def run(): Unit = {
@@ -206,6 +229,10 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         case BrokerState.RUNNING =>
           info("Beginning controlled shutdown.")
           _state = BrokerState.PENDING_CONTROLLED_SHUTDOWN
+          // Send the next heartbeat immediately in order to let the controller
+          // begin processing the controlled shutdown as soon as possible.
+          scheduleNextCommunicationImmediately()
+
         case _ =>
           info(s"Skipping controlled shutdown because we are in state ${_state}.")
           beginShutdown()
@@ -225,7 +252,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * Start shutting down the BrokerLifecycleManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
+    eventQueue.beginShutdown("beginShutdown");
   }
 
   /**
@@ -256,11 +283,14 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       _clusterId = clusterId
       _advertisedListeners = advertisedListeners.duplicate()
       _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
-      eventQueue.scheduleDeferred("initialRegistrationTimeout",
-        new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
-        new RegistrationTimeoutEvent())
+      if (!isZkBroker) {
+        // Only KRaft brokers block on registration during startup
+        eventQueue.scheduleDeferred("initialRegistrationTimeout",
+          new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
+          new RegistrationTimeoutEvent())
+      }
       sendBrokerRegistration()
-      info(s"Incarnation ${incarnationId} of broker ${nodeId} in cluster ${clusterId} " +
+      info(s"Incarnation $incarnationId of broker $nodeId in cluster $clusterId " +
         "is now STARTING.")
     }
   }
@@ -275,13 +305,14 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     }
     val data = new BrokerRegistrationRequestData().
         setBrokerId(nodeId).
+        setIsMigratingZkBroker(isZkBroker).
         setClusterId(_clusterId).
         setFeatures(features).
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
         setRack(rack.orNull)
-    if (isTraceEnabled) {
-      trace(s"Sending broker registration ${data}")
+    if (isDebugEnabled) {
+      debug(s"Sending broker registration $data")
     }
     _channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
       new BrokerRegistrationResponseHandler())
@@ -290,18 +321,18 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   private class BrokerRegistrationResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
-        error(s"Unable to register broker ${nodeId} because of an authentication exception.",
-          response.authenticationException());
+        error(s"Unable to register broker $nodeId because of an authentication exception.",
+          response.authenticationException())
         scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
-        error(s"Unable to register broker ${nodeId} because of an API version problem.",
-          response.versionMismatch());
+        error(s"Unable to register broker $nodeId because of an API version problem.",
+          response.versionMismatch())
         scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
-        warn(s"Unable to register broker ${nodeId}.")
+        warn(s"Unable to register broker $nodeId.")
         scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerRegistrationResponse]) {
-        error(s"Unable to register broker ${nodeId} because the controller returned an " +
+        error(s"Unable to register broker $nodeId because the controller returned an " +
           "invalid response type.")
         scheduleNextCommunicationAfterFailure()
       } else {
@@ -312,11 +343,11 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           _brokerEpoch = message.data().brokerEpoch()
           registered = true
           initialRegistrationSucceeded = true
-          info(s"Successfully registered broker ${nodeId} with broker epoch ${_brokerEpoch}")
+          info(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
           scheduleNextCommunicationImmediately() // Immediately send a heartbeat
         } else {
-          info(s"Unable to register broker ${nodeId} because the controller returned " +
-            s"error ${errorCode}")
+          info(s"Unable to register broker $nodeId because the controller returned " +
+            s"error $errorCode")
           scheduleNextCommunicationAfterFailure()
         }
       }
@@ -337,7 +368,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       setWantFence(!readyToUnfence).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
     if (isTraceEnabled) {
-      trace(s"Sending broker heartbeat ${data}")
+      trace(s"Sending broker heartbeat $data")
     }
     _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data),
       new BrokerHeartbeatResponseHandler())
@@ -346,18 +377,18 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
-        error(s"Unable to send broker heartbeat for ${nodeId} because of an " +
-          "authentication exception.", response.authenticationException());
+        error(s"Unable to send broker heartbeat for $nodeId because of an " +
+          "authentication exception.", response.authenticationException())
         scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
-        error(s"Unable to send broker heartbeat for ${nodeId} because of an API " +
-          "version problem.", response.versionMismatch());
+        error(s"Unable to send broker heartbeat for $nodeId because of an API " +
+          "version problem.", response.versionMismatch())
         scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
-        warn(s"Unable to send broker heartbeat for ${nodeId}. Retrying.")
+        warn(s"Unable to send broker heartbeat for $nodeId. Retrying.")
         scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerHeartbeatResponse]) {
-        error(s"Unable to send broker heartbeat for ${nodeId} because the controller " +
+        error(s"Unable to send broker heartbeat for $nodeId because the controller " +
           "returned an invalid response type.")
         scheduleNextCommunicationAfterFailure()
       } else {
@@ -367,7 +398,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           failedAttempts = 0
           _state match {
             case BrokerState.STARTING =>
-              if (message.data().isCaughtUp()) {
+              if (message.data().isCaughtUp) {
                 info(s"The broker has caught up. Transitioning from STARTING to RECOVERY.")
                 _state = BrokerState.RECOVERY
                 initialCatchUpFuture.complete(null)
@@ -378,8 +409,9 @@ class BrokerLifecycleManager(val config: KafkaConfig,
               // there is no recovery work to be done, we start up a bit quicker.
               scheduleNextCommunication(NANOSECONDS.convert(10, MILLISECONDS))
             case BrokerState.RECOVERY =>
-              if (!message.data().isFenced()) {
+              if (!message.data().isFenced) {
                 info(s"The broker has been unfenced. Transitioning from RECOVERY to RUNNING.")
+                initialUnfenceFuture.complete(null)
                 _state = BrokerState.RUNNING
               } else {
                 info(s"The broker is in RECOVERY.")
@@ -402,7 +434,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
                   scheduleNextCommunicationAfterSuccess()
                 }
               } else {
-                info(s"The controlled has asked us to exit controlled shutdown.")
+                info(s"The controller has asked us to exit controlled shutdown.")
                 beginShutdown()
               }
               gotControlledShutdownResponse = true
@@ -413,7 +445,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
               scheduleNextCommunicationAfterSuccess()
           }
         } else {
-          warn(s"Broker ${nodeId} sent a heartbeat request but received error ${errorCode}.")
+          warn(s"Broker $nodeId sent a heartbeat request but received error $errorCode.")
           scheduleNextCommunicationAfterFailure()
         }
       }
@@ -451,7 +483,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
-        eventQueue.beginShutdown("registrationTimeout", new ShutdownEvent())
+        eventQueue.beginShutdown("registrationTimeout");
       }
     }
   }
@@ -472,6 +504,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       _state = BrokerState.SHUTTING_DOWN
       controlledShutdownFuture.complete(null)
       initialCatchUpFuture.cancel(false)
+      initialUnfenceFuture.cancel(false)
       if (_channelManager != null) {
         _channelManager.shutdown()
         _channelManager = null

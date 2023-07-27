@@ -46,9 +46,11 @@ public class QuotaConfigs {
 
     public static final int IP_CONNECTION_RATE_DEFAULT = Integer.MAX_VALUE;
 
-    private static Set<String> userClientConfigNames = new HashSet<>(Arrays.asList(
-        PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, CONSUMER_BYTE_RATE_OVERRIDE_CONFIG,
-        REQUEST_PERCENTAGE_OVERRIDE_CONFIG, CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG
+    private final static Set<String> USER_AND_CLIENT_QUOTA_NAMES = new HashSet<>(Arrays.asList(
+        PRODUCER_BYTE_RATE_OVERRIDE_CONFIG,
+        CONSUMER_BYTE_RATE_OVERRIDE_CONFIG,
+        REQUEST_PERCENTAGE_OVERRIDE_CONFIG,
+        CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG
     ));
 
     private static void buildUserClientQuotaConfigDef(ConfigDef configDef) {
@@ -68,21 +70,21 @@ public class QuotaConfigs {
     }
 
     public static boolean isClientOrUserConfig(String name) {
-        return userClientConfigNames.contains(name);
+        return USER_AND_CLIENT_QUOTA_NAMES.contains(name);
     }
 
-    public static ConfigDef userConfigs() {
+    public static ConfigDef userAndClientQuotaConfigs() {
+        ConfigDef configDef = new ConfigDef();
+        buildUserClientQuotaConfigDef(configDef);
+        return configDef;
+    }
+
+    public static ConfigDef scramMechanismsPlusUserAndClientQuotaConfigs() {
         ConfigDef configDef = new ConfigDef();
         ScramMechanism.mechanismNames().forEach(mechanismName -> {
             configDef.define(mechanismName, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                 "User credentials for SCRAM mechanism " + mechanismName);
         });
-        buildUserClientQuotaConfigDef(configDef);
-        return configDef;
-    }
-
-    public static ConfigDef clientConfigs() {
-        ConfigDef configDef = new ConfigDef();
         buildUserClientQuotaConfigDef(configDef);
         return configDef;
     }

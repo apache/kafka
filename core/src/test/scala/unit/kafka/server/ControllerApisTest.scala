@@ -17,57 +17,81 @@
 
 package kafka.server
 
-import java.net.InetAddress
-import java.util
-import java.util.Properties
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutionException
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.test.MockController
-import kafka.utils.MockTime
+import kafka.utils.NotNothing
 import org.apache.kafka.clients.admin.AlterConfigOp
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.Uuid.ZERO_UUID
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource, AlterConfigsResourceCollection => OldAlterConfigsResourceCollection, AlterableConfig => OldAlterableConfig, AlterableConfigCollection => OldAlterableConfigCollection}
+import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.CreateTopicsRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult
-import org.apache.kafka.common.message._
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterConfigsResourceCollection, AlterableConfig, AlterableConfigCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => OldAlterConfigsResourceCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfigCollection => OldAlterableConfigCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfig => OldAlterableConfig}
-import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.controller.Controller
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.{ElectionType, Uuid}
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
+import java.net.InetAddress
+import java.util
+import java.util.Collections.{singleton, singletonList, singletonMap}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
+import java.util.concurrent.atomic.AtomicReference
+import java.util.{Collections, Properties}
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 class ControllerApisTest {
+  object MockControllerMutationQuota {
+    val errorMessage = "quota exceeded in test"
+    var throttleTimeMs = 1000
+  }
+
+  case class MockControllerMutationQuota(quota: Int) extends ControllerMutationQuota {
+    var permitsRecorded = 0.0
+
+    override def isExceeded: Boolean = permitsRecorded > quota
+
+    override def record(permits: Double): Unit = {
+      if (permits >= 0) {
+        permitsRecorded += permits
+        if (isExceeded)
+          throw new ThrottlingQuotaExceededException(throttleTime, MockControllerMutationQuota.errorMessage)
+      }
+    }
+
+    override def throttleTime: Int = if (isExceeded) MockControllerMutationQuota.throttleTimeMs else 0
+  }
+
   private val nodeId = 1
   private val brokerRack = "Rack1"
   private val clientID = "Client1"
@@ -76,15 +100,38 @@ class ControllerApisTest {
   private val time = new MockTime
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
-  private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
+  private val neverThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
+  when(neverThrottlingClientControllerQuotaManager.newQuotaFor(
+    any(classOf[RequestChannel.Request]),
+    any(classOf[Short])
+  )).thenReturn(
+    MockControllerMutationQuota(Integer.MAX_VALUE) // never throttles
+  )
+  private val alwaysThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
+  when(alwaysThrottlingClientControllerQuotaManager.newQuotaFor(
+    any(classOf[RequestChannel.Request]),
+    any(classOf[Short])
+  )).thenReturn(
+    MockControllerMutationQuota(0) // always throttles
+  )
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
 
-  private val quotas = QuotaManagers(
+  private val quotasNeverThrottleControllerMutations = QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
     clientRequestQuotaManager,
-    clientControllerQuotaManager,
+    neverThrottlingClientControllerQuotaManager,
+    replicaQuotaManager,
+    replicaQuotaManager,
+    replicaQuotaManager,
+    None)
+
+  private val quotasAlwaysThrottleControllerMutations = QuotaManagers(
+    clientQuotaManager,
+    clientQuotaManager,
+    clientRequestQuotaManager,
+    alwaysThrottlingClientControllerQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
@@ -92,22 +139,27 @@ class ControllerApisTest {
 
   private def createControllerApis(authorizer: Option[Authorizer],
                                    controller: Controller,
-                                   props: Properties = new Properties()): ControllerApis = {
+                                   props: Properties = new Properties(),
+                                   throttle: Boolean = false): ControllerApis = {
     props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    props.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9092")
     new ControllerApis(
       requestChannel,
       authorizer,
-      quotas,
+      if (throttle) quotasAlwaysThrottleControllerMutations else quotasNeverThrottleControllerMutations,
       time,
-      Map.empty,
       controller,
       raftManager,
       new KafkaConfig(props),
       MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
       Seq.empty,
-      new SimpleApiVersionManager(ListenerType.CONTROLLER)
+      new SimpleApiVersionManager(
+        ListenerType.CONTROLLER,
+        true,
+        false,
+        () => Features.fromKRaftVersion(MetadataVersion.latest()))
     )
   }
 
@@ -135,12 +187,11 @@ class ControllerApisTest {
 
   def createDenyAllAuthorizer(): Authorizer = {
     val authorizer = mock(classOf[Authorizer])
-    mock(classOf[Authorizer])
     when(authorizer.authorize(
       any(classOf[AuthorizableRequestContext]),
       any(classOf[java.util.List[Action]])
     )).thenReturn(
-      java.util.Collections.singletonList(AuthorizationResult.DENIED)
+      singletonList(AuthorizationResult.DENIED)
     )
     authorizer
   }
@@ -172,6 +223,41 @@ class ControllerApisTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any()
     )
+  }
+
+  @Test
+  def testFetchLocalTimeComputedCorrectly(): Unit = {
+    val localTimeDurationMs = 5
+    val initialTimeNanos = time.nanoseconds()
+    val initialTimeMs = time.milliseconds()
+
+    when(
+      raftManager.handleRequest(
+        any(classOf[RequestHeader]),
+        any(classOf[ApiMessage]),
+        any(classOf[Long])
+      )
+    ).thenAnswer { _ =>
+      time.sleep(localTimeDurationMs)
+      new CompletableFuture[ApiMessage]()
+    }
+
+    // Local time should be updated when `ControllerApis.handle` returns
+    val fetchRequestData = new FetchRequestData()
+    val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
+    createControllerApis(None, new MockController.Builder().build())
+      .handle(request, RequestLocal.NoCaching)
+
+    verify(raftManager).handleRequest(
+      ArgumentMatchers.eq(request.header),
+      ArgumentMatchers.eq(fetchRequestData),
+      ArgumentMatchers.eq(initialTimeMs)
+    )
+
+    assertEquals(localTimeDurationMs, TimeUnit.MILLISECONDS.convert(
+      request.apiLocalCompleteTimeNanos - initialTimeNanos,
+      TimeUnit.NANOSECONDS
+    ))
   }
 
   @Test
@@ -294,11 +380,11 @@ class ControllerApisTest {
   }
 
   @Test
-  def testUnauthorizedHandleAlterIsrRequest(): Unit = {
+  def testUnauthorizedHandleAlterPartitionRequest(): Unit = {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleAlterIsrRequest(buildRequest(new AlterIsrRequest.Builder(
-          new AlterIsrRequestData()).build(0))))
+        handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
+          new AlterPartitionRequestData(), false).build(0))))
   }
 
   @Test
@@ -498,6 +584,7 @@ class ControllerApisTest {
         new CreatableTopic().setName("bar").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("bar").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("baz").setNumPartitions(2).setReplicationFactor(3),
+        new CreatableTopic().setName("indescribable").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("quux").setNumPartitions(2).setReplicationFactor(3),
     ).iterator()))
     val expectedResponse = Set(new CreatableTopicResult().setName("foo").
@@ -508,12 +595,49 @@ class ControllerApisTest {
         setErrorMessage("Duplicate topic name."),
       new CreatableTopicResult().setName("baz").
         setErrorCode(NONE.code()).
-        setTopicId(new Uuid(0L, 1L)),
+        setTopicId(new Uuid(0L, 1L)).
+        setNumPartitions(2).
+        setReplicationFactor(3).
+        setTopicConfigErrorCode(NONE.code()),
+      new CreatableTopicResult().setName("indescribable").
+        setErrorCode(NONE.code()).
+        setTopicId(new Uuid(0L, 2L)).
+        setTopicConfigErrorCode(TOPIC_AUTHORIZATION_FAILED.code()),
       new CreatableTopicResult().setName("quux").
-        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()))
-    assertEquals(expectedResponse, controllerApis.createTopics(request,
+        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
+        setErrorMessage("Authorization failed."))
+    assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       false,
+      _ => Set("baz", "indescribable"),
       _ => Set("baz")).get().topics().asScala.toSet)
+  }
+
+  @ParameterizedTest(name = "testCreateTopicsMutationQuota with throttle: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testCreateTopicsMutationQuota(throttle: Boolean): Unit = {
+    val controller = new MockController.Builder().build()
+    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    val topicName = "foo"
+    val requestData = new CreateTopicsRequestData().setTopics(new CreatableTopicCollection(
+      util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)).iterator()))
+    val request = new CreateTopicsRequest.Builder(requestData).build()
+    val expectedResponseDataUnthrottled = Set(new CreatableTopicResult().setName(topicName).
+        setErrorCode(NONE.code()).
+        setTopicId(new Uuid(0L, 1L)).
+        setNumPartitions(1).
+        setReplicationFactor(1).
+        setTopicConfigErrorCode(NONE.code()))
+    val expectedResponseDataThrottled = Set(new CreatableTopicResult().setName(topicName).
+      setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+      setErrorMessage(THROTTLING_QUOTA_EXCEEDED.message()))
+    val response = handleRequest[CreateTopicsResponse](request, controllerApis)
+    if (throttle) {
+      assertEquals(expectedResponseDataThrottled, response.data.topics().asScala.toSet)
+      assertEquals(MockControllerMutationQuota.throttleTimeMs, response.throttleTimeMs())
+    } else {
+      assertEquals(expectedResponseDataUnthrottled, response.data.topics().asScala.toSet)
+      assertEquals(0, response.throttleTimeMs())
+    }
   }
 
   @Test
@@ -530,7 +654,7 @@ class ControllerApisTest {
         setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
         setErrorMessage("This server does not host this topic-partition."),
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
-    assertEquals(expectedResponse, controllerApis.deleteTopics(request,
+    assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       true,
       _ => Set.empty,
@@ -556,7 +680,7 @@ class ControllerApisTest {
         setErrorCode(UNKNOWN_TOPIC_ID.code()).
         setErrorMessage("This server does not host this topic ID."),
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
-    assertEquals(response, controllerApis.deleteTopics(request,
+    assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       true,
       _ => Set.empty,
@@ -598,7 +722,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName(null).setTopicId(bazId).
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate topic id."))
-    assertEquals(response, controllerApis.deleteTopics(request,
+    assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
       names => names.toSet,
@@ -634,7 +758,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName("foo").setTopicId(fooId).
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message))
-    assertEquals(response, controllerApis.deleteTopics(request,
+    assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
       _ => Set("foo", "baz"),
@@ -659,7 +783,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName(null).setTopicId(barId).
         setErrorCode(UNKNOWN_TOPIC_ID.code).
         setErrorMessage(UNKNOWN_TOPIC_ID.message))
-    assertEquals(expectedResponse, controllerApis.deleteTopics(request,
+    assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
       _ => Set("foo"),
@@ -678,7 +802,7 @@ class ControllerApisTest {
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(fooId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
     assertEquals(classOf[NotControllerException], assertThrows(
-      classOf[ExecutionException], () => controllerApis.deleteTopics(request,
+      classOf[ExecutionException], () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
         false,
         _ => Set("foo", "bar"),
@@ -695,23 +819,24 @@ class ControllerApisTest {
     val controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
-    assertThrows(classOf[TopicDeletionDisabledException], () => controllerApis.deleteTopics(request,
+    assertThrows(classOf[TopicDeletionDisabledException],
+      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
         false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
-    assertThrows(classOf[InvalidRequestException], () => controllerApis.deleteTopics(request,
+    assertThrows(classOf[InvalidRequestException],
+      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         1,
         false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
   }
 
-  @Test
-  def testCreatePartitionsRequest(): Unit = {
-    val controller = new MockController.Builder().
-      newInitialTopic("foo", Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-      newInitialTopic("bar", Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")).build()
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testCreatePartitionsRequest(validateOnly: Boolean): Unit = {
+    val controller = mock(classOf[Controller])
     val controllerApis = createControllerApis(None, controller)
     val request = new CreatePartitionsRequestData()
     request.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))
@@ -719,20 +844,303 @@ class ControllerApisTest {
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
+    request.setValidateOnly(validateOnly)
+
+    // Check if the controller is called correctly with the 'validateOnly' field set appropriately.
+    when(controller.createPartitions(
+      any(),
+      ArgumentMatchers.eq(
+        Collections.singletonList(
+          new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))),
+      ArgumentMatchers.eq(validateOnly))).thenReturn(CompletableFuture
+      .completedFuture(Collections.singletonList(
+        new CreatePartitionsTopicResult().setName("foo").
+          setErrorCode(NONE.code()).
+          setErrorMessage(null)
+      )))
     assertEquals(Set(new CreatePartitionsTopicResult().setName("foo").
-        setErrorCode(NONE.code()).
-        setErrorMessage(null),
+      setErrorCode(NONE.code()).
+      setErrorMessage(null),
       new CreatePartitionsTopicResult().setName("bar").
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate topic name."),
       new CreatePartitionsTopicResult().setName("baz").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
         setErrorMessage(null)),
-      controllerApis.createPartitions(request, false, _ => Set("foo", "bar")).get().asScala.toSet)
+      controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
+        _ => Set("foo", "bar")).get().asScala.toSet)
+  }
+
+  @Test
+  def testCreatePartitionsAuthorization(): Unit = {
+    val controller = new MockController.Builder()
+      .newInitialTopic("foo", Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"))
+      .build()
+    val authorizer = mock(classOf[Authorizer])
+    val controllerApis = createControllerApis(Some(authorizer), controller)
+
+    val requestData = new CreatePartitionsRequestData()
+    requestData.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2))
+    requestData.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10))
+    val request = new CreatePartitionsRequest.Builder(requestData).build()
+
+    val fooResource = new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.LITERAL)
+    val fooAction = new Action(AclOperation.ALTER, fooResource, 1, true, true)
+
+    val barResource = new ResourcePattern(ResourceType.TOPIC, "bar", PatternType.LITERAL)
+    val barAction = new Action(AclOperation.ALTER, barResource, 1, true, true)
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument[util.List[Action]](1).asScala
+      val results = actions.map { action =>
+        if (action == fooAction) AuthorizationResult.ALLOWED
+        else if (action == barAction) AuthorizationResult.DENIED
+        else throw new AssertionError(s"Unexpected action $action")
+      }
+      new util.ArrayList[AuthorizationResult](results.asJava)
+    }
+
+    val response = handleRequest[CreatePartitionsResponse](request, controllerApis)
+    val results = response.data.results.asScala
+    assertEquals(Some(Errors.NONE), results.find(_.name == "foo").map(result => Errors.forCode(result.errorCode)))
+    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), results.find(_.name == "bar").map(result => Errors.forCode(result.errorCode)))
+  }
+
+  @ParameterizedTest(name = "testCreatePartitionsMutationQuota with throttle: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testCreatePartitionsMutationQuota(throttle: Boolean): Unit = {
+    val topicName = "foo"
+    val controller = new MockController.Builder()
+      .newInitialTopic(topicName, Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"), 1)
+      .build()
+    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    val requestData = new CreatePartitionsRequestData()
+    requestData.topics().add(new CreatePartitionsTopic().setName(topicName).setAssignments(null).setCount(2))
+    val request = new CreatePartitionsRequest.Builder(requestData).build()
+    val expectedResponseDataUnthrottled = Set(new CreatePartitionsTopicResult().setName(topicName).
+      setErrorCode(NONE.code()))
+    val expectedResponseDataThrottled = Set(new CreatePartitionsTopicResult().setName(topicName).
+      setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+      setErrorMessage(THROTTLING_QUOTA_EXCEEDED.message()))
+    val response = handleRequest[CreatePartitionsResponse](request, controllerApis)
+    if (throttle) {
+      assertEquals(expectedResponseDataThrottled, response.data.results().asScala.toSet)
+      assertEquals(MockControllerMutationQuota.throttleTimeMs, response.throttleTimeMs())
+    } else {
+      assertEquals(expectedResponseDataUnthrottled, response.data.results().asScala.toSet)
+      assertEquals(0, response.throttleTimeMs())
+    }
+  }
+
+  @Test
+  def testElectLeadersAuthorization(): Unit = {
+    val authorizer = mock(classOf[Authorizer])
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(Some(authorizer), controller)
+
+    val request = new ElectLeadersRequest.Builder(
+      ElectionType.PREFERRED,
+      null,
+      30000
+    ).build()
+
+    val resource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val actions = singletonList(new Action(AclOperation.ALTER, resource, 1, true, true))
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      ArgumentMatchers.eq(actions)
+    )).thenReturn(singletonList(AuthorizationResult.DENIED))
+
+    val response = handleRequest[ElectLeadersResponse](request, controllerApis)
+    assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testElectLeadersHandledByController(): Unit = {
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+
+    val request = new ElectLeadersRequest.Builder(
+      ElectionType.PREFERRED,
+      null,
+      30000
+    ).build()
+
+    val responseData = new ElectLeadersResponseData()
+        .setErrorCode(Errors.NOT_CONTROLLER.code)
+
+    when(controller.electLeaders(any[ControllerRequestContext],
+      ArgumentMatchers.eq(request.data)
+    )).thenReturn(CompletableFuture.completedFuture(responseData))
+
+    val response = handleRequest[ElectLeadersResponse](request, controllerApis)
+    assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testDeleteTopicsReturnsNotController(): Unit = {
+    val topicId = Uuid.randomUuid()
+    val topicName = "foo"
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+
+    val findNamesFuture = CompletableFuture.completedFuture(
+      singletonMap(topicId, new ResultOrError(topicName))
+    )
+    when(controller.findTopicNames(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(singleton(topicId))
+    )).thenReturn(findNamesFuture)
+
+    val findIdsFuture = CompletableFuture.completedFuture(
+      Collections.emptyMap[String, ResultOrError[Uuid]]()
+    )
+    when(controller.findTopicIds(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(Collections.emptySet())
+    )).thenReturn(findIdsFuture)
+
+    val deleteFuture = new CompletableFuture[util.Map[Uuid, ApiError]]()
+    deleteFuture.completeExceptionally(new NotControllerException("Controller has moved"))
+    when(controller.deleteTopics(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(singleton(topicId))
+    )).thenReturn(deleteFuture)
+
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData().setTopics(singletonList(
+        new DeleteTopicState().setTopicId(topicId)
+      ))
+    ).build()
+
+    val response = handleRequest[DeleteTopicsResponse](request, controllerApis)
+    val topicIdResponse = response.data.responses.asScala.find(_.topicId == topicId).get
+    assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(topicIdResponse.errorCode))
+  }
+
+  @ParameterizedTest(name = "testDeleteTopicsMutationQuota with throttle: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testDeleteTopicsMutationQuota(throttle: Boolean): Unit = {
+    val topicId = Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")
+    val topicName = "foo"
+    val controller = new MockController.Builder()
+      .newInitialTopic(topicName, topicId, 1)
+      .build()
+    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    val requestData = new DeleteTopicsRequestData().setTopics(singletonList(
+      new DeleteTopicState().setTopicId(topicId)))
+    val request = new DeleteTopicsRequest.Builder(requestData).build()
+    val expectedResponseDataUnthrottled = Set(new DeletableTopicResult().setName(topicName).
+      setTopicId(topicId).
+      setErrorCode(NONE.code()))
+    val expectedResponseDataThrottled = Set(new DeletableTopicResult().setName(topicName).
+      setTopicId(topicId).
+      setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+      setErrorMessage(THROTTLING_QUOTA_EXCEEDED.message()))
+    val response = handleRequest[DeleteTopicsResponse](request, controllerApis)
+    if (throttle) {
+      assertEquals(expectedResponseDataThrottled, response.data.responses().asScala.toSet)
+      assertEquals(MockControllerMutationQuota.throttleTimeMs, response.throttleTimeMs())
+    } else {
+      assertEquals(expectedResponseDataUnthrottled, response.data.responses().asScala.toSet)
+      assertEquals(0, response.throttleTimeMs())
+    }
+  }
+
+  @Test
+  def testAllocateProducerIdsReturnsNotController(): Unit = {
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+
+    // We construct the future here to mimic the logic in `QuorumController.allocateProducerIds`.
+    // When an exception is raised on the original future, the `thenApply` future is also completed
+    // exceptionally, but the underlying cause is wrapped in a `CompletionException`.
+    val future = new CompletableFuture[ProducerIdsBlock]
+    val thenApplyFuture = future.thenApply[AllocateProducerIdsResponseData] { result =>
+      new AllocateProducerIdsResponseData()
+        .setProducerIdStart(result.firstProducerId())
+        .setProducerIdLen(result.size())
+    }
+    future.completeExceptionally(new NotControllerException("Controller has moved"))
+
+    val request = new AllocateProducerIdsRequest.Builder(
+      new AllocateProducerIdsRequestData()
+        .setBrokerId(4)
+        .setBrokerEpoch(93234)
+    ).build()
+
+    when(controller.allocateProducerIds(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(request.data)
+    )).thenReturn(thenApplyFuture)
+
+    val response = handleRequest[AllocateProducerIdsResponse](request, controllerApis)
+    assertEquals(Errors.NOT_CONTROLLER, response.error)
+  }
+
+  private def handleRequest[T <: AbstractResponse](
+    request: AbstractRequest,
+    controllerApis: ControllerApis
+  )(
+    implicit classTag: ClassTag[T],
+    @nowarn("cat=unused") nn: NotNothing[T]
+  ): T = {
+    val req = buildRequest(request)
+
+    controllerApis.handle(req, RequestLocal.NoCaching)
+
+    val capturedResponse: ArgumentCaptor[AbstractResponse] =
+      ArgumentCaptor.forClass(classOf[AbstractResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(req),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+
+    capturedResponse.getValue match {
+      case response: T => response
+      case response =>
+        throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, " +
+          s"but found ${response.getClass}")
+    }
+  }
+
+  @Test
+  def testCompletableFutureExceptions(): Unit = {
+    // This test simulates an error in a completable future as we return from the controller. We need to ensure
+    // that any exception throw in the completion phase is properly captured and translated to an error response.
+    val request = buildRequest(new FetchRequest(new FetchRequestData(), 12))
+    val response = new FetchResponseData()
+    val responseFuture = new CompletableFuture[ApiMessage]()
+    val errorResponseFuture = new AtomicReference[AbstractResponse]()
+    when(raftManager.handleRequest(any(), any(), any())).thenReturn(responseFuture)
+    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+      // Simulate an encoding failure in the initial fetch response
+      throw new UnsupportedVersionException("Something went wrong")
+    }.thenAnswer { invocation =>
+      val resp = invocation.getArgument(1, classOf[AbstractResponse])
+      errorResponseFuture.set(resp)
+    }
+
+    // Calling handle does not block since we do not call get() in ControllerApis
+    createControllerApis(None,
+      new MockController.Builder().build()).handle(request, null)
+
+    // When we complete this future, the completion stages will fire (including the error handler in ControllerApis#request)
+    responseFuture.complete(response)
+
+    // Now we should get an error response with UNSUPPORTED_VERSION
+    val errorResponse = errorResponseFuture.get()
+    assertEquals(1, errorResponse.errorCounts().getOrDefault(Errors.UNSUPPORTED_VERSION, 0))
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    quotas.shutdown()
+    quotasNeverThrottleControllerMutations.shutdown()
+    quotasAlwaysThrottleControllerMutations.shutdown()
   }
 }

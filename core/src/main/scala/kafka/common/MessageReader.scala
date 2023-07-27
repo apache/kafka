@@ -28,6 +28,8 @@ import org.apache.kafka.clients.producer.ProducerRecord
   *
   * This is used by the `ConsoleProducer`.
   */
+@deprecated("This class has been deprecated and will be removed in 4.0." +
+  "Please use org.apache.kafka.tools.api.RecordReader instead", "3.5.0")
 trait MessageReader {
 
   def init(inputStream: InputStream, props: Properties): Unit = {}

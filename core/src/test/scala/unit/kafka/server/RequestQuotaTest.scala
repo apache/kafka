@@ -19,12 +19,11 @@ import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import kafka.api.LeaderAndIsr
-import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
@@ -50,7 +49,7 @@ import org.apache.kafka.common._
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -82,12 +81,13 @@ class RequestQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.TestAuthorizer].getName)
     properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
+    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
-    super.setUp()
+    super.setUp(testInfo)
 
     createTopic(topic, numPartitions)
     leaderNode = servers.head
@@ -159,7 +159,8 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions -- RequestQuotaTest.ClusterActionsWithThrottle) {
+    val actions = RequestQuotaTest.ClusterActions -- RequestQuotaTest.ClusterActionsWithThrottle -- RequestQuotaTest.Envelope
+    for (apiKey <- actions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
 
@@ -170,7 +171,7 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.zkBrokerApis.asScala) {
+    for (apiKey <- ApiKeys.zkBrokerApis.asScala.toSet -- RequestQuotaTest.Envelope) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
     }
 
@@ -226,8 +227,8 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.FETCH =>
           val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-          partitionMap.put(tp, new FetchRequest.PartitionData(0, 0, 100, Optional.of(15)))
-          FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 0, partitionMap, getTopicIds().asJava)
+          partitionMap.put(tp, new FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), 0, 0, 100, Optional.of(15)))
+          FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 0, partitionMap)
 
         case ApiKeys.METADATA =>
           new MetadataRequest.Builder(List(topic).asJava, true)
@@ -251,7 +252,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setLeader(brokerId)
               .setLeaderEpoch(Int.MaxValue)
               .setIsr(List(brokerId).asJava)
-              .setZkVersion(2)
+              .setPartitionEpoch(2)
               .setReplicas(Seq(brokerId).asJava)
               .setIsNew(true)).asJava,
             getTopicIds().asJava,
@@ -263,7 +264,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTopicName(tp.topic())
               .setPartitionStates(Seq(new StopReplicaPartitionState()
                 .setPartitionIndex(tp.partition())
-                .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+                .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
                 .setDeletePartition(true)).asJava)
           ).asJava
           new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
@@ -301,7 +302,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new OffsetCommitRequest.Builder(
             new OffsetCommitRequestData()
               .setGroupId("test-group")
-              .setGenerationId(1)
+              .setGenerationIdOrMemberEpoch(1)
               .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
               .setTopics(
                 Collections.singletonList(
@@ -320,7 +321,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava, false)
+          new OffsetFetchRequest.Builder(Map("test-group"-> List(tp).asJava).asJava, false, false)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
@@ -426,7 +427,7 @@ class RequestQuotaTest extends BaseRequestTest {
           OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
-          new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
+          AddPartitionsToTxnRequest.Builder.forClient("test-transactional-id", 1, 0, List(tp).asJava)
 
         case ApiKeys.ADD_OFFSETS_TO_TXN =>
           new AddOffsetsToTxnRequest.Builder(new AddOffsetsToTxnRequestData()
@@ -489,7 +490,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new AlterConfigsRequest.Builder(
             Collections.singletonMap(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic),
               new AlterConfigsRequest.Config(Collections.singleton(
-                new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
+                new AlterConfigsRequest.ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1000000")
               ))), true)
 
         case ApiKeys.ALTER_REPLICA_LOG_DIRS =>
@@ -598,8 +599,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
             tp, 10, 5, Collections.singletonList(3)))
 
-        case ApiKeys.ALTER_ISR =>
-          new AlterIsrRequest.Builder(new AlterIsrRequestData())
+        case ApiKeys.ALTER_PARTITION =>
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), true)
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
@@ -643,6 +644,10 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
           new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
+
+        case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
+          new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData(), true)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -763,9 +768,10 @@ class RequestQuotaTest extends BaseRequestTest {
 
 object RequestQuotaTest {
   val ClusterActions = ApiKeys.zkBrokerApis.asScala.filter(_.clusterAction).toSet
-  val ClusterActionsWithThrottle = Set(ApiKeys.ALLOCATE_PRODUCER_IDS)
+  val ClusterActionsWithThrottle = Set(ApiKeys.ALLOCATE_PRODUCER_IDS, ApiKeys.UPDATE_FEATURES)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.zkBrokerApis.asScala.toSet -- ClusterActions -- SaslActions
+  val Envelope = Set(ApiKeys.ENVELOPE)
+  val ClientActions = ApiKeys.zkBrokerApis.asScala.toSet -- ClusterActions -- SaslActions -- Envelope
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

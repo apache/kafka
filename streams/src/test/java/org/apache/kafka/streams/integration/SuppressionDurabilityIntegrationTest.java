@@ -50,6 +50,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -85,6 +86,8 @@ import static org.hamcrest.Matchers.equalTo;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class SuppressionDurabilityIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         3,
@@ -125,6 +128,7 @@ public class SuppressionDurabilityIntegrationTest {
     public String processingGuaranteee;
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRecoverBufferAfterShutdown() {
         final String testId = safeUniqueTestName(getClass(), testName);
         final String appId = "appId_" + testId;

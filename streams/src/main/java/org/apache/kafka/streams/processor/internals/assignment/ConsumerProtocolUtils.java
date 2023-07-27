@@ -38,13 +38,13 @@ public class ConsumerProtocolUtils {
         out.writeInt(taskId.subtopology());
         out.writeInt(taskId.partition());
         if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            if (taskId.namedTopology() != null) {
-                out.writeInt(taskId.namedTopology().length());
-                out.writeChars(taskId.namedTopology());
+            if (taskId.topologyName() != null) {
+                out.writeInt(taskId.topologyName().length());
+                out.writeChars(taskId.topologyName());
             } else {
                 out.writeInt(0);
             }
-        } else if (taskId.namedTopology() != null) {
+        } else if (taskId.topologyName() != null) {
             throw new TaskAssignmentException("Named topologies are not compatible with protocol version " + version);
         }
     }
@@ -73,15 +73,15 @@ public class ConsumerProtocolUtils {
         buf.putInt(taskId.subtopology());
         buf.putInt(taskId.partition());
         if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            if (taskId.namedTopology() != null) {
-                buf.putInt(taskId.namedTopology().length());
-                for (final char c : taskId.namedTopology().toCharArray()) {
+            if (taskId.topologyName() != null) {
+                buf.putInt(taskId.topologyName().length());
+                for (final char c : taskId.topologyName().toCharArray()) {
                     buf.putChar(c);
                 }
             } else {
                 buf.putInt(0);
             }
-        } else if (taskId.namedTopology() != null) {
+        } else if (taskId.topologyName() != null) {
             throw new TaskAssignmentException("Named topologies are not compatible with protocol version " + version);
         }
     }

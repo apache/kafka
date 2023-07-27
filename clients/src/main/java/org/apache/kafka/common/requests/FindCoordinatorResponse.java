@@ -26,8 +26,11 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 
 public class FindCoordinatorResponse extends AbstractResponse {
@@ -49,6 +52,22 @@ public class FindCoordinatorResponse extends AbstractResponse {
         this.data = data;
     }
 
+    public Optional<Coordinator> coordinatorByKey(String key) {
+        Objects.requireNonNull(key);
+        if (this.data.coordinators().isEmpty()) {
+            // version <= 3
+            return Optional.of(new Coordinator()
+                    .setErrorCode(data.errorCode())
+                    .setErrorMessage(data.errorMessage())
+                    .setHost(data.host())
+                    .setPort(data.port())
+                    .setNodeId(data.nodeId())
+                    .setKey(key));
+        }
+        // version >= 4
+        return data.coordinators().stream().filter(c -> c.key().equals(key)).findFirst();
+    }
+
     @Override
     public FindCoordinatorResponseData data() {
         return data;
@@ -63,6 +82,11 @@ public class FindCoordinatorResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public boolean hasError() {
         return error() != Errors.NONE;
     }
@@ -73,7 +97,15 @@ public class FindCoordinatorResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error());
+        if (!data.coordinators().isEmpty()) {
+            Map<Errors, Integer> errorCounts = new HashMap<>();
+            for (Coordinator coordinator : data.coordinators()) {
+                updateErrorCounts(errorCounts, Errors.forCode(coordinator.errorCode()));
+            }
+            return errorCounts;
+        } else {
+            return errorCounts(error());
+        }
     }
 
     public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {

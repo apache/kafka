@@ -20,17 +20,16 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.OffsetFetchRequestData.{OffsetFetchRequestGroup, OffsetFetchRequestTopics}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.{AbstractResponse, OffsetFetchRequest, OffsetFetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import java.util
 import java.util.Collections.singletonList
 import scala.jdk.CollectionConverters._
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 
 class OffsetFetchRequestTest extends BaseRequestTest {
 
@@ -74,8 +73,8 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
 
     TestUtils.createOffsetsTopic(zkClient, servers)
   }
@@ -128,6 +127,56 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   }
 
   @Test
+  def testOffsetFetchRequestAllOffsetsSingleGroup(): Unit = {
+    createTopic(topic)
+
+    val tpList = singletonList(new TopicPartition(topic, 0))
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    commitOffsets(tpList)
+
+    // Testing from version 2 onward since version 0 and do not support
+    // fetching all offsets.
+    for (version <- 2 to ApiKeys.OFFSET_FETCH.latestVersion()) {
+      if (version < 8) {
+        val request = new OffsetFetchRequest.Builder(
+          groupId,
+          false,
+          null,
+          version >= 7
+        ).build(version.toShort)
+
+        val response = connectAndReceive[OffsetFetchResponse](request)
+        assertEquals(Errors.NONE, response.error())
+        val topicData = response.data.topics().get(0)
+        val partitionData = topicData.partitions().get(0)
+        if (version < 3) {
+          assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs())
+        }
+        verifySingleGroupResponse(version.asInstanceOf[Short],
+          response.error().code(), partitionData.errorCode(), topicData.name(),
+          partitionData.partitionIndex(), partitionData.committedOffset(),
+          partitionData.committedLeaderEpoch(), partitionData.metadata())
+      } else {
+        val request = new OffsetFetchRequest.Builder(
+          Collections.singletonMap(groupId, null),
+          false,
+          false
+        ).build(version.toShort)
+
+        val response = connectAndReceive[OffsetFetchResponse](request)
+        assertEquals(Errors.NONE, response.groupLevelError(groupId))
+        val groupData = response.data().groups().get(0)
+        val topicData = groupData.topics().get(0)
+        val partitionData = topicData.partitions().get(0)
+        verifySingleGroupResponse(version.asInstanceOf[Short],
+          groupData.errorCode(), partitionData.errorCode(), topicData.name(),
+          partitionData.partitionIndex(), partitionData.committedOffset(),
+          partitionData.committedLeaderEpoch(), partitionData.metadata())
+      }
+    }
+  }
+
+  @Test
   def testOffsetFetchRequestWithMultipleGroups(): Unit = {
     createTopic(topics(0))
     createTopic(topics(1), numPartitions = 2)
@@ -146,42 +195,6 @@ class OffsetFetchRequestTest extends BaseRequestTest {
       val response = connectAndReceive[OffsetFetchResponse](request)
       response.data.groups.asScala.map(_.groupId).foreach( groupId =>
         verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId), partitionMap(groupId))
-      )
-    }
-  }
-
-  @Test
-  def testOffsetFetchRequestWithMultipleGroupsWithOneGroupRepeating(): Unit = {
-    createTopic(topics(0))
-    createTopic(topics(1), numPartitions = 2)
-    createTopic(topics(2), numPartitions = 3)
-
-    // create 5 consumers to commit offsets so we can fetch them later
-    val partitionMap = groupToPartitionMap.asScala.map(e => (e._1, Option(e._2).getOrElse(allTopicsList)))
-    groups.foreach { groupId =>
-      consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-      commitOffsets(partitionMap(groupId))
-    }
-
-    for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion()) {
-      val request = new OffsetFetchRequest.Builder(groupToPartitionMap, false, false)
-        .build(version.asInstanceOf[Short])
-      val requestGroups = request.data().groups()
-      requestGroups.add(
-        // add the same group as before with different topic partitions
-        new OffsetFetchRequestGroup()
-          .setGroupId(groups(2))
-          .setTopics(singletonList(
-            new OffsetFetchRequestTopics()
-              .setName(topics(0))
-              .setPartitionIndexes(singletonList(0)))))
-      request.data().setGroups(requestGroups)
-      val response = connectAndReceive[OffsetFetchResponse](request)
-      response.data.groups.asScala.map(_.groupId).foreach( groupId =>
-        if (groupId == "group3") // verify that the response gives back the latest changed topic partition list
-          verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId), topic1List)
-        else
-          verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId), partitionMap(groupId))
       )
     }
   }

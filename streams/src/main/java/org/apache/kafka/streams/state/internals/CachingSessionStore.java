@@ -19,10 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
@@ -47,9 +49,13 @@ class CachingSessionStore
 
     private final SessionKeySchema keySchema;
     private final SegmentedCacheFunction cacheFunction;
+    private static final String INVALID_RANGE_WARN_MSG = "Returning empty iterator for fetch with invalid key range: from > to. " +
+        "This may be due to range arguments set in the wrong order, " +
+        "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+        "Note that the built-in numerical serdes do not follow this for negative numbers";
 
     private String cacheName;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
 
@@ -76,7 +82,7 @@ class CachingSessionStore
         super.init(context, root);
     }
 
-    private void initInternal(final InternalProcessorContext context) {
+    private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
 
         cacheName = context.taskId() + "-" + name();
@@ -87,7 +93,7 @@ class CachingSessionStore
         });
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext<?, ?> context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
         final Windowed<Bytes> bytesKey = SessionKeySchema.from(binaryKey);
         if (flushListener != null) {
@@ -99,22 +105,29 @@ class CachingSessionStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (newValueBytes != null || oldValueBytes != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(bytesKey, entry.newValue());
 
                 final ProcessorRecordContext current = context.recordContext();
-                context.setRecordContext(entry.entry().context());
                 try {
+                    context.setRecordContext(entry.entry().context());
+                    wrapped().put(bytesKey, entry.newValue());
                     flushListener.apply(
-                        binaryKey.get(),
-                        newValueBytes,
-                        sendOldValues ? oldValueBytes : null,
-                        entry.entry().context().timestamp());
+                        new Record<>(
+                            binaryKey.get(),
+                            new Change<>(newValueBytes, sendOldValues ? oldValueBytes : null),
+                            entry.entry().context().timestamp(),
+                            entry.entry().context().headers()));
                 } finally {
                     context.setRecordContext(current);
                 }
             }
         } else {
-            wrapped().put(bytesKey, entry.newValue());
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(entry.entry().context());
+                wrapped().put(bytesKey, entry.newValue());
+            } finally {
+                context.setRecordContext(current);
+            }
         }
     }
 
@@ -170,7 +183,8 @@ class CachingSessionStore
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
                                                                              key,
                                                                              earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+                                                                             latestSessionStartTime,
+                                                                             true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -200,7 +214,8 @@ class CachingSessionStore
             key,
             key,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            false
         );
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
@@ -212,18 +227,15 @@ class CachingSessionStore
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
-        if (keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                "This may be due to range arguments set in the wrong order, " +
-                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+        if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
+            LOG.warn(INVALID_RANGE_WARN_MSG);
             return KeyValueIterators.emptyIterator();
         }
 
         validateStoreOpen();
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
+        final Bytes cacheKeyFrom = keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
+        final Bytes cacheKeyTo = keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
@@ -232,7 +244,8 @@ class CachingSessionStore
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
                                                                              keyTo,
                                                                              earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+                                                                             latestSessionStartTime,
+                                                                     true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -243,18 +256,15 @@ class CachingSessionStore
                                                                           final Bytes keyTo,
                                                                           final long earliestSessionEndTime,
                                                                           final long latestSessionStartTime) {
-        if (keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                         "This may be due to range arguments set in the wrong order, " +
-                         "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                         "Note that the built-in numerical serdes do not follow this for negative numbers");
+        if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
+            LOG.warn(INVALID_RANGE_WARN_MSG);
             return KeyValueIterators.emptyIterator();
         }
 
         validateStoreOpen();
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
+        final Bytes cacheKeyFrom = keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
+        final Bytes cacheKeyTo = keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
@@ -263,7 +273,8 @@ class CachingSessionStore
             keyFrom,
             keyTo,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            false
         );
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
@@ -304,16 +315,12 @@ class CachingSessionStore
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return findSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
                                                                    final Bytes keyTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return backwardFindSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
@@ -325,6 +332,11 @@ class CachingSessionStore
     @Override
     public void flushCache() {
         context.cache().flush(cacheName);
+    }
+
+    @Override
+    public void clearCache() {
+        context.cache().clear(cacheName);
     }
 
     public void close() {

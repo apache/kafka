@@ -22,20 +22,30 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * Class for listening to various states of the restoration process of a StateStore.
  *
+ * <p>
  * When calling {@link org.apache.kafka.streams.KafkaStreams#setGlobalStateRestoreListener(StateRestoreListener)}
  * the passed instance is expected to be stateless since the {@code StateRestoreListener} is shared
  * across all {@link org.apache.kafka.streams.processor.internals.StreamThread} instances.
  *
+ * <p>
  * Users desiring stateful operations will need to provide synchronization internally in
  * the {@code StateRestorerListener} implementation.
  *
+ * <p>
  * Note that this listener is only registered at the per-client level and users can base on the {@code storeName}
  * parameter to define specific monitoring for different {@link StateStore}s. There is another
- * {@link StateRestoreCallback} interface which is registered via the {@link ProcessorContext#register(StateStore, StateRestoreCallback)}
+ * {@link StateRestoreCallback} interface which is registered via the
+ * {@link StateStoreContext#register(StateStore, StateRestoreCallback, CommitCallback)}
  * function per-store, and it is used to apply the fetched changelog records into the local state store during restoration.
  * These two interfaces serve different restoration purposes and users should not try to implement both of them in a single
  * class during state store registration.
  *
+ * <p>
+ * Also note that the update process of standby tasks is not monitored via this interface, since a standby task does
+ * note actually <it>restore</it> state, but keeps updating its state from the changelogs written by the active task
+ * which does not ever finish.
+ *
+ * <p>
  * Incremental updates are exposed so users can estimate how much progress has been made.
  */
 public interface StateRestoreListener {
@@ -84,4 +94,17 @@ public interface StateRestoreListener {
                       final String storeName,
                       final long totalRestored);
 
+    /**
+     * Method called when restoring the {@link StateStore} is suspended due to the task being migrated out of the host.
+     * If the migrated task is recycled or re-assigned back to the current host, another
+     * {@link #onRestoreStart(TopicPartition, String, long, long)} would be called.
+     *
+     * @param topicPartition the {@link TopicPartition} containing the values to restore
+     * @param storeName the name of the store just restored
+     * @param totalRestored the total number of records restored for this TopicPartition before being paused
+     */
+    default void onRestoreSuspended(final TopicPartition topicPartition,
+                                    final String storeName,
+                                    final long totalRestored) {
+    }
 }

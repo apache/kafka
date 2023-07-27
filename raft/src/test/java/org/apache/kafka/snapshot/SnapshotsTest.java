@@ -75,7 +75,7 @@ final public class SnapshotsTest {
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE)
         );
         Path path = Snapshots.snapshotPath(TestUtils.tempDirectory().toPath(), snapshotId);
-        Path deletedPath = Snapshots.deleteRename(path, snapshotId);
+        Path deletedPath = Snapshots.deleteRenamePath(path, snapshotId);
         SnapshotPath snapshotPath = Snapshots.parse(deletedPath).get();
 
         assertEquals(snapshotId, snapshotPath.snapshotId);
@@ -116,11 +116,11 @@ final public class SnapshotsTest {
 
             if (renameBeforeDeleting)
                 // rename snapshot before deleting
-                Utils.atomicMoveWithFallback(snapshotPath, Snapshots.deleteRename(snapshotPath, snapshotId), false);
+                Utils.atomicMoveWithFallback(snapshotPath, Snapshots.deleteRenamePath(snapshotPath, snapshotId), false);
 
             assertTrue(Snapshots.deleteIfExists(logDirPath, snapshot.snapshotId()));
             assertFalse(Files.exists(snapshotPath));
-            assertFalse(Files.exists(Snapshots.deleteRename(snapshotPath, snapshotId)));
+            assertFalse(Files.exists(Snapshots.deleteRenamePath(snapshotPath, snapshotId)));
         }
     }
 }

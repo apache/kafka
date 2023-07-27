@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -31,6 +30,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -59,6 +61,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
  */
 public class NioEchoServer extends Thread {
+    private final static Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
+
     public enum MetricType {
         TOTAL, RATE, AVG, MAX;
 
@@ -106,8 +110,8 @@ public class NioEchoServer extends Thread {
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
         this.port = serverSocketChannel.socket().getLocalPort();
-        this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
+        this.socketChannels = Collections.synchronizedList(new ArrayList<>());
+        this.newChannels = Collections.synchronizedList(new ArrayList<>());
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
@@ -120,7 +124,7 @@ public class NioEchoServer extends Thread {
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
                 securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         this.metrics = new Metrics();
         this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                 "MetricGroup", channelBuilder, logContext);
@@ -186,7 +190,7 @@ public class NioEchoServer extends Thread {
             long thisMaxWaitMs = maxAggregateWaitMs - currentElapsedMs;
             String metricName = namePrefix + metricType.metricNameSuffix();
             if (expectedValue == 0.0) {
-                Double expected = expectedValue;
+                double expected = expectedValue;
                 if (metricType == MetricType.MAX || metricType == MetricType.AVG)
                     expected = Double.NaN;
 
@@ -243,7 +247,7 @@ public class NioEchoServer extends Thread {
                 }
             }
         } catch (IOException e) {
-            // ignore
+            LOG.warn(e.getMessage(), e);
         }
     }
 
@@ -346,6 +350,7 @@ public class NioEchoServer extends Thread {
     public void close() throws IOException, InterruptedException {
         this.serverSocketChannel.close();
         closeSocketChannels();
+        Utils.closeQuietly(selector, "selector");
         acceptorThread.interrupt();
         acceptorThread.join();
         interrupt();
@@ -358,8 +363,10 @@ public class NioEchoServer extends Thread {
         }
         @Override
         public void run() {
+            java.nio.channels.Selector acceptSelector = null;
+
             try {
-                java.nio.channels.Selector acceptSelector = java.nio.channels.Selector.open();
+                acceptSelector = java.nio.channels.Selector.open();
                 serverSocketChannel.register(acceptSelector, SelectionKey.OP_ACCEPT);
                 while (serverSocketChannel.isOpen()) {
                     if (acceptSelector.select(1000) > 0) {
@@ -377,7 +384,9 @@ public class NioEchoServer extends Thread {
                     }
                 }
             } catch (IOException e) {
-                // ignore
+                LOG.warn(e.getMessage(), e);
+            } finally {
+                Utils.closeQuietly(acceptSelector, "acceptSelector");
             }
         }
     }

@@ -68,6 +68,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -99,6 +100,8 @@ public class MeteredTimestampedKeyValueStoreTest {
     @Mock(type = MockType.NICE)
     private InternalProcessorContext context;
 
+    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
+
     private MeteredTimestampedKeyValueStore<String, String> metered;
     private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(KEY_BYTES,
         VALUE_AND_TIMESTAMP_BYTES
@@ -124,6 +127,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expectSerdes();
         expect(inner.name()).andStubReturn(STORE_NAME);
+        expect(context.appConfigs()).andStubReturn(CONFIGS);
         tags = mkMap(
             mkEntry(THREAD_ID_TAG_KEY, threadId),
             mkEntry("task-id", taskId.toString()),
@@ -187,7 +191,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
-        final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.namedTopology());
+        final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.topologyName());
         expect(context.changelogFor(STORE_NAME)).andReturn(null);
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
     }
@@ -234,7 +238,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             STORE_LEVEL_GROUP,
             THREAD_ID_TAG_KEY,
             threadId,
-            taskId.toString(),
+            taskId,
             STORE_TYPE,
             STORE_NAME
         )));
@@ -262,7 +266,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(KEY);
         assertEquals(valueWithBinary.value, VALUE_AND_TIMESTAMP);
-        assertEquals(valueWithBinary.serializedValue, VALUE_AND_TIMESTAMP_BYTES);
+        assertArrayEquals(valueWithBinary.serializedValue, VALUE_AND_TIMESTAMP_BYTES);
     }
 
     @SuppressWarnings("resource")

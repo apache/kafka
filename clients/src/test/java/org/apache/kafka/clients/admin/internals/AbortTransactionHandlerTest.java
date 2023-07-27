@@ -63,7 +63,7 @@ public class AbortTransactionHandlerTest {
     @Test
     public void testValidBuildRequestCall() {
         AbortTransactionHandler handler = new AbortTransactionHandler(abortSpec, logContext);
-        WriteTxnMarkersRequest.Builder request = handler.buildRequest(1, singleton(topicPartition));
+        WriteTxnMarkersRequest.Builder request = handler.buildBatchedRequest(1, singleton(topicPartition));
         assertEquals(1, request.data.markers().size());
 
         WriteTxnMarkersRequestData.WritableTxnMarker markerRequest = request.data.markers().get(0);

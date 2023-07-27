@@ -20,9 +20,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -31,10 +33,14 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KStreamPrintTest {
 
     private ByteArrayOutputStream byteOutStream;
     private Processor<Integer, String, Void, Void> printProcessor;
+
+    @Mock
+    private ProcessorContext<Void, Void> processorContext;
 
     @Before
     public void setUp() {
@@ -46,8 +52,6 @@ public class KStreamPrintTest {
             "test-stream"));
 
         printProcessor = kStreamPrint.get();
-        final ProcessorContext<Void, Void> processorContext = EasyMock.createNiceMock(ProcessorContext.class);
-        EasyMock.replay(processorContext);
 
         printProcessor.init(processorContext);
     }

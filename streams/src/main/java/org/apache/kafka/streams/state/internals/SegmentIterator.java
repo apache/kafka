@@ -74,18 +74,10 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
             close();
             currentSegment = segments.next();
             try {
-                if (from == null || to == null) {
-                    if (forward) {
-                        currentIterator = currentSegment.all();
-                    } else {
-                        currentIterator = currentSegment.reverseAll();
-                    }
+                if (forward) {
+                    currentIterator = currentSegment.range(from, to);
                 } else {
-                    if (forward) {
-                        currentIterator = currentSegment.range(from, to);
-                    } else {
-                        currentIterator = currentSegment.reverseRange(from, to);
-                    }
+                    currentIterator = currentSegment.reverseRange(from, to);
                 }
             } catch (final InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.
@@ -99,7 +91,7 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
         try {
             hasNext = hasNextCondition.hasNext(currentIterator);
         } catch (final InvalidStateStoreException e) {
-            //already closed so ignore
+            // already closed so ignore
         }
         return hasNext;
     }

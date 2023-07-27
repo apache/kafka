@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -52,7 +53,9 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
+import org.mockito.Mockito;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -253,6 +256,40 @@ public class TopicAdminTest {
             Set<String> newTopicNames = admin.createTopics(newTopic1, newTopic2);
             assertEquals(1, newTopicNames.size());
             assertEquals(newTopic2.name(), newTopicNames.iterator().next());
+        }
+    }
+
+    @Test
+    public void shouldRetryCreateTopicWhenAvailableBrokersAreNotEnoughForReplicationFactor() {
+        Cluster cluster = createCluster(1);
+        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).replicationFactor((short) 2).compacted().build();
+
+        try (TopicAdmin admin = Mockito.spy(new TopicAdmin(null, new MockAdminClient(cluster.nodes(), cluster.nodeById(0))))) {
+            try {
+                admin.createTopicsWithRetry(newTopic, 2, 1, new MockTime());
+            } catch (Exception e) {
+                // not relevant
+                e.printStackTrace();
+            }
+            Mockito.verify(admin, Mockito.times(2)).createTopics(newTopic);
+        }
+    }
+
+    @Test
+    public void shouldRetryWhenTopicCreateThrowsWrappedTimeoutException() {
+        Cluster cluster = createCluster(1);
+        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).replicationFactor((short) 1).compacted().build();
+
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0));
+             TopicAdmin admin = Mockito.spy(new TopicAdmin(null, mockAdminClient))) {
+            mockAdminClient.timeoutNextRequest(1);
+            try {
+                admin.createTopicsWithRetry(newTopic, 2, 1, new MockTime());
+            } catch (Exception e) {
+                // not relevant
+                e.printStackTrace();
+            }
+            Mockito.verify(admin, Mockito.times(2)).createTopics(newTopic);
         }
     }
 
@@ -465,6 +502,78 @@ public class TopicAdminTest {
         }
     }
 
+    /**
+     * TopicAdmin can be used to read the end offsets, but the admin client API used to do this was
+     * added to the broker in 0.11.0.0. This means that if Connect talks to older brokers,
+     * the admin client cannot be used to read end offsets, and will throw an UnsupportedVersionException.
+     */
+    @Test
+    public void retryEndOffsetsShouldRethrowUnknownVersionException() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = null; // response should use error
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            // Expect the admin client list offsets will throw unsupported version, simulating older brokers
+            env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            // The retryEndOffsets should catch and rethrow an unsupported version exception
+            assertThrows(UnsupportedVersionException.class, () -> admin.retryEndOffsets(tps, Duration.ofMillis(100), 1));
+        }
+    }
+
+    @Test
+    public void retryEndOffsetsShouldWrapNonRetriableExceptionsWithConnectException() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = 1000L;
+        Cluster cluster = createCluster(1, "myTopic", 1);
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+            Map<TopicPartition, Long> offsetMap = new HashMap<>();
+            offsetMap.put(tp1, offset);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE));
+            Map<String, Object> adminConfig = new HashMap<>();
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
+            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
+
+            assertThrows(ConnectException.class, () -> {
+                admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
+            });
+        }
+    }
+
+    @Test
+    public void retryEndOffsetsShouldRetryWhenTopicNotFound() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = 1000L;
+        Cluster cluster = createCluster(1, "myTopic", 1);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+            Map<TopicPartition, Long> offsetMap = new HashMap<>();
+            offsetMap.put(tp1, offset);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResult(tp1, offset));
+
+            Map<String, Object> adminConfig = new HashMap<>();
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
+            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
+            Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
+            assertNotNull(endoffsets);
+            assertTrue(endoffsets.containsKey(tp1));
+            assertEquals(1000L, endoffsets.get(tp1).longValue());
+        }
+    }
+
     @Test
     public void endOffsetsShouldFailWithNonRetriableWhenAuthorizationFailureOccurs() {
         String topicName = "myTopic";
@@ -477,9 +586,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithClusterAuthorizationException(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            ConnectException e = assertThrows(ConnectException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            ConnectException e = assertThrows(ConnectException.class, () -> admin.endOffsets(tps));
             assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
         }
     }
@@ -496,9 +603,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -509,14 +614,14 @@ public class TopicAdminTest {
         Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
+            new MockTime(), cluster, AdminClientConfig.RETRIES_CONFIG, "0"
+        )) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            TimeoutException e = assertThrows(TimeoutException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            TimeoutException e = assertThrows(TimeoutException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -532,9 +637,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithUnknownError(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            ConnectException e = assertThrows(ConnectException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            ConnectException e = assertThrows(ConnectException.class, () -> admin.endOffsets(tps));
             assertTrue(e.getMessage().contains("Error while getting end offsets for topic"));
         }
     }
@@ -601,9 +704,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithClusterAuthorizationException(tp1, null));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            ConnectException e = assertThrows(ConnectException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            ConnectException e = assertThrows(ConnectException.class, () -> admin.endOffsets(tps));
             assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
         }
     }
@@ -635,12 +736,16 @@ public class TopicAdminTest {
     }
 
     private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
+        return prepareMetadataResponse(cluster, error, error);
+    }
+
+    private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors topicError, Errors partitionError) {
         List<MetadataResponseTopic> metadata = new ArrayList<>();
         for (String topic : cluster.topics()) {
             List<MetadataResponseData.MetadataResponsePartition> pms = new ArrayList<>();
             for (PartitionInfo pInfo : cluster.availablePartitionsForTopic(topic)) {
                 MetadataResponseData.MetadataResponsePartition pm  = new MetadataResponseData.MetadataResponsePartition()
-                        .setErrorCode(error.code())
+                        .setErrorCode(partitionError.code())
                         .setPartitionIndex(pInfo.partition())
                         .setLeaderId(pInfo.leader().id())
                         .setLeaderEpoch(234)
@@ -650,7 +755,7 @@ public class TopicAdminTest {
                 pms.add(pm);
             }
             MetadataResponseTopic tm = new MetadataResponseTopic()
-                    .setErrorCode(error.code())
+                    .setErrorCode(topicError.code())
                     .setName(topic)
                     .setIsInternal(false)
                     .setPartitions(pms);
@@ -797,7 +902,7 @@ public class TopicAdminTest {
     protected TopicDescription topicDescription(MockAdminClient admin, String topicName)
             throws ExecutionException, InterruptedException {
         DescribeTopicsResult result = admin.describeTopics(Collections.singleton(topicName));
-        Map<String, KafkaFuture<TopicDescription>> byName = result.values();
+        Map<String, KafkaFuture<TopicDescription>> byName = result.topicNameValues();
         return byName.get(topicName).get();
     }
 

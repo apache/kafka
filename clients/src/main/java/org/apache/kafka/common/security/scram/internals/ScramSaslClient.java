@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.scram.internals;
 
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -204,7 +205,7 @@ public class ScramSaslClient implements SaslClient {
         try {
             byte[] serverKey = formatter.serverKey(saltedPassword);
             byte[] serverSignature = formatter.serverSignature(serverKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
-            if (!Arrays.equals(signature, serverSignature))
+            if (!MessageDigest.isEqual(signature, serverSignature))
                 throw new SaslException("Invalid server signature in server final message");
         } catch (InvalidKeyException e) {
             throw new SaslException("Sasl server signature verification failed", e);

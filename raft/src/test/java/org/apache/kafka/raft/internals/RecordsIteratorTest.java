@@ -19,6 +19,7 @@ package org.apache.kafka.raft.internals;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -26,22 +27,35 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+import org.apache.kafka.snapshot.MockRawSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -59,11 +73,11 @@ public final class RecordsIteratorTest {
 
     @ParameterizedTest
     @MethodSource("emptyRecords")
-    void testEmptyRecords(Records records) throws IOException {
-        testIterator(Collections.emptyList(), records);
+    void testEmptyRecords(Records records) {
+        testIterator(Collections.emptyList(), records, true);
     }
 
-    @Property
+    @Property(tries = 50)
     public void testMemoryRecords(
         @ForAll CompressionType compressionType,
         @ForAll long seed
@@ -71,10 +85,10 @@ public final class RecordsIteratorTest {
         List<TestBatch<String>> batches = createBatches(seed);
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
-        testIterator(batches, memRecords);
+        testIterator(batches, memRecords, true);
     }
 
-    @Property
+    @Property(tries = 50)
     public void testFileRecords(
         @ForAll CompressionType compressionType,
         @ForAll long seed
@@ -85,34 +99,134 @@ public final class RecordsIteratorTest {
         FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
         fileRecords.append(memRecords);
 
-        testIterator(batches, fileRecords);
+        testIterator(batches, fileRecords, true);
+        fileRecords.close();
+    }
+
+    @Property(tries = 50)
+    public void testCrcValidation(
+        @ForAll CompressionType compressionType,
+        @ForAll long seed
+    ) throws IOException {
+        List<TestBatch<String>> batches = createBatches(seed);
+        MemoryRecords memRecords = buildRecords(compressionType, batches);
+        // Read the Batch CRC for the first batch from the buffer
+        ByteBuffer readBuf = memRecords.buffer();
+        readBuf.position(DefaultRecordBatch.CRC_OFFSET);
+        int actualCrc = readBuf.getInt();
+        // Corrupt the CRC on the first batch
+        memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc + 1);
+
+        assertThrows(CorruptRecordException.class, () -> testIterator(batches, memRecords, true));
+
+        FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
+        fileRecords.append(memRecords);
+        assertThrows(CorruptRecordException.class, () -> testIterator(batches, fileRecords, true));
+
+        // Verify check does not trigger when doCrcValidation is false
+        assertDoesNotThrow(() -> testIterator(batches, memRecords, false));
+        assertDoesNotThrow(() -> testIterator(batches, fileRecords, false));
+
+        // Fix the corruption
+        memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc);
+
+        // Verify check does not trigger when the corruption is fixed
+        assertDoesNotThrow(() -> testIterator(batches, memRecords, true));
+        FileRecords moreFileRecords = FileRecords.open(TestUtils.tempFile());
+        moreFileRecords.append(memRecords);
+        assertDoesNotThrow(() -> testIterator(batches, moreFileRecords, true));
+
+        fileRecords.close();
+        moreFileRecords.close();
+    }
+
+    @Test
+    public void testControlRecordIteration() {
+        AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
+        try (RecordsSnapshotWriter<String> snapshot = RecordsSnapshotWriter.createWithHeader(
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf)),
+                4 * 1024,
+                MemoryPool.NONE,
+                new MockTime(),
+                0,
+                CompressionType.NONE,
+                STRING_SERDE
+            )
+        ) {
+            snapshot.append(Arrays.asList("a", "b", "c"));
+            snapshot.append(Arrays.asList("d", "e", "f"));
+            snapshot.append(Arrays.asList("g", "h", "i"));
+            snapshot.freeze();
+        }
+
+        try (RecordsIterator<String> iterator = createIterator(
+                MemoryRecords.readableRecords(buffer.get()),
+                BufferSupplier.NO_CACHING,
+                true
+            )
+        ) {
+            // Check snapshot header control record
+            Batch<String> batch = iterator.next();
+
+            assertEquals(1, batch.controlRecords().size());
+            assertEquals(ControlRecordType.SNAPSHOT_HEADER, batch.controlRecords().get(0).type());
+            assertEquals(new SnapshotHeaderRecord(), batch.controlRecords().get(0).message());
+
+            // Consume the iterator until we find a control record
+            do {
+                batch = iterator.next();
+            }
+            while (batch.controlRecords().isEmpty());
+
+            // Check snapshot footer control record
+            assertEquals(1, batch.controlRecords().size());
+            assertEquals(ControlRecordType.SNAPSHOT_FOOTER, batch.controlRecords().get(0).type());
+            assertEquals(new SnapshotFooterRecord(), batch.controlRecords().get(0).message());
+
+            // Snapshot footer must be last record
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    void testControlRecordTypeValues() {
+        // If this test fails then it means that ControlRecordType was changed. Please review the
+        // implementation for RecordsIterator to see if it needs to be updated based on the changes
+        // to ControlRecordType.
+        assertEquals(6, ControlRecordType.values().length);
     }
 
     private void testIterator(
         List<TestBatch<String>> expectedBatches,
-        Records records
+        Records records,
+        boolean validateCrc
     ) {
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
 
-        RecordsIterator<String> iterator = createIterator(
-            records,
-            mockBufferSupplier(allocatedBuffers)
-        );
+        try (RecordsIterator<String> iterator = createIterator(
+                records,
+                mockBufferSupplier(allocatedBuffers),
+                validateCrc
+            )
+        ) {
+            for (TestBatch<String> batch : expectedBatches) {
+                assertTrue(iterator.hasNext());
+                assertEquals(batch, TestBatch.from(iterator.next()));
+            }
 
-        for (TestBatch<String> batch : expectedBatches) {
-            assertTrue(iterator.hasNext());
-            assertEquals(batch, TestBatch.from(iterator.next()));
+            assertFalse(iterator.hasNext());
+            assertThrows(NoSuchElementException.class, iterator::next);
         }
 
-        assertFalse(iterator.hasNext());
-        assertThrows(NoSuchElementException.class, iterator::next);
-
-        iterator.close();
         assertEquals(Collections.emptySet(), allocatedBuffers);
     }
 
-    static RecordsIterator<String> createIterator(Records records, BufferSupplier bufferSupplier) {
-        return new RecordsIterator<>(records, STRING_SERDE, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC);
+    static RecordsIterator<String> createIterator(
+        Records records,
+        BufferSupplier bufferSupplier,
+        boolean validateCrc
+    ) {
+        return new RecordsIterator<>(records, STRING_SERDE, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC, validateCrc);
     }
 
     static BufferSupplier mockBufferSupplier(Set<ByteBuffer> buffers) {

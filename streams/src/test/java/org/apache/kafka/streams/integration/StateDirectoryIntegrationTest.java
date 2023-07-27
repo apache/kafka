@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -47,6 +48,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -56,6 +58,8 @@ import static org.junit.Assert.assertTrue;
 
 @Category(IntegrationTest.class)
 public class StateDirectoryIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
@@ -255,7 +259,8 @@ public class StateDirectoryIntegrationTest {
             assertTrue(appDir.exists());    // Application state directory Exists
 
             try {
-                assertTrue((new File(appDir, "dummy")).createNewFile());
+                final File dummyFile = new File(appDir, "dummy");
+                Files.createFile(dummyFile.toPath());
             } catch (final IOException e) {
                 throw new RuntimeException("Failed to create dummy file.", e);
             }

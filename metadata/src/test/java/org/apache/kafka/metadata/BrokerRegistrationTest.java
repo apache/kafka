@@ -22,51 +22,66 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
     private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
         new BrokerRegistration(0, 0, Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)),
-            Optional.empty(), false),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
+            Optional.empty(), false, false),
         new BrokerRegistration(1, 0, Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)),
-            Optional.empty(), false),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
+            Optional.empty(), true, false),
         new BrokerRegistration(2, 0, Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", new VersionRange((short) 2, (short) 3)),
-            Optional.of("myrack"), false));
+            Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
+                new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
+                        Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
+            Optional.of("myrack"), false, true),
+        new BrokerRegistration(3, 0, Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw"),
+            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
+            Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
+                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
+            Optional.empty(), false, true, true));
 
     @Test
     public void testValues() {
         assertEquals(0, REGISTRATIONS.get(0).id());
         assertEquals(1, REGISTRATIONS.get(1).id());
         assertEquals(2, REGISTRATIONS.get(2).id());
+        assertEquals(3, REGISTRATIONS.get(3).id());
     }
 
     @Test
     public void testEquals() {
-        assertFalse(REGISTRATIONS.get(0).equals(REGISTRATIONS.get(1)));
-        assertFalse(REGISTRATIONS.get(1).equals(REGISTRATIONS.get(0)));
-        assertFalse(REGISTRATIONS.get(0).equals(REGISTRATIONS.get(2)));
-        assertFalse(REGISTRATIONS.get(2).equals(REGISTRATIONS.get(0)));
-        assertTrue(REGISTRATIONS.get(0).equals(REGISTRATIONS.get(0)));
-        assertTrue(REGISTRATIONS.get(1).equals(REGISTRATIONS.get(1)));
-        assertTrue(REGISTRATIONS.get(2).equals(REGISTRATIONS.get(2)));
+        assertNotEquals(REGISTRATIONS.get(0), REGISTRATIONS.get(1));
+        assertNotEquals(REGISTRATIONS.get(1), REGISTRATIONS.get(0));
+        assertNotEquals(REGISTRATIONS.get(0), REGISTRATIONS.get(2));
+        assertNotEquals(REGISTRATIONS.get(2), REGISTRATIONS.get(0));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(0));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(1));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(2));
+        assertEquals(REGISTRATIONS.get(0), REGISTRATIONS.get(0));
+        assertEquals(REGISTRATIONS.get(1), REGISTRATIONS.get(1));
+        assertEquals(REGISTRATIONS.get(2), REGISTRATIONS.get(2));
+        assertEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(3));
     }
 
     @Test
@@ -75,8 +90,20 @@ public class BrokerRegistrationTest {
             "incarnationId=3MfdxWlNSn2UDYsmDP1pYg, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
-            "rack=Optional.empty, fenced=false)",
+            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false)",
             REGISTRATIONS.get(1).toString());
+        assertEquals("BrokerRegistration(id=2, epoch=0, " +
+            "incarnationId=eY7oaG1RREie5Kk9uy1l6g, listeners=[Endpoint(" +
+            "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
+            "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
+            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false)",
+            REGISTRATIONS.get(2).toString());
+        assertEquals("BrokerRegistration(id=3, epoch=0, " +
+            "incarnationId=1t8VyWx2TCSTpUWuqj-FOw, listeners=[Endpoint(" +
+            "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
+            "host='localhost', port=9093)], supportedFeatures={metadata.version: 7}, " +
+            "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true)",
+            REGISTRATIONS.get(3).toString());
     }
 
     @Test
@@ -84,14 +111,17 @@ public class BrokerRegistrationTest {
         testRoundTrip(REGISTRATIONS.get(0));
         testRoundTrip(REGISTRATIONS.get(1));
         testRoundTrip(REGISTRATIONS.get(2));
+        testRoundTrip(REGISTRATIONS.get(3));
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
-        ApiMessageAndVersion messageAndVersion = registration.toRecord();
+        ApiMessageAndVersion messageAndVersion = registration.
+            toRecord(new ImageWriterOptions.Builder().build());
         BrokerRegistration registration2 = BrokerRegistration.fromRecord(
             (RegisterBrokerRecord) messageAndVersion.message());
         assertEquals(registration, registration2);
-        ApiMessageAndVersion messageAndVersion2 = registration2.toRecord();
+        ApiMessageAndVersion messageAndVersion2 = registration2.
+            toRecord(new ImageWriterOptions.Builder().build());
         assertEquals(messageAndVersion, messageAndVersion2);
     }
 
@@ -104,5 +134,7 @@ public class BrokerRegistrationTest {
             REGISTRATIONS.get(1).node("INTERNAL"));
         assertEquals(Optional.of(new Node(2, "localhost", 9092, "myrack")),
             REGISTRATIONS.get(2).node("INTERNAL"));
+        assertEquals(Optional.of(new Node(3, "localhost", 9093, null)),
+            REGISTRATIONS.get(3).node("INTERNAL"));
     }
 }

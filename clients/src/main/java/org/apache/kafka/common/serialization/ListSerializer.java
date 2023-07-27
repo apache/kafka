@@ -29,10 +29,14 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 
 public class ListSerializer<Inner> implements Serializer<List<Inner>> {
+
+    final Logger log = LoggerFactory.getLogger(ListSerializer.class);
 
     private static final List<Class<? extends Serializer<?>>> FIXED_LENGTH_SERIALIZERS = Arrays.asList(
         ShortSerializer.class,
@@ -63,6 +67,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner != null) {
+            log.error("Could not configure ListSerializer as the parameter has already been set -- inner: {}", inner);
             throw new ConfigException("List serializer was already initialized using a non-default constructor");
         }
         final String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
@@ -128,6 +133,8 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
             }
             return baos.toByteArray();
         } catch (IOException e) {
+            log.error("Failed to serialize list due to", e);
+            log.trace("List that could not be serialized: {}", data); // avoid logging actual data above TRACE level since it may contain sensitive information
             throw new KafkaException("Failed to serialize List", e);
         }
     }

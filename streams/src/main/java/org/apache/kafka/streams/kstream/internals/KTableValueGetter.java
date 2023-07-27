@@ -16,14 +16,30 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public interface KTableValueGetter<K, V> {
 
-    void init(ProcessorContext context);
+    void init(ProcessorContext<?, ?> context);
 
     ValueAndTimestamp<V> get(K key);
+
+    /**
+     * Returns the latest record version, associated with the provided key, with timestamp
+     * not exceeding the provided timestamp bound. This method may only be called if
+     * {@link #isVersioned()} is true.
+     */
+    default ValueAndTimestamp<V> get(K key, long asOfTimestamp) {
+        throw new UnsupportedOperationException("get(key, timestamp) is only supported for versioned stores");
+    }
+
+    /**
+     * @return whether this value getter supports multiple record versions for the same key.
+     *         If true, then {@link #get(Object, long)} must be implemented. If not, then
+     *         {@link #get(Object, long)} must not be called.
+     */
+    boolean isVersioned();
 
     default void close() {}
 }

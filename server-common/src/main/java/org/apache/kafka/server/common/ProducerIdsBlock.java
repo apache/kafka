@@ -18,6 +18,8 @@
 package org.apache.kafka.server.common;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Holds a range of Producer IDs used for Transactional and EOS producers.
@@ -29,40 +31,72 @@ public class ProducerIdsBlock {
 
     public static final ProducerIdsBlock EMPTY = new ProducerIdsBlock(-1, 0, 0);
 
-    private final int brokerId;
-    private final long producerIdStart;
-    private final int producerIdLen;
+    private final int assignedBrokerId;
+    private final long firstProducerId;
+    private final int blockSize;
+    private final AtomicLong producerIdCounter;
 
-    public ProducerIdsBlock(int brokerId, long producerIdStart, int producerIdLen) {
-        this.brokerId = brokerId;
-        this.producerIdStart = producerIdStart;
-        this.producerIdLen = producerIdLen;
+    public ProducerIdsBlock(int assignedBrokerId, long firstProducerId, int blockSize) {
+        this.assignedBrokerId = assignedBrokerId;
+        this.firstProducerId = firstProducerId;
+        this.blockSize = blockSize;
+        producerIdCounter = new AtomicLong(firstProducerId);
     }
 
-    public int brokerId() {
-        return brokerId;
+    /**
+     * Claim the next available producer id from the block.
+     * Returns an empty result if there are no more available producer ids in the block.
+     */
+    public Optional<Long> claimNextId() {
+        long nextId = producerIdCounter.getAndIncrement();
+        if (nextId > lastProducerId()) {
+            return Optional.empty();
+        }
+        return Optional.of(nextId);
     }
 
-    public long producerIdStart() {
-        return producerIdStart;
+    /**
+     * Get the ID of the broker that this block was assigned to.
+     */
+    public int assignedBrokerId() {
+        return assignedBrokerId;
     }
 
-    public int producerIdLen() {
-        return producerIdLen;
+    /**
+     * Get the first ID (inclusive) to be assigned from this block.
+     */
+    public long firstProducerId() {
+        return firstProducerId;
     }
 
-    public long producerIdEnd() {
-        return producerIdStart + producerIdLen - 1;
+    /**
+     * Get the number of IDs contained in this block.
+     */
+    public int size() {
+        return blockSize;
     }
 
+    /**
+     * Get the last ID (inclusive) to be assigned from this block.
+     */
+    public long lastProducerId() {
+        return firstProducerId + blockSize - 1;
+    }
+
+    /**
+     * Get the first ID of the next block following this one.
+     */
+    public long nextBlockFirstId() {
+        return firstProducerId + blockSize;
+    }
 
     @Override
     public String toString() {
-        return "ProducerIdsBlock{" +
-                "brokerId=" + brokerId +
-                ", producerIdStart=" + producerIdStart +
-                ", producerIdLen=" + producerIdLen +
-                '}';
+        return "ProducerIdsBlock(" +
+                "assignedBrokerId=" + assignedBrokerId +
+                ", firstProducerId=" + firstProducerId +
+                ", size=" + blockSize +
+                ')';
     }
 
     @Override
@@ -70,11 +104,11 @@ public class ProducerIdsBlock {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ProducerIdsBlock that = (ProducerIdsBlock) o;
-        return brokerId == that.brokerId && producerIdStart == that.producerIdStart && producerIdLen == that.producerIdLen;
+        return assignedBrokerId == that.assignedBrokerId && firstProducerId == that.firstProducerId && blockSize == that.blockSize;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(brokerId, producerIdStart, producerIdLen);
+        return Objects.hash(assignedBrokerId, firstProducerId, blockSize);
     }
 }

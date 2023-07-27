@@ -27,7 +27,9 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -59,7 +61,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @Category({IntegrationTest.class})
 public class StoreUpgradeIntegrationTest {
     private static final String STORE_NAME = "store";
@@ -93,7 +94,7 @@ public class StoreUpgradeIntegrationTest {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
@@ -953,127 +954,107 @@ public class StoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class KeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
+    private static class KeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
         private KeyValueStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            store = (KeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final Long oldCount = store.get(key);
+            final Long oldCount = store.get(record.key());
             if (oldCount != null) {
                 newCount = oldCount + 1L;
             } else {
                 newCount = 1L;
             }
 
-            store.put(key, newCount);
+            store.put(record.key(), newCount);
         }
 
-        @Override
-        public void close() {}
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class TimestampedKeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
         private TimestampedKeyValueStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.context = context;
-            store = (TimestampedKeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.get(key);
+            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.get(record.key());
             final long newTimestamp;
 
             if (oldCountWithTimestamp == null) {
                 newCount = 1L;
-                newTimestamp = context.timestamp();
+                newTimestamp = record.timestamp();
             } else {
                 newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context.timestamp());
+                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), record.timestamp());
             }
 
-            store.put(key, ValueAndTimestamp.make(newCount, newTimestamp));
+            store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp));
         }
 
-        @Override
-        public void close() {}
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class WindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
+    private static class WindowedProcessor implements Processor<Integer, Integer, Void, Void> {
         private WindowStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            store = (WindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final Long oldCount = store.fetch(key, key < 10 ? 0L : 100000L);
+            final Long oldCount = store.fetch(record.key(), record.key() < 10 ? 0L : 100000L);
             if (oldCount != null) {
                 newCount = oldCount + 1L;
             } else {
                 newCount = 1L;
             }
 
-            store.put(key, newCount, key < 10 ? 0L : 100000L);
+            store.put(record.key(), newCount, record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class TimestampedWindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer, Void, Void> {
         private TimestampedWindowStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.context = context;
-            store = (TimestampedWindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.fetch(key, key < 10 ? 0L : 100000L);
+            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.fetch(record.key(), record.key() < 10 ? 0L : 100000L);
             final long newTimestamp;
 
             if (oldCountWithTimestamp == null) {
                 newCount = 1L;
-                newTimestamp = context.timestamp();
+                newTimestamp = record.timestamp();
             } else {
                 newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context.timestamp());
+                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), record.timestamp());
             }
 
-            store.put(key, ValueAndTimestamp.make(newCount, newTimestamp), key < 10 ? 0L : 100000L);
+            store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp), record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 }

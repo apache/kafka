@@ -33,7 +33,9 @@ import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 
@@ -61,7 +63,7 @@ object ConsoleConsumer extends Logging {
   }
 
   def run(conf: ConsumerConfig): Unit = {
-    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs.toLong else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
 
     val consumerWrapper =
@@ -148,6 +150,8 @@ object ConsoleConsumer extends Logging {
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+    if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
     CommandLineUtils.maybeMergeOptions(
       props, ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.options, config.isolationLevelOpt)
     props
@@ -245,6 +249,10 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
+    val messageFormatterConfigOpt = parser.accepts("formatter-config", s"Config properties file to initialize the message formatter. Note that $messageFormatterArgOpt takes precedence over this config.")
+      .withRequiredArg
+      .describedAs("config file")
+      .ofType(classOf[String])
     val resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
       "start with the earliest message present in the log rather than the latest message.")
     val maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
@@ -286,16 +294,15 @@ object ConsoleConsumer extends Logging {
 
     options = tryParse(parser, args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
+    CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
 
     var groupIdPassed = true
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // topic must be specified.
-    var topicArg: String = null
-    var includedTopicsArg: String = null
-    var filterSpec: TopicFilter = null
-    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
+    var topicArg: String = _
+    var includedTopicsArg: String = _
+    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
@@ -304,7 +311,11 @@ object ConsoleConsumer extends Logging {
     val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
     val skipMessageOnError = options.has(skipMessageOnErrorOpt)
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    val formatterArgs = if (options.has(messageFormatterConfigOpt))
+      Utils.loadProps(options.valueOf(messageFormatterConfigOpt))
+    else
+      new Properties()
+    formatterArgs ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
@@ -330,19 +341,19 @@ object ConsoleConsumer extends Logging {
     val topicOrFilterArgs = List(topicArg, includedTopicsArg).filterNot(_ == null)
     // user need to specify value for either --topic or one of the include filters options (--include or --whitelist)
     if (topicOrFilterArgs.size != 1)
-      CommandLineUtils.printUsageAndDie(parser, s"Exactly one of --include/--topic is required. " +
+      CommandLineUtils.printUsageAndExit(parser, s"Exactly one of --include/--topic is required. " +
         s"${if (options.has(whitelistOpt)) "--whitelist is DEPRECATED use --include instead; ignored if --include specified."}")
 
     if (partitionArg.isDefined) {
       if (!options.has(topicOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The topic is required when partition is specified.")
+        CommandLineUtils.printUsageAndExit(parser, "The topic is required when partition is specified.")
       if (fromBeginning && options.has(offsetOpt))
-        CommandLineUtils.printUsageAndDie(parser, "Options from-beginning and offset cannot be specified together.")
+        CommandLineUtils.printUsageAndExit(parser, "Options from-beginning and offset cannot be specified together.")
     } else if (options.has(offsetOpt))
-      CommandLineUtils.printUsageAndDie(parser, "The partition is required when offset is specified.")
+      CommandLineUtils.printUsageAndExit(parser, "The partition is required when offset is specified.")
 
     def invalidOffset(offset: String): Nothing =
-      CommandLineUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
+      ToolsUtils.printUsageAndExit(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
         "'earliest', 'latest', or a non-negative long.")
 
     val offsetArg =
@@ -374,7 +385,7 @@ object ConsoleConsumer extends Logging {
     ).flatten
 
     if (groupIdsProvided.size > 1) {
-      CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
+      CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
         + "via '--consumer-property', or via '--consumer.config') do not match. "
         + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
     }
@@ -392,20 +403,27 @@ object ConsoleConsumer extends Logging {
     }
 
     if (groupIdPassed && partitionArg.isDefined)
-      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified together.")
+      CommandLineUtils.printUsageAndExit(parser, "Options group and partition cannot be specified together.")
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
         parser.parse(args: _*)
       catch {
         case e: OptionException =>
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+          ToolsUtils.printUsageAndExit(parser, e.getMessage)
       }
     }
   }
 
-  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], includedTopics: Option[String],
-                                       consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
+  private[tools] class ConsumerWrapper(
+    topic: Option[String],
+    partitionId: Option[Int],
+    offset: Option[Long],
+    includedTopics: Option[String],
+    consumer: Consumer[Array[Byte], Array[Byte]],
+    timeoutMs: Long = Long.MaxValue,
+    time: Time = Time.SYSTEM
+  ) {
     consumerInit()
     var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
@@ -450,10 +468,12 @@ object ConsoleConsumer extends Logging {
     }
 
     def receive(): ConsumerRecord[Array[Byte], Array[Byte]] = {
-      if (!recordIter.hasNext) {
+      val startTimeMs = time.milliseconds
+      while (!recordIter.hasNext) {
         recordIter = consumer.poll(Duration.ofMillis(timeoutMs)).iterator
-        if (!recordIter.hasNext)
+        if (!recordIter.hasNext && (time.milliseconds - startTimeMs > timeoutMs)) {
           throw new TimeoutException()
+        }
       }
 
       recordIter.next

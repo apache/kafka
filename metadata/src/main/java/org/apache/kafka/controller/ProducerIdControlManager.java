@@ -19,67 +19,103 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
+import org.apache.kafka.timeline.TimelineObject;
+import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
 
 
 public class ProducerIdControlManager {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+        private ClusterControlManager clusterControlManager = null;
 
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder setClusterControlManager(ClusterControlManager clusterControlManager) {
+            this.clusterControlManager = clusterControlManager;
+            return this;
+        }
+
+        ProducerIdControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            if (clusterControlManager == null) {
+                throw new RuntimeException("You must specify ClusterControlManager.");
+            }
+            return new ProducerIdControlManager(
+                logContext,
+                clusterControlManager,
+                snapshotRegistry);
+        }
+    }
+
+    private final Logger log;
     private final ClusterControlManager clusterControlManager;
-    private final TimelineLong lastProducerId;
+    private final TimelineObject<ProducerIdsBlock> nextProducerBlock;
+    private final TimelineLong brokerEpoch;
 
-    ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
+    private ProducerIdControlManager(
+        LogContext logContext,
+        ClusterControlManager clusterControlManager,
+        SnapshotRegistry snapshotRegistry
+    ) {
+        this.log = logContext.logger(ProducerIdControlManager.class);
         this.clusterControlManager = clusterControlManager;
-        this.lastProducerId = new TimelineLong(snapshotRegistry);
+        this.nextProducerBlock = new TimelineObject<>(snapshotRegistry, ProducerIdsBlock.EMPTY);
+        this.brokerEpoch = new TimelineLong(snapshotRegistry);
     }
 
     ControllerResult<ProducerIdsBlock> generateNextProducerId(int brokerId, long brokerEpoch) {
         clusterControlManager.checkBrokerEpoch(brokerId, brokerEpoch);
 
-        long producerId = lastProducerId.get();
-
-        if (producerId > Long.MAX_VALUE - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
+        long firstProducerIdInBlock = nextProducerBlock.get().firstProducerId();
+        if (firstProducerIdInBlock > Long.MAX_VALUE - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
             throw new UnknownServerException("Exhausted all producerIds as the next block's end producerId " +
-                "is will has exceeded long type limit");
+                "has exceeded the int64 type limit");
         }
 
-        long nextProducerId = producerId + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE;
+        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, firstProducerIdInBlock, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
+        long newNextProducerId = block.nextBlockFirstId();
+
         ProducerIdsRecord record = new ProducerIdsRecord()
-            .setProducerIdsEnd(nextProducerId)
+            .setNextProducerId(newNextProducerId)
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
-        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, producerId, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
         return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), block);
     }
 
-    void replay(ProducerIdsRecord record) {
-        long currentProducerId = lastProducerId.get();
-        if (record.producerIdsEnd() <= currentProducerId) {
-            throw new RuntimeException("Producer ID from record is not monotonically increasing");
-        } else {
-            lastProducerId.set(record.producerIdsEnd());
-        }
+    // VisibleForTesting
+    ProducerIdsBlock nextProducerBlock() {
+        return nextProducerBlock.get();
     }
 
-    Iterator<List<ApiMessageAndVersion>> iterator(long epoch) {
-        List<ApiMessageAndVersion> records = new ArrayList<>(1);
-
-        long producerId = lastProducerId.get(epoch);
-        if (producerId > 0) {
-            records.add(new ApiMessageAndVersion(
-                new ProducerIdsRecord()
-                    .setProducerIdsEnd(producerId)
-                    .setBrokerId(0)
-                    .setBrokerEpoch(0L),
-                (short) 0));
+    void replay(ProducerIdsRecord record) {
+        // During a migration, we may be calling replay() without ever having called generateNextProducerId(),
+        // so the next producer block could be EMPTY
+        ProducerIdsBlock nextBlock = nextProducerBlock.get();
+        if (nextBlock != ProducerIdsBlock.EMPTY && record.nextProducerId() <= nextBlock.firstProducerId()) {
+            throw new RuntimeException("Next Producer ID from replayed record (" + record.nextProducerId() + ")" +
+                " is not greater than current next Producer ID in block (" + nextBlock + ")");
+        } else {
+            log.info("Replaying ProducerIdsRecord {}", record);
+            nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(),
+                    ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
+            brokerEpoch.set(record.brokerEpoch());
         }
-        return Collections.singleton(records).iterator();
     }
 }

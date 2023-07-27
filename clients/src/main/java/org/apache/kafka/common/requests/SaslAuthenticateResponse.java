@@ -68,6 +68,11 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
+    @Override
     public SaslAuthenticateResponseData data() {
         return data;
     }

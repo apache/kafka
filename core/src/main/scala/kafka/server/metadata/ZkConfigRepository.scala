@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import java.util.Properties
 
-import kafka.server.ConfigType
+import kafka.server.{ConfigEntityName, ConfigType}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
@@ -37,6 +37,13 @@ class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository 
       case Type.BROKER => ConfigType.Broker
       case tpe => throw new IllegalArgumentException(s"Unsupported config type: $tpe")
     }
-    adminZkClient.fetchEntityConfig(configTypeForZk, configResource.name)
+    // ZK stores cluster configs under "<default>".
+    val effectiveName = if (configResource.`type`.equals(Type.BROKER) &&
+        configResource.name.isEmpty) {
+      ConfigEntityName.Default
+    } else {
+      configResource.name
+    }
+    adminZkClient.fetchEntityConfig(configTypeForZk, effectiveName)
   }
 }

@@ -31,8 +31,8 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
-import org.easymock.EasyMock
 import org.junit.jupiter.api.AfterEach
+import org.mockito.Mockito.mock
 
 class BaseClientQuotaManagerTest {
   protected val time = new MockTime
@@ -57,7 +57,7 @@ class BaseClientQuotaManagerTest {
 
     val request = builder.build()
     val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
-    val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
+    val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
@@ -79,7 +79,7 @@ class BaseClientQuotaManagerTest {
 
   protected def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
                          channelThrottlingCallback: ThrottleCallback): Unit = {
-    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicPartition, PartitionData], Collections.emptyMap()))
+    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicPartition, PartitionData]))
     quotaManager.throttle(request, channelThrottlingCallback, throttleTimeMs)
   }
 }

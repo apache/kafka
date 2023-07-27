@@ -18,15 +18,17 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -41,7 +43,7 @@ import java.util.concurrent.TimeUnit;
  * Handles processing for an individual task. This interface only provides the basic methods
  * used by {@link Worker} to manage the tasks. Implementations combine a user-specified Task with
  * Kafka to create a data flow.
- *
+ * <p>
  * Note on locking: since the task runs in its own thread, special care must be taken to ensure
  * that state transitions are reported correctly, in particular since some state transitions are
  * asynchronous (e.g. pause/resume). For example, changing the state to paused could cause a race
@@ -52,16 +54,18 @@ abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
     private static final String THREAD_NAME_PREFIX = "task-thread-";
 
-    protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
+    private final StatusBackingStore statusBackingStore;
+    protected final ConnectorTaskId id;
     protected final ClassLoader loader;
-    protected final StatusBackingStore statusBackingStore;
     protected final Time time;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final TaskMetricsGroup taskMetricsGroup;
     private volatile TargetState targetState;
+    private volatile boolean failed;
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
     private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
+    private final ErrorHandlingMetrics errorMetrics;
 
     protected final RetryWithToleranceOperator retryWithToleranceOperator;
 
@@ -70,14 +74,17 @@ abstract class WorkerTask implements Runnable {
                       TargetState initialState,
                       ClassLoader loader,
                       ConnectMetrics connectMetrics,
+                      ErrorHandlingMetrics errorMetrics,
                       RetryWithToleranceOperator retryWithToleranceOperator,
                       Time time,
                       StatusBackingStore statusBackingStore) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
+        this.errorMetrics = errorMetrics;
         this.statusListener = taskMetricsGroup;
         this.loader = loader;
         this.targetState = initialState;
+        this.failed = false;
         this.stopping = false;
         this.cancelled = false;
         this.taskMetricsGroup.recordState(this.targetState);
@@ -113,7 +120,7 @@ abstract class WorkerTask implements Runnable {
 
     /**
      * Stop this task from processing messages. This method does not block, it only triggers
-     * shutdown. Use #{@link #awaitStop} to block until completion.
+     * shutdown. Use {@link #awaitStop} to block until completion.
      */
     public void stop() {
         triggerStop();
@@ -125,6 +132,7 @@ abstract class WorkerTask implements Runnable {
      */
     public void cancel() {
         cancelled = true;
+        retryWithToleranceOperator.triggerStop();
     }
 
     /**
@@ -145,7 +153,9 @@ abstract class WorkerTask implements Runnable {
      * Remove all metrics published by this task.
      */
     public void removeMetrics() {
-        taskMetricsGroup.close();
+        // Close quietly here so that we can be sure to close everything even if one attempt fails
+        Utils.closeQuietly(taskMetricsGroup::close, "Task metrics group");
+        Utils.closeQuietly(errorMetrics, "Error handling metrics");
     }
 
     protected abstract void initializeAndStart();
@@ -154,8 +164,14 @@ abstract class WorkerTask implements Runnable {
 
     protected abstract void close();
 
+    protected boolean isFailed() {
+        return failed;
+    }
+
     protected boolean isStopping() {
-        return stopping;
+        // The target state should never be STOPPED, but if things go wrong and it somehow is,
+        // we handle that identically to a request to shut down the task
+        return stopping || targetState == TargetState.STOPPED;
     }
 
     protected boolean isCancelled() {
@@ -174,7 +190,7 @@ abstract class WorkerTask implements Runnable {
     private void doRun() throws InterruptedException {
         try {
             synchronized (this) {
-                if (stopping)
+                if (isStopping())
                     return;
 
                 if (targetState == TargetState.PAUSED) {
@@ -187,9 +203,10 @@ abstract class WorkerTask implements Runnable {
             statusListener.onStartup(id);
             execute();
         } catch (Throwable t) {
+            failed = true;
             if (cancelled) {
                 log.warn("{} After being scheduled for shutdown, the orphan task threw an uncaught exception. A newer instance of this task might be already running", this, t);
-            } else if (stopping) {
+            } else if (isStopping()) {
                 log.warn("{} After being scheduled for shutdown, task threw an uncaught exception.", this, t);
             } else {
                 log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
@@ -236,7 +253,6 @@ abstract class WorkerTask implements Runnable {
         LoggingContext.clear();
 
         try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
@@ -249,7 +265,6 @@ abstract class WorkerTask implements Runnable {
                     throw (Error) t;
             } finally {
                 Thread.currentThread().setName(savedName);
-                Plugins.compareAndSwapLoaders(savedLoader);
                 shutdownLatch.countDown();
             }
         }
@@ -268,7 +283,7 @@ abstract class WorkerTask implements Runnable {
     protected boolean awaitUnpause() throws InterruptedException {
         synchronized (this) {
             while (targetState == TargetState.PAUSED) {
-                if (stopping)
+                if (isStopping())
                     return false;
                 this.wait();
             }
@@ -278,9 +293,21 @@ abstract class WorkerTask implements Runnable {
 
     public void transitionTo(TargetState state) {
         synchronized (this) {
-            // ignore the state change if we are stopping
-            if (stopping)
+            // Ignore the state change if we are stopping.
+            // This has the consequence that, if we ever transition to the STOPPED target state (which
+            // should never happen since whole point of that state is that it comes with a complete
+            // shutdown of all the tasks for the connector), we will never be able to transition out of it.
+            // Since part of transitioning to the STOPPED state is that we shut down the task and all of
+            // its resources (Kafka clients, SMTs, etc.), this is a reasonable way to do things; otherwise,
+            // we'd have to re-instantiate all of those resources to be able to resume (or even just pause)
+            // the task .
+            if (isStopping()) {
+                log.debug("{} Ignoring request to transition stopped task {} to state {}", this, id, state);
                 return;
+            }
+
+            if (targetState == TargetState.STOPPED)
+                log.warn("{} Received unexpected request to transition task {} to state {}; will shut down in response", this, id, TargetState.STOPPED);
 
             this.targetState = state;
             this.notifyAll();
@@ -307,7 +334,7 @@ abstract class WorkerTask implements Runnable {
      * @param duration the length of time in milliseconds for the commit attempt to complete
      */
     protected void recordCommitSuccess(long duration) {
-        taskMetricsGroup.recordCommit(duration, null);
+        taskMetricsGroup.recordCommit(duration, true, null);
     }
 
     /**
@@ -317,7 +344,7 @@ abstract class WorkerTask implements Runnable {
      * @param error the unexpected error that occurred; may be null in the case of timeouts or interruptions
      */
     protected void recordCommitFailure(long duration, Throwable error) {
-        taskMetricsGroup.recordCommit(duration, error);
+        taskMetricsGroup.recordCommit(duration, false, error);
     }
 
     /**
@@ -377,18 +404,16 @@ abstract class WorkerTask implements Runnable {
 
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
             MetricName metricName = metricGroup.metricName(template);
-            if (metricGroup.metrics().metric(metricName) == null) {
-                metricGroup.metrics().addMetric(metricName, (config, now) ->
+            metricGroup.metrics().addMetricIfAbsent(metricName, null, (Gauge<Double>) (config, now) ->
                     taskStateTimer.durationRatio(matchingState, now));
-            }
         }
 
         void close() {
             metricGroup.close();
         }
 
-        void recordCommit(long duration, Throwable error) {
-            if (error == null) {
+        void recordCommit(long duration, boolean success, Throwable error) {
+            if (success) {
                 commitTime.record(duration);
                 commitAttempts.record(1.0d);
             } else {

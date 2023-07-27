@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -39,10 +40,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -50,19 +52,23 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Category(IntegrationTest.class)
+@Timeout(600)
+@Tag("integration")
 public class OptimizedKTableIntegrationTest {
+    private static final Logger LOG = LoggerFactory.getLogger(OptimizedKTableIntegrationTest.class);
     private static final int NUM_BROKERS = 1;
     private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
@@ -70,29 +76,25 @@ public class OptimizedKTableIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-
-    @Rule
-    public final TestName testName = new TestName();
-
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = CLUSTER.time;
 
-    @Before
+    @BeforeEach
     public void before() throws InterruptedException {
         CLUSTER.createTopic(INPUT_TOPIC_NAME, 2, 1);
     }
 
-    @After
+    @AfterEach
     public void after() {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
             kafkaStreams.close();
@@ -100,7 +102,7 @@ public class OptimizedKTableIntegrationTest {
     }
 
     @Test
-    public void shouldApplyUpdatesToStandbyStore() throws Exception {
+    public void shouldApplyUpdatesToStandbyStore(final TestInfo testInfo) throws Exception {
         final int batch1NumMessages = 100;
         final int batch2NumMessages = 100;
         final int key = 1;
@@ -114,55 +116,66 @@ public class OptimizedKTableIntegrationTest {
             .toStream()
             .peek((k, v) -> semaphore.release());
 
-        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration());
-        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration());
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(testInfo));
+        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(testInfo));
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
+        try {
+            startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-        produceValueRange(key, 0, batch1NumMessages);
+            produceValueRange(key, 0, batch1NumMessages);
 
-        // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+            // Assert that all messages in the first batch were processed in a timely manner
+            assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams1, QueryableStoreTypes.keyValueStore());
-        final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, QueryableStoreTypes.keyValueStore());
+            final AtomicReference<ReadOnlyKeyValueStore<Integer, Integer>> newActiveStore = new AtomicReference<>(null);
+            TestUtils.retryOnExceptionWithTimeout(() -> {
+                final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams1, QueryableStoreTypes.keyValueStore());
+                final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, QueryableStoreTypes.keyValueStore());
 
-        final boolean kafkaStreams1WasFirstActive;
-        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
+                final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
-        // Assert that the current value in store reflects all messages being processed
-        if ((keyQueryMetadata.activeHost().port() % 2) == 1) {
-            assertThat(store1.get(key), is(equalTo(batch1NumMessages - 1)));
-            kafkaStreams1WasFirstActive = true;
-        } else {
-            assertThat(store2.get(key), is(equalTo(batch1NumMessages - 1)));
-            kafkaStreams1WasFirstActive = false;
-        }
+                try {
+                    // Assert that the current value in store reflects all messages being processed
+                    if ((keyQueryMetadata.activeHost().port() % 2) == 1) {
+                        assertThat(store1.get(key), is(equalTo(batch1NumMessages - 1)));
+                        kafkaStreams1.close();
+                        newActiveStore.set(store2);
+                    } else {
+                        assertThat(store2.get(key), is(equalTo(batch1NumMessages - 1)));
+                        kafkaStreams2.close();
+                        newActiveStore.set(store1);
+                    }
+                } catch (final InvalidStateStoreException e) {
+                    LOG.warn("Detected an unexpected rebalance during test. Retrying if possible.", e);
+                    throw e;
+                } catch (final Throwable t) {
+                    LOG.error("Caught non-retriable exception in test. Exiting.", t);
+                    throw new NoRetryException(t);
+                }
+            });
 
-        if (kafkaStreams1WasFirstActive) {
+            // Wait for failover
+            TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
+                // Assert that after failover we have recovered to the last store write
+                assertThat(newActiveStore.get().get(key), is(equalTo(batch1NumMessages - 1)));
+            });
+
+            final int totalNumMessages = batch1NumMessages + batch2NumMessages;
+
+            produceValueRange(key, batch1NumMessages, totalNumMessages);
+
+            // Assert that all messages in the second batch were processed in a timely manner
+            assertThat(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+
+            TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
+                // Assert that the current value in store reflects all messages being processed
+                assertThat(newActiveStore.get().get(key), is(equalTo(totalNumMessages - 1)));
+            });
+        } finally {
             kafkaStreams1.close();
-        } else {
             kafkaStreams2.close();
         }
-
-        final ReadOnlyKeyValueStore<Integer, Integer> newActiveStore = kafkaStreams1WasFirstActive ? store2 : store1;
-        TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
-            // Assert that after failover we have recovered to the last store write
-            assertThat(newActiveStore.get(key), is(equalTo(batch1NumMessages - 1)));
-        });
-
-        final int totalNumMessages = batch1NumMessages + batch2NumMessages;
-
-        produceValueRange(key, batch1NumMessages, totalNumMessages);
-
-        // Assert that all messages in the second batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
-
-        TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
-            // Assert that the current value in store reflects all messages being processed
-            assertThat(newActiveStore.get(key), is(equalTo(totalNumMessages - 1)));
-        });
     }
 
     private void produceValueRange(final int key, final int start, final int endExclusive) {
@@ -186,8 +199,8 @@ public class OptimizedKTableIntegrationTest {
         return streams;
     }
 
-    private Properties streamsConfiguration() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private Properties streamsConfiguration(final TestInfo testInfo) {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -198,7 +211,7 @@ public class OptimizedKTableIntegrationTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        config.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);

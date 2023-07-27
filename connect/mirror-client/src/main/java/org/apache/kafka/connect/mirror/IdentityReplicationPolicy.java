@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 
 /** IdentityReplicationPolicy does not rename remote topics. This is useful for migrating
   * from legacy MM1, or for any use-case involving one-way replication.
-  *
+  * <p>
   * N.B. MirrorMaker is not able to prevent cycles when using this class, so take care that
   * your replication topology is acyclic. If migrating from MirrorMaker v1, this will likely
   * already be the case.
@@ -46,7 +46,7 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
 
     /** Unlike DefaultReplicationPolicy, IdentityReplicationPolicy does not include the source
       * cluster alias in the remote topic name. Instead, topic names are unchanged.
-      *
+      * <p>
       * In the special case of heartbeats, we defer to DefaultReplicationPolicy.
       */
     @Override
@@ -58,10 +58,10 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
         }
     }
 
-    /** Unlike DefaultReplicationPolicy, IdendityReplicationPolicy cannot know the source of
+    /** Unlike DefaultReplicationPolicy, IdentityReplicationPolicy cannot know the source of
       * a remote topic based on its name alone. If `source.cluster.alias` is provided,
       * `topicSource` will return that.
-      *
+      * <p>
       * In the special case of heartbeats, we defer to DefaultReplicationPolicy.
       */
     @Override
@@ -74,7 +74,7 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
     }
 
     /** Since any topic may be a "remote topic", this just returns `topic`.
-      *
+      * <p>
       * In the special case of heartbeats, we defer to DefaultReplicationPolicy.
       */
     @Override
@@ -87,6 +87,6 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
     }
 
     private boolean looksLikeHeartbeat(String topic) {
-        return topic != null && topic.endsWith(MirrorClientConfig.HEARTBEATS_TOPIC);
+        return topic != null && topic.endsWith(heartbeatsTopic());
     }
 }

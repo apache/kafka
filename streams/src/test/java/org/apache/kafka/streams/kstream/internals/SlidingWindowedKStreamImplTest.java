@@ -37,8 +37,8 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
@@ -54,7 +54,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SlidingWindowedKStreamImplTest {
 
     private static final String TOPIC = "input";
@@ -67,12 +66,12 @@ public class SlidingWindowedKStreamImplTest {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         windowedStream = stream.
             groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(100L), ofMillis(1000L)));
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(1000L)));
     }
 
     @Test
     public void shouldCountSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .count()
             .toStream()
@@ -113,7 +112,7 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldReduceSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .reduce(MockReducer.STRING_ADDER)
             .toStream()
@@ -154,7 +153,7 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldAggregateSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .aggregate(
                 MockInitializer.STRING_INIT,

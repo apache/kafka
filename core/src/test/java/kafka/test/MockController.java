@@ -19,14 +19,19 @@ package kafka.test;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
-import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -39,15 +44,20 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.Controller;
+import org.apache.kafka.controller.ControllerRequestContext;
 import org.apache.kafka.controller.ResultOrError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
+import org.apache.kafka.server.authorizer.AclCreateResult;
+import org.apache.kafka.server.authorizer.AclDeleteResult;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -56,6 +66,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -70,11 +81,32 @@ public class MockController implements Controller {
 
     private final AtomicLong nextTopicId = new AtomicLong(1);
 
+    @Override
+    public CompletableFuture<List<AclCreateResult>> createAcls(
+        ControllerRequestContext context,
+        List<AclBinding> aclBindings
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<List<AclDeleteResult>> deleteAcls(
+        ControllerRequestContext context,
+        List<AclBindingFilter> aclBindingFilters
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
     public static class Builder {
         private final Map<String, MockTopic> initialTopics = new HashMap<>();
 
         public Builder newInitialTopic(String name, Uuid id) {
             initialTopics.put(name, new MockTopic(name, id));
+            return this;
+        }
+
+        public Builder newInitialTopic(String name, Uuid id, int numPartitions) {
+            initialTopics.put(name, new MockTopic(name, id, numPartitions));
             return this;
         }
 
@@ -93,13 +125,27 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {
+    public CompletableFuture<AlterPartitionResponseData> alterPartition(
+        ControllerRequestContext context,
+        AlterPartitionRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    synchronized public CompletableFuture<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request) {
+    public CompletableFuture<AlterUserScramCredentialsResponseData> alterUserScramCredentials(
+        ControllerRequestContext context,
+        AlterUserScramCredentialsRequestData request
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    synchronized public CompletableFuture<CreateTopicsResponseData> createTopics(
+        ControllerRequestContext context,
+        CreateTopicsRequestData request,
+        Set<String> describable
+    ) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         for (CreatableTopic topic : request.topics()) {
             if (topicNameToId.containsKey(topic.name())) {
@@ -109,32 +155,65 @@ public class MockController implements Controller {
             } else {
                 long topicId = nextTopicId.getAndIncrement();
                 Uuid topicUuid = new Uuid(0, topicId);
-                topicNameToId.put(topic.name(), topicUuid);
-                topics.put(topicUuid, new MockTopic(topic.name(), topicUuid));
-                response.topics().add(new CreatableTopicResult().
+                MockTopic mockTopic = new MockTopic(topic.name(), topicUuid);
+                CreatableTopicResult creatableTopicResult = new CreatableTopicResult().
                     setName(topic.name()).
-                    setErrorCode(Errors.NONE.code()).
-                    setTopicId(topicUuid));
-                // For a better mock, we might want to return configs, replication factor,
-                // etc.  Right now, the tests that use MockController don't need these
-                // things.
+                    setErrorCode(Errors.NONE.code());
+                try {
+                    context.applyPartitionChangeQuota(mockTopic.numPartitions);
+                    creatableTopicResult.setTopicId(topicUuid);
+                    topicNameToId.put(topic.name(), topicUuid);
+                    topics.put(topicUuid, mockTopic);
+                    if (describable.contains(topic.name())) {
+                        // Note: we don't simulate topic configs here yet.
+                        // Just returning replication factor and numPartitions.
+                        if (topic.assignments() != null && !topic.assignments().isEmpty()) {
+                            creatableTopicResult.
+                                setTopicConfigErrorCode(Errors.NONE.code()).
+                                setReplicationFactor((short)
+                                    topic.assignments().iterator().next().brokerIds().size()).
+                                setNumPartitions(topic.assignments().size());
+                        } else {
+                            creatableTopicResult.
+                                setTopicConfigErrorCode(Errors.NONE.code()).
+                                setReplicationFactor(topic.replicationFactor()).
+                                setNumPartitions(topic.numPartitions());
+                        }
+                    } else {
+                        creatableTopicResult.
+                            setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code());
+                    }
+                } catch (ThrottlingQuotaExceededException e) {
+                    ApiError apiError = new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED);
+                    creatableTopicResult.setErrorCode(apiError.error().code()).setErrorMessage(apiError.message());
+                }
+                response.topics().add(creatableTopicResult);
             }
         }
         return CompletableFuture.completedFuture(response);
     }
 
     @Override
-    public CompletableFuture<Void> unregisterBroker(int brokerId) {
+    public CompletableFuture<Void> unregisterBroker(
+        ControllerRequestContext context,
+        int brokerId
+    ) {
         throw new UnsupportedOperationException();
     }
 
     static class MockTopic {
         private final String name;
         private final Uuid id;
+        private final int numPartitions;
 
         MockTopic(String name, Uuid id) {
+            this(name, id, 1);
+        }
+
+        MockTopic(String name, Uuid id, int numPartitions) {
             this.name = name;
             this.id = id;
+            this.numPartitions = numPartitions;
         }
     }
 
@@ -145,8 +224,10 @@ public class MockController implements Controller {
     private final Map<ConfigResource, Map<String, String>> configs = new HashMap<>();
 
     @Override
-    synchronized public CompletableFuture<Map<String, ResultOrError<Uuid>>>
-            findTopicIds(long deadlineNs, Collection<String> topicNames) {
+    synchronized public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(
+        ControllerRequestContext context,
+        Collection<String> topicNames
+    ) {
         Map<String, ResultOrError<Uuid>> results = new HashMap<>();
         for (String topicName : topicNames) {
             if (!topicNameToId.containsKey(topicName)) {
@@ -159,8 +240,21 @@ public class MockController implements Controller {
     }
 
     @Override
-    synchronized public CompletableFuture<Map<Uuid, ResultOrError<String>>>
-            findTopicNames(long deadlineNs, Collection<Uuid> topicIds) {
+    synchronized public CompletableFuture<Map<String, Uuid>> findAllTopicIds(
+        ControllerRequestContext context
+    ) {
+        Map<String, Uuid> results = new HashMap<>();
+        for (Entry<Uuid, MockTopic> entry : topics.entrySet()) {
+            results.put(entry.getValue().name, entry.getKey());
+        }
+        return CompletableFuture.completedFuture(results);
+    }
+
+    @Override
+    synchronized public CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(
+        ControllerRequestContext context,
+        Collection<Uuid> topicIds
+    ) {
         Map<Uuid, ResultOrError<String>> results = new HashMap<>();
         for (Uuid topicId : topicIds) {
             MockTopic topic = topics.get(topicId);
@@ -174,8 +268,10 @@ public class MockController implements Controller {
     }
 
     @Override
-    synchronized public CompletableFuture<Map<Uuid, ApiError>>
-            deleteTopics(long deadlineNs, Collection<Uuid> topicIds) {
+    synchronized public CompletableFuture<Map<Uuid, ApiError>> deleteTopics(
+        ControllerRequestContext context,
+        Collection<Uuid> topicIds
+    ) {
         if (!active) {
             CompletableFuture<Map<Uuid, ApiError>> future = new CompletableFuture<>();
             future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);
@@ -183,36 +279,52 @@ public class MockController implements Controller {
         }
         Map<Uuid, ApiError> results = new HashMap<>();
         for (Uuid topicId : topicIds) {
-            MockTopic topic = topics.remove(topicId);
+            MockTopic topic = topics.get(topicId);
             if (topic == null) {
                 results.put(topicId, new ApiError(Errors.UNKNOWN_TOPIC_ID));
             } else {
-                topicNameToId.remove(topic.name);
-                results.put(topicId, ApiError.NONE);
+                try {
+                    context.applyPartitionChangeQuota(topic.numPartitions);
+                    topics.remove(topicId);
+                    topicNameToId.remove(topic.name);
+                    results.put(topicId, ApiError.NONE);
+                } catch (ThrottlingQuotaExceededException e) {
+                    results.put(topicId, new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED));
+                }
             }
         }
         return CompletableFuture.completedFuture(results);
     }
 
     @Override
-    public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>> describeConfigs(Map<ConfigResource, Collection<String>> resources) {
+    public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>> describeConfigs(
+        ControllerRequestContext context,
+        Map<ConfigResource, Collection<String>> resources
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
+    public CompletableFuture<ElectLeadersResponseData> electLeaders(
+        ControllerRequestContext context,
+        ElectLeadersRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<FeatureMapAndEpoch> finalizedFeatures() {
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures(
+        ControllerRequestContext context
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
-            Map<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> configChanges,
-            boolean validateOnly) {
+        ControllerRequestContext context,
+        Map<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> configChanges,
+        boolean validateOnly
+    ) {
         Map<ConfigResource, ApiError> results = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> entry :
                 configChanges.entrySet()) {
@@ -252,20 +364,27 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterPartitionReassignmentsResponseData>
-            alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
+    public CompletableFuture<AlterPartitionReassignmentsResponseData> alterPartitionReassignments(
+        ControllerRequestContext context,
+        AlterPartitionReassignmentsRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<ListPartitionReassignmentsResponseData>
-            listPartitionReassignments(ListPartitionReassignmentsRequestData request) {
+    public CompletableFuture<ListPartitionReassignmentsResponseData> listPartitionReassignments(
+        ControllerRequestContext context,
+        ListPartitionReassignmentsRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
-            Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
+        ControllerRequestContext context,
+        Map<ConfigResource, Map<String, String>> newConfigs,
+        boolean validateOnly
+    ) {
         Map<ConfigResource, ApiError> results = new HashMap<>();
         if (!validateOnly) {
             for (Entry<ConfigResource, Map<String, String>> entry : newConfigs.entrySet()) {
@@ -281,14 +400,18 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<BrokerHeartbeatReply>
-            processBrokerHeartbeat(BrokerHeartbeatRequestData request) {
+    public CompletableFuture<BrokerHeartbeatReply> processBrokerHeartbeat(
+        ControllerRequestContext context,
+        BrokerHeartbeatRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<BrokerRegistrationReply>
-            registerBroker(BrokerRegistrationRequestData request) {
+    public CompletableFuture<BrokerRegistrationReply> registerBroker(
+        ControllerRequestContext context,
+        BrokerRegistrationRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
@@ -298,19 +421,36 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<Map<ClientQuotaEntity, ApiError>>
-            alterClientQuotas(Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly) {
+    public CompletableFuture<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
+        ControllerRequestContext context,
+        Collection<ClientQuotaAlteration> quotaAlterations,
+        boolean validateOnly
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(AllocateProducerIdsRequestData request) {
+    public CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
+        ControllerRequestContext context,
+        AllocateProducerIdsRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topicList) {
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+        ControllerRequestContext context,
+        UpdateFeaturesRequestData request
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
+        ControllerRequestContext context,
+        List<CreatePartitionsTopic> topicList,
+        boolean validateOnly
+    ) {
         if (!active) {
             CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();
             future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);
@@ -319,9 +459,18 @@ public class MockController implements Controller {
         List<CreatePartitionsTopicResult> results = new ArrayList<>();
         for (CreatePartitionsTopic topic : topicList) {
             if (topicNameToId.containsKey(topic.name())) {
-                results.add(new CreatePartitionsTopicResult().setName(topic.name()).
-                    setErrorCode(Errors.NONE.code()).
-                    setErrorMessage(null));
+                try {
+                    context.applyPartitionChangeQuota(topic.count());
+                    results.add(new CreatePartitionsTopicResult().setName(topic.name()).
+                        setErrorCode(Errors.NONE.code()).
+                        setErrorMessage(null));
+                } catch (ThrottlingQuotaExceededException e) {
+                    ApiError apiError = new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED);
+                    results.add(new CreatePartitionsTopicResult().
+                        setName(topic.name()).
+                        setErrorCode(apiError.error().code()).
+                        setErrorMessage(apiError.message()));
+                }
             } else {
                 results.add(new CreatePartitionsTopicResult().setName(topic.name()).
                     setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()).
@@ -329,11 +478,6 @@ public class MockController implements Controller {
             }
         }
         return CompletableFuture.completedFuture(results);
-    }
-
-    @Override
-    public CompletableFuture<Long> beginWritingSnapshot() {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -346,7 +490,7 @@ public class MockController implements Controller {
     }
 
     @Override
-    public long curClaimEpoch() {
+    public int curClaimEpoch() {
         return active ? 1 : -1;
     }
 

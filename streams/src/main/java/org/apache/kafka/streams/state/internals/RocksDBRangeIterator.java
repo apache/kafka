@@ -18,11 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksIterator;
 
 import java.util.Comparator;
-import java.util.Set;
 
 class RocksDBRangeIterator extends RocksDbIterator {
     // RocksDB's JNI interface does not expose getters/setters that allow the
@@ -35,26 +33,27 @@ class RocksDBRangeIterator extends RocksDbIterator {
 
     RocksDBRangeIterator(final String storeName,
                          final RocksIterator iter,
-                         final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
                          final Bytes from,
                          final Bytes to,
                          final boolean forward,
                          final boolean toInclusive) {
-        super(storeName, iter, openIterators, forward);
+        super(storeName, iter, forward);
         this.forward = forward;
         this.toInclusive = toInclusive;
         if (forward) {
-            iter.seek(from.get());
-            rawLastKey = to.get();
-            if (rawLastKey == null) {
-                throw new NullPointerException("RocksDBRangeIterator: RawLastKey is null for key " + to);
+            if (from == null) {
+                iter.seekToFirst();
+            } else {
+                iter.seek(from.get());
             }
+            rawLastKey = to == null ? null : to.get();
         } else {
-            iter.seekForPrev(to.get());
-            rawLastKey = from.get();
-            if (rawLastKey == null) {
-                throw new NullPointerException("RocksDBRangeIterator: RawLastKey is null for key " + from);
+            if (to == null) {
+                iter.seekToLast();
+            } else {
+                iter.seekForPrev(to.get());
             }
+            rawLastKey = from == null ? null : from.get();
         }
     }
 
@@ -63,6 +62,10 @@ class RocksDBRangeIterator extends RocksDbIterator {
         final KeyValue<Bytes, byte[]> next = super.makeNext();
         if (next == null) {
             return allDone();
+        } else if (rawLastKey == null) {
+            //null means range endpoint is open
+            return next;
+
         } else {
             if (forward) {
                 if (comparator.compare(next.key.get(), rawLastKey) < 0) {

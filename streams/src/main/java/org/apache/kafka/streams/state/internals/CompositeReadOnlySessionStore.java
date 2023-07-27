@@ -101,8 +101,6 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                          final K keyTo,
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
-        Objects.requireNonNull(keyFrom, "from can't be null");
-        Objects.requireNonNull(keyTo, "to can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
@@ -130,8 +128,6 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                                  final K keyTo,
                                                                  final long earliestSessionEndTime,
                                                                  final long latestSessionStartTime) {
-        Objects.requireNonNull(keyFrom, "from can't be null");
-        Objects.requireNonNull(keyTo, "to can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
@@ -189,7 +185,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                 throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
                                                              " and may have been migrated to another instance; " +
                                                              "please re-discover its location from the state metadata. " +
-                                                             "Original error message: " + ise.toString());
+                                                             "Original error message: " + ise);
             }
         }
         return KeyValueIterators.emptyIterator();
@@ -221,8 +217,6 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom, final K keyTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom can't be null");
-        Objects.requireNonNull(keyTo, "keyTo can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction =
             store -> store.fetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
@@ -233,8 +227,6 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom, final K keyTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom can't be null");
-        Objects.requireNonNull(keyTo, "keyTo can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction =
             store -> store.backwardFetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(

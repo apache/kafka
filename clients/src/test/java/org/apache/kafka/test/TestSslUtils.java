@@ -23,7 +23,12 @@ import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.DERT61String;
+import org.bouncycastle.asn1.DERUTF8String;
+import org.bouncycastle.asn1.x500.AttributeTypeAndValue;
+import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
@@ -216,7 +221,7 @@ public class TestSslUtils {
         }
         if (trustCerts != null) {
             if (tsPath == null) {
-                tsPath = File.createTempFile("truststore", ".pem").getPath();
+                tsPath = TestUtils.tempFile("truststore", ".pem").getPath();
                 sslProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, tsPath);
             }
             sslProps.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, PEM_TYPE);
@@ -244,7 +249,7 @@ public class TestSslUtils {
 
         if (certChain != null) {
             if (ksPath == null) {
-                ksPath = File.createTempFile("keystore", ".pem").getPath();
+                ksPath = TestUtils.tempFile("keystore", ".pem").getPath();
                 sslProps.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, ksPath);
             }
             sslProps.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, PEM_TYPE);
@@ -330,7 +335,7 @@ public class TestSslUtils {
 
     static String pem(Certificate cert) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8.name()))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             pemWriter.writeObject(new JcaMiscPEMGenerator(cert));
         }
         return new String(out.toByteArray(), StandardCharsets.UTF_8);
@@ -338,12 +343,12 @@ public class TestSslUtils {
 
     static String pem(PrivateKey privateKey, Password password) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8.name()))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             if (password == null) {
                 pemWriter.writeObject(new JcaPKCS8Generator(privateKey, null));
             } else {
                 JceOpenSSLPKCS8EncryptorBuilder encryptorBuilder = new JceOpenSSLPKCS8EncryptorBuilder(PKCS8Generator.PBE_SHA1_3DES);
-                encryptorBuilder.setPasssword(password.value().toCharArray());
+                encryptorBuilder.setPassword(password.value().toCharArray());
                 try {
                     pemWriter.writeObject(new JcaPKCS8Generator(privateKey, encryptorBuilder.build()));
                 } catch (Exception e) {
@@ -382,6 +387,17 @@ public class TestSslUtils {
         }
 
         public X509Certificate generate(String dn, KeyPair keyPair) throws CertificateException {
+            return generate(new X500Name(dn), keyPair);
+        }
+
+        public X509Certificate generate(String commonName, String org, boolean utf8, KeyPair keyPair) throws CertificateException {
+            RDN[] rdns = new RDN[2];
+            rdns[0] = new RDN(new AttributeTypeAndValue(BCStyle.CN, utf8 ? new DERUTF8String(commonName) : new DERT61String(commonName)));
+            rdns[1] = new RDN(new AttributeTypeAndValue(BCStyle.O, utf8 ? new DERUTF8String(org) : new DERT61String(org)));
+            return generate(new X500Name(rdns), keyPair);
+        }
+
+        public X509Certificate generate(X500Name dn, KeyPair keyPair) throws CertificateException {
             try {
                 Security.addProvider(new BouncyCastleProvider());
                 AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
@@ -399,11 +415,10 @@ public class TestSslUtils {
                 else
                     throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
-                X500Name name = new X500Name(dn);
                 Date from = new Date();
                 Date to = new Date(from.getTime() + days * 86400000L);
                 BigInteger sn = new BigInteger(64, new SecureRandom());
-                X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(name, sn, from, to, name, subPubKeyInfo);
+                X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(dn, sn, from, to, dn, subPubKeyInfo);
 
                 if (subjectAltName != null)
                     v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);
@@ -504,13 +519,13 @@ public class TestSslUtils {
             File keyStoreFile = null;
 
             if (mode == Mode.CLIENT && useClientCert) {
-                keyStoreFile = File.createTempFile("clientKS", ".jks");
+                keyStoreFile = TestUtils.tempFile("clientKS", ".jks");
                 KeyPair cKP = generateKeyPair(algorithm);
                 X509Certificate cCert = certBuilder.generate("CN=" + cn + ", O=A client", cKP);
                 createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "client", cKP.getPrivate(), cCert);
                 certs.put(certAlias, cCert);
             } else if (mode == Mode.SERVER) {
-                keyStoreFile = File.createTempFile("serverKS", ".jks");
+                keyStoreFile = TestUtils.tempFile("serverKS", ".jks");
                 KeyPair sKP = generateKeyPair(algorithm);
                 X509Certificate sCert = certBuilder.generate("CN=" + cn + ", O=A server", sKP);
                 createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "server", sKP.getPrivate(), sCert);

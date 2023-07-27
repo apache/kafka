@@ -46,13 +46,18 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final static String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
@@ -61,9 +66,12 @@ public class RecordCollectorImpl implements RecordCollector {
     private final TaskId taskId;
     private final StreamsProducer streamsProducer;
     private final ProductionExceptionHandler productionExceptionHandler;
-    private final Sensor droppedRecordsSensor;
     private final boolean eosEnabled;
     private final Map<TopicPartition, Long> offsets;
+
+    private final StreamsMetricsImpl streamsMetrics;
+    private final Sensor droppedRecordsSensor;
+    private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
@@ -74,15 +82,29 @@ public class RecordCollectorImpl implements RecordCollector {
                                final TaskId taskId,
                                final StreamsProducer streamsProducer,
                                final ProductionExceptionHandler productionExceptionHandler,
-                               final StreamsMetricsImpl streamsMetrics) {
+                               final StreamsMetricsImpl streamsMetrics,
+                               final ProcessorTopology topology) {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.streamsProducer = streamsProducer;
         this.productionExceptionHandler = productionExceptionHandler;
         this.eosEnabled = streamsProducer.eosEnabled();
+        this.streamsMetrics = streamsMetrics;
 
         final String threadId = Thread.currentThread().getName();
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
+        for (final String topic : topology.sinkTopics()) {
+            final String processorNodeId = topology.sink(topic).name();
+            producedSensorByTopic.put(
+                topic,
+                TopicMetrics.producedSensor(
+                    threadId,
+                    taskId.toString(),
+                    processorNodeId,
+                    topic,
+                    streamsMetrics
+                ));
+        }
 
         this.offsets = new HashMap<>();
     }
@@ -106,8 +128,9 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        final Integer partition;
 
         if (partitioner != null) {
             final List<PartitionInfo> partitions;
@@ -122,21 +145,36 @@ public class RecordCollectorImpl implements RecordCollector {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + fatal.toString(),
+                    "' for task " + taskId + " due to " + fatal,
                     fatal
                 );
             }
             if (partitions.size() > 0) {
-                partition = partitioner.partition(topic, key, value, partitions.size());
+                final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, partitions.size());
+                if (!maybeMulticastPartitions.isPresent()) {
+                    // A null//empty partition indicates we should use the default partitioner
+                    send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
+                } else {
+                    final Set<Integer> multicastPartitions = maybeMulticastPartitions.get();
+                    if (multicastPartitions.isEmpty()) {
+                        // If a record is not to be sent to any partition, mark it as a dropped record.
+                        log.warn("Skipping record as partitioner returned empty partitions. "
+                                + "topic=[{}]", topic);
+                        droppedRecordsSensor.record();
+                    } else {
+                        for (final int multicastPartition: multicastPartitions) {
+                            send(topic, key, value, headers, multicastPartition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
+                        }
+                    }
+                }
             } else {
                 throw new StreamsException("Could not get partition information for topic " + topic + " for task " + taskId +
                     ". This can happen if the topic does not exist.");
             }
         } else {
-            partition = null;
+            send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
         }
 
-        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
     }
 
     @Override
@@ -147,7 +185,9 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Integer partition,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer) {
+                            final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
         final byte[] keyBytes;
@@ -172,9 +212,40 @@ public class RecordCollectorImpl implements RecordCollector {
                     keyClass,
                     valueClass),
                 exception);
-        } catch (final RuntimeException exception) {
-            final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
-            throw new StreamsException(errorMessage, exception);
+        } catch (final Exception exception) {
+            final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
+            final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
+
+            log.debug(String.format("Error serializing record to topic %s", topic), exception);
+
+            try {
+                response = productionExceptionHandler.handleSerializationException(record, exception);
+            } catch (final Exception e) {
+                log.error("Fatal when handling serialization exception", e);
+                recordSendError(topic, e, null);
+                return;
+            }
+
+            if (response == ProductionExceptionHandlerResponse.FAIL) {
+                throw new StreamsException(
+                    String.format(
+                        "Unable to serialize record. ProducerRecord(topic=[%s], partition=[%d], timestamp=[%d]",
+                        topic,
+                        partition,
+                        timestamp),
+                    exception
+                );
+            }
+
+            log.warn("Unable to serialize record, continue processing. " +
+                            "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
+                    topic,
+                    partition,
+                    timestamp);
+
+            droppedRecordsSensor.record();
+
+            return;
         }
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
@@ -191,6 +262,23 @@ public class RecordCollectorImpl implements RecordCollector {
                     offsets.put(tp, metadata.offset());
                 } else {
                     log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
+                }
+
+                if (!topic.endsWith("-changelog")) {
+                    // we may not have created a sensor during initialization if the node uses dynamic topic routing,
+                    // as all topics are not known up front, so create the sensor for this topic if absent
+                    final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
+                        topic,
+                        t -> TopicMetrics.producedSensor(
+                            Thread.currentThread().getName(),
+                            taskId.toString(),
+                            processorNodeId,
+                            topic,
+                            context.metrics()
+                        )
+                    );
+                    final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
+                    topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
                 }
             } else {
                 recordSendError(topic, exception, serializedRecord);
@@ -267,6 +355,8 @@ public class RecordCollectorImpl implements RecordCollector {
     public void closeClean() {
         log.info("Closing record collector clean");
 
+        removeAllProducedSensors();
+
         // No need to abort transaction during a clean close: either we have successfully committed the ongoing
         // transaction during handleRevocation and thus there is no transaction in flight, or else none of the revoked
         // tasks had any data in the current transaction and therefore there is no need to commit or abort it.
@@ -288,6 +378,12 @@ public class RecordCollectorImpl implements RecordCollector {
         }
 
         checkForException();
+    }
+
+    private void removeAllProducedSensors() {
+        for (final Sensor sensor : producedSensorByTopic.values()) {
+            streamsMetrics.removeSensor(sensor);
+        }
     }
 
     @Override

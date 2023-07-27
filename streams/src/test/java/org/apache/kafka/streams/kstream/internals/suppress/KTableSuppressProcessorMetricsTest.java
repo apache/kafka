@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -29,14 +28,17 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
-import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
+import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.hamcrest.Matcher;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
 import java.util.Map;
@@ -48,8 +50,9 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecord
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.core.Is.is;
+import static org.mockito.Mockito.mock;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
     private static final TaskId TASK_ID = new TaskId(0, 0);
@@ -126,15 +129,16 @@ public class KTableSuppressProcessorMetricsTest {
     public void shouldRecordMetricsWithBuiltInMetricsVersionLatest() {
         final String storeName = "test-store";
 
-        final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
+        final StateStore buffer = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(
             storeName, Serdes.String(),
             Serdes.Long()
         )
             .withLoggingDisabled()
             .build();
 
-        final KTableImpl<String, ?, Long> mock = EasyMock.mock(KTableImpl.class);
-        final org.apache.kafka.streams.processor.Processor<String, Change<Long>> processor =
+        @SuppressWarnings("unchecked")
+        final KTableImpl<String, ?, Long> mock = mock(KTableImpl.class);
+        final Processor<String, Change<Long>, String, Change<Long>> processor =
             new KTableSuppressProcessorSupplier<>(
                 (SuppressedInternal<String>) Suppressed.<String>untilTimeLimit(Duration.ofDays(100), maxRecords(1)),
                 storeName,
@@ -142,8 +146,8 @@ public class KTableSuppressProcessorMetricsTest {
             ).get();
 
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
-        final MockInternalProcessorContext context =
-            new MockInternalProcessorContext(streamsConfig, TASK_ID, TestUtils.tempDirectory());
+        final MockInternalNewProcessorContext<String, Change<Long>> context =
+            new MockInternalNewProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
         final Time time = new SystemTime();
         context.setCurrentNode(new ProcessorNode("testNode"));
         context.setSystemTimeMs(time.milliseconds());
@@ -152,10 +156,11 @@ public class KTableSuppressProcessorMetricsTest {
         processor.init(context);
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, new RecordHeaders(), timestamp);
+        context.setRecordMetadata("", 0, 0L);
+        context.setTimestamp(timestamp);
         final String key = "longKey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
-        processor.process(key, value);
+        processor.process(new Record<>(key, value, timestamp));
 
         final MetricName evictionRateMetric = evictionRateMetricLatest;
         final MetricName evictionTotalMetric = evictionTotalMetricLatest;
@@ -175,8 +180,9 @@ public class KTableSuppressProcessorMetricsTest {
             verifyMetric(metrics, bufferCountMaxMetric, is(1.0));
         }
 
-        context.setRecordMetadata("", 0, 1L, new RecordHeaders(), timestamp + 1);
-        processor.process("key", value);
+        context.setRecordMetadata("", 0, 1L);
+        context.setTimestamp(timestamp + 1);
+        processor.process(new Record<>("key", value, timestamp + 1));
 
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();

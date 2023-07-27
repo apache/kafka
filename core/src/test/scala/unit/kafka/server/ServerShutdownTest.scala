@@ -16,22 +16,20 @@
  */
 package kafka.server
 
-import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{CoreUtils, TestUtils}
-import kafka.utils.TestUtils._
+import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
 import java.util.Collections
-import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.{CancellationException, Executors, TimeUnit}
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
+import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogManager
 import kafka.zookeeper.ZooKeeperClientTimeoutException
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -40,57 +38,79 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Disabled, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Properties
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 @Timeout(60)
-class ServerShutdownTest extends ZooKeeperTestHarness {
-  var config: KafkaConfig = null
+class ServerShutdownTest extends KafkaServerTestHarness {
   val host = "localhost"
   val topic = "test"
   val sent1 = List("hello", "there")
   val sent2 = List("more", "messages")
+  val propsToChangeUponRestart = new Properties()
+  var priorConfig: Option[KafkaConfig] = None
 
-  @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
-    val props = TestUtils.createBrokerConfig(0, zkConnect)
-    config = KafkaConfig.fromProps(props)
+  override def generateConfigs: Seq[KafkaConfig] = {
+    priorConfig.foreach { config =>
+      // keep the same log directory
+      val originals = config.originals
+      val logDirsValue = originals.get(KafkaConfig.LogDirsProp)
+      if (logDirsValue != null) {
+        propsToChangeUponRestart.put(KafkaConfig.LogDirsProp, logDirsValue)
+      } else {
+        propsToChangeUponRestart.put(KafkaConfig.LogDirProp, originals.get(KafkaConfig.LogDirProp))
+      }
+    }
+    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))
+    Seq(priorConfig.get)
   }
 
-  @Test
-  def testCleanShutdown(): Unit = {
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    // be sure to clear local variables before setting up so that anything leftover from a prior test
+    // won;t impact the initial config for the current test
+    priorConfig = None
+    propsToChangeUponRestart.clear()
+    super.setUp(testInfo)
+  }
 
-    def createProducer(server: KafkaServer): KafkaProducer[Integer, String] =
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCleanShutdown(quorum: String): Unit = {
+
+    def createProducer(): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
-        TestUtils.getBrokerListStrFromServers(Seq(server)),
+        bootstrapServers(),
         keySerializer = new IntegerSerializer,
         valueSerializer = new StringSerializer
       )
 
-    def createConsumer(server: KafkaServer): KafkaConsumer[Integer, String] =
+    def createConsumer(): Consumer[Integer, String] =
       TestUtils.createConsumer(
-        TestUtils.getBrokerListStrFromServers(Seq(server)),
+        bootstrapServers(),
         securityProtocol = SecurityProtocol.PLAINTEXT,
         keyDeserializer = new IntegerDeserializer,
         valueDeserializer = new StringDeserializer
       )
 
-    var server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
-    server.startup()
-    var producer = createProducer(server)
+    var producer = createProducer()
 
     // create topic
-    createTopic(zkClient, topic, servers = Seq(server))
+    createTopic(topic)
 
     // send some messages
     sent1.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
 
     // do a clean shutdown and check that offset checkpoint file exists
-    server.shutdown()
+    shutdownBroker()
     for (logDir <- config.logDirs) {
       val OffsetCheckpointFile = new File(logDir, LogManager.RecoveryPointCheckpointFile)
       assertTrue(OffsetCheckpointFile.exists)
@@ -99,14 +119,13 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     producer.close()
 
     /* now restart the server and check that the written data is still readable and everything still works */
-    server = new KafkaServer(config)
-    server.startup()
+    restartBroker()
 
     // wait for the broker to receive the update metadata request after startup
-    TestUtils.waitForPartitionMetadata(Seq(server), topic, 0)
+    TestUtils.waitForPartitionMetadata(Seq(broker), topic, 0)
 
-    producer = createProducer(server)
-    val consumer = createConsumer(server)
+    producer = createProducer()
+    val consumer = createConsumer()
     consumer.subscribe(Seq(topic).asJava)
 
     val consumerRecords = TestUtils.consumeRecords(consumer, sent1.size)
@@ -120,66 +139,98 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
     consumer.close()
     producer.close()
-    server.shutdown()
-    CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus()
   }
 
-  @Test
-  def testCleanShutdownAfterFailedStartup(): Unit = {
-    val newProps = TestUtils.createBrokerConfig(0, zkConnect)
-    newProps.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-    newProps.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
-    val newConfig = KafkaConfig.fromProps(newProps)
-    verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException](newConfig)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
+    if (isKRaftTest()) {
+      propsToChangeUponRestart.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "1000")
+      shutdownBroker()
+      shutdownKRaftController()
+      verifyCleanShutdownAfterFailedStartup[CancellationException]
+    } else {
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
+    }
   }
 
-  @Test
-  def testCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
-    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
-    server.startup()
-    createTopic(zkClient, topic, servers = Seq(server))
-    server.shutdown()
-    server.awaitShutdown()
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
+    createTopic(topic)
+    shutdownBroker()
     config.logDirs.foreach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
-    verifyCleanShutdownAfterFailedStartup[KafkaStorageException](config)
+
+    val expectedStatusCode = Some(1)
+    @volatile var receivedStatusCode = Option.empty[Int]
+    @volatile var hasHaltProcedureCalled = false
+    Exit.setHaltProcedure((statusCode, _) => {
+      hasHaltProcedureCalled = true
+      receivedStatusCode = Some(statusCode)
+    }.asInstanceOf[Nothing])
+
+    try {
+      val recreateBrokerExec: Executable = () => recreateBroker(true)
+      // this startup should fail with no online log dir (due to corrupted log), and exit directly without throwing exception
+      assertDoesNotThrow(recreateBrokerExec)
+      // JVM should exit with status code 1
+      TestUtils.waitUntilTrue(() => hasHaltProcedureCalled == true && expectedStatusCode == receivedStatusCode,
+        s"Expected to halt directly with the expected status code:${expectedStatusCode.get}, " +
+          s"but got hasHaltProcedureCalled: $hasHaltProcedureCalled and received status code: ${receivedStatusCode.orNull}")
+    } finally {
+      Exit.resetHaltProcedure()
+    }
   }
 
-  @Test
-  def testCleanShutdownWithZkUnavailable(): Unit = {
-    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
-    server.startup()
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testCleanShutdownWithZkUnavailable(quorum: String): Unit = {
     shutdownZooKeeper()
-    server.shutdown()
-    server.awaitShutdown()
-    CoreUtils.delete(server.config.logDirs)
+    shutdownBroker()
+    CoreUtils.delete(broker.config.logDirs)
     verifyNonDaemonThreadsStatus()
   }
 
-  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](config: KafkaConfig)(implicit exceptionClassTag: ClassTag[E]): Unit = {
-    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
+  @Disabled
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
+    shutdownKRaftController()
+    shutdownBroker()
+    CoreUtils.delete(broker.config.logDirs)
+    verifyNonDaemonThreadsStatus()
+  }
+
+  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](implicit exceptionClassTag: ClassTag[E]): Unit = {
     try {
-      server.startup()
+      recreateBroker(startup = true)
       fail("Expected KafkaServer setup to fail and throw exception")
-    }
-    catch {
+    } catch {
       // Try to clean up carefully without hanging even if the test fails. This means trying to accurately
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
-        assertTrue(exceptionClassTag.runtimeClass.isInstance(e), s"Unexpected exception $e")
-        assertEquals(BrokerState.NOT_RUNNING, server.brokerState)
+        assertCause(exceptionClassTag.runtimeClass, e)
+        assertEquals(if (isKRaftTest()) BrokerState.SHUTTING_DOWN else BrokerState.NOT_RUNNING, brokers.head.brokerState)
+    } finally {
+      shutdownBroker()
     }
-    finally {
-      if (server.brokerState != BrokerState.NOT_RUNNING)
-        server.shutdown()
-      server.awaitShutdown()
+  }
+
+  private def assertCause(expectedClass: Class[_], e: Throwable): Unit = {
+    var cause = e
+    while (cause != null) {
+      if (expectedClass.isInstance(cause)) {
+        return
+      }
+      cause = cause.getCause
     }
-    CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus()
+    fail(s"Failed to assert cause of $e, expected cause $expectedClass")
   }
 
   private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {
@@ -192,19 +243,19 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @Test
-  def testConsecutiveShutdown(): Unit = {
-    val server = new KafkaServer(config)
-    server.startup()
-    server.shutdown()
-    server.awaitShutdown()
-    server.shutdown()
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsecutiveShutdown(quorum: String): Unit = {
+    shutdownBroker()
+    brokers.head.shutdown()
   }
 
   // Verify that if controller is in the midst of processing a request, shutdown completes
-  // without waiting for request timeout.
-  @Test
-  def testControllerShutdownDuringSend(): Unit = {
+  // without waiting for request timeout. Since this involves LeaderAndIsr request, it is
+  // ZK-only for now.
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testControllerShutdownDuringSend(quorum: String): Unit = {
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
 
@@ -229,9 +280,13 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
       controllerContext.setLiveBrokers(brokerAndEpochs)
-      controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-        metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-      controllerChannelManager.startup()
+      controllerChannelManager = new ControllerChannelManager(
+        () => controllerContext.epoch,
+        controllerConfig,
+        Time.SYSTEM,
+        metrics,
+        new StateChangeLogger(controllerId, inControllerContext = true, None))
+      controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
@@ -255,4 +310,14 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       metrics.close()
     }
   }
+
+  private def config: KafkaConfig = configs.head
+  private def broker: KafkaBroker = brokers.head
+  private def shutdownBroker(): Unit = killBroker(0) // idempotent
+  private def restartBroker(): Unit = {
+    shutdownBroker()
+    restartDeadBrokers(reconfigure = !propsToChangeUponRestart.isEmpty)
+  }
+  private def recreateBroker(startup: Boolean): Unit =
+    recreateBrokers(reconfigure = !propsToChangeUponRestart.isEmpty, startup = startup)
 }

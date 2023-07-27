@@ -24,8 +24,8 @@ import static org.junit.Assert.assertTrue;
 
 public class SessionWindowTest {
 
-    private long start = 50;
-    private long end = 100;
+    private final long start = 50;
+    private final long end = 100;
     private final SessionWindow window = new SessionWindow(start, end);
     private final TimeWindow timeWindow = new TimeWindow(start, end);
 

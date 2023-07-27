@@ -18,7 +18,9 @@ package org.apache.kafka.connect.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.tools.ThroughputThrottler;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.common.utils.ThroughputThrottler;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -31,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * A connector primarily intended for system tests. The connector simply generates as many tasks as requested. The
@@ -38,7 +41,7 @@ import java.util.Map;
  * messages have been sent. Each message is also assigned a unique, increasing seqno that is passed to Kafka Connect; when
  * tasks are started on new nodes, this seqno is used to resume where the task previously left off, allowing for
  * testing of distributed Kafka Connect.
- *
+ * <p>
  * If logging is left enabled, log output on stdout can be easily ignored by checking whether a given line is valid JSON.
  */
 public class VerifiableSourceTask extends SourceTask {
@@ -48,6 +51,7 @@ public class VerifiableSourceTask extends SourceTask {
     public static final String ID_CONFIG = "id";
     public static final String TOPIC_CONFIG = "topic";
     public static final String THROUGHPUT_CONFIG = "throughput";
+    public static final String COMPLETE_RECORD_DATA_CONFIG = "complete.record.data";
 
     private static final String ID_FIELD = "id";
     private static final String SEQNO_FIELD = "seqno";
@@ -61,6 +65,15 @@ public class VerifiableSourceTask extends SourceTask {
     private long startingSeqno;
     private long seqno;
     private ThroughputThrottler throttler;
+    private boolean completeRecordData;
+
+    private static final Schema COMPLETE_VALUE_SCHEMA = SchemaBuilder.struct()
+        .field("name", Schema.STRING_SCHEMA)
+        .field("task", Schema.INT32_SCHEMA)
+        .field("topic", Schema.STRING_SCHEMA)
+        .field("time_ms", Schema.INT64_SCHEMA)
+        .field("seqno", Schema.INT64_SCHEMA)
+        .build();
 
     @Override
     public String version() {
@@ -87,12 +100,13 @@ public class VerifiableSourceTask extends SourceTask {
             seqno = 0;
         startingSeqno = seqno;
         throttler = new ThroughputThrottler(throughput, System.currentTimeMillis());
+        completeRecordData = "true".equalsIgnoreCase(props.get(COMPLETE_RECORD_DATA_CONFIG));
 
         log.info("Started VerifiableSourceTask {}-{} producing to topic {} resuming from seqno {}", name, id, topic, startingSeqno);
     }
 
     @Override
-    public List<SourceRecord> poll() throws InterruptedException {
+    public List<SourceRecord> poll() {
         long sendStartMs = System.currentTimeMillis();
         if (throttler.shouldThrottle(seqno - startingSeqno, sendStartMs))
             throttler.throttle();
@@ -114,14 +128,16 @@ public class VerifiableSourceTask extends SourceTask {
         System.out.println(dataJson);
 
         Map<String, Long> ccOffset = Collections.singletonMap(SEQNO_FIELD, seqno);
-        SourceRecord srcRecord = new SourceRecord(partition, ccOffset, topic, Schema.INT32_SCHEMA, id, Schema.INT64_SCHEMA, seqno);
+        Schema valueSchema = completeRecordData ? COMPLETE_VALUE_SCHEMA : Schema.INT64_SCHEMA;
+        Object value = completeRecordData ? completeValue(data) : seqno;
+        SourceRecord srcRecord = new SourceRecord(partition, ccOffset, topic, Schema.INT32_SCHEMA, id, valueSchema, value);
         List<SourceRecord> result = Collections.singletonList(srcRecord);
         seqno++;
         return result;
     }
 
     @Override
-    public void commitRecord(SourceRecord record, RecordMetadata metadata) throws InterruptedException {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         Map<String, Object> data = new HashMap<>();
         data.put("name", name);
         data.put("task", id);
@@ -141,6 +157,15 @@ public class VerifiableSourceTask extends SourceTask {
 
     @Override
     public void stop() {
-        throttler.wakeup();
+        if (throttler != null)
+            throttler.wakeup();
+    }
+
+    private Object completeValue(Map<String, Object> data) {
+        Struct result = new Struct(COMPLETE_VALUE_SCHEMA);
+        Stream.of("name", "task", "topic", "time_ms", "seqno").forEach(
+            field -> result.put(field, data.get(field))
+        );
+        return result;
     }
 }

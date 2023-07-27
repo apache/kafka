@@ -26,9 +26,12 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.slf4j.Logger;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -36,24 +39,49 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.CLIENT_QUOTA_RECORD;
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class ClientQuotaControlManager {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        ClientQuotaControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            return new ClientQuotaControlManager(logContext, snapshotRegistry);
+        }
+    }
+
+    private final Logger log;
+
     private final SnapshotRegistry snapshotRegistry;
 
     final TimelineHashMap<ClientQuotaEntity, TimelineHashMap<String, Double>> clientQuotaData;
 
-    ClientQuotaControlManager(SnapshotRegistry snapshotRegistry) {
+    ClientQuotaControlManager(
+        LogContext logContext,
+        SnapshotRegistry snapshotRegistry
+    ) {
+        this.log = logContext.logger(ClientQuotaControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.clientQuotaData = new TimelineHashMap<>(snapshotRegistry, 0);
     }
@@ -68,7 +96,8 @@ public class ClientQuotaControlManager {
      */
     ControllerResult<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
             Collection<ClientQuotaAlteration> quotaAlterations) {
-        List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
+        List<ApiMessageAndVersion> outputRecords =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         Map<ClientQuotaEntity, ApiError> outputResults = new HashMap<>();
 
         quotaAlterations.forEach(quotaAlteration -> {
@@ -113,17 +142,20 @@ public class ClientQuotaControlManager {
             if (quotas.size() == 0) {
                 clientQuotaData.remove(entity);
             }
+            log.info("Replayed ClientQuotaRecord for {} removing {}.", entity, record.key());
         } else {
             quotas.put(record.key(), record.value());
+            log.info("Replayed ClientQuotaRecord for {} setting {} to {}.",
+                    entity, record.key(), record.value());
         }
     }
 
     private void alterClientQuotaEntity(
-            ClientQuotaEntity entity,
-            Map<String, Double> newQuotaConfigs,
-            List<ApiMessageAndVersion> outputRecords,
-            Map<ClientQuotaEntity, ApiError> outputResults) {
-
+        ClientQuotaEntity entity,
+        Map<String, Double> newQuotaConfigs,
+        List<ApiMessageAndVersion> outputRecords,
+        Map<ClientQuotaEntity, ApiError> outputResults
+    ) {
         // Check entity types and sanitize the names
         Map<String, String> validatedEntityMap = new HashMap<>(3);
         ApiError error = validateEntity(entity, validatedEntityMap);
@@ -160,7 +192,7 @@ public class ClientQuotaControlManager {
                             .setEntity(recordEntitySupplier.get())
                             .setKey(key)
                             .setRemove(true),
-                        CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                        (short) 0));
                 }
             } else {
                 ApiError validationError = validateQuotaKeyValue(configKeys, key, newValue);
@@ -175,7 +207,7 @@ public class ClientQuotaControlManager {
                                 .setEntity(recordEntitySupplier.get())
                                 .setKey(key)
                                 .setValue(newValue),
-                            CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                            (short) 0));
                     }
                 }
             }
@@ -185,7 +217,7 @@ public class ClientQuotaControlManager {
         outputResults.put(entity, ApiError.NONE);
     }
 
-    private ApiError configKeysForEntityType(Map<String, String> entity, Map<String, ConfigDef.ConfigKey> output) {
+    static ApiError configKeysForEntityType(Map<String, String> entity, Map<String, ConfigDef.ConfigKey> output) {
         // We only allow certain combinations of quota entity types. Which type is in use determines which config
         // keys are valid
         boolean hasUser = entity.containsKey(ClientQuotaEntity.USER);
@@ -204,12 +236,8 @@ public class ClientQuotaControlManager {
                     return new ApiError(Errors.INVALID_REQUEST, entity.get(ClientQuotaEntity.IP) + " is not a valid IP or resolvable host.");
                 }
             }
-        } else if (hasUser && hasClientId) {
-            configKeys = QuotaConfigs.userConfigs().configKeys();
-        } else if (hasUser) {
-            configKeys = QuotaConfigs.userConfigs().configKeys();
-        } else if (hasClientId) {
-            configKeys = QuotaConfigs.clientConfigs().configKeys();
+        } else if (hasUser || hasClientId) {
+            configKeys = QuotaConfigs.userAndClientQuotaConfigs().configKeys();
         } else {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity");
         }
@@ -218,46 +246,64 @@ public class ClientQuotaControlManager {
         return ApiError.NONE;
     }
 
-    private ApiError validateQuotaKeyValue(Map<String, ConfigDef.ConfigKey> validKeys, String key, Double value) {
-        // TODO can this validation be shared with alter configs?
+    static ApiError validateQuotaKeyValue(
+        Map<String, ConfigDef.ConfigKey> validKeys,
+        String key,
+        double value
+    ) {
         // Ensure we have an allowed quota key
         ConfigDef.ConfigKey configKey = validKeys.get(key);
         if (configKey == null) {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid configuration key " + key);
         }
+        if (value <= 0.0) {
+            return new ApiError(Errors.INVALID_REQUEST, "Quota " + key + " must be greater than 0");
+        }
 
         // Ensure the quota value is valid
         switch (configKey.type()) {
             case DOUBLE:
-                break;
+                return ApiError.NONE;
             case SHORT:
-            case INT:
-            case LONG:
-                Double epsilon = 1e-6;
-                Long longValue = Double.valueOf(value + epsilon).longValue();
-                if (Math.abs(longValue.doubleValue() - value) > epsilon) {
+                if (value > Short.MAX_VALUE) {
                     return new ApiError(Errors.INVALID_REQUEST,
-                            "Configuration " + key + " must be a Long value");
+                        "Proposed value for " + key + " is too large for a SHORT.");
                 }
-                break;
+                return getErrorForIntegralQuotaValue(value, key);
+            case INT:
+                if (value > Integer.MAX_VALUE) {
+                    return new ApiError(Errors.INVALID_REQUEST,
+                        "Proposed value for " + key + " is too large for an INT.");
+                }
+                return getErrorForIntegralQuotaValue(value, key);
+            case LONG: {
+                if (value > Long.MAX_VALUE) {
+                    return new ApiError(Errors.INVALID_REQUEST,
+                        "Proposed value for " + key + " is too large for a LONG.");
+                }
+                return getErrorForIntegralQuotaValue(value, key);
+            }
             default:
                 return new ApiError(Errors.UNKNOWN_SERVER_ERROR,
                         "Unexpected config type " + configKey.type() + " should be Long or Double");
         }
+    }
+
+    static ApiError getErrorForIntegralQuotaValue(double value, String key) {
+        double remainder = Math.abs(value % 1.0);
+        if (remainder > 1e-6) {
+            return new ApiError(Errors.INVALID_REQUEST, key + " cannot be a fractional value.");
+        }
         return ApiError.NONE;
     }
 
-    // TODO move this somewhere common?
-    private boolean isValidIpEntity(String ip) {
-        if (Objects.nonNull(ip)) {
-            try {
-                InetAddress.getByName(ip);
-                return true;
-            } catch (UnknownHostException e) {
-                return false;
-            }
-        } else {
+    static boolean isValidIpEntity(String ip) {
+        if (ip == null) return true;
+        try {
+            InetAddress.getByName(ip);
             return true;
+        } catch (UnknownHostException e) {
+            return false;
         }
     }
 
@@ -289,46 +335,5 @@ public class ClientQuotaControlManager {
         }
 
         return ApiError.NONE;
-    }
-
-    class ClientQuotaControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final long epoch;
-        private final Iterator<Entry<ClientQuotaEntity, TimelineHashMap<String, Double>>> iterator;
-
-        ClientQuotaControlIterator(long epoch) {
-            this.epoch = epoch;
-            this.iterator = clientQuotaData.entrySet(epoch).iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            if (!hasNext()) throw new NoSuchElementException();
-            Entry<ClientQuotaEntity, TimelineHashMap<String, Double>> entry = iterator.next();
-            ClientQuotaEntity entity = entry.getKey();
-            List<ApiMessageAndVersion> records = new ArrayList<>();
-            for (Entry<String, Double> quotaEntry : entry.getValue().entrySet(epoch)) {
-                ClientQuotaRecord record = new ClientQuotaRecord();
-                for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
-                    record.entity().add(new EntityData().
-                        setEntityType(entityEntry.getKey()).
-                        setEntityName(entityEntry.getValue()));
-                }
-                record.setKey(quotaEntry.getKey());
-                record.setValue(quotaEntry.getValue());
-                record.setRemove(false);
-                records.add(new ApiMessageAndVersion(record,
-                    CLIENT_QUOTA_RECORD.highestSupportedVersion()));
-            }
-            return records;
-        }
-    }
-
-    ClientQuotaControlIterator iterator(long epoch) {
-        return new ClientQuotaControlIterator(epoch);
     }
 }

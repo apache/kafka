@@ -45,6 +45,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.clients.consumer.KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS;
 
 
 /**
@@ -91,11 +92,27 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         return this.subscriptions.assignedPartitions();
     }
 
-    /** Simulate a rebalance event. */
+    /**
+     * Simulate a rebalance event.
+     */
     public synchronized void rebalance(Collection<TopicPartition> newAssignment) {
-        // TODO: Rebalance callbacks
+        // compute added and removed partitions for rebalance callback
+        Set<TopicPartition> oldAssignmentSet = this.subscriptions.assignedPartitions();
+        Set<TopicPartition> newAssignmentSet = new HashSet<>(newAssignment);
+        List<TopicPartition> added = newAssignment.stream().filter(x -> !oldAssignmentSet.contains(x)).collect(Collectors.toList());
+        List<TopicPartition> removed = oldAssignmentSet.stream().filter(x -> !newAssignmentSet.contains(x)).collect(Collectors.toList());
+
+        // rebalance
         this.records.clear();
         this.subscriptions.assignFromSubscribed(newAssignment);
+
+        // rebalance callbacks
+        if (!added.isEmpty()) {
+            this.subscriptions.rebalanceListener().onPartitionsAssigned(added);
+        }
+        if (!removed.isEmpty()) {
+            this.subscriptions.rebalanceListener().onPartitionsRevoked(removed);
+        }
     }
 
     @Override
@@ -446,7 +463,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public final synchronized void close() {
+    public void close() {
+        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+    }
+
+    @Override
+    public synchronized void close(Duration timeout) {
         this.closed = true;
     }
 
@@ -554,6 +576,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance() {
+        enforceRebalance(null);
+    }
+
+    @Override
+    public void enforceRebalance(final String reason) {
         shouldRebalance = true;
     }
 
@@ -567,10 +594,5 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public Duration lastPollTimeout() {
         return lastPollTimeout;
-    }
-
-    @Override
-    public void close(Duration timeout) {
-        close();
     }
 }

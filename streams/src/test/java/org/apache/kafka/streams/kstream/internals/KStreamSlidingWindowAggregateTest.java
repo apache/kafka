@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -24,9 +26,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -34,8 +39,8 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -47,12 +52,13 @@ import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.Matcher;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -69,11 +75,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
+import org.junit.runners.Parameterized.Parameter;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -83,100 +91,158 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @RunWith(Parameterized.class)
 public class KStreamSlidingWindowAggregateTest {
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Boolean[]> data() {
-        return Arrays.asList(new Boolean[][] {
-            {false},
-            {true}
+    @Parameterized.Parameters(name = "{0}_inorder:{1}_cache:{2}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {
+            {StrategyType.ON_WINDOW_UPDATE, true, true},
+            {StrategyType.ON_WINDOW_UPDATE, true, false},
+            {StrategyType.ON_WINDOW_UPDATE, false, true},
+            {StrategyType.ON_WINDOW_UPDATE, false, false},
+            {StrategyType.ON_WINDOW_CLOSE, true, true},
+            {StrategyType.ON_WINDOW_CLOSE, true, false},
+            {StrategyType.ON_WINDOW_CLOSE, false, true},
+            {StrategyType.ON_WINDOW_CLOSE, false, false}
         });
     }
+    @Parameter
+    public StrategyType type;
 
-    @Parameterized.Parameter
+    @Parameter(1)
     public boolean inOrderIterator;
+
+    @Parameter(2)
+    public boolean withCache;
+
+    private boolean emitFinal;
+    private EmitStrategy emitStrategy;
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
 
-    @SuppressWarnings("unchecked")
+    @Before
+    public void before() {
+        emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
+        emitStrategy = StrategyType.forType(type);
+        // Set interval to 0 so that it always tries to emit
+        props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
+    }
+
     @Test
     public void testAggregateSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
-        final WindowBytesStoreSupplier storeSupplier =
-            inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
+
         final KTable<Windowed<String>, String> table = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-            .aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                Materialized.as(storeSupplier)
-            );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5)))
+            .emitStrategy(emitStrategy)
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, materialized);
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "1", 10L);
-            inputTopic.pipeInput("A", "2", 15L);
-            inputTopic.pipeInput("A", "3", 20L);
-            inputTopic.pipeInput("A", "4", 22L);
-            inputTopic.pipeInput("A", "5", 30L);
+            inputTopic.pipeInput("A", "2", 10L);
+            inputTopic.pipeInput("A", "3", 14L);
+            inputTopic.pipeInput("A", "4", 15L);
+            inputTopic.pipeInput("A", "5", 20L);
+            inputTopic.pipeInput("A", "6", 22L);
+            inputTopic.pipeInput("A", "7", 30L);
         }
 
-        final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
+        final Map<Long, Set<ValueAndTimestamp<String>>> actual = gatherOutput(supplier);
+        final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
 
-        for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
-            final Windowed<String> window = entry.key();
-            final Long start = window.window().start();
-            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
-
-            if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
-                actual.replace(start, valueAndTimestamp);
-            }
+        if (emitFinal) {
+            expected.put(0L, mkSet(
+                ValueAndTimestamp.make("0+1+2", 10L)
+            ));
+            expected.put(4L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3", 14L)
+            ));
+            expected.put(5L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4", 15L)
+            ));
+            expected.put(10L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4+5", 20L)
+            ));
+            expected.put(11L, mkSet(
+                ValueAndTimestamp.make("0+3+4+5", 20L)
+            ));
+            expected.put(12L, mkSet(
+                ValueAndTimestamp.make("0+3+4+5+6", 22L)
+            ));
+        } else {
+            expected.put(0L, mkSet(
+                ValueAndTimestamp.make("0+1", 10L),
+                ValueAndTimestamp.make("0+1+2", 10L)
+            ));
+            expected.put(4L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3", 14L)
+            ));
+            expected.put(5L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4", 15L)
+            ));
+            expected.put(10L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4+5", 20L)
+            ));
+            expected.put(11L, mkSet(
+                ValueAndTimestamp.make("0+3", 14L),
+                ValueAndTimestamp.make("0+3+4", 15L),
+                ValueAndTimestamp.make("0+3+4+5", 20L)
+            ));
+            expected.put(12L, mkSet(
+                ValueAndTimestamp.make("0+3+4+5+6", 22L)
+            ));
+            expected.put(15L, mkSet(
+                ValueAndTimestamp.make("0+4", 15L),
+                ValueAndTimestamp.make("0+4+5", 20L),
+                ValueAndTimestamp.make("0+4+5+6", 22L)
+            ));
+            expected.put(16L, mkSet(
+                ValueAndTimestamp.make("0+5", 20L),
+                ValueAndTimestamp.make("0+5+6", 22L)
+            ));
+            expected.put(20L, mkSet(
+                ValueAndTimestamp.make("0+5+6+7", 30L)
+            ));
+            expected.put(21L, mkSet(
+                ValueAndTimestamp.make("0+6", 22L),
+                ValueAndTimestamp.make("0+6+7", 30L)
+            ));
+            expected.put(23L, mkSet(
+                ValueAndTimestamp.make("0+7", 30L)
+            ));
         }
-
-        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
-        expected.put(0L, ValueAndTimestamp.make("0+1", 10L));
-        expected.put(5L, ValueAndTimestamp.make("0+1+2", 15L));
-        expected.put(10L, ValueAndTimestamp.make("0+1+2+3", 20L));
-        expected.put(11L, ValueAndTimestamp.make("0+2+3", 20L));
-        expected.put(12L, ValueAndTimestamp.make("0+2+3+4", 22L));
-        expected.put(16L, ValueAndTimestamp.make("0+3+4", 22L));
-        expected.put(20L, ValueAndTimestamp.make("0+3+4+5", 30L));
-        expected.put(21L, ValueAndTimestamp.make("0+4+5", 30L));
-        expected.put(23L, ValueAndTimestamp.make("0+5", 30L));
 
         assertEquals(expected, actual);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testReduceSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        final WindowBytesStoreSupplier storeSupplier =
-            inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
         final KTable<Windowed<String>, String> table = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5)))
+            .emitStrategy(emitStrategy)
             .reduce(
                 MockReducer.STRING_ADDER,
-                Materialized.as(storeSupplier)
+                materialized
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -189,29 +255,39 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic.pipeInput("A", "6", 30L);
         }
 
-        final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
+        final Map<Long, Set<ValueAndTimestamp<String>>> actual = gatherOutput(supplier);
+        final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
 
-        for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
-            final Windowed<String> window = entry.key();
-            final Long start = window.window().start();
-            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
-            if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
-                actual.replace(start, valueAndTimestamp);
-            }
+        if (emitFinal) {
+            expected.put(0L, mkSet(ValueAndTimestamp.make("1", 10L)));
+            expected.put(4L, mkSet(ValueAndTimestamp.make("1+2", 14L)));
+            expected.put(5L, mkSet(ValueAndTimestamp.make("1+2+3", 15L)));
+            expected.put(11L, mkSet(ValueAndTimestamp.make("2+3", 15L)));
+            expected.put(12L, mkSet(ValueAndTimestamp.make("2+3+4", 22L)));
+        } else {
+            expected.put(0L, mkSet(ValueAndTimestamp.make("1", 10L)));
+            expected.put(4L, mkSet(ValueAndTimestamp.make("1+2", 14L)));
+            expected.put(5L, mkSet(ValueAndTimestamp.make("1+2+3", 15L)));
+            expected.put(11L, mkSet(
+                ValueAndTimestamp.make("2", 14L),
+                ValueAndTimestamp.make("2+3", 15L)
+            ));
+            expected.put(12L, mkSet(ValueAndTimestamp.make("2+3+4", 22L)));
+            expected.put(15L, mkSet(
+                ValueAndTimestamp.make("3", 15L),
+                ValueAndTimestamp.make("3+4", 22L)
+            ));
+            expected.put(16L, mkSet(
+                ValueAndTimestamp.make("4", 22L),
+                ValueAndTimestamp.make("4+5", 26L)
+            ));
+            expected.put(20L, mkSet(ValueAndTimestamp.make("4+5+6", 30L)));
+            expected.put(23L, mkSet(
+                ValueAndTimestamp.make("5", 26L),
+                ValueAndTimestamp.make("5+6", 30L)
+            ));
+            expected.put(27L, mkSet(ValueAndTimestamp.make("6", 30L)));
         }
-
-        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
-        expected.put(0L, ValueAndTimestamp.make("1", 10L));
-        expected.put(4L, ValueAndTimestamp.make("1+2", 14L));
-        expected.put(5L, ValueAndTimestamp.make("1+2+3", 15L));
-        expected.put(11L, ValueAndTimestamp.make("2+3", 15L));
-        expected.put(12L, ValueAndTimestamp.make("2+3+4", 22L));
-        expected.put(15L, ValueAndTimestamp.make("3+4", 22L));
-        expected.put(16L, ValueAndTimestamp.make("4+5", 26L));
-        expected.put(20L, ValueAndTimestamp.make("4+5+6", 30L));
-        expected.put(23L, ValueAndTimestamp.make("5+6", 30L));
-        expected.put(27L, ValueAndTimestamp.make("6", 30L));
-
         assertEquals(expected, actual);
     }
 
@@ -219,22 +295,23 @@ public class KStreamSlidingWindowAggregateTest {
     public void testAggregateLargeInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
+        final long grace = emitFinal ? 10L : 50L;
 
-        final WindowBytesStoreSupplier storeSupplier =
-            inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
+
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(grace)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.as(storeSupplier)
+                materialized
             );
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -250,18 +327,18 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic1.pipeInput("B", "3", 18L);
             inputTopic1.pipeInput("B", "4", 19L);
             inputTopic1.pipeInput("B", "5", 25L);
-            inputTopic1.pipeInput("B", "6", 14L);
+            inputTopic1.pipeInput("B", "6", 14L); // skip for emit final [4, 14], close time 15
 
-            inputTopic1.pipeInput("C", "1", 11L);
+            inputTopic1.pipeInput("C", "1", 11L); // skip for emit final [1, 11], close time 15
             inputTopic1.pipeInput("C", "2", 15L);
             inputTopic1.pipeInput("C", "3", 16L);
             inputTopic1.pipeInput("C", "4", 21);
             inputTopic1.pipeInput("C", "5", 23L);
             
-            inputTopic1.pipeInput("D", "4", 11L);
-            inputTopic1.pipeInput("D", "2", 12L);
+            inputTopic1.pipeInput("D", "4", 11L); // skip for emit final [1, 11], close time 15
+            inputTopic1.pipeInput("D", "2", 12L); // skip for emit final [2, 12], close time 15
             inputTopic1.pipeInput("D", "3", 29L);
-            inputTopic1.pipeInput("D", "5", 16L);
+            inputTopic1.pipeInput("D", "5", 16L); // skip for emit final [6, 16], close time: 19
         }
         final Comparator<KeyValueTimestamp<Windowed<String>, String>> comparator =
             Comparator.comparing((KeyValueTimestamp<Windowed<String>, String> o) -> o.key().key())
@@ -269,108 +346,168 @@ public class KStreamSlidingWindowAggregateTest {
 
         final ArrayList<KeyValueTimestamp<Windowed<String>, String>> actual = supplier.theCapturedProcessor().processed();
         actual.sort(comparator);
-        assertEquals(
-            asList(
-                // FINAL WINDOW: A@10 left window created when A@10 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1", 10),
-                // FINAL WINDOW: A@15 left window created when A@15 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+4", 15),
-                // A@20 left window created when A@20 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(10, 20)), "0+1+2", 20),
-                // FINAL WINDOW: A@20 left window updated when A@15 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(10, 20)), "0+1+2+4", 20),
-                // A@10 right window created when A@20 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)), "0+2", 20),
-                // FINAL WINDOW: A@10 right window updated when A@15 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)), "0+2+4", 20),
-                // A@22 left window created when A@22 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(12, 22)), "0+2+3", 22),
-                // FINAL WINDOW: A@22 left window updated when A@15 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(12, 22)), "0+2+3+4", 22),
-                // FINAL WINDOW: A@15 right window created when A@15 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(16, 26)), "0+2+3", 22),
-                // FINAL WINDOW: A@20 right window created when A@22 processed
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(21, 31)), "0+3", 22),
-                // FINAL WINDOW: B@12 left window created when B@12 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(2, 12)), "0+1", 12),
-                // FINAL WINDOW: B@13 left window created when B@13 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(3, 13)), "0+1+2", 13),
-                // FINAL WINDOW: B@14 left window created when B@14 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(4, 14)), "0+1+2+6", 14),
-                // B@18 left window created when B@18 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(8, 18)), "0+1+2+3", 18),
-                // FINAL WINDOW: B@18 left window updated when B@14 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(8, 18)), "0+1+2+3+6", 18),
-                // B@19 left window created when B@19 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(9, 19)), "0+1+2+3+4", 19),
-                // FINAL WINDOW: B@19 left window updated when B@14 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(9, 19)), "0+1+2+3+4+6", 19),
-                // B@12 right window created when B@13 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)), "0+2", 13),
-                // B@12 right window updated when B@18 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)), "0+2+3", 18),
-                // B@12 right window updated when B@19 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)), "0+2+3+4", 19),
-                // FINAL WINDOW: B@12 right window updated when B@14 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)), "0+2+3+4+6", 19),
-                // B@13 right window created when B@18 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(14, 24)), "0+3", 18),
-                // B@13 right window updated when B@19 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(14, 24)), "0+3+4", 19),
-                // FINAL WINDOW: B@13 right window updated when B@14 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(14, 24)), "0+3+4+6", 19),
-                // FINAL WINDOW: B@25 left window created when B@25 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(15, 25)), "0+3+4+5", 25),
-                // B@18 right window created when B@19 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(19, 29)), "0+4", 19),
-                // FINAL WINDOW: B@18 right window updated when B@25 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(19, 29)), "0+4+5", 25),
-                // FINAL WINDOW: B@19 right window updated when B@25 processed
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(20, 30)), "0+5", 25),
-                // FINAL WINDOW: C@11 left window created when C@11 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(1, 11)), "0+1", 11),
-                // FINAL WINDOW: C@15 left window created when C@15 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+1+2", 15),
-                // FINAL WINDOW: C@16 left window created when C@16 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(6, 16)), "0+1+2+3", 16),
-                // FINAL WINDOW: C@21 left window created when C@21 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(11, 21)), "0+1+2+3+4", 21),
-                // C@11 right window created when C@15 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(12, 22)), "0+2", 15),
-                // C@11 right window updated when C@16 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(12, 22)), "0+2+3", 16),
-                // FINAL WINDOW: C@11 right window updated when C@21 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(12, 22)), "0+2+3+4", 21),
-                // FINAL WINDOW: C@23 left window created when C@23 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)), "0+2+3+4+5", 23),
-                // C@15 right window created when C@16 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(16, 26)), "0+3", 16),
-                // C@15 right window updated when C@21 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(16, 26)), "0+3+4", 21),
-                // FINAL WINDOW: C@15 right window updated when C@23 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(16, 26)), "0+3+4+5", 23),
-                // C@16 right window created when C@21 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(17, 27)), "0+4", 21),
-                // FINAL WINDOW: C@16 right window updated when C@23 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(17, 27)), "0+4+5", 23),
-                // FINAL WINDOW: C@21 right window created when C@23 processed
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(22, 32)), "0+5", 23),
-                // FINAL WINDOW: D@11 left window created when D@11 processed
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(1, 11)), "0+4", 11),
-                // FINAL WINDOW: D@12 left window created when D@12 processed
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(2, 12)), "0+4+2", 12),
-                // FINAL WINDOW: D@16 left window created when D@16 processed
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(6, 16)), "0+4+2+5", 16),
-                // D@11 right window created when D@12 processed
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(12, 22)), "0+2", 12),
-                // FINAL WINDOW: D@11 right window updated when D@16 processed
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(12, 22)), "0+2+5", 16),
-                // FINAL WINDOW: D@12 right window created when D@16 processed
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(13, 23)), "0+5", 16),
-                // FINAL WINDOW: D@29 left window created when D@29 processed
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(19, 29)), "0+3", 29)),
-            actual
-        );
+
+        if (emitFinal) {
+            assertEquals(
+                asList(
+                    // FINAL WINDOW: A@10 left window created when A@10 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1", 10),
+                    // FINAL WINDOW: A@15 left window created when A@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+4",
+                        15),
+                    // FINAL WINDOW: B@12 left window created when B@12 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(2, 12)), "0+1", 12),
+                    // FINAL WINDOW: B@13 left window created when B@13 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(3, 13)), "0+1+2",
+                        13),
+                    // FINAL WINDOW: B@18 left window updated when B@14 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(8, 18)), "0+1+2+3+6",
+                        18),
+                    // FINAL WINDOW: C@15 left window created when C@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+2",
+                        15),
+                    // FINAL WINDOW: C@16 left window created when C@16 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(6, 16)), "0+2+3",
+                        16)),
+                actual
+            );
+        } else {
+            assertEquals(
+                asList(
+                    // FINAL WINDOW: A@10 left window created when A@10 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1", 10),
+                    // FINAL WINDOW: A@15 left window created when A@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+4",
+                        15),
+                    // A@20 left window created when A@20 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(10, 20)), "0+1+2",
+                        20),
+                    // FINAL WINDOW: A@20 left window updated when A@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(10, 20)), "0+1+2+4",
+                        20),
+                    // A@10 right window created when A@20 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)), "0+2", 20),
+                    // FINAL WINDOW: A@10 right window updated when A@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)), "0+2+4",
+                        20),
+                    // A@22 left window created when A@22 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(12, 22)), "0+2+3",
+                        22),
+                    // FINAL WINDOW: A@22 left window updated when A@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(12, 22)), "0+2+3+4",
+                        22),
+                    // FINAL WINDOW: A@15 right window created when A@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(16, 26)), "0+2+3",
+                        22),
+                    // FINAL WINDOW: A@20 right window created when A@22 processed
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(21, 31)), "0+3", 22),
+                    // FINAL WINDOW: B@12 left window created when B@12 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(2, 12)), "0+1", 12),
+                    // FINAL WINDOW: B@13 left window created when B@13 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(3, 13)), "0+1+2",
+                        13),
+                    // FINAL WINDOW: B@14 left window created when B@14 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(4, 14)), "0+1+2+6",
+                        14),
+                    // B@18 left window created when B@18 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(8, 18)), "0+1+2+3",
+                        18),
+                    // FINAL WINDOW: B@18 left window updated when B@14 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(8, 18)), "0+1+2+3+6",
+                        18),
+                    // B@19 left window created when B@19 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(9, 19)), "0+1+2+3+4",
+                        19),
+                    // FINAL WINDOW: B@19 left window updated when B@14 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(9, 19)),
+                        "0+1+2+3+4+6", 19),
+                    // B@12 right window created when B@13 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)), "0+2", 13),
+                    // B@12 right window updated when B@18 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)), "0+2+3",
+                        18),
+                    // B@12 right window updated when B@19 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)), "0+2+3+4",
+                        19),
+                    // FINAL WINDOW: B@12 right window updated when B@14 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(13, 23)),
+                        "0+2+3+4+6", 19),
+                    // B@13 right window created when B@18 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(14, 24)), "0+3", 18),
+                    // B@13 right window updated when B@19 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(14, 24)), "0+3+4",
+                        19),
+                    // FINAL WINDOW: B@13 right window updated when B@14 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(14, 24)), "0+3+4+6",
+                        19),
+                    // FINAL WINDOW: B@25 left window created when B@25 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(15, 25)), "0+3+4+5",
+                        25),
+                    // B@18 right window created when B@19 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(19, 29)), "0+4", 19),
+                    // FINAL WINDOW: B@18 right window updated when B@25 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(19, 29)), "0+4+5",
+                        25),
+                    // FINAL WINDOW: B@19 right window updated when B@25 processed
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(20, 30)), "0+5", 25),
+                    // FINAL WINDOW: C@11 left window created when C@11 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(1, 11)), "0+1", 11),
+                    // FINAL WINDOW: C@15 left window created when C@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+1+2",
+                        15),
+                    // FINAL WINDOW: C@16 left window created when C@16 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(6, 16)), "0+1+2+3",
+                        16),
+                    // FINAL WINDOW: C@21 left window created when C@21 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(11, 21)),
+                        "0+1+2+3+4", 21),
+                    // C@11 right window created when C@15 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(12, 22)), "0+2", 15),
+                    // C@11 right window updated when C@16 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(12, 22)), "0+2+3",
+                        16),
+                    // FINAL WINDOW: C@11 right window updated when C@21 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(12, 22)), "0+2+3+4",
+                        21),
+                    // FINAL WINDOW: C@23 left window created when C@23 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)),
+                        "0+2+3+4+5", 23),
+                    // C@15 right window created when C@16 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(16, 26)), "0+3", 16),
+                    // C@15 right window updated when C@21 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(16, 26)), "0+3+4",
+                        21),
+                    // FINAL WINDOW: C@15 right window updated when C@23 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(16, 26)), "0+3+4+5",
+                        23),
+                    // C@16 right window created when C@21 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(17, 27)), "0+4", 21),
+                    // FINAL WINDOW: C@16 right window updated when C@23 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(17, 27)), "0+4+5",
+                        23),
+                    // FINAL WINDOW: C@21 right window created when C@23 processed
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(22, 32)), "0+5", 23),
+                    // FINAL WINDOW: D@11 left window created when D@11 processed
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(1, 11)), "0+4", 11),
+                    // FINAL WINDOW: D@12 left window created when D@12 processed
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(2, 12)), "0+4+2",
+                        12),
+                    // FINAL WINDOW: D@16 left window created when D@16 processed
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(6, 16)), "0+4+2+5",
+                        16),
+                    // D@11 right window created when D@12 processed
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(12, 22)), "0+2", 12),
+                    // FINAL WINDOW: D@11 right window updated when D@16 processed
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(12, 22)), "0+2+5",
+                        16),
+                    // FINAL WINDOW: D@12 right window created when D@16 processed
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(13, 23)), "0+5", 16),
+                    // FINAL WINDOW: D@29 left window created when D@29 processed
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(19, 29)), "0+3",
+                        29)),
+                actual
+            );
+        }
     }
 
     @Test
@@ -378,37 +515,27 @@ public class KStreamSlidingWindowAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
-        final WindowBytesStoreSupplier storeSupplier1 =
-            inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder1", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse1", Duration.ofMillis(50000), Duration.ofMillis(10), false);
-        final WindowBytesStoreSupplier storeSupplier2 =
-            inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder2", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse2", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final WindowBytesStoreSupplier storeSupplier1 = setupWindowBytesStoreSupplier(1);
+        final WindowBytesStoreSupplier storeSupplier2 = setupWindowBytesStoreSupplier(2);
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized1 = setupMaterialized(emitFinal ? Materialized.as("store-name1") : Materialized.as(storeSupplier1));
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized2 = setupMaterialized(emitFinal ? Materialized.as("store-name2") : Materialized.as(storeSupplier2));
 
+        final long grace = emitFinal ? 0 : 100;
         final KTable<Windowed<String>, String> table1 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
-            .aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                Materialized.as(storeSupplier1)
-            );
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(grace)))
+            .emitStrategy(emitStrategy)
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, materialized1);
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
-            .aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                Materialized.as(storeSupplier2)
-            );
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(grace)))
+            .emitStrategy(emitStrategy)
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, materialized2);
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
-
         table2.toStream().process(supplier);
 
         table1.join(table2, (p1, p2) -> p1 + "%" + p2).toStream().process(supplier);
@@ -422,14 +549,22 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic1.pipeInput("B", "2", 11L);
             inputTopic1.pipeInput("C", "3", 12L);
 
-            final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
+            final List<MockApiProcessor<Windowed<String>, String, Void, Void>> processors = supplier.capturedProcessors(3);
 
-            processors.get(0).checkAndClearProcessResult(
+            if (emitFinal) {
+                processors.get(0).checkAndClearProcessResult(
                     // left windows created by the first set of records to table 1
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1",  10),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(1, 11)),  "0+2",  11),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)),  "0+3",  12)
-            );
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1", 10),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(1, 11)), "0+2", 11)
+                );
+            } else {
+                processors.get(0).checkAndClearProcessResult(
+                    // left windows created by the first set of records to table 1
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1", 10),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(1, 11)), "0+2", 11),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)), "0+3", 12)
+                );
+            }
             processors.get(1).checkAndClearProcessResult();
             processors.get(2).checkAndClearProcessResult();
 
@@ -437,77 +572,110 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic1.pipeInput("B", "2", 16L);
             inputTopic1.pipeInput("C", "3", 19L);
 
-            processors.get(0).checkAndClearProcessResult(
+            if (emitFinal) {
+                processors.get(0).checkAndClearProcessResult(
                     // right windows from previous records are created, and left windows from new records to table 1
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)),  "0+1",  15),
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1+1",  15),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(12, 22)),  "0+2",  16),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)),  "0+2+2",  16),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)),  "0+3",  19),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(9, 19)),  "0+3+3",  19)
-            );
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)), "0+3", 12),
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)), "0+2+2", 16)
+                );
+            } else {
+                processors.get(0).checkAndClearProcessResult(
+                    // right windows from previous records are created, and left windows from new records to table 1
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)), "0+1", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(12, 22)), "0+2", 16),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)), "0+2+2", 16),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)), "0+3", 19),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(9, 19)), "0+3+3", 19)
+                );
+            }
             processors.get(1).checkAndClearProcessResult();
             processors.get(2).checkAndClearProcessResult();
 
             inputTopic2.pipeInput("A", "a", 10L);
-            inputTopic2.pipeInput("B", "b", 30L);
             inputTopic2.pipeInput("C", "c", 12L);
-            inputTopic2.pipeInput("C", "c", 35L);
-
 
             processors.get(0).checkAndClearProcessResult();
-            processors.get(1).checkAndClearProcessResult(
+            if (emitFinal) {
+                processors.get(1).checkAndClearProcessResult(
                     // left windows from first set of records sent to table 2
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+a",  10),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(20, 30)),  "0+b",  30),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)),  "0+c",  12),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(25, 35)),  "0+c",  35)
-            );
-            processors.get(2).checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 10)
+                );
+                processors.get(2).checkAndClearProcessResult(
                     // set of join windows from windows created by table 1 and table 2
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1%0+a",  10),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)),  "0+3%0+c",  12)
-            );
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1%0+a", 10)
+                );
+            } else {
+                processors.get(1).checkAndClearProcessResult(
+                    // left windows from first set of records sent to table 2
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 10),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)), "0+c", 12)
+                );
+                processors.get(2).checkAndClearProcessResult(
+                    // set of join windows from windows created by table 1 and table 2
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1%0+a", 10),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)), "0+3%0+c", 12)
+                );
+            }
 
             inputTopic2.pipeInput("A", "a", 15L);
             inputTopic2.pipeInput("B", "b", 16L);
             inputTopic2.pipeInput("C", "c", 17L);
 
             processors.get(0).checkAndClearProcessResult();
-            processors.get(1).checkAndClearProcessResult(
+
+            if (emitFinal) {
+                processors.get(1).checkAndClearProcessResult(
                     // right windows from previous records are created (where applicable), and left windows from new records to table 2
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)),  "0+a",  15),
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+a+a",  15),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)),  "0+b",  16),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)),  "0+c",  17),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(7, 17)),  "0+c+c",  17)
-            );
-            processors.get(2).checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)), "0+c", 12),
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a+a", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)), "0+b", 16)
+                );
+                processors.get(2).checkAndClearProcessResult(
                     // set of join windows from windows created by table 1 and table 2
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)),  "0+1%0+a",  15),
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1+1%0+a+a",  15),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)),  "0+2+2%0+b",  16),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)),  "0+3%0+c",  19)
-            );
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(2, 12)), "0+3%0+c", 12),
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1%0+a+a", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)), "0+2+2%0+b", 16)
+                );
+            } else {
+                processors.get(1).checkAndClearProcessResult(
+                    // right windows from previous records are created (where applicable), and left windows from new records to table 2
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)), "0+a", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a+a", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)), "0+b", 16),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)), "0+c", 17),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(7, 17)), "0+c+c", 17)
+                );
+                processors.get(2).checkAndClearProcessResult(
+                    // set of join windows from windows created by table 1 and table 2
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(11, 21)), "0+1%0+a", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1%0+a+a", 15),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(6, 16)), "0+2+2%0+b", 16),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(13, 23)), "0+3%0+c", 19)
+                );
+            }
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testEarlyRecordsSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String()));
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(50), ofMillis(200)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(50), ofMillis(0)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
+                materialized
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -520,45 +688,117 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic.pipeInput("A", "4", 3L);
             inputTopic.pipeInput("A", "5", 13L);
             inputTopic.pipeInput("A", "6", 10L);
+            inputTopic.pipeInput("A", "7", 70L);
         }
 
-        final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
-        for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
-            final Windowed<String> window = entry.key();
-            final Long start = window.window().start();
-            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
-            if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
-                actual.replace(start, valueAndTimestamp);
-            }
-        }
+        final Map<Long, Set<ValueAndTimestamp<String>>> actual = gatherOutput(supplier);
+        final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
 
-        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
-        expected.put(0L, ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L));
-        expected.put(1L, ValueAndTimestamp.make("0+2+3+4+5+6", 13L));
-        expected.put(4L, ValueAndTimestamp.make("0+2+3+5+6", 13L));
-        expected.put(6L, ValueAndTimestamp.make("0+3+5+6", 13L));
-        expected.put(7L, ValueAndTimestamp.make("0+5+6", 13L));
-        expected.put(11L, ValueAndTimestamp.make("0+5", 13L));
+        if (emitFinal) {
+            expected.put(0L,
+                mkSet(
+                    ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L)
+                )
+            );
+            expected.put(1L,
+                mkSet(
+                    ValueAndTimestamp.make("0+2+3+4+5+6", 13L)
+                )
+            );
+            expected.put(4L,
+                mkSet(
+                    ValueAndTimestamp.make("0+2+3+5+6", 13L)
+                )
+            );
+            expected.put(6L,
+                mkSet(
+                    ValueAndTimestamp.make("0+3+5+6", 13L)
+                )
+            );
+            expected.put(7L,
+                mkSet(
+                    ValueAndTimestamp.make("0+5+6", 13L)
+                )
+            );
+            expected.put(11L,
+                mkSet(
+                    ValueAndTimestamp.make("0+5", 13L)
+                )
+            );
+        } else {
+            expected.put(0L,
+                mkSet(
+                    ValueAndTimestamp.make("0+1", 0L),
+                    ValueAndTimestamp.make("0+1+2", 5L),
+                    ValueAndTimestamp.make("0+1+2+3", 6L),
+                    ValueAndTimestamp.make("0+1+2+3+4", 6L),
+                    ValueAndTimestamp.make("0+1+2+3+4+5", 13L),
+                    ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L)
+                )
+            );
+            expected.put(1L,
+                mkSet(
+                    ValueAndTimestamp.make("0+2", 5L),
+                    ValueAndTimestamp.make("0+2+3", 6L),
+                    ValueAndTimestamp.make("0+2+3+4", 6L),
+                    ValueAndTimestamp.make("0+2+3+4+5", 13L),
+                    ValueAndTimestamp.make("0+2+3+4+5+6", 13L)
+                )
+            );
+            expected.put(4L,
+                mkSet(
+                    ValueAndTimestamp.make("0+2+3", 6L),
+                    ValueAndTimestamp.make("0+2+3+5", 13L),
+                    ValueAndTimestamp.make("0+2+3+5+6", 13L)
+                )
+            );
+            expected.put(6L,
+                mkSet(
+                    ValueAndTimestamp.make("0+3", 6L),
+                    ValueAndTimestamp.make("0+3+5", 13L),
+                    ValueAndTimestamp.make("0+3+5+6", 13L)
+                )
+            );
+            expected.put(7L,
+                mkSet(
+                    ValueAndTimestamp.make("0+5", 13L),
+                    ValueAndTimestamp.make("0+5+6", 13L)
+                )
+            );
+            expected.put(11L,
+                mkSet(
+                    ValueAndTimestamp.make("0+5", 13L)
+                )
+            );
+            expected.put(20L,
+                mkSet(
+                    ValueAndTimestamp.make("0+7", 70L)
+                )
+            );
+        }
 
         assertEquals(expected, actual);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testEarlyRecordsRepeatedInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String()));
+
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(5), ofMillis(20)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(5), ofMillis(0)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
+                materialized
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -572,22 +812,53 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic.pipeInput("A", "5", 2L);
             inputTopic.pipeInput("A", "6", 2L);
             inputTopic.pipeInput("A", "7", 0L);
+            inputTopic.pipeInput("A", "8", 7L);
         }
 
-        final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
+        final Map<Long, Set<ValueAndTimestamp<String>>> actual = new HashMap<>();
         for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
             final Windowed<String> window = entry.key();
             final Long start = window.window().start();
-            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
-            if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
-                actual.replace(start, valueAndTimestamp);
-            }
+            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
+            final Set<ValueAndTimestamp<String>> valueSet = actual.computeIfAbsent(start, k -> new HashSet<>());
+            valueSet.add(valueAndTimestamp);
         }
 
-        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
-        expected.put(0L, ValueAndTimestamp.make("0+1+2+3+4+5+6+7", 4L));
-        expected.put(1L, ValueAndTimestamp.make("0+2+3+5+6", 4L));
-        expected.put(3L, ValueAndTimestamp.make("0+3", 4L));
+        final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
+        if (emitFinal) {
+            expected.put(0L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4+5+6+7", 4L)
+            ));
+            expected.put(1L, mkSet(
+                ValueAndTimestamp.make("0+2+3+5+6", 4L)
+            ));
+        } else {
+            expected.put(0L, mkSet(
+                ValueAndTimestamp.make("0+1", 0L),
+                ValueAndTimestamp.make("0+1+2", 2L),
+                ValueAndTimestamp.make("0+1+2+3+4+5", 4L),
+                ValueAndTimestamp.make("0+1+2+3+4+5+6", 4L),
+                ValueAndTimestamp.make("0+1+2+3", 4L),
+                ValueAndTimestamp.make("0+1+2+3+4", 4L),
+                ValueAndTimestamp.make("0+1+2+3+4+5+6+7", 4L)
+            ));
+            expected.put(1L, mkSet(
+                ValueAndTimestamp.make("0+2+3+5+6", 4L),
+                ValueAndTimestamp.make("0+2", 2L),
+                ValueAndTimestamp.make("0+2+3", 4L),
+                ValueAndTimestamp.make("0+2+3+5", 4L)
+            ));
+            expected.put(2L, mkSet(
+                ValueAndTimestamp.make("0+2+3+5+6+8", 7)
+            ));
+            expected.put(3L, mkSet(
+                ValueAndTimestamp.make("0+3", 4L),
+                ValueAndTimestamp.make("0+3+8", 7L)
+            ));
+            expected.put(5L, mkSet(
+                ValueAndTimestamp.make("0+8", 7)
+            ));
+        }
         assertEquals(expected, actual);
     }
 
@@ -595,22 +866,22 @@ public class KStreamSlidingWindowAggregateTest {
     public void testEarlyRecordsLargeInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        final WindowBytesStoreSupplier storeSupplier =
-            inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
+        final long grace = emitFinal ? 1L : 50L;
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(grace)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.as(storeSupplier)
+                materialized
             );
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -633,74 +904,545 @@ public class KStreamSlidingWindowAggregateTest {
 
         final ArrayList<KeyValueTimestamp<Windowed<String>, String>> actual = supplier.theCapturedProcessor().processed();
         actual.sort(comparator);
-        assertEquals(
-            asList(
-                // E@0
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1", 0),
-                // E@5
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3", 5),
-                // E@6
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4", 6),
-                // E@3
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2", 6),
-                //E@10
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2+5", 10),
-                //E@4
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2+5+7", 10),
-                //E@2
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2+5+7+8", 10),
-                // E@5
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3", 5),
-                // E@6
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4", 6),
-                // E@3
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2", 6),
-                //E@10
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2+5", 10),
-                //E@4
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2+5+7", 10),
-                //E@2
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2+5+7+8", 10),
-                //E@13
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6", 13),
-                //E@10
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6+5", 13),
-                //E@4
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6+5+7", 13),
-                // E@3
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4", 6),
-                //E@13
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6", 13),
-                //E@10
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6+5", 13),
-                //E@4
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6+5+7", 13),
-                //E@4
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(5, 15)), "0+3+4+6+5", 13),
-                //E@15
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(5, 15)), "0+3+4+6+5+9", 15),
-                // E@6
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4", 6),
-                //E@13
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6", 13),
-                //E@10
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6+5", 13),
-                //E@15
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6+5+9", 15),
-                //E@13
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6", 13),
-                //E@10
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6+5", 13),
-                //E@15
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6+5+9", 15),
-                //E@10
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(11, 21)), "0+6", 13),
-                //E@15
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(11, 21)), "0+6+9", 15),
-                //E@15
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(14, 24)), "0+9", 15)),
-            actual
-        );
+
+        if (emitFinal) {
+            assertEquals(
+                asList(
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2",
+                        6),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2",
+                        6),
+                    // E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)),
+                        "0+3+4+2+6+5+7", 13)),
+                actual
+            );
+        } else {
+            assertEquals(
+                asList(
+                    // E@0
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1", 0),
+                    // E@5
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3", 5),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4",
+                        6),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2",
+                        6),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)),
+                        "0+1+3+4+2+5", 10),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)),
+                        "0+1+3+4+2+5+7", 10),
+                    //E@2
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)),
+                        "0+1+3+4+2+5+7+8", 10),
+                    // E@5
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3", 5),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4", 6),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2",
+                        6),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2+5",
+                        10),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)),
+                        "0+3+4+2+5+7", 10),
+                    //E@2
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)),
+                        "0+3+4+2+5+7+8", 10),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6",
+                        13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)),
+                        "0+3+4+2+6+5", 13),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)),
+                        "0+3+4+2+6+5+7", 13),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4", 6),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6",
+                        13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6+5",
+                        13),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)),
+                        "0+3+4+6+5+7", 13),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(5, 15)), "0+3+4+6+5",
+                        13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(5, 15)),
+                        "0+3+4+6+5+9", 15),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4", 6),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6",
+                        13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6+5",
+                        13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6+5+9",
+                        15),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6", 13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6+5",
+                        13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6+5+9",
+                        15),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(11, 21)), "0+6", 13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(11, 21)), "0+6+9",
+                        15),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(14, 24)), "0+9",
+                        15)),
+                actual
+            );
+        }
+    }
+
+    @Test
+    public void testEarlyNoGracePeriodSmallInput() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String()));
+
+        final KTable<Windowed<String>, String> table2 = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(50)))
+            .emitStrategy(emitStrategy)
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                materialized
+            );
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        table2.toStream().process(supplier);
+
+        // all events are considered as early events since record timestamp is less than time difference of the window
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+
+            inputTopic.pipeInput("A", "1", 0L);
+            inputTopic.pipeInput("A", "2", 5L);
+            inputTopic.pipeInput("A", "3", 6L);
+            inputTopic.pipeInput("A", "4", 3L);
+            inputTopic.pipeInput("A", "5", 13L);
+            inputTopic.pipeInput("A", "6", 10L);
+            inputTopic.pipeInput("A", "6", 70L);
+        }
+
+        final Map<Long, Set<ValueAndTimestamp<String>>> actual = gatherOutput(supplier);
+        final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
+
+        if (emitFinal) {
+            expected.put(0L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L)
+            ));
+            expected.put(1L, mkSet(
+                ValueAndTimestamp.make("0+2+3+4+5+6", 13L)
+            ));
+            expected.put(4L, mkSet(
+                ValueAndTimestamp.make("0+2+3+5+6", 13L)
+            ));
+            expected.put(6L, mkSet(
+                ValueAndTimestamp.make("0+3+5+6", 13L)
+            ));
+            expected.put(7L, mkSet(
+                ValueAndTimestamp.make("0+5+6", 13L)
+            ));
+            expected.put(11L, mkSet(
+                ValueAndTimestamp.make("0+5", 13L)
+            ));
+        } else {
+            expected.put(0L, mkSet(
+                ValueAndTimestamp.make("0+1", 0L),
+                ValueAndTimestamp.make("0+1+2", 5L),
+                ValueAndTimestamp.make("0+1+2+3", 6L),
+                ValueAndTimestamp.make("0+1+2+3+4", 6L),
+                ValueAndTimestamp.make("0+1+2+3+4+5", 13L),
+                ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L)
+            ));
+            expected.put(1L, mkSet(
+                ValueAndTimestamp.make("0+2", 5L),
+                ValueAndTimestamp.make("0+2+3", 6L),
+                ValueAndTimestamp.make("0+2+3+4", 6L),
+                ValueAndTimestamp.make("0+2+3+4+5", 13L),
+                ValueAndTimestamp.make("0+2+3+4+5+6", 13L)
+            ));
+            expected.put(4L, mkSet(
+                ValueAndTimestamp.make("0+2+3", 6L),
+                ValueAndTimestamp.make("0+2+3+5", 13L),
+                ValueAndTimestamp.make("0+2+3+5+6", 13L)
+            ));
+            expected.put(6L, mkSet(
+                ValueAndTimestamp.make("0+3", 6L),
+                ValueAndTimestamp.make("0+3+5", 13L),
+                ValueAndTimestamp.make("0+3+5+6", 13L)
+            ));
+            expected.put(7L, mkSet(
+                ValueAndTimestamp.make("0+5", 13L),
+                ValueAndTimestamp.make("0+5+6", 13L)
+            ));
+            expected.put(11L, mkSet(
+                ValueAndTimestamp.make("0+5", 13L)
+            ));
+            expected.put(20L, mkSet(
+                ValueAndTimestamp.make("0+6", 70L)
+            ));
+        }
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testNoGracePeriodSmallInput() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String()));
+
+        final KTable<Windowed<String>, String> table2 = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(50)))
+            .emitStrategy(emitStrategy)
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                materialized
+            );
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        table2.toStream().process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+
+            inputTopic.pipeInput("A", "1", 100L);
+            inputTopic.pipeInput("A", "2", 105L);
+            inputTopic.pipeInput("A", "3", 106L);
+            inputTopic.pipeInput("A", "4", 103L);
+            inputTopic.pipeInput("A", "5", 113L);
+            inputTopic.pipeInput("A", "6", 110L);
+        }
+
+        final Map<Long, Set<ValueAndTimestamp<String>>> actual = gatherOutput(supplier);
+        final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
+
+        if (emitFinal) {
+            expected.put(50L, mkSet(
+                ValueAndTimestamp.make("0+1", 100L)
+            ));
+            expected.put(55L, mkSet(
+                ValueAndTimestamp.make("0+1+2", 105L)
+            ));
+            expected.put(56L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4", 106L)
+            ));
+        } else {
+            expected.put(50L, mkSet(
+                ValueAndTimestamp.make("0+1", 100L)
+            ));
+            expected.put(55L, mkSet(
+                ValueAndTimestamp.make("0+1+2", 105L)
+            ));
+            expected.put(56L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3", 106L),
+                ValueAndTimestamp.make("0+1+2+3+4", 106L)
+            ));
+            expected.put(63L, mkSet(
+                ValueAndTimestamp.make("0+1+2+3+4+5", 113L),
+                ValueAndTimestamp.make("0+1+2+3+4+5+6", 113L)
+            ));
+            expected.put(101L, mkSet(
+                ValueAndTimestamp.make("0+2", 105L),
+                ValueAndTimestamp.make("0+2+3", 106L),
+                ValueAndTimestamp.make("0+2+3+4", 106L),
+                ValueAndTimestamp.make("0+2+3+4+5", 113L),
+                ValueAndTimestamp.make("0+2+3+4+5+6", 113L)
+            ));
+            expected.put(104L, mkSet(
+                ValueAndTimestamp.make("0+2+3", 106L),
+                ValueAndTimestamp.make("0+2+3+5", 113L),
+                ValueAndTimestamp.make("0+2+3+5+6", 113L)
+            ));
+            expected.put(106L, mkSet(
+                ValueAndTimestamp.make("0+3", 106L),
+                ValueAndTimestamp.make("0+3+5", 113L),
+                ValueAndTimestamp.make("0+3+5+6", 113L)
+            ));
+            expected.put(107L, mkSet(
+                ValueAndTimestamp.make("0+5", 113L),
+                ValueAndTimestamp.make("0+5+6", 113L)
+            ));
+            expected.put(111L, mkSet(
+                ValueAndTimestamp.make("0+5", 113L)
+            ));
+        }
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testEarlyNoGracePeriodLargeInput() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+        final WindowBytesStoreSupplier storeSupplier =
+                inOrderIterator
+                        ? new InOrderMemoryWindowStoreSupplier("InOrder", 500L, 10L, false)
+                        : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(500), Duration.ofMillis(10), false);
+
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
+
+        final KTable<Windowed<String>, String> table2 = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(10)))
+            .emitStrategy(emitStrategy)
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                materialized
+            );
+
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        table2.toStream().process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+
+            inputTopic1.pipeInput("E", "1", 0L);
+            inputTopic1.pipeInput("E", "3", 5L);
+            inputTopic1.pipeInput("E", "4", 6L);
+            inputTopic1.pipeInput("E", "2", 3L);
+            inputTopic1.pipeInput("E", "6", 13L);
+            inputTopic1.pipeInput("E", "5", 10L);
+            inputTopic1.pipeInput("E", "7", 4L);
+            inputTopic1.pipeInput("E", "8", 2L);
+            inputTopic1.pipeInput("E", "9", 15L);
+        }
+        final Comparator<KeyValueTimestamp<Windowed<String>, String>> comparator =
+                Comparator.comparing((KeyValueTimestamp<Windowed<String>, String> o) -> o.key().key())
+                        .thenComparing((KeyValueTimestamp<Windowed<String>, String> o) -> o.key().window().start());
+
+        final ArrayList<KeyValueTimestamp<Windowed<String>, String>> actual = supplier.theCapturedProcessor().processed();
+        actual.sort(comparator);
+
+        if (emitFinal) {
+            assertEquals(
+                asList(
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2", 6),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2", 6),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6+5+7", 13),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6+5+7", 13)),
+                actual
+            );
+        } else {
+            assertEquals(
+                asList(
+                    // E@0
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1", 0),
+                    // E@5
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3", 5),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4", 6),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(0, 10)), "0+1+3+4+2", 6),
+                    // E@5
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3", 5),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4", 6),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(1, 11)), "0+3+4+2", 6),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6", 13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6+5", 13),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(3, 13)), "0+3+4+2+6+5+7", 13),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4", 6),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6", 13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6+5", 13),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(4, 14)), "0+3+4+6+5+7", 13),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(5, 15)), "0+3+4+6+5", 13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(5, 15)), "0+3+4+6+5+9", 15),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4", 6),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6", 13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6+5", 13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(6, 16)), "0+4+6+5+9", 15),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6", 13),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6+5", 13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(7, 17)), "0+6+5+9", 15),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(11, 21)), "0+6", 13),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(11, 21)), "0+6+9", 15),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(14, 24)), "0+9", 15)),
+                actual
+            );
+        }
+    }
+
+    @Test
+    public void testNoGracePeriodLargeInput() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+        final WindowBytesStoreSupplier storeSupplier =
+                inOrderIterator
+                        ? new InOrderMemoryWindowStoreSupplier("InOrder", 500L, 10L, false)
+                        : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(500), Duration.ofMillis(10), false);
+
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
+
+        final KTable<Windowed<String>, String> table2 = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(10)))
+            .emitStrategy(emitStrategy)
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                materialized
+            );
+
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        table2.toStream().process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+
+            inputTopic1.pipeInput("E", "1", 100L);
+            inputTopic1.pipeInput("E", "3", 105L);
+            inputTopic1.pipeInput("E", "4", 106L);
+            inputTopic1.pipeInput("E", "2", 103L);
+            inputTopic1.pipeInput("E", "6", 113L);
+            inputTopic1.pipeInput("E", "5", 110L);
+            inputTopic1.pipeInput("E", "7", 104L);
+            inputTopic1.pipeInput("E", "8", 102L);
+            inputTopic1.pipeInput("E", "9", 115L);
+        }
+        final Comparator<KeyValueTimestamp<Windowed<String>, String>> comparator =
+                Comparator.comparing((KeyValueTimestamp<Windowed<String>, String> o) -> o.key().key())
+                        .thenComparing((KeyValueTimestamp<Windowed<String>, String> o) -> o.key().window().start());
+
+        final ArrayList<KeyValueTimestamp<Windowed<String>, String>> actual = supplier.theCapturedProcessor().processed();
+        actual.sort(comparator);
+
+        if (emitFinal) {
+            assertEquals(
+                asList(
+                    // E@0
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(90, 100)), "0+1", 100),
+                    // E@5
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(95, 105)), "0+1+3", 105),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(96, 106)), "0+1+3+4+2", 106),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(101, 111)), "0+3+4+2", 106),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(103, 113)), "0+3+4+2+6+5+7", 113),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(104, 114)), "0+3+4+6+5+7", 113)),
+                actual
+            );
+        } else {
+            assertEquals(
+                asList(
+                    // E@0
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(90, 100)), "0+1", 100),
+                    // E@5
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(95, 105)), "0+1+3", 105),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(96, 106)), "0+1+3+4", 106),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(96, 106)), "0+1+3+4+2", 106),
+                    // E@5
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(101, 111)), "0+3", 105),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(101, 111)), "0+3+4", 106),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(101, 111)), "0+3+4+2", 106),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(103, 113)), "0+3+4+2+6", 113),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(103, 113)), "0+3+4+2+6+5", 113),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(103, 113)), "0+3+4+2+6+5+7", 113),
+                    // E@3
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(104, 114)), "0+3+4", 106),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(104, 114)), "0+3+4+6", 113),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(104, 114)), "0+3+4+6+5", 113),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(104, 114)), "0+3+4+6+5+7", 113),
+                    //E@4
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(105, 115)), "0+3+4+6+5", 113),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(105, 115)), "0+3+4+6+5+9", 115),
+                    // E@6
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(106, 116)), "0+4", 106),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(106, 116)), "0+4+6", 113),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(106, 116)), "0+4+6+5", 113),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(106, 116)), "0+4+6+5+9", 115),
+                    //E@13
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(107, 117)), "0+6", 113),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(107, 117)), "0+6+5", 113),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(107, 117)), "0+6+5+9", 115),
+                    //E@10
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(111, 121)), "0+6", 113),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(111, 121)), "0+6+9", 115),
+                    //E@15
+                    new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(114, 124)), "0+9", 115)),
+                actual
+            );
+        }
     }
 
     @Test
@@ -708,11 +1450,14 @@ public class KStreamSlidingWindowAggregateTest {
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        builder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.toStringInstance("+"), Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()));
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
+
+        builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
+            .emitStrategy(emitStrategy)
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.toStringInstance("+"), materialized);
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
@@ -726,7 +1471,7 @@ public class KStreamSlidingWindowAggregateTest {
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
                     .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key or value. value=[1] topic=[topic] partition=[0] offset=[0]")
+                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] offset=[0]")
             );
         }
     }
@@ -736,18 +1481,17 @@ public class KStreamSlidingWindowAggregateTest {
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        final WindowBytesStoreSupplier storeSupplier =
-            inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(90)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.as(storeSupplier)
+                materialized
             )
             .toStream()
             .to("output");
@@ -767,33 +1511,48 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic.pipeInput("k", "4", 104L);
             inputTopic.pipeInput("k", "5", 105L);
             inputTopic.pipeInput("k", "6", 15L);
+            inputTopic.pipeInput("k", "101", 300L);
+            inputTopic.pipeInput("k", "102", 400L);
 
-            assertLatenessMetrics(driver, is(7.0), is(185.0), is(96.25));
+            assertLatenessMetrics(driver, is(7.0), is(185.0), is(77.0));
 
             assertThat(appender.getMessages(), hasItems(
                     // left window for k@100
-                    "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[90,100] expiration=[110] streamTime=[200]",
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[90,100] expiration=[110] streamTime=[200]",
                     // left window for k@101
-                    "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[91,101] expiration=[110] streamTime=[200]",
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[91,101] expiration=[110] streamTime=[200]",
                     // left window for k@102
-                    "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[92,102] expiration=[110] streamTime=[200]",
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[92,102] expiration=[110] streamTime=[200]",
                     // left window for k@103
-                    "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[93,103] expiration=[110] streamTime=[200]",
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[93,103] expiration=[110] streamTime=[200]",
                     // left window for k@104
-                    "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[94,104] expiration=[110] streamTime=[200]",
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[94,104] expiration=[110] streamTime=[200]",
                     // left window for k@105
-                    "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[95,105] expiration=[110] streamTime=[200]",
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[95,105] expiration=[110] streamTime=[200]",
                     // left window for k@15
-                    "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[15] window=[5,15] expiration=[110] streamTime=[200]"
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[7] timestamp=[15] window=[15,25] expiration=[110] streamTime=[200]"
             ));
             final TestOutputTopic<Windowed<String>, String> outputTopic =
                     driver.createOutputTopic("output", new TimeWindowedDeserializer<>(new StringDeserializer(), 10L), new StringDeserializer());
-            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L)));
-            assertTrue(outputTopic.isEmpty());
+
+            if (emitFinal) {
+                assertThat(outputTopic.readRecord(), equalTo(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L)));
+                assertThat(outputTopic.readRecord(), equalTo(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(290, 300)), "0+101", null, 300L)));
+                assertTrue(outputTopic.isEmpty());
+            } else {
+                assertThat(outputTopic.readRecord(), equalTo(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L)));
+                assertThat(outputTopic.readRecord(), equalTo(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(290, 300)), "0+101", null, 300L)));
+                assertThat(outputTopic.readRecord(), equalTo(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(390, 400)), "0+102", null, 400L)));
+                assertTrue(outputTopic.isEmpty());
+            }
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testAggregateRandomInput() {
 
@@ -804,10 +1563,13 @@ public class KStreamSlidingWindowAggregateTest {
                 ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false)
                 : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
 
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
+
         final KTable<Windowed<String>, String> table = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(10000)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
+            .emitStrategy(emitStrategy)
             // The aggregator needs to sort the strings so the window value is the same for the final windows even when
             // records are processed in a different order. Here, we sort alphabetically.
             .aggregate(
@@ -819,9 +1581,9 @@ public class KStreamSlidingWindowAggregateTest {
                     aggregate = String.valueOf(ch);
                     return aggregate;
                 },
-                Materialized.as(storeSupplier)
+                materialized
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
         final long seed = new Random().nextLong();
         final Random shuffle = new Random(seed);
@@ -856,9 +1618,10 @@ public class KStreamSlidingWindowAggregateTest {
             try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
                 final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
-                for (int i = 0; i < input.size(); i++) {
-                    inputTopic1.pipeInput("A", input.get(i).value(), input.get(i).timestamp());
+                for (final ValueAndTimestamp<String> i : input) {
+                    inputTopic1.pipeInput("A", i.value(), i.timestamp());
                 }
+                inputTopic1.pipeInput("A", "V", 181);
             }
 
             final Map<Long, ValueAndTimestamp<String>> results = new HashMap<>();
@@ -866,7 +1629,7 @@ public class KStreamSlidingWindowAggregateTest {
             for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
                 final Windowed<String> window = entry.key();
                 final Long start = window.window().start();
-                final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
+                final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
                 if (results.putIfAbsent(start, valueAndTimestamp) != null) {
                     results.replace(start, valueAndTimestamp);
                 }
@@ -878,44 +1641,56 @@ public class KStreamSlidingWindowAggregateTest {
                 t
             );
         } catch (final Throwable t) {
-            final StringBuilder sb =
-                new StringBuilder()
-                    .append("Exception in randomized scenario. Reproduce with seed: ")
-                    .append(seed)
-                    .append(".");
-            throw new AssertionError(sb.toString(), t);
+            final String msg = "Exception in randomized scenario. Reproduce with seed: " + seed + ".";
+            throw new AssertionError(msg, t);
         }
     }
 
     private void verifyRandomTestResults(final Map<Long, ValueAndTimestamp<String>> actual) {
         final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
-        expected.put(0L, ValueAndTimestamp.make("ARSTU", 10L));
-        expected.put(3L, ValueAndTimestamp.make("ASTU", 10L));
-        expected.put(4L, ValueAndTimestamp.make("ATU", 10L));
-        expected.put(5L, ValueAndTimestamp.make("ABTU", 15L));
-        expected.put(6L, ValueAndTimestamp.make("ABCU", 16L));
-        expected.put(8L, ValueAndTimestamp.make("ABCDU", 18L));
-        expected.put(9L, ValueAndTimestamp.make("ABCD", 18L));
-        expected.put(11L, ValueAndTimestamp.make("BCD", 18L));
-        expected.put(16L, ValueAndTimestamp.make("CD", 18L));
-        expected.put(17L, ValueAndTimestamp.make("D", 18L));
-        expected.put(20L, ValueAndTimestamp.make("E", 30L));
-        expected.put(30L, ValueAndTimestamp.make("EF", 40L));
-        expected.put(31L, ValueAndTimestamp.make("F", 40L));
-        expected.put(45L, ValueAndTimestamp.make("G", 55L));
-        expected.put(46L, ValueAndTimestamp.make("GH", 56L));
-        expected.put(48L, ValueAndTimestamp.make("GHIJ", 58L));
-        expected.put(52L, ValueAndTimestamp.make("GHIJK", 62L));
-        expected.put(53L, ValueAndTimestamp.make("GHIJKLMN", 63L));
-        expected.put(56L, ValueAndTimestamp.make("HIJKLMN", 63L));
-        expected.put(57L, ValueAndTimestamp.make("IJKLMN", 63L));
-        expected.put(59L, ValueAndTimestamp.make("KLMN", 63L));
-        expected.put(63L, ValueAndTimestamp.make("LMN", 63L));
-        expected.put(66L, ValueAndTimestamp.make("O", 76L));
-        expected.put(67L, ValueAndTimestamp.make("OP", 77L));
-        expected.put(70L, ValueAndTimestamp.make("OPQ", 80L));
-        expected.put(77L, ValueAndTimestamp.make("PQ", 80L));
-        expected.put(78L, ValueAndTimestamp.make("Q", 80L));
+
+        if (emitFinal) {
+            // only non-expired records
+            expected.put(52L, ValueAndTimestamp.make("GHIJK", 62L));
+            expected.put(53L, ValueAndTimestamp.make("GHIJKLMN", 63L));
+            expected.put(56L, ValueAndTimestamp.make("HIJKLMN", 63L));
+            expected.put(57L, ValueAndTimestamp.make("IJKLMN", 63L));
+            expected.put(59L, ValueAndTimestamp.make("KLMN", 63L));
+            expected.put(63L, ValueAndTimestamp.make("LMN", 63L));
+            expected.put(66L, ValueAndTimestamp.make("O", 76L));
+            expected.put(67L, ValueAndTimestamp.make("OP", 77L));
+            expected.put(70L, ValueAndTimestamp.make("OPQ", 80L));
+
+        } else {
+            expected.put(0L, ValueAndTimestamp.make("ARSTU", 10L));
+            expected.put(3L, ValueAndTimestamp.make("ASTU", 10L));
+            expected.put(4L, ValueAndTimestamp.make("ATU", 10L));
+            expected.put(5L, ValueAndTimestamp.make("ABTU", 15L));
+            expected.put(6L, ValueAndTimestamp.make("ABCU", 16L));
+            expected.put(8L, ValueAndTimestamp.make("ABCDU", 18L));
+            expected.put(9L, ValueAndTimestamp.make("ABCD", 18L));
+            expected.put(11L, ValueAndTimestamp.make("BCD", 18L));
+            expected.put(16L, ValueAndTimestamp.make("CD", 18L));
+            expected.put(17L, ValueAndTimestamp.make("D", 18L));
+            expected.put(20L, ValueAndTimestamp.make("E", 30L));
+            expected.put(30L, ValueAndTimestamp.make("EF", 40L));
+            expected.put(31L, ValueAndTimestamp.make("F", 40L));
+            expected.put(45L, ValueAndTimestamp.make("G", 55L));
+            expected.put(46L, ValueAndTimestamp.make("GH", 56L));
+            expected.put(48L, ValueAndTimestamp.make("GHIJ", 58L));
+            expected.put(52L, ValueAndTimestamp.make("GHIJK", 62L));
+            expected.put(53L, ValueAndTimestamp.make("GHIJKLMN", 63L));
+            expected.put(56L, ValueAndTimestamp.make("HIJKLMN", 63L));
+            expected.put(57L, ValueAndTimestamp.make("IJKLMN", 63L));
+            expected.put(59L, ValueAndTimestamp.make("KLMN", 63L));
+            expected.put(63L, ValueAndTimestamp.make("LMN", 63L));
+            expected.put(66L, ValueAndTimestamp.make("O", 76L));
+            expected.put(67L, ValueAndTimestamp.make("OP", 77L));
+            expected.put(70L, ValueAndTimestamp.make("OPQ", 80L));
+            expected.put(77L, ValueAndTimestamp.make("PQ", 80L));
+            expected.put(78L, ValueAndTimestamp.make("Q", 80L));
+            expected.put(171L, ValueAndTimestamp.make("V", 181L));
+        }
 
         assertEquals(expected, actual);
     }
@@ -972,6 +1747,38 @@ public class KStreamSlidingWindowAggregateTest {
         assertThat(driver.metrics().get(latenessMaxMetric).metricValue(), maxLateness);
         assertThat(driver.metrics().get(latenessAvgMetric).metricValue(), avgLateness);
     }
+
+    private WindowBytesStoreSupplier setupWindowBytesStoreSupplier(final int index) {
+        return inOrderIterator
+                ? new InOrderMemoryWindowStoreSupplier("InOrder" + index, 50000L, 10L, false)
+                : Stores.inMemoryWindowStore("Reverse" + index, Duration.ofMillis(50000L), Duration.ofMillis(10L), false);
+    }
+
+    private Materialized<String, String, WindowStore<Bytes, byte[]>> setupMaterialized(final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized) {
+        if (emitFinal) {
+            if (withCache) {
+                return materialized.withCachingEnabled();
+            }
+            return materialized.withCachingDisabled();
+        }
+        return materialized;
+    }
+
+    private static Map<Long, Set<ValueAndTimestamp<String>>> gatherOutput(final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier) {
+        final Map<Long, Set<ValueAndTimestamp<String>>> actual = new HashMap<>();
+
+        for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
+            final Windowed<String> window = entry.key();
+            final Long start = window.window().start();
+            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
+            final Set<ValueAndTimestamp<String>> valueSet = actual.computeIfAbsent(start, k -> new HashSet<>());
+            valueSet.add(valueAndTimestamp);
+        }
+
+        return actual;
+    }
+
+
 
     private static class InOrderMemoryWindowStore extends InMemoryWindowStore {
         InOrderMemoryWindowStore(final String name,

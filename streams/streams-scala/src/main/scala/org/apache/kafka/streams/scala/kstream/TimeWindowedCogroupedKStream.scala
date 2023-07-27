@@ -39,8 +39,8 @@ class TimeWindowedCogroupedKStream[K, V](val inner: TimeWindowedCogroupedKStream
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => V)(
-    implicit materialized: Materialized[K, V, ByteArrayWindowStore]
+  def aggregate(initializer: => V)(implicit
+    materialized: Materialized[K, V, ByteArrayWindowStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.aggregate((() => initializer).asInitializer, materialized))
 
@@ -54,8 +54,8 @@ class TimeWindowedCogroupedKStream[K, V](val inner: TimeWindowedCogroupedKStream
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => V, named: Named)(
-    implicit materialized: Materialized[K, V, ByteArrayWindowStore]
+  def aggregate(initializer: => V, named: Named)(implicit
+    materialized: Materialized[K, V, ByteArrayWindowStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.aggregate((() => initializer).asInitializer, named, materialized))
 

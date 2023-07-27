@@ -37,7 +37,6 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.DbPath;
 import org.rocksdb.Env;
 import org.rocksdb.InfoLogLevel;
-import org.rocksdb.Logger;
 import org.rocksdb.MemTableConfig;
 import org.rocksdb.MergeOperator;
 import org.rocksdb.Options;
@@ -49,6 +48,7 @@ import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WALRecoveryMode;
 import org.rocksdb.WalFilter;
 import org.rocksdb.WriteBufferManager;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
@@ -62,10 +62,11 @@ import java.util.List;
  * This class do the translation between generic {@link Options} into {@link DBOptions} and {@link ColumnFamilyOptions}.
  */
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
+
+    private static final Logger log = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+
     private final DBOptions dbOptions;
     private final ColumnFamilyOptions columnFamilyOptions;
-
-    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
 
     RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(final DBOptions dbOptions,
                                                                final ColumnFamilyOptions columnFamilyOptions) {
@@ -249,7 +250,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setMaxTotalWalSize(final long maxTotalWalSize) {
-        dbOptions.setMaxTotalWalSize(maxTotalWalSize);
+        logIgnoreWalOption("maxTotalWalSize");
         return this;
     }
 
@@ -304,7 +305,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalDir(final String walDir) {
-        dbOptions.setWalDir(walDir);
+        logIgnoreWalOption("walDir");
         return this;
     }
 
@@ -337,14 +338,21 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Deprecated
-    @Override
     public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
-        dbOptions.setBaseBackgroundCompactions(baseBackgroundCompactions);
+        final String message = "This method has been removed from the underlying RocksDB. " +
+                "It was not affecting compaction even in earlier versions. " +
+                "It is currently a no-op method. " +
+                "RocksDB decides the number of background compactions based on the maxBackgroundJobs(...) method";
+        log.warn(message);
+        // no-op
     }
 
-    @Override
+    @Deprecated
     public int baseBackgroundCompactions() {
-        return dbOptions.baseBackgroundCompactions();
+        final String message = "This method has been removed from the underlying RocksDB. " +
+                "It is currently a no-op method which returns a default value of -1.";
+        log.warn(message);
+        return -1;
     }
 
     @Deprecated
@@ -473,8 +481,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalTtlSeconds(final long walTtlSeconds) {
-        LOG.warn("option walTtlSeconds will be ignored: Streams does not expose RocksDB ttl functionality");
-        dbOptions.setWalTtlSeconds(walTtlSeconds);
+        logIgnoreWalOption("walTtlSeconds");
         return this;
     }
 
@@ -485,7 +492,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalSizeLimitMB(final long sizeLimitMB) {
-        dbOptions.setWalSizeLimitMB(sizeLimitMB);
+        logIgnoreWalOption("walSizeLimitMB");
         return this;
     }
 
@@ -610,15 +617,21 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.accessHintOnCompactionStart();
     }
 
-    @Override
+    @Deprecated
     public Options setNewTableReaderForCompactionInputs(final boolean newTableReaderForCompactionInputs) {
-        dbOptions.setNewTableReaderForCompactionInputs(newTableReaderForCompactionInputs);
+        final String message = "This method has been removed from the underlying RocksDB. " +
+                "It was not affecting compaction even in earlier versions. " +
+                "It is currently a no-op method.";
+        log.warn(message);
         return this;
     }
 
-    @Override
+    @Deprecated
     public boolean newTableReaderForCompactionInputs() {
-        return dbOptions.newTableReaderForCompactionInputs();
+        final String message = "This method has been removed from the underlying RocksDB. " +
+                "It is now a method which always returns false.";
+        log.warn(message);
+        return false;
     }
 
     @Override
@@ -678,7 +691,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalBytesPerSync(final long walBytesPerSync) {
-        dbOptions.setWalBytesPerSync(walBytesPerSync);
+        logIgnoreWalOption("walBytesPerSync");
         return this;
     }
 
@@ -766,7 +779,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalRecoveryMode(final WALRecoveryMode walRecoveryMode) {
-        dbOptions.setWalRecoveryMode(walRecoveryMode);
+        logIgnoreWalOption("walRecoveryMode");
         return this;
     }
 
@@ -865,7 +878,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public Options setLogger(final Logger logger) {
+    public Options setLogger(final org.rocksdb.Logger logger) {
         dbOptions.setLogger(logger);
         return this;
     }
@@ -1466,7 +1479,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalFilter(final AbstractWalFilter walFilter) {
-        dbOptions.setWalFilter(walFilter);
+        logIgnoreWalOption("walFilter");
         return this;
     }
 
@@ -1486,15 +1499,24 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.allowIngestBehind();
     }
 
-    @Override
+    @Deprecated
     public Options setPreserveDeletes(final boolean preserveDeletes) {
-        dbOptions.setPreserveDeletes(preserveDeletes);
+        final String message = "This method has been removed from the underlying RocksDB. " +
+                "It was marked for deprecation in earlier versions. " +
+                "The behaviour can be replicated by using user-defined timestamps. " +
+                "It is currently a no-op method.";
+        log.warn(message);
+        // no-op
         return this;
     }
 
-    @Override
+    @Deprecated
     public boolean preserveDeletes() {
-        return dbOptions.preserveDeletes();
+        final String message = "This method has been removed from the underlying RocksDB. " +
+                "It was marked for deprecation in earlier versions. " +
+                "It is currently a no-op method with a default value of false.";
+        log.warn(message);
+        return false;
     }
 
     @Override
@@ -1510,7 +1532,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setManualWalFlush(final boolean manualWalFlush) {
-        dbOptions.setManualWalFlush(manualWalFlush);
+        logIgnoreWalOption("manualWalFlush");
         return this;
     }
 
@@ -1550,6 +1572,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public long ttl() {
         return columnFamilyOptions.ttl();
+    }
+
+    @Override
+    public Options setPeriodicCompactionSeconds(final long periodicCompactionSeconds) {
+        columnFamilyOptions.setPeriodicCompactionSeconds(periodicCompactionSeconds);
+        return this;
+    }
+
+    @Override
+    public long periodicCompactionSeconds() {
+        return columnFamilyOptions.periodicCompactionSeconds();
     }
 
     @Override
@@ -1662,15 +1695,124 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return columnFamilyOptions.compactionThreadLimiter();
     }
 
+    @Override
     public Options setCompactionFilter(final AbstractCompactionFilter<? extends AbstractSlice<?>> compactionFilter) {
         columnFamilyOptions.setCompactionFilter(compactionFilter);
         return this;
     }
 
+    @Override
     public Options setCompactionFilterFactory(final AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory) {
         columnFamilyOptions.setCompactionFilterFactory(compactionFilterFactory);
         return this;
     }
+
+    @Override
+    public Options setBlobCompactionReadaheadSize(final long blobCompactionReadaheadSize) {
+        columnFamilyOptions.setBlobCompactionReadaheadSize(blobCompactionReadaheadSize);
+        return this;
+    }
+
+    @Override
+    public long blobCompactionReadaheadSize() {
+        return columnFamilyOptions.blobCompactionReadaheadSize();
+    }
+
+    @Override
+    public Options setMemtableWholeKeyFiltering(final boolean memtableWholeKeyFiltering) {
+        columnFamilyOptions.setMemtableWholeKeyFiltering(memtableWholeKeyFiltering);
+        return this;
+    }
+
+    @Override
+    public boolean memtableWholeKeyFiltering() {
+        return columnFamilyOptions.memtableWholeKeyFiltering();
+    }
+
+    //
+    // BEGIN options for blobs (integrated BlobDB)
+    //
+    
+    @Override
+    public Options setEnableBlobFiles(final boolean enableBlobFiles) {
+        columnFamilyOptions.setEnableBlobFiles(enableBlobFiles);
+        return this;
+    }
+
+    @Override
+    public boolean enableBlobFiles() {
+        return columnFamilyOptions.enableBlobFiles();
+    }
+
+    @Override
+    public Options setMinBlobSize(final long minBlobSize) {
+        columnFamilyOptions.setMinBlobSize(minBlobSize);
+        return this;
+    }
+
+    @Override
+    public long minBlobSize() {
+        return columnFamilyOptions.minBlobSize();
+    }
+
+    @Override
+    public Options setBlobFileSize(final long blobFileSize) {
+        columnFamilyOptions.setBlobFileSize(blobFileSize);
+        return this;
+    }
+
+    @Override
+    public long blobFileSize() {
+        return columnFamilyOptions.blobFileSize();
+    }
+
+    @Override
+    public Options setBlobCompressionType(final CompressionType compressionType) {
+        columnFamilyOptions.setBlobCompressionType(compressionType);
+        return this;
+    }
+
+    @Override
+    public CompressionType blobCompressionType() {
+        return columnFamilyOptions.blobCompressionType();
+    }
+
+    @Override
+    public Options setEnableBlobGarbageCollection(final boolean enableBlobGarbageCollection) {
+        columnFamilyOptions.setEnableBlobGarbageCollection(enableBlobGarbageCollection);
+        return this;
+    }
+
+    @Override
+    public boolean enableBlobGarbageCollection() {
+        return columnFamilyOptions.enableBlobGarbageCollection();
+    }
+
+    @Override
+    public Options setBlobGarbageCollectionAgeCutoff(final double blobGarbageCollectionAgeCutoff) {
+        columnFamilyOptions.setBlobGarbageCollectionAgeCutoff(blobGarbageCollectionAgeCutoff);
+        return this;
+    }
+
+    @Override
+    public double blobGarbageCollectionAgeCutoff() {
+        return columnFamilyOptions.blobGarbageCollectionAgeCutoff();
+    }
+
+    @Override
+    public Options setBlobGarbageCollectionForceThreshold(final double blobGarbageCollectionForceThreshold) {
+        columnFamilyOptions.setBlobGarbageCollectionForceThreshold(blobGarbageCollectionForceThreshold);
+        return this;
+    }
+
+    @Override
+    public double blobGarbageCollectionForceThreshold() {
+        return columnFamilyOptions.blobGarbageCollectionForceThreshold();
+    }
+
+    //
+    // END options for blobs (integrated BlobDB)
+    //
 
     @Override
     public void close() {
@@ -1679,5 +1821,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         columnFamilyOptions.close();
         // close super last since we initialized it first
         super.close();
+    }
+
+    private void logIgnoreWalOption(final String option) {
+        log.warn("WAL is explicitly disabled by Streams in RocksDB. Setting option '{}' will be ignored", option);
     }
 }

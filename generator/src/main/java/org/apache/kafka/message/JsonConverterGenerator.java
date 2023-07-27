@@ -164,6 +164,11 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("MessageUtil.jsonNodeToUnsignedShort(%s, \"%s\")",
                     target.sourceVariable(), target.humanReadableName())));
+        } else if (target.field().type() instanceof FieldType.Uint32FieldType) {
+            headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+            buffer.printf("%s;%n", target.assignmentStatement(
+                 String.format("MessageUtil.jsonNodeToUnsignedInt(%s, \"%s\")",
+                     target.sourceVariable(), target.humanReadableName())));
         } else if (target.field().type() instanceof FieldType.Int32FieldType) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
@@ -346,7 +351,8 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             headerGenerator.addImport(MessageGenerator.INT_NODE_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("new IntNode(%s)", target.sourceVariable())));
-        } else if (target.field().type() instanceof FieldType.Int64FieldType) {
+        } else if (target.field().type() instanceof FieldType.Int64FieldType ||
+                (target.field().type() instanceof FieldType.Uint32FieldType)) {
             headerGenerator.addImport(MessageGenerator.LONG_NODE_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("new LongNode(%s)", target.sourceVariable())));

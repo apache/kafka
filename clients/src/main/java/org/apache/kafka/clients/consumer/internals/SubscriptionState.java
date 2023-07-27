@@ -42,11 +42,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.clients.consumer.internals.Fetcher.hasUsableOffsetForLeaderEpochVersion;
+import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 
@@ -54,18 +55,17 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
  * is "assigned" either directly with {@link #assignFromUser(Set)} (manual assignment)
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
- *
+ * <p>
  * Once assigned, the partition is not considered "fetchable" until its initial position has
- * been set with {@link #seekValidated(TopicPartition, FetchPosition)}. Fetchable partitions track a fetch
- * position which is used to set the offset of the next fetch, and a consumed position
- * which is the last offset that has been returned to the user. You can suspend fetching
- * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
- * offsets. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
+ * been set with {@link #seekValidated(TopicPartition, FetchPosition)}. Fetchable partitions
+ * track a position which is the last offset that has been returned to the user. You can
+ * suspend fetching from a partition through {@link #pause(TopicPartition)} without affecting the consumed
+ * position. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
  * used. You can also query the pause state independently with {@link #isPaused(TopicPartition)}.
- *
- * Note that pause state as well as fetch/consumed positions are not preserved when partition
+ * <p>
+ * Note that pause state as well as the consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
- *
+ * <p>
  * Thread Safety: this class is thread-safe.
  */
 public class SubscriptionState {
@@ -132,7 +132,7 @@ public class SubscriptionState {
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
-        this.subscription = new HashSet<>();
+        this.subscription = new TreeSet<>(); // use a sorted set for better logging
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
@@ -616,10 +616,15 @@ public class SubscriptionState {
      * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
      *
      * @param tp The topic partition
-     * @return true if the preferred read replica was set, false otherwise.
+     * @return the removed preferred read replica if set, None otherwise.
      */
     public synchronized Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
-        return assignedState(tp).clearPreferredReadReplica();
+        final TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
+        if (topicPartitionState == null) {
+            return Optional.empty();
+        } else {
+            return topicPartitionState.clearPreferredReadReplica();
+        }
     }
 
     public synchronized Map<TopicPartition, OffsetAndMetadata> allConsumed() {
@@ -737,6 +742,10 @@ public class SubscriptionState {
         assignedState(tp).pause();
     }
 
+    public synchronized void markPendingRevocation(Set<TopicPartition> tps) {
+        tps.forEach(tp -> assignedState(tp).markPendingRevocation());
+    }
+
     public synchronized void resume(TopicPartition tp) {
         assignedState(tp).resume();
     }
@@ -768,6 +777,7 @@ public class SubscriptionState {
         private Long logStartOffset; // the log start offset
         private Long lastStableOffset;
         private boolean paused;  // whether this partition has been paused by the user
+        private boolean pendingRevocation;
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
@@ -776,6 +786,7 @@ public class SubscriptionState {
         
         TopicPartitionState() {
             this.paused = false;
+            this.pendingRevocation = false;
             this.endOffsetRequested = false;
             this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
@@ -965,12 +976,16 @@ public class SubscriptionState {
             this.paused = true;
         }
 
+        private void markPendingRevocation() {
+            this.pendingRevocation = true;
+        }
+
         private void resume() {
             this.paused = false;
         }
 
         private boolean isFetchable() {
-            return !paused && hasValidPosition();
+            return !paused && !pendingRevocation && hasValidPosition();
         }
 
         private void highWatermark(Long highWatermark) {

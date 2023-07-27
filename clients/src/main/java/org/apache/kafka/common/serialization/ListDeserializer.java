@@ -28,6 +28,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -36,6 +39,8 @@ import org.apache.kafka.common.serialization.Serdes.ListSerde;
 import org.apache.kafka.common.utils.Utils;
 
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
+
+    final Logger log = LoggerFactory.getLogger(ListDeserializer.class);
 
     private static final Map<Class<? extends Deserializer<?>>, Integer> FIXED_LENGTH_DESERIALIZERS = mkMap(
         mkEntry(ShortDeserializer.class, Short.BYTES),
@@ -54,6 +59,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     public <L extends List<Inner>> ListDeserializer(Class<L> listClass, Deserializer<Inner> inner) {
         if (listClass == null || inner == null) {
+            log.error("Could not construct ListDeserializer as not all required parameters were present -- listClass: {}, inner: {}", listClass, inner);
             throw new IllegalArgumentException("ListDeserializer requires both \"listClass\" and \"innerDeserializer\" parameters to be provided during initialization");
         }
         this.listClass = listClass;
@@ -68,6 +74,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (listClass != null || inner != null) {
+            log.error("Could not configure ListDeserializer as some parameters were already set -- listClass: {}, inner: {}", listClass, inner);
             throw new ConfigException("List deserializer was already initialized using a non-default constructor");
         }
         configureListClass(configs, isKey);
@@ -128,6 +135,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             }
         } catch (InstantiationException | IllegalAccessException | NoSuchMethodException |
                 IllegalArgumentException | InvocationTargetException e) {
+            log.error("Failed to construct list due to ", e);
             throw new KafkaException("Could not construct a list instance of \"" + listClass.getCanonicalName() + "\"", e);
         }
     }
@@ -171,6 +179,8 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                 }
                 byte[] payload = new byte[entrySize];
                 if (dis.read(payload) == -1) {
+                    log.error("Ran out of bytes in serialized list");
+                    log.trace("Deserialized list so far: {}", deserializedList); // avoid logging actual data above TRACE level since it may contain sensitive information
                     throw new SerializationException("End of the stream was reached prematurely");
                 }
                 deserializedList.add(inner.deserialize(topic, payload));

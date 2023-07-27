@@ -61,8 +61,14 @@ public class ConfigEntry {
      * @param isReadOnly whether the config is read-only and cannot be updated
      * @param synonyms Synonym configs in order of precedence
      */
-    ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
-                List<ConfigSynonym> synonyms, ConfigType type, String documentation) {
+    public ConfigEntry(String name,
+            String value,
+            ConfigSource source,
+            boolean isSensitive,
+            boolean isReadOnly,
+            List<ConfigSynonym> synonyms,
+            ConfigType type,
+            String documentation) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
         this.value = value;
@@ -235,7 +241,7 @@ public class ConfigEntry {
          *
          * @param name Configuration name (this may be different from the name of the associated {@link ConfigEntry}
          * @param value Configuration value
-         * @param source {@link ConfigSource} of this configuraton
+         * @param source {@link ConfigSource} of this configuration
          */
         ConfigSynonym(String name, String value, ConfigSource source) {
             this.name = name;

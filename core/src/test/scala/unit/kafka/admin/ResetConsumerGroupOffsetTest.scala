@@ -12,7 +12,7 @@
   */
 package kafka.admin
 
-import java.io.{BufferedWriter, File, FileWriter}
+import java.io.{BufferedWriter, FileWriter}
 import java.text.{SimpleDateFormat}
 import java.util.{Calendar, Date, Properties}
 
@@ -54,7 +54,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   private def basicArgs: Array[String] = {
     Array("--reset-offsets",
-      "--bootstrap-server", brokerList,
+      "--bootstrap-server", bootstrapServers(),
       "--timeout", test.TestUtils.DEFAULT_MAX_WAIT_MS.toString)
   }
 
@@ -356,8 +356,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
     produceConsumeAndShutdown(topic = topic, group = group, totalMessages = 100, numConsumers = 2)
 
-    val file = File.createTempFile("reset", ".csv")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("reset", ".csv")
 
     val exportedOffsets = consumerGroupCommand.resetOffsets()
     val bw = new BufferedWriter(new FileWriter(file))
@@ -397,8 +396,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     awaitConsumerGroupInactive(consumerGroupCommand, group1)
     awaitConsumerGroupInactive(consumerGroupCommand, group2)
 
-    val file = File.createTempFile("reset", ".csv")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("reset", ".csv")
 
     val exportedOffsets = consumerGroupCommand.resetOffsets()
     val bw = new BufferedWriter(new FileWriter(file))
@@ -425,7 +423,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetWithUnrecognizedNewConsumerOption(): Unit = {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }

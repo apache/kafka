@@ -24,7 +24,7 @@
       "about": "The ID of the requesting broker" },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
       "about": "The epoch of the requesting broker" },
-    { "name": "ProducerIdsEnd", "type": "int64", "versions": "0+",
-      "about": "The highest producer ID that has been generated"}
+    { "name": "NextProducerId", "type": "int64", "versions": "0+",
+      "about": "The next producerId that will be assigned (i.e. the first producerId in the next assigned block)"}
   ]
 }

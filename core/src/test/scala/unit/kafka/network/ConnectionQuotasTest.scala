@@ -22,17 +22,18 @@ import java.util
 import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 import com.yammer.metrics.core.Meter
-import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits.MapExtensionMethods
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
@@ -88,8 +89,8 @@ class ConnectionQuotasTest {
     TestUtils.clearYammerMetrics()
 
     listeners.keys.foreach { name =>
-        blockedPercentMeters.put(name, KafkaMetricsGroup.newMeter(
-          s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, Map(ListenerMetricTag -> name)))
+        blockedPercentMeters.put(name, new KafkaMetricsGroup(this.getClass).newMeter(
+          s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, Map(ListenerMetricTag -> name).asJava))
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
@@ -395,7 +396,6 @@ class ConnectionQuotasTest {
     val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
-    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 

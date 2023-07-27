@@ -19,13 +19,12 @@ package org.apache.kafka.connect.runtime.health;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.util.Callback;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -37,8 +36,10 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 
-@RunWith(PowerMockRunner.class)
+@RunWith(MockitoJUnitRunner.class)
 public class ConnectClusterStateImplTest {
     protected static final String KAFKA_CLUSTER_ID = "franzwashere";
 
@@ -60,13 +61,13 @@ public class ConnectClusterStateImplTest {
     
     @Test
     public void connectors() {
-        Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
-        herder.connectors(EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(() -> {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Callback<Collection<String>>> callback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
             callback.getValue().onCompletion(null, expectedConnectors);
             return null;
-        });
-        EasyMock.replay(herder);
+        }).when(herder).connectors(callback.capture());
+
         assertEquals(expectedConnectors, connectClusterState.connectors());
     }
 
@@ -74,14 +75,16 @@ public class ConnectClusterStateImplTest {
     public void connectorConfig() {
         final String connName = "sink6";
         final Map<String, String> expectedConfig = Collections.singletonMap("key", "value");
-        Capture<Callback<Map<String, String>>> callback = EasyMock.newCapture();
-        herder.connectorConfig(EasyMock.eq(connName), EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(() -> {
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Callback<Map<String, String>>> callback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
             callback.getValue().onCompletion(null, expectedConfig);
             return null;
-        });
-        EasyMock.replay(herder);
+        }).when(herder).connectorConfig(eq(connName), callback.capture());
+
         Map<String, String> actualConfig = connectClusterState.connectorConfig(connName);
+
         assertEquals(expectedConfig, actualConfig);
         assertNotSame(
             "Config should be copied in order to avoid mutation by REST extensions",
@@ -97,14 +100,14 @@ public class ConnectClusterStateImplTest {
 
     @Test
     public void connectorsFailure() {
-        Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
-        herder.connectors(EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(() -> {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Callback<Collection<String>>> callback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
             Throwable timeout = new TimeoutException();
             callback.getValue().onCompletion(timeout, null);
             return null;
-        });
-        EasyMock.replay(herder);
+        }).when(herder).connectors(callback.capture());
+
         assertThrows(ConnectException.class, connectClusterState::connectors);
     }
 }

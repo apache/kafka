@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.util.Collections;
@@ -46,13 +47,17 @@ public class MockRecordCollector implements RecordCollector {
                             final Integer partition,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer) {
-        collected.add(new ProducerRecord<>(topic,
+                            final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context) {
+        collected.add(new ProducerRecord<>(
+            topic,
             partition,
             timestamp,
             key,
             value,
-            headers));
+            headers)
+        );
     }
 
     @Override
@@ -63,13 +68,17 @@ public class MockRecordCollector implements RecordCollector {
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        collected.add(new ProducerRecord<>(topic,
+        collected.add(new ProducerRecord<>(
+            topic,
             0, // partition id
             timestamp,
             key,
             value,
-            headers));
+            headers)
+        );
     }
 
     @Override

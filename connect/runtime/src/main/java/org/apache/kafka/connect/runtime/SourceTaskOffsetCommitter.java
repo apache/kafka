@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.common.utils.ThreadUtils;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
- * Manages offset commit scheduling and execution for SourceTasks.
+ * Manages offset commit scheduling and execution for {@link SourceTask}s.
  * </p>
  * <p>
  * Unlike sink tasks which directly manage their offset commits in the main poll() thread since
@@ -67,14 +68,7 @@ class SourceTaskOffsetCommitter {
     }
 
     public void close(long timeoutMs) {
-        commitExecutorService.shutdown();
-        try {
-            if (!commitExecutorService.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)) {
-                log.error("Graceful shutdown of offset commitOffsets thread timed out.");
-            }
-        } catch (InterruptedException e) {
-            // ignore and allow to exit immediately
-        }
+        ThreadUtils.shutdownExecutorServiceQuietly(commitExecutorService, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
@@ -104,7 +98,13 @@ class SourceTaskOffsetCommitter {
         }
     }
 
-    private void commit(WorkerSourceTask workerTask) {
+    // Visible for testing
+    static void commit(WorkerSourceTask workerTask) {
+        if (!workerTask.shouldCommitOffsets()) {
+            log.trace("{} Skipping offset commit as there are no offsets that should be committed", workerTask);
+            return;
+        }
+
         log.debug("{} Committing offsets", workerTask);
         try {
             if (workerTask.commitOffsets()) {

@@ -19,8 +19,12 @@ package org.apache.kafka.connect.runtime.isolation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Enumeration;
+import java.util.Objects;
+import java.util.Vector;
 
 /**
  * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
@@ -81,6 +85,35 @@ public class PluginClassLoader extends URLClassLoader {
         return "PluginClassLoader{pluginLocation=" + pluginLocation + "}";
     }
 
+    @Override
+    public URL getResource(String name) {
+        Objects.requireNonNull(name);
+
+        URL url = findResource(name);
+        if (url == null) {
+            url = super.getResource(name);
+        }
+        return url;
+    }
+
+    @Override
+    public Enumeration<URL> getResources(String name) throws IOException {
+        Objects.requireNonNull(name);
+        Vector<URL> resources = new Vector<>();
+        for (Enumeration<URL> foundLocally = findResources(name); foundLocally.hasMoreElements();) {
+            URL url = foundLocally.nextElement();
+            if (url != null)
+                resources.add(url);
+        }
+        // Explicitly call the parent implementation instead of super to avoid double-listing the local resources
+        for (Enumeration<URL> foundByParent = getParent().getResources(name); foundByParent.hasMoreElements();) {
+            URL url = foundByParent.nextElement();
+            if (url != null)
+                resources.add(url);
+        }
+        return resources.elements();
+    }
+
     // This method needs to be thread-safe because it is supposed to be called by multiple
     // Connect tasks. While findClass is thread-safe, defineClass called within loadClass of the
     // base method is not. More on multithreaded classloaders in:
@@ -109,3 +142,4 @@ public class PluginClassLoader extends URLClassLoader {
         }
     }
 }
+

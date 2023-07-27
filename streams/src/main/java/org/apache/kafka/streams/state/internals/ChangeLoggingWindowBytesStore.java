@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
@@ -34,8 +35,8 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
  * updates to a changelog
  */
 class ChangeLoggingWindowBytesStore
-    extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
-    implements WindowStore<Bytes, byte[]> {
+        extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
+        implements WindowStore<Bytes, byte[]> {
 
     interface ChangeLoggingKeySerializer {
         Bytes serialize(final Bytes key, final long timestamp, final int seqnum);
@@ -133,12 +134,12 @@ class ChangeLoggingWindowBytesStore
                     final byte[] value,
                     final long windowStartTimestamp) {
         wrapped().put(key, value, windowStartTimestamp);
+
         log(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
-    void log(final Bytes key,
-             final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp());
+    void log(final Bytes key, final byte[] value) {
+        context.logChange(name(), key, value, context.timestamp(), wrapped().getPosition());
     }
 
     private int maybeUpdateSeqnumForDups() {

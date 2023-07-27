@@ -29,11 +29,13 @@ import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRep
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 /**
  * The implementation class of {@link KGroupedTable}.
@@ -67,11 +69,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private <T> KTable<K, T> doAggregate(final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier,
+    private <VAgg> KTable<K, VAgg> doAggregate(final ProcessorSupplier<K, Change<V>, K, Change<VAgg>> aggregateSupplier,
                                          final NamedInternal named,
                                          final String functionName,
-                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+                                         final MaterializedInternal<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
 
         final String sinkName = named.suffixWithOrElseGet("-sink", builder, KStreamImpl.SINK_NAME);
         final String sourceName = named.suffixWithOrElseGet("-source", builder, KStreamImpl.SOURCE_NAME);
@@ -90,8 +91,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         final StatefulProcessorNode statefulProcessorNode = new StatefulProcessorNode<>(
             funcName,
             new ProcessorParameters<>(aggregateSupplier, funcName),
-            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize()
+            new KeyValueStoreMaterializer<>(materialized).materialize()
         );
+        statefulProcessorNode.setOutputVersioned(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier);
 
         // now the repartition node must be the parent of the StateProcessorNode
         builder.addGraphNode(repartitionGraphNode, statefulProcessorNode);
@@ -145,8 +147,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         if (materializedInternal.valueSerde() == null) {
             materializedInternal.withValueSerde(valueSerde);
         }
-        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-        final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(
+        final ProcessorSupplier<K, Change<V>, K, Change<V>> aggregateSupplier = new KTableReduce<>(
             materializedInternal.storeName(),
             adder,
             subtractor);
@@ -177,8 +178,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
             materializedInternal.withValueSerde(Serdes.Long());
         }
 
-        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-        final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(
+        final ProcessorSupplier<K, Change<V>, K, Change<Long>> aggregateSupplier = new KTableAggregate<>(
             materializedInternal.storeName(),
             countInitializer,
             countAdder,
@@ -198,33 +198,32 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                        final Aggregator<? super K, ? super V, VR> adder,
-                                        final Aggregator<? super K, ? super V, VR> subtractor,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
+                                        final Aggregator<? super K, ? super V, VAgg> adder,
+                                        final Aggregator<? super K, ? super V, VAgg> subtractor,
+                                        final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, adder, subtractor, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                        final Aggregator<? super K, ? super V, VR> adder,
-                                        final Aggregator<? super K, ? super V, VR> subtractor,
+    public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
+                                        final Aggregator<? super K, ? super V, VAgg> adder,
+                                        final Aggregator<? super K, ? super V, VAgg> subtractor,
                                         final Named named,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                        final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+        final MaterializedInternal<K, VAgg, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
-        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-        final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(
+        final ProcessorSupplier<K, Change<V>, K, Change<VAgg>> aggregateSupplier = new KTableAggregate<>(
             materializedInternal.storeName(),
             initializer,
             adder,
@@ -233,17 +232,17 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> adder,
-                                      final Aggregator<? super K, ? super V, T> subtractor,
+    public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
+                                      final Aggregator<? super K, ? super V, VAgg> adder,
+                                      final Aggregator<? super K, ? super V, VAgg> subtractor,
                                       final Named named) {
         return aggregate(initializer, adder, subtractor, named, Materialized.with(keySerde, null));
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> adder,
-                                      final Aggregator<? super K, ? super V, T> subtractor) {
+    public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
+                                      final Aggregator<? super K, ? super V, VAgg> adder,
+                                      final Aggregator<? super K, ? super V, VAgg> subtractor) {
         return aggregate(initializer, adder, subtractor, Materialized.with(keySerde, null));
     }
 

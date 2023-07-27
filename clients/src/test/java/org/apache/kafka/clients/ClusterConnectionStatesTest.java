@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -90,31 +91,35 @@ public class ClusterConnectionStatesTest {
     @Test
     public void testClusterConnectionStateChanges() {
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        assertEquals(0, connectionStates.connectionDelay(nodeId1, time.milliseconds()));
 
         // Start connecting to Node and check state
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
-        assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.CONNECTING);
+        assertEquals(ConnectionState.CONNECTING, connectionStates.connectionState(nodeId1));
         assertTrue(connectionStates.isConnecting(nodeId1));
         assertFalse(connectionStates.isReady(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
+        long connectionDelay = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+        double connectionDelayDelta = connectionSetupTimeoutMs * connectionSetupTimeoutJitter;
+        assertEquals(connectionSetupTimeoutMs, connectionDelay, connectionDelayDelta);
 
         time.sleep(100);
 
         // Successful connection
         connectionStates.ready(nodeId1);
-        assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.READY);
+        assertEquals(ConnectionState.READY, connectionStates.connectionState(nodeId1));
         assertTrue(connectionStates.isReady(nodeId1, time.milliseconds()));
         assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.isConnecting(nodeId1));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()), Long.MAX_VALUE);
+        assertEquals(Long.MAX_VALUE, connectionStates.connectionDelay(nodeId1, time.milliseconds()));
 
         time.sleep(15000);
 
         // Disconnected from broker
         connectionStates.disconnected(nodeId1, time.milliseconds());
-        assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.DISCONNECTED);
+        assertEquals(ConnectionState.DISCONNECTED, connectionStates.connectionState(nodeId1));
         assertTrue(connectionStates.isDisconnected(nodeId1));
         assertTrue(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.isConnecting(nodeId1));
@@ -179,7 +184,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.authenticationFailed(nodeId1, time.milliseconds(), new AuthenticationException("No path to CA for certificate!"));
         time.sleep(1000);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.AUTHENTICATION_FAILED);
-        assertTrue(connectionStates.authenticationException(nodeId1) instanceof AuthenticationException);
+        assertNotNull(connectionStates.authenticationException(nodeId1));
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
@@ -227,20 +232,8 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testExponentialReconnectBackoff() {
-        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
-            / Math.log(reconnectBackoffExpBase);
-
-        // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
-        for (int i = 0; i < 10; i++) {
-            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
-            connectionStates.disconnected(nodeId1, time.milliseconds());
-            // Calculate expected backoff value without jitter
-            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
-                * reconnectBackoffMs);
-            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
-            assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
-            time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
-        }
+        verifyReconnectExponentialBackoff(false);
+        verifyReconnectExponentialBackoff(true);
     }
 
     @Test
@@ -421,5 +414,27 @@ public class ClusterConnectionStatesTest {
     private void setupMultipleIPs() {
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
                 connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.multipleIPHostResolver);
+    }
+
+    private void verifyReconnectExponentialBackoff(boolean enterCheckingApiVersionState) {
+        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
+            / Math.log(reconnectBackoffExpBase);
+
+        connectionStates.remove(nodeId1);
+        // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
+        for (int i = 0; i < 10; i++) {
+            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
+            if (enterCheckingApiVersionState) {
+                connectionStates.checkingApiVersions(nodeId1);
+            }
+
+            connectionStates.disconnected(nodeId1, time.milliseconds());
+            // Calculate expected backoff value without jitter
+            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
+                * reconnectBackoffMs);
+            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+            assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
+            time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
+        }
     }
 }

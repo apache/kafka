@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -42,19 +43,25 @@ public class StreamThreadStateStoreProvider {
 
     @SuppressWarnings("unchecked")
     public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
-        final String storeName = storeQueryParams.storeName();
-        final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
-        if (streamThread.state() == StreamThread.State.DEAD) {
+        final StreamThread.State state = streamThread.state();
+        if (state == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
-        final StreamThread.State state = streamThread.state();
+
+        final String storeName = storeQueryParams.storeName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
+        final String topologyName = storeQueryParams instanceof NamedTopologyStoreQueryParameters ?
+            ((NamedTopologyStoreQueryParameters) storeQueryParams).topologyName() :
+            null;
+
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
             final Collection<Task> tasks = storeQueryParams.staleStoresEnabled() ?
-                    streamThread.allTasks().values() : streamThread.activeTasks();
+                    streamThread.readyOnlyAllTasks() : streamThread.readOnlyActiveTasks();
 
             if (storeQueryParams.partition() != null) {
                 for (final Task task : tasks) {
                     if (task.id().partition() == storeQueryParams.partition() &&
+                        (topologyName == null || topologyName.equals(task.id().topologyName())) &&
                         task.getStore(storeName) != null &&
                         storeName.equals(task.getStore(storeName).name())) {
                         final T typedStore = validateAndCastStores(task.getStore(storeName), queryableStoreType, storeName, task.id());

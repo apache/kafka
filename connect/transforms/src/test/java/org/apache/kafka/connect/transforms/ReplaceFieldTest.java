@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ReplaceFieldTest {
-    private ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
+    private final ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
 
     @AfterEach
     public void teardown() {

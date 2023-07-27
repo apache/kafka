@@ -203,7 +203,7 @@ public class UpdateMetadataRequestTest {
 
             long topicIdCount = deserializedRequest.data().topicStates().stream()
                     .map(UpdateMetadataRequestData.UpdateMetadataTopicState::topicId)
-                    .filter(topicId -> topicId != Uuid.ZERO_UUID).count();
+                    .filter(topicId -> !Uuid.ZERO_UUID.equals(topicId)).count();
             if (version >= 7)
                 assertEquals(2, topicIdCount);
             else

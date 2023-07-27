@@ -57,6 +57,11 @@ public class ExpireDelegationTokenResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }

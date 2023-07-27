@@ -370,6 +370,13 @@ class ZkReplicaStateMachine(config: KafkaConfig,
         })
       }
 
+    if (isDebugEnabled) {
+      updatesToRetry.foreach { partition =>
+        debug(s"Controller failed to remove replica $replicaId from ISR of partition $partition. " +
+          s"Attempted to write state ${adjustedLeaderAndIsrs(partition)}, but failed with bad ZK version. This will be retried.")
+      }
+    }
+
     (leaderIsrAndControllerEpochs ++ exceptionsForPartitionsWithNoLeaderAndIsrInZk, updatesToRetry)
   }
 

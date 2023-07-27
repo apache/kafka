@@ -39,7 +39,7 @@ public class ConsumerRecordsTest {
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records = new LinkedHashMap<>();
 
         String topic = "topic";
-        records.put(new TopicPartition(topic, 0), new ArrayList<ConsumerRecord<Integer, String>>());
+        records.put(new TopicPartition(topic, 0), new ArrayList<>());
         ConsumerRecord<Integer, String> record1 = new ConsumerRecord<>(topic, 1, 0, 0L, TimestampType.CREATE_TIME,
             0, 0, 1, "value1", new RecordHeaders(), Optional.empty());
         ConsumerRecord<Integer, String> record2 = new ConsumerRecord<>(topic, 1, 1, 0L, TimestampType.CREATE_TIME,

@@ -17,11 +17,10 @@
 package kafka.coordinator.transaction
 
 
+import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendRetryQueueSizeMetricName, MetricNames, UnknownDestinationQueueSizeMetricName}
+
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-import kafka.api.KAFKA_2_8_IV0
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
@@ -34,11 +33,23 @@ import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersReque
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
 
 object TransactionMarkerChannelManager {
+  private val UnknownDestinationQueueSizeMetricName = "UnknownDestinationQueueSize"
+  private val LogAppendRetryQueueSizeMetricName = "LogAppendRetryQueueSize"
+
+  // Visible for testing
+  private[transaction] val MetricNames = Set(
+    UnknownDestinationQueueSizeMetricName,
+    LogAppendRetryQueueSizeMetricName
+  )
+
   def apply(config: KafkaConfig,
             metrics: Metrics,
             metadataCache: MetadataCache,
@@ -132,7 +143,9 @@ class TransactionMarkerChannelManager(
   txnStateManager: TransactionStateManager,
   time: Time
 ) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, config.requestTimeoutMs, time)
-  with Logging with KafkaMetricsGroup {
+  with Logging {
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
 
@@ -147,15 +160,23 @@ class TransactionMarkerChannelManager(
   private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
   val writeTxnMarkersRequestVersion: Short =
-    if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 1
+    if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 1
     else 0
 
-  newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
-  newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
+  metricsGroup.newGauge(UnknownDestinationQueueSizeMetricName, () => markersQueueForUnknownBroker.totalNumMarkers)
+  metricsGroup.newGauge(LogAppendRetryQueueSizeMetricName, () => txnLogAppendRetryQueue.size)
 
   override def shutdown(): Unit = {
-    super.shutdown()
-    markersQueuePerBroker.clear()
+    try {
+      super.shutdown()
+      markersQueuePerBroker.clear()
+    } finally {
+      removeMetrics()
+    }
+  }
+
+  private def removeMetrics(): Unit = {
+    MetricNames.foreach(metricsGroup.removeMetric(_))
   }
 
   // visible for testing
@@ -180,7 +201,7 @@ class TransactionMarkerChannelManager(
   }
 
   def retryLogAppends(): Unit = {
-    val txnLogAppendRetries: java.util.List[PendingCompleteTxn] = new util.ArrayList[PendingCompleteTxn]()
+    val txnLogAppendRetries: util.List[PendingCompleteTxn] = new util.ArrayList[PendingCompleteTxn]()
     txnLogAppendRetryQueue.drainTo(txnLogAppendRetries)
     txnLogAppendRetries.forEach { txnLogAppend =>
       debug(s"Retry appending $txnLogAppend transaction log")
@@ -188,9 +209,9 @@ class TransactionMarkerChannelManager(
     }
   }
 
-  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+  override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     retryLogAppends()
-    val txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
+    val txnIdAndMarkerEntries: util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
     markersQueueForUnknownBroker.forEachTxnTopicPartition { case (_, queue) =>
       queue.drainTo(txnIdAndMarkerEntries)
     }
@@ -218,13 +239,13 @@ class TransactionMarkerChannelManager(
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
       val request = new WriteTxnMarkersRequest.Builder(writeTxnMarkersRequestVersion, markersToSend)
 
-      RequestAndCompletionHandler(
+      new RequestAndCompletionHandler(
         currentTimeMs,
         node,
         request,
         requestCompletionHandler
       )
-    }
+    }.asJavaCollection
   }
 
   private def writeTxnCompletion(pendingCompleteTxn: PendingCompleteTxn): Unit = {

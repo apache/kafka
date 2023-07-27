@@ -34,7 +34,7 @@ import org.apache.kafka.common.Configurable;
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
  */
-public interface ProducerInterceptor<K, V> extends Configurable {
+public interface ProducerInterceptor<K, V> extends Configurable, AutoCloseable {
     /**
      * This is called from {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)} and
      * {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord, Callback)} methods, before key and value

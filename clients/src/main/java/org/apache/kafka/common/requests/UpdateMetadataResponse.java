@@ -47,6 +47,11 @@ public class UpdateMetadataResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static UpdateMetadataResponse parse(ByteBuffer buffer, short version) {
         return new UpdateMetadataResponse(new UpdateMetadataResponseData(new ByteBufferAccessor(buffer), version));
     }

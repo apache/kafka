@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.ArrayList;
@@ -82,5 +83,12 @@ public class MockProcessor<K, V> extends org.apache.kafka.streams.processor.Abst
 
     public ArrayList<KeyValueTimestamp<K, V>> processed() {
         return delegate.processed();
+    }
+
+    @SuppressWarnings("unchecked")
+    public void addProcessorMetadata(final String key, final long value) {
+        if (context instanceof InternalProcessorContext) {
+            ((InternalProcessorContext<K, V>) context).addProcessorMetadataKeyValue(key, value);
+        }
     }
 }

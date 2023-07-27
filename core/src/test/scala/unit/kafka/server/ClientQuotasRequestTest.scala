@@ -37,7 +37,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(clusterType = Type.BOTH)
+@ClusterTestDefaults(clusterType = Type.ALL)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @Tag("integration")
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
@@ -294,8 +294,8 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testAlterClientQuotasBadIp(): Unit = {
-    val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "abc-123").asJava)
-    val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "ip").asJava)
+    val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "not a valid host because it has spaces").asJava)
+    val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP ->  "RFC2606.invalid").asJava)
     val expectedExceptionMessage = "not a valid IP"
     expectInvalidRequestWithMessage(alterEntityQuotas(invalidHostPatternEntity, Map(IpConnectionRateProp -> Some(50.0)),
       validateOnly = true), expectedExceptionMessage)
@@ -588,7 +588,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private def alterClientQuotas(request: Map[ClientQuotaEntity, Map[String, Option[Double]]], validateOnly: Boolean) = {
     val entries = request.map { case (entity, alter) =>
       val ops = alter.map { case (key, value) =>
-        new ClientQuotaAlteration.Op(key, value.map(Double.box).getOrElse(null))
+        new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull)
       }.asJavaCollection
       new ClientQuotaAlteration(entity, ops)
     }

@@ -39,6 +39,7 @@ public class UniformStickyPartitionerTest {
     private final static String TOPIC_A = "TOPIC_A";
     private final static String TOPIC_B = "TOPIC_B";
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRoundRobinWithUnavailablePartitions() {
         // Intentionally make the partition list not in partition order to test the edge
@@ -55,7 +56,7 @@ public class UniformStickyPartitionerTest {
         int part = 0;
         Partitioner partitioner = new UniformStickyPartitioner();
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.emptySet(), Collections.emptySet());
         for (int i = 0; i < 50; i++) {
             part = partitioner.partition("test", null, null, null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
@@ -77,13 +78,14 @@ public class UniformStickyPartitionerTest {
         assertEquals(countForPart0, countForPart2, "The distribution between two available partitions should be even");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void testRoundRobinWithKeyBytes() throws InterruptedException {
+    public void testRoundRobinWithKeyBytes() {
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(TOPIC_A, 0, NODES[0], NODES, NODES),
                 new PartitionInfo(TOPIC_A, 1, NODES[1], NODES, NODES), new PartitionInfo(TOPIC_A, 2, NODES[1], NODES, NODES),
                 new PartitionInfo(TOPIC_B, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -140,14 +142,15 @@ public class UniformStickyPartitionerTest {
         assertEquals(30, partitionCount.get(oldPart).intValue());
         assertEquals(60, partitionCount.get(newPart).intValue());
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Test
-    public void testRoundRobinWithNullKeyBytes() throws InterruptedException {
+    public void testRoundRobinWithNullKeyBytes() {
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(TOPIC_A, 0, NODES[0], NODES, NODES),
                 new PartitionInfo(TOPIC_A, 1, NODES[1], NODES, NODES), new PartitionInfo(TOPIC_A, 2, NODES[1], NODES, NODES),
                 new PartitionInfo(TOPIC_B, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 

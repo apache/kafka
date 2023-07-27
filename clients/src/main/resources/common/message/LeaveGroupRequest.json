@@ -23,7 +23,9 @@
   // Version 3 defines batch processing scheme with group.instance.id + member.id for identity
   //
   // Version 4 is the first flexible version.
-  "validVersions": "0-4",
+  //
+  // Version 5 adds the Reason field (KIP-800).
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
@@ -36,7 +38,10 @@
         "about": "The member ID to remove from the group." },
       { "name": "GroupInstanceId", "type": "string",
         "versions": "3+", "nullableVersions": "3+", "default": "null",
-        "about": "The group instance ID to remove from the group." }
+        "about": "The group instance ID to remove from the group." },
+      { "name": "Reason", "type": "string",
+        "versions": "5+", "nullableVersions": "5+", "default": "null", "ignorable": true,
+        "about": "The reason why the member left the group." }
     ]}
   ]
 }

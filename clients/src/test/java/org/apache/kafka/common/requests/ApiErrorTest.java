@@ -41,10 +41,10 @@ public class ApiErrorTest {
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void fromThrowableShouldReturnCorrectError(Throwable t, Errors expectedErrors, String expectedMsg) {
+    public void fromThrowableShouldReturnCorrectError(Throwable t, Errors expectedError, String expectedMsg) {
         ApiError apiError = ApiError.fromThrowable(t);
-        assertEquals(apiError.error(), expectedErrors);
-        assertEquals(apiError.message(), expectedMsg);
+        assertEquals(expectedError, apiError.error());
+        assertEquals(expectedMsg, apiError.message());
     }
 
     private static Collection<Arguments> parameters() {

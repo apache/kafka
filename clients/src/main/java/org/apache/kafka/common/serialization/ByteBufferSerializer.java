@@ -16,25 +16,38 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.nio.ByteBuffer;
 
+/**
+ * Do not need to flip before call <i>serialize(String, ByteBuffer)</i>. For example:
+ *
+ * <blockquote>
+ * <pre>
+ * ByteBufferSerializer serializer = ...; // Create Serializer
+ * ByteBuffer buffer = ...;               // Allocate ByteBuffer
+ * buffer.put(data);                      // Put data into buffer, do not need to flip
+ * serializer.serialize(topic, buffer);   // Serialize buffer
+ * </pre>
+ * </blockquote>
+ */
 public class ByteBufferSerializer implements Serializer<ByteBuffer> {
-    public byte[] serialize(String topic, ByteBuffer data) {
-        if (data == null)
-            return null;
 
-        data.rewind();
+    @Override
+    public byte[] serialize(String topic, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
 
         if (data.hasArray()) {
-            byte[] arr = data.array();
+            final byte[] arr = data.array();
             if (data.arrayOffset() == 0 && arr.length == data.remaining()) {
                 return arr;
             }
         }
 
-        byte[] ret = new byte[data.remaining()];
-        data.get(ret, 0, ret.length);
-        data.rewind();
-        return ret;
+        data.flip();
+        return Utils.toArray(data);
     }
 }

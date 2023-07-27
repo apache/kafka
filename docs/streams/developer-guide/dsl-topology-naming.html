@@ -41,7 +41,7 @@
 		   you are required to explicitly name each one.
 	    </p>
 		<p>
-		   At the DLS layer, there are operators.  A single DSL operator may
+		   At the DSL layer, there are operators.  A single DSL operator may
 		   compile down to multiple <code>Processors</code> and <code>State Stores</code>, and
 		   if required <code>repartition topics</code>. But with the Kafka Streams
 		   DSL, all these names are generated for you. There is a relationship between
@@ -66,7 +66,7 @@
 
 		<p>
 		 	By saying there is a readability trade-off, we are referring to viewing a description of the topology.
-		 	When you render the string description of your topology via the <code>Topology#desribe()</code>
+		 	When you render the string description of your topology via the <code>Topology#describe()</code>
 		 	method, you can see what the processor is, but you don't have any context for its business purpose.
 		 	For example, consider the following simple topology:
 

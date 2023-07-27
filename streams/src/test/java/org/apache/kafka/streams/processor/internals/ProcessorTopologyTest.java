@@ -60,6 +60,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.HashSet;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
@@ -295,6 +297,17 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3");
         assertNextOutputRecord(outputTopic1.readRecord(), "key4", "value4");
         assertNextOutputRecord(outputTopic1.readRecord(), "key5", "value5");
+        assertTrue(outputTopic1.isEmpty());
+    }
+
+    @Test
+    public void testDrivingSimpleTopologyWithDroppingPartitioner() {
+        driver = new TopologyTestDriver(createSimpleTopologyWithDroppingPartitioner(), props);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestOutputTopic<String, String> outputTopic1 =
+                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
+
+        inputTopic.pipeInput("key1", "value1");
         assertTrue(outputTopic1.isEmpty());
     }
 
@@ -1581,6 +1594,34 @@ public class ProcessorTopologyTest {
             .addProcessor("child2", TimestampProcessor::new, "processor")
             .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
+    }
+
+    static class DroppingPartitioner implements StreamPartitioner<String, String> {
+
+        @Override
+        @Deprecated
+        public Integer partition(final String topic, final String key, final String value, final int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final int numPartitions) {
+            final Set<Integer> partitions = new HashSet<>();
+            for (int i = 1; i < numPartitions; i += 2) {
+                partitions.add(i);
+            }
+            return Optional.of(partitions);
+        }
+    }
+
+    // Adding a test only for dropping partitioner as the output topic is a single partitioned topic
+    // and the default implementation of partitions method already sends a singleton list which is
+    // getting tested in other tests
+    private Topology createSimpleTopologyWithDroppingPartitioner() {
+        return topology
+                .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+                .addProcessor("processor", ForwardingProcessor::new, "source")
+                .addSink("sink", OUTPUT_TOPIC_1, new DroppingPartitioner(), "processor");
     }
 
     @Deprecated // testing old PAPI

@@ -28,7 +28,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   @Test
   def testDeleteWithTopicOption(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group, "--topic")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group, "--topic")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
@@ -37,7 +37,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", missingGroup)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", missingGroup)
     val service = getConsumerGroupService(cgcArgs)
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
@@ -51,7 +51,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val missingGroup = "missing.group"
 
     // note the group to be deleted is a different (non-existing) group
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", missingGroup)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", missingGroup)
     val service = getConsumerGroupService(cgcArgs)
 
     val result = service.deleteGroups()
@@ -65,7 +65,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group
     addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -83,7 +83,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group
     addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -103,7 +103,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group
     val executor = addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -133,7 +133,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         group -> executor
       }).toMap
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--all-groups")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--all-groups")
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -164,7 +164,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group
     val executor = addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -189,7 +189,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group
     val executor = addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -215,7 +215,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group
     val executor = addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -240,7 +240,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
   @Test
   def testDeleteWithUnrecognizedNewConsumerOption(): Unit = {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 }

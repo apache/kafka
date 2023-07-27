@@ -105,8 +105,8 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   private val krb5conf = new File(workDir, "krb5.conf")
 
   private var _port = config.getProperty(MiniKdc.KdcPort).toInt
-  private var ds: DirectoryService = null
-  private var kdc: KdcServer = null
+  private var ds: DirectoryService = _
+  private var kdc: KdcServer = _
   private var closed = false
 
   def port: Int = _port
@@ -261,7 +261,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   private def refreshJvmKerberosConfig(): Unit = {
     val klass =
-      if (Java.isIbmJdk)
+      if (Java.isIbmJdk && !Java.isIbmJdkSemeru)
         Class.forName("com.ibm.security.krb5.internal.Config")
       else
         Class.forName("sun.security.krb5.Config")

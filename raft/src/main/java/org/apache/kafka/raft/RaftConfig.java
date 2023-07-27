@@ -57,8 +57,8 @@ public class RaftConfig {
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
-        "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
-        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094`";
+        "the set of voters in a comma-separated list of <code>{id}@{host}:{port}</code> entries. " +
+        "For example: <code>1@localhost:9092,2@localhost:9093,3@localhost:9094</code>";
     public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
@@ -68,8 +68,8 @@ public class RaftConfig {
 
     public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "fetch.timeout.ms";
     public static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
-        "the current leader before becoming a candidate and triggering a election for voters; Maximum time without " +
-        "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader";
+        "the current leader before becoming a candidate and triggering an election for voters; Maximum time without " +
+        "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader.";
     public static final int DEFAULT_QUORUM_FETCH_TIMEOUT_MS = 2_000;
 
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";

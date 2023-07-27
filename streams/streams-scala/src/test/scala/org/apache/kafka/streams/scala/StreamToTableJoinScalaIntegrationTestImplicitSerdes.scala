@@ -54,7 +54,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     val clicksPerRegion: KTable[String, Long] =
       userClicksStream
 
-      // Join the stream against the table.
+        // Join the stream against the table.
         .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
 
         // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
@@ -98,7 +98,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     val clicksPerRegion: KTable[String, Long] =
       userClicksStream
 
-      // Join the stream against the table.
+        // Join the stream against the table.
         .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
 
         // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>

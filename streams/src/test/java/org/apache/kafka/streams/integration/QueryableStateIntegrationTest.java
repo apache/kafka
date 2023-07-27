@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreamsTest;
@@ -56,19 +56,18 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matchers;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,16 +109,16 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.sessionStore;
-import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 @SuppressWarnings("deprecation")
 public class QueryableStateIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
@@ -130,12 +129,12 @@ public class QueryableStateIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -161,8 +160,8 @@ public class QueryableStateIntegrationTest {
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
 
-    private void createTopics() throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private void createTopics(final TestInfo testInfo) throws Exception {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamOne = streamOne + "-" + safeTestName;
         streamConcurrent = streamConcurrent + "-" + safeTestName;
         streamThree = streamThree + "-" + safeTestName;
@@ -213,14 +212,11 @@ public class QueryableStateIntegrationTest {
         return input;
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() throws Exception {
-        createTopics();
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws Exception {
+        createTopics(testInfo);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -241,7 +237,7 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    @After
+    @AfterEach
     public void shutdown() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close(ofSeconds(30));
@@ -447,8 +443,8 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldRejectNonExistentStoreName() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+    public void shouldRejectNonExistentStoreName(final TestInfo testInfo) throws InterruptedException {
+        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
 
@@ -462,7 +458,7 @@ public class QueryableStateIntegrationTest {
         );
 
         final Properties properties = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(getClass(), testName)),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(getClass(), testInfo)),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
@@ -485,8 +481,8 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldRejectWronglyTypedStore() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+    public void shouldRejectWronglyTypedStore(final TestInfo testInfo) throws InterruptedException {
+        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
 
@@ -556,12 +552,13 @@ public class QueryableStateIntegrationTest {
             listeners.add(listener);
             streamsList.add(streams);
         }
-        startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(60));
-
-        final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
-        verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 4));
 
         try {
+            startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(60));
+
+            final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 4));
+
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
 
             for (int i = 0; i < streamsList.size(); i++) {
@@ -658,10 +655,11 @@ public class QueryableStateIntegrationTest {
             listeners.add(listener);
             streamsList.add(streams);
         }
-        startApplicationAndWaitUntilRunning(streamsList, ofSeconds(60));
-        verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
 
         try {
+            startApplicationAndWaitUntilRunning(streamsList, ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
+
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
 
             // Ensure each thread can serve all keys by itself; i.e standby replication works.
@@ -768,7 +766,7 @@ public class QueryableStateIntegrationTest {
         t2.toStream().to(outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -835,7 +833,7 @@ public class QueryableStateIntegrationTest {
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
@@ -892,7 +890,7 @@ public class QueryableStateIntegrationTest {
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
@@ -944,7 +942,7 @@ public class QueryableStateIntegrationTest {
         t3.toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -964,7 +962,7 @@ public class QueryableStateIntegrationTest {
     }
 
     private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, cacheSizeBytes);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
 
@@ -1005,7 +1003,7 @@ public class QueryableStateIntegrationTest {
             .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
             .count(Materialized.as(windowStoreName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -1032,7 +1030,7 @@ public class QueryableStateIntegrationTest {
         final String storeName = "count-by-key";
         stream.groupByKey().count(Materialized.as(storeName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
         IntegrationTestUtils.produceKeyValuesSynchronously(
@@ -1060,7 +1058,7 @@ public class QueryableStateIntegrationTest {
 
         // start again, and since it may take time to restore we wait for it to transit to RUNNING a bit longer
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams, maxWaitMs);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         // make sure we never get any value other than 8 for hello
         TestUtils.waitForCondition(
@@ -1103,8 +1101,7 @@ public class QueryableStateIntegrationTest {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.setUncaughtExceptionHandler((t, e) -> failed.set(true));
 
-        // since we start with two threads, wait for a bit longer for both of them to transit to running
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams, 30000);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,

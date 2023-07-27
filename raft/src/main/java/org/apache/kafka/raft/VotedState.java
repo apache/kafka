@@ -92,11 +92,6 @@ public class VotedState implements EpochState {
         return electionTimer.isExpired();
     }
 
-    public void overrideElectionTimeout(long currentTimeMs, long timeoutMs) {
-        electionTimer.update(currentTimeMs);
-        electionTimer.reset(timeoutMs);
-    }
-
     @Override
     public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
         if (votedId() == candidateId) {

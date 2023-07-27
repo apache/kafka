@@ -19,8 +19,10 @@
   "listeners": ["zkBroker", "broker"],
   "name": "DescribeLogDirsRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-2",
+  "validVersions": "0-4",
   // Version 2 is the first flexible version.
+  // Version 3 is the same as version 2 (new field in response).
+  // Version 4 is the same as version 2 (new fields in response).
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Topics", "type": "[]DescribableLogDirTopic", "versions": "0+", "nullableVersions": "0+",
@@ -28,7 +30,7 @@
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
         "about": "The topic name" },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partition indxes." }
+        "about": "The partition indexes." }
     ]}
   ]
 }

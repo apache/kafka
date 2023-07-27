@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InsertHeaderTest {
 
-    private InsertHeader<SourceRecord> xform = new InsertHeader<>();
+    private final InsertHeader<SourceRecord> xform = new InsertHeader<>();
 
     private Map<String, ?> config(String header, String valueLiteral) {
         Map<String, String> result = new HashMap<>();
@@ -113,9 +113,8 @@ public class InsertHeaderTest {
         Object value = "value";
         Long timestamp = 0L;
 
-        SourceRecord record = new SourceRecord(sourcePartition, sourceOffset, topic, partition,
+        return new SourceRecord(sourcePartition, sourceOffset, topic, partition,
                 keySchema, key, valueSchema, value, timestamp, headers);
-        return record;
     }
 }
 

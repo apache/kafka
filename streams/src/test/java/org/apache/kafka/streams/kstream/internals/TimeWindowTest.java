@@ -27,11 +27,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
-@SuppressWarnings("deprecation")
 public class TimeWindowTest {
 
-    private long start = 50;
-    private long end = 100;
+    private final long start = 50;
+    private final long end = 100;
     private final TimeWindow window = new TimeWindow(start, end);
     private final SessionWindow sessionWindow = new SessionWindow(start, end);
 
@@ -125,6 +124,7 @@ public class TimeWindowTest {
         assertThrows(IllegalArgumentException.class, () -> window.overlap(sessionWindow));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReturnMatchedWindowsOrderedByTimestamp() {
         final TimeWindows windows = TimeWindows.of(ofMillis(12L)).advanceBy(ofMillis(5L));

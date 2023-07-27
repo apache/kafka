@@ -29,8 +29,10 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,9 +67,9 @@ import static org.junit.Assert.fail;
  */
 @Category(IntegrationTest.class)
 public class ErrorHandlingIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
-
     private static final int NUM_WORKERS = 1;
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
@@ -126,7 +128,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
 
-        // tolerate all erros
+        // tolerate all errors
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
 
         // retry for up to one second
@@ -176,7 +178,7 @@ public class ErrorHandlingIntegrationTest {
         }
 
         connect.deleteConnector(CONNECTOR_NAME);
-        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME,
+        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME,
                 "Connector tasks did not stop in time.");
 
     }
@@ -203,7 +205,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
 
-        // tolerate all erros
+        // tolerate all errors
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
 
         // retry for up to one second
@@ -245,7 +247,7 @@ public class ErrorHandlingIntegrationTest {
         ConsumerRecords<byte[], byte[]> messages = connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC);
 
         connect.deleteConnector(CONNECTOR_NAME);
-        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME,
+        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME,
             "Connector tasks did not stop in time.");
     }
 
@@ -261,7 +263,7 @@ public class ErrorHandlingIntegrationTest {
         try {
             ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
             return info != null && info.tasks().size() == NUM_TASKS
-                    && connectorHandle.taskHandle(TASK_ID).partitionsAssigned() == 1;
+                    && connectorHandle.taskHandle(TASK_ID).numPartitionsAssigned() == 1;
         }  catch (Exception e) {
             // Log the exception and return that the partitions were not assigned
             log.error("Could not check connector state info.", e);

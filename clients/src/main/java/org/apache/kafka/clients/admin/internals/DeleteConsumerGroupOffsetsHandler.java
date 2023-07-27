@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<CoordinatorKey, Map<TopicPartition, Errors>> {
+public class DeleteConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, Errors>> {
 
     private final CoordinatorKey groupId;
     private final Set<TopicPartition> partitions;
@@ -80,7 +80,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
     }
 
     @Override
-    public OffsetDeleteRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+    public OffsetDeleteRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
         validateKeys(groupIds);
 
         final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();

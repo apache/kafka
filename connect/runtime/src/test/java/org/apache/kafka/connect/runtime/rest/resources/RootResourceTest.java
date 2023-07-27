@@ -20,21 +20,20 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockRunner;
-import org.easymock.EasyMockSupport;
-import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
-public class RootResourceTest extends EasyMockSupport {
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
+public class RootResourceTest {
 
-    @Mock
-    private Herder herder;
+    @Mock private Herder herder;
     private RootResource rootResource;
 
     @Before
@@ -44,15 +43,13 @@ public class RootResourceTest extends EasyMockSupport {
 
     @Test
     public void testRootGet() {
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(MockAdminClient.DEFAULT_CLUSTER_ID);
-
-        replayAll();
+        when(herder.kafkaClusterId()).thenReturn(MockAdminClient.DEFAULT_CLUSTER_ID);
 
         ServerInfo info = rootResource.serverInfo();
         assertEquals(AppInfoParser.getVersion(), info.version());
         assertEquals(AppInfoParser.getCommitId(), info.commit());
         assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, info.clusterId());
 
-        verifyAll();
+        verify(herder).kafkaClusterId();
     }
 }

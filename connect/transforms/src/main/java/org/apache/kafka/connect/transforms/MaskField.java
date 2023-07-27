@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import java.util.ArrayList;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
@@ -28,7 +29,6 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -148,9 +148,9 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         Object maskedValue = PRIMITIVE_VALUE_MAPPING.get(value.getClass());
         if (maskedValue == null) {
             if (value instanceof List)
-                maskedValue = Collections.emptyList();
+                maskedValue = new ArrayList<>();
             else if (value instanceof Map)
-                maskedValue = Collections.emptyMap();
+                maskedValue = new HashMap<>();
             else
                 throw new DataException("Cannot mask value of type: " + value.getClass());
         }

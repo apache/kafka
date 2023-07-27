@@ -45,6 +45,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -82,6 +83,7 @@ public class MeteredWindowStoreTest {
     private static final String VALUE = "value";
     private static final byte[] VALUE_BYTES = VALUE.getBytes();
     private static final int WINDOW_SIZE_MS = 10;
+    private static final int RETENTION_PERIOD = 100;
     private static final long TIMESTAMP = 42L;
 
     private final String threadId = Thread.currentThread().getName();
@@ -171,7 +173,7 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
         final String defaultChangelogTopicName =
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME, context.taskId().namedTopology());
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME, context.taskId().topologyName());
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
     }
 
@@ -271,13 +273,34 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
+    public void shouldReturnNoRecordWhenFetchedKeyHasExpired() {
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1 + RETENTION_PERIOD))
+                .andReturn(KeyValueIterators.emptyWindowStoreIterator());
+        replay(innerStoreMock);
+
+        store.init((StateStoreContext) context, store);
+        store.fetch("a", ofEpochMilli(1), ofEpochMilli(1).plus(RETENTION_PERIOD, ChronoUnit.MILLIS)).close(); // recorded on close;
+
+        verify(innerStoreMock);
+    }
+
+    @Test
     public void shouldFetchRangeFromInnerStoreAndRecordFetchMetrics() {
         expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+        expect(innerStoreMock.fetch(null, Bytes.wrap("b".getBytes()), 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), null, 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+        expect(innerStoreMock.fetch(null, null, 1, 1))
             .andReturn(KeyValueIterators.emptyIterator());
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
         store.fetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+        store.fetch(null, "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+        store.fetch("a", null, ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+        store.fetch(null, null, ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
         // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
@@ -306,10 +329,19 @@ public class MeteredWindowStoreTest {
     public void shouldBackwardFetchRangeFromInnerStoreAndRecordFetchMetrics() {
         expect(innerStoreMock.backwardFetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1))
             .andReturn(KeyValueIterators.emptyIterator());
+        expect(innerStoreMock.backwardFetch(null, Bytes.wrap("b".getBytes()), 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+        expect(innerStoreMock.backwardFetch(Bytes.wrap("a".getBytes()), null, 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+        expect(innerStoreMock.backwardFetch(null, null, 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
         store.backwardFetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+        store.backwardFetch(null, "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+        store.backwardFetch("a", null, ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+        store.backwardFetch(null, null, ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
         // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
@@ -452,27 +484,6 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> store.backwardFetch(null, 0L, 1L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
-        assertThrows(NullPointerException.class, () -> store.fetch(null, "to", 0L, 1L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
-        assertThrows(NullPointerException.class, () -> store.fetch("from", null, 0L, 1L));
-    }
-
-
-    @Test
-    public void shouldThrowNullPointerOnbackwardFetchRangeIfFromIsNull() {
-        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, "to", 0L, 1L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerOnbackwardFetchRangeIfToIsNull() {
-        assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null, 0L, 1L));
     }
 
     private KafkaMetric metric(final String name) {
