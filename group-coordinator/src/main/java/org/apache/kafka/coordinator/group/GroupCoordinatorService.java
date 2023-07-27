@@ -330,9 +330,30 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(new SyncGroupResponseData()
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+        }
+
+        CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
+
+        runtime.scheduleWriteOperation("generic-group-sync",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
+        ).exceptionally(exception -> {
+            if (!(exception instanceof KafkaException)) {
+                log.error("SyncGroup request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+            }
+
+            if (!responseFuture.isDone()) {
+                responseFuture.complete(new SyncGroupResponseData()
+                    .setErrorCode(Errors.forException(exception).code()));
+            }
+            return null;
+        });
+
+        return responseFuture;
     }
 
     /**
