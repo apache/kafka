@@ -666,9 +666,12 @@ public class KRaftMigrationDriverTest {
             image = delta.apply(provenance);
 
             driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            
+            // Call onMetadataUpdate twice. The first call will trigger the migration to begin (due to presence of brokers)
+            // Both calls will "wakeup" the driver and cause a PollEvent to be run. Calling these back-to-back effectively
+            // causes two MigrateMetadataEvents to be enqueued. Ensure only one is actually run.
             driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
                 new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
-
             driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
                 new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
 
