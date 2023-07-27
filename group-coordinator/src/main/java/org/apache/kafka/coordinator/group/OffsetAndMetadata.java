@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 
@@ -24,11 +24,13 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 
+import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
+
 /**
  * Represents a committed offset with its metadata.
  */
 public class OffsetAndMetadata {
-    public static final String NO_METADATA = "";
+    private static final String NO_METADATA = "";
 
     /**
      * The committed offset.
@@ -114,12 +116,29 @@ public class OffsetAndMetadata {
     ) {
         return new OffsetAndMetadata(
             record.offset(),
-            record.leaderEpoch() == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
-                OptionalInt.empty() : OptionalInt.of(record.leaderEpoch()),
+            ofSentinel(record.leaderEpoch()),
             record.metadata(),
             record.commitTimestamp(),
-            record.expireTimestamp() == OffsetCommitRequest.DEFAULT_TIMESTAMP ?
-                OptionalLong.empty() : OptionalLong.of(record.expireTimestamp())
+            ofSentinel(record.expireTimestamp())
+        );
+    }
+
+    /**
+     * @return An OffsetAndMetadata created from an OffsetCommitRequestPartition request.
+     */
+    public static OffsetAndMetadata fromRequest(
+        OffsetCommitRequestData.OffsetCommitRequestPartition partition,
+        long currentTimeMs,
+        OptionalLong expireTimestampMs
+    ) {
+        return new OffsetAndMetadata(
+            partition.committedOffset(),
+            ofSentinel(partition.committedLeaderEpoch()),
+            partition.committedMetadata() == null ?
+                OffsetAndMetadata.NO_METADATA : partition.committedMetadata(),
+            partition.commitTimestamp() == OffsetCommitRequest.DEFAULT_TIMESTAMP ?
+                currentTimeMs : partition.commitTimestamp(),
+            expireTimestampMs
         );
     }
 }

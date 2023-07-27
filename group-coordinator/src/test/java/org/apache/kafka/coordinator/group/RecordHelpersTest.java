@@ -60,6 +60,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -522,6 +523,8 @@ public class RecordHelpersTest {
             time
         );
 
+        Map<String, byte[]> assignment = new HashMap<>();
+
         expectedMembers.forEach(member -> {
             JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
             protocols.add(new JoinGroupRequestProtocol()
@@ -537,13 +540,16 @@ public class RecordHelpersTest {
                 member.sessionTimeout(),
                 "consumer",
                 protocols,
-                member.assignment()
+                GenericGroupMember.EMPTY_ASSIGNMENT
             ));
+
+            assignment.put(member.memberId(), member.assignment());
         });
 
         group.initNextGeneration();
         Record groupMetadataRecord = RecordHelpers.newGroupMetadataRecord(
             group,
+            assignment,
             metadataVersion
         );
 
@@ -609,6 +615,7 @@ public class RecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
+                Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
             ));
     }
@@ -659,6 +666,7 @@ public class RecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
+                Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
             ));
     }
