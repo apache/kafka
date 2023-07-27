@@ -49,7 +49,6 @@ public class RackAwareTaskAssignor {
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
-    private final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer;
     private final AssignmentConfigs assignmentConfigs;
     private final Map<TopicPartition, Set<String>> racksForPartition;
     private final Map<UUID, String> racksForProcess;
@@ -63,11 +62,11 @@ public class RackAwareTaskAssignor {
                                  final AssignmentConfigs assignmentConfigs) {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
-        this.racksForProcessConsumer = racksForProcessConsumer;
         this.internalTopicManager = internalTopicManager;
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
         this.racksForProcess = new HashMap<>();
+        validateClientRack(racksForProcessConsumer);
     }
 
     public synchronized boolean canEnableRackAwareAssignor() {
@@ -78,11 +77,6 @@ public class RackAwareTaskAssignor {
             return false;
         }
          */
-
-        if (!validateClientRack()) {
-            return false;
-        }
-
         return validateTopicPartitionRack();
         // TODO: add changelog topic, standby task validation
     }
@@ -158,8 +152,7 @@ public class RackAwareTaskAssignor {
         return true;
     }
 
-    // Visible for testing
-    public boolean validateClientRack() {
+    private void validateClientRack(final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer) {
         /*
          * Check rack information is populated correctly in clients
          * 1. RackId exist for all clients
@@ -170,31 +163,28 @@ public class RackAwareTaskAssignor {
             KeyValue<String, String> previousRackInfo = null;
             for (final Map.Entry<String, Optional<String>> rackEntry : entry.getValue().entrySet()) {
                 if (!rackEntry.getValue().isPresent()) {
-                    log.warn("RackId doesn't exist for process {} and consumer {}. Disable {}",
-                        processId, rackEntry.getKey(), getClass().getName());
-                    return false;
+                    throw new IllegalArgumentException(String.format("RackId doesn't exist for process %s and consumer %s",
+                        processId, rackEntry.getKey()));
                 }
                 if (previousRackInfo == null) {
                     previousRackInfo = KeyValue.pair(rackEntry.getKey(), rackEntry.getValue().get());
                 } else if (!previousRackInfo.value.equals(rackEntry.getValue().get())) {
-                    log.error(
-                        "Consumers {} and {} for same process {} has different rackId {} and {}. File a ticket for this bug. Disable {}",
-                        previousRackInfo.key,
-                        rackEntry.getKey(),
-                        entry.getKey(),
-                        previousRackInfo.value,
-                        rackEntry.getValue().get(),
-                        getClass().getName());
-                    return false;
+                    throw new IllegalArgumentException(
+                        String.format("Consumers %s and %s for same process %s has different rackId %s and %s. File a ticket for this bug",
+                            previousRackInfo.key,
+                            rackEntry.getKey(),
+                            entry.getKey(),
+                            previousRackInfo.value,
+                            rackEntry.getValue().get()
+                        )
+                    );
                 }
             }
             if (previousRackInfo == null) {
-                log.warn("RackId doesn't exist for process {}. Disable {}", processId, getClass().getName());
-                return false;
+                throw new IllegalArgumentException(String.format("RackId doesn't exist for process %s", processId));
             }
             racksForProcess.put(entry.getKey(), previousRackInfo.value);
         }
-        return true;
     }
 
     public Map<UUID, String> racksForProcess() {

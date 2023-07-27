@@ -177,7 +177,6 @@ public class RackAwareTaskAssignorTest {
         // False since partitionWithoutInfo10 is missing in cluster metadata
         assertFalse(assignor.canEnableRackAwareAssignor());
         assertFalse(assignor.populateTopicsToDescribe(new HashSet<>()));
-        assertTrue(assignor.validateClientRack());
     }
 
     @Test
@@ -191,30 +190,41 @@ public class RackAwareTaskAssignorTest {
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
-        assertTrue(assignor.validateClientRack());
         assertFalse(assignor.populateTopicsToDescribe(new HashSet<>()));
         // False since nodeMissingRack has one node which doesn't have rack
         assertFalse(assignor.canEnableRackAwareAssignor());
     }
 
     @Test
-    public void shouldDisableActiveWhenRackMissingInClient() {
-        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+    public void shouldThrowWhenRackMissingInClientConsumer() {
+        // Throws since process1 doesn't have rackId
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(true),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        );
-
-        // False since process1 doesn't have rackId
-        assertFalse(assignor.validateClientRack());
-        assertFalse(assignor.canEnableRackAwareAssignor());
+        ));
+        assertEquals("RackId doesn't exist for process 00000000-0000-0000-0000-000000000001 and consumer consumer1", exception.getMessage());
     }
 
     @Test
-    public void shouldDisableActiveWhenRackDiffersInSameProcess() {
+    public void shouldThrowWhenRackMissingInProcess() {
+        // Throws since process1 doesn't have rackId
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> new RackAwareTaskAssignor(
+            getClusterForTopic0(),
+            getTaskTopicPartitionMapForTask0(),
+            getTopologyGroupTaskMap(),
+            getProcessWithNoConsumerRacks(),
+            mockInternalTopicManager,
+            new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
+        ));
+        assertEquals("RackId doesn't exist for process 00000000-0000-0000-0000-000000000001", exception.getMessage());
+    }
+
+    @Test
+    public void shouldThrowWhenRackDiffersInSameProcess() {
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
 
         // Different consumers in same process have different rack ID. This shouldn't happen.
@@ -222,21 +232,21 @@ public class RackAwareTaskAssignorTest {
         processRacks.computeIfAbsent(UUID_1, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
         processRacks.computeIfAbsent(UUID_1, k -> new HashMap<>()).put("consumer2", Optional.of("rack2"));
 
-        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
             getTopologyGroupTaskMap(),
             processRacks,
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        );
+        ));
 
-        assertFalse(assignor.validateClientRack());
-        assertFalse(assignor.canEnableRackAwareAssignor());
+        assertEquals("Consumers consumer2 and consumer1 for same process 00000000-0000-0000-0000-000000000001 "
+            + "has different rackId rack2 and rack1. File a ticket for this bug", exception.getMessage());
     }
 
     @Test
-    public void shouldEnableRackAwareAssignorForActiveWithoutDescribingTopics() {
+    public void shouldEnableRackAwareAssignorWithoutDescribingTopics() {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
@@ -251,7 +261,7 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldEnableRackAwareAssignorForActiveWithDescribingTopics() {
+    public void shouldEnableRackAwareAssignorWithDescribingTopics() {
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doReturn(
             Collections.singletonMap(
@@ -275,7 +285,7 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldDisableRackAwareAssignorForActiveWithDescribingTopicsFailure() {
+    public void shouldDisableRackAwareAssignorWithDescribingTopicsFailure() {
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(
             TP_0_NAME));
@@ -591,8 +601,8 @@ public class RackAwareTaskAssignorTest {
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         final Exception exception = assertThrows(IllegalStateException.class,
             () -> assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost));
-        Assertions.assertEquals("Client 00000000-0000-0000-0000-000000000002 doesn't have rack configured. Maybe forgot to call "
-            + "canEnableRackAwareAssignor first", exception.getMessage());
+        Assertions.assertEquals("TopicPartition topic0-0 has no rack information. "
+            + "Maybe forgot to call canEnableRackAwareAssignor first", exception.getMessage());
     }
 
     @Test
@@ -785,6 +795,12 @@ public class RackAwareTaskAssignorTest {
         final Optional<String> rack = missingRack ? Optional.empty() : Optional.of("rack1");
         processRacks.put(UUID_1, Collections.singletonMap("consumer1", rack));
         return processRacks;
+    }
+
+    private Map<UUID, Map<String, Optional<String>>> getProcessWithNoConsumerRacks() {
+        return mkMap(
+            mkEntry(UUID_1, mkMap())
+        );
     }
 
     private Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForTask0() {
