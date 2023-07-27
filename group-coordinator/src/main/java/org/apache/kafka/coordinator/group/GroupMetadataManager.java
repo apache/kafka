@@ -412,7 +412,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * @return The group corresponding to the groupId or throw GroupIdNotFoundException.
+     * @return The group corresponding to the group id or throw GroupIdNotFoundException.
      */
     public Group group(String groupId) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);

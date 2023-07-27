@@ -275,8 +275,7 @@ public class OffsetMetadataManager {
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
         request.topics().forEach(topic -> {
-            final OffsetCommitResponseData.OffsetCommitResponseTopic topicResponse =
-                new OffsetCommitResponseTopic().setName(topic.name());
+            final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic().setName(topic.name());
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
