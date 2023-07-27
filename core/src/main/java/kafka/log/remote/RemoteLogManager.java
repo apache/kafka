@@ -681,8 +681,14 @@ public class RemoteLogManager implements Closeable {
         }
 
         public void run() {
-            if (isCancelled())
-                return;
+            try {
+                if (isCancelled() || !remoteLogMetadataManager.isInitialized(topicIdPartition)) {
+                    logger.debug("Partition {} is either cancelled or not initialized", topicIdPartition);
+                    return;
+                }
+            } catch (RemoteStorageException e) {
+                throw new RuntimeException(e);
+            }
 
             try {
                 Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(topicIdPartition.topicPartition());
