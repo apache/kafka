@@ -31,6 +31,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
@@ -52,10 +54,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 
 import java.net.InetAddress;
 import java.util.Collections;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -494,5 +498,99 @@ public class GroupCoordinatorServiceTest {
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
 
         assertEquals(expectedResponse, response.get());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFetchOffsetsWithoutWithoutRequireStable(
+        boolean requireStable
+    ) throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        service.startup(() -> 1);
+
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topicsRequest =
+            Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0)));
+
+        List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicsResponse =
+            Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(100L))));
+
+        if (requireStable) {
+            when(runtime.scheduleWriteOperation(
+                ArgumentMatchers.eq("fetch-offsets"),
+                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.any()
+            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+        } else {
+            when(runtime.scheduleReadOperation(
+                ArgumentMatchers.eq("fetch-offsets"),
+                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.any()
+            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+        }
+
+        CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> future = service.fetchOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            "group",
+            topicsRequest,
+            requireStable
+        );
+
+        assertEquals(topicsResponse, future.get(5, TimeUnit.SECONDS));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFetchAllOffsetsWithoutWithoutRequireStable(
+        boolean requireStable
+    ) throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        service.startup(() -> 1);
+
+        List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicsResponse =
+            Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(100L))));
+
+        if (requireStable) {
+            when(runtime.scheduleWriteOperation(
+                ArgumentMatchers.eq("fetch-all-offsets"),
+                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.any()
+            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+        } else {
+            when(runtime.scheduleReadOperation(
+                ArgumentMatchers.eq("fetch-all-offsets"),
+                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.any()
+            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+        }
+
+        CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> future = service.fetchAllOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            "group",
+            requireStable
+        );
+
+        assertEquals(topicsResponse, future.get(5, TimeUnit.SECONDS));
     }
 }

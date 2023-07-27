@@ -23,6 +23,8 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.errors.ApiException;
@@ -55,6 +57,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -247,6 +250,40 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
             request,
             responseFuture
         );
+    }
+
+    /**
+     * Fetch offsets for a given Group.
+     *
+     * @param groupId   The group id.
+     * @param topics    The topics to fetch the offsets for.
+     * @param epoch     The epoch (or offset) used to read from the
+     *                  timeline data structure.
+     *
+     * @return A List of OffsetFetchResponseTopics response.
+     */
+    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
+        String groupId,
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+        long epoch
+    ) throws ApiException {
+        return offsetMetadataManager.fetchOffsets(groupId, topics, epoch);
+    }
+
+    /**
+     * Fetch all offsets for a given Group.
+     *
+     * @param groupId   The group id.
+     * @param epoch     The epoch (or offset) used to read from the
+     *                  timeline data structure.
+     *
+     * @return A List of OffsetFetchResponseTopics response.
+     */
+    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
+        String groupId,
+        long epoch
+    ) throws ApiException {
+        return offsetMetadataManager.fetchAllOffsets(groupId, epoch);
     }
 
     /**
