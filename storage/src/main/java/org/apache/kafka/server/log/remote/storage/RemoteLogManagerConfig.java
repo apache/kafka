@@ -122,6 +122,18 @@ public final class RemoteLogManagerConfig {
             "is full, fetch requests are served with an error.";
     public static final int DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS = 100;
 
+    public static final String LOG_LOCAL_RETENTION_MS_PROP = "log.local.retention.ms";
+    public static final String LOG_LOCAL_RETENTION_MS_DOC = "The number of milli seconds to keep the local log segment before it gets deleted. " +
+            "Default value is -2, it represents `log.retention.ms` value is to be used. The effective value should always be less than or equal " +
+            "to `log.retention.ms` value.";
+    public static final Long DEFAULT_LOG_LOCAL_RETENTION_MS = -2L;
+
+    public static final String LOG_LOCAL_RETENTION_BYTES_PROP = "log.local.retention.bytes";
+    public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
+            "deletes the old segments. Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
+            "less than or equal to `log.retention.bytes` value.";
+    public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
     static {
@@ -215,7 +227,19 @@ public final class RemoteLogManagerConfig {
                                   DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS,
                                   atLeast(1),
                                   MEDIUM,
-                                  REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC);
+                                  REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC)
+                  .defineInternal(LOG_LOCAL_RETENTION_MS_PROP,
+                          LONG,
+                          DEFAULT_LOG_LOCAL_RETENTION_MS,
+                          atLeast(-2),
+                          MEDIUM,
+                          LOG_LOCAL_RETENTION_MS_DOC)
+                  .defineInternal(LOG_LOCAL_RETENTION_BYTES_PROP,
+                          LONG,
+                          DEFAULT_LOG_LOCAL_RETENTION_BYTES,
+                          atLeast(-2),
+                          MEDIUM,
+                          LOG_LOCAL_RETENTION_BYTES_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
