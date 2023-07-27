@@ -20,8 +20,7 @@ import kafka.utils.TestUtils.waitUntilTrue
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-import scala.jdk.CollectionConverters.SeqHasAsJava
-
+import scala.jdk.CollectionConverters._
 
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
   @Test
