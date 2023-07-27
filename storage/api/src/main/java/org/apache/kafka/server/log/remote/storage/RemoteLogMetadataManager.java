@@ -210,4 +210,14 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @return Total size of the log stored in remote storage in bytes.
      */
     long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException;
+
+    /**
+     * Denotes whether the partition metadata is ready to serve.
+     *
+     * @param topicIdPartition topic partition
+     * @return True if the partition is initialized for remote storage operations.
+     */
+    default boolean isInitialized(TopicIdPartition topicIdPartition) throws RemoteStorageException {
+        return true;
+    }
 }

@@ -80,6 +80,11 @@ public class NoOpRemoteLogMetadataManager implements RemoteLogMetadataManager {
     }
 
     @Override
+    public boolean isInitialized(TopicIdPartition topicIdPartition) {
+        return true;
+    }
+
+    @Override
     public void close() throws IOException {
     }
 
