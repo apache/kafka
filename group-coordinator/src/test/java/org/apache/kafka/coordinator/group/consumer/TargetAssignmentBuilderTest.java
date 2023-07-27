@@ -93,7 +93,8 @@ public class TargetAssignmentBuilderTest {
                 topicId,
                 topicName,
                 numPartitions,
-                partitionRacks));
+                partitionRacks
+            ));
             return topicId;
         }
 
@@ -712,7 +713,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    public static <T> void assertUnorderedList(
+    private static <T> void assertUnorderedList(
         List<T> expected,
         List<T> actual
     ) {

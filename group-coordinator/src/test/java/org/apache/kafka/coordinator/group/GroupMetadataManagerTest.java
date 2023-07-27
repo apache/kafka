@@ -5695,7 +5695,7 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    public static void assertApiMessageAndVersionEquals(
+    private static void assertApiMessageAndVersionEquals(
         ApiMessageAndVersion expected,
         ApiMessageAndVersion actual
     ) {
@@ -5742,7 +5742,7 @@ public class GroupMetadataManagerTest {
                 fail("Topic metadata lists have different sizes");
             }
 
-            for (int i = 0; i < expectedValue.topics().size(); i++) {
+            for (int i = 0; i < expectedTopicMetadataList.size(); i++) {
                 ConsumerGroupPartitionMetadataValue.TopicMetadata expectedTopicMetadata =
                     expectedTopicMetadataList.get(i);
                 ConsumerGroupPartitionMetadataValue.TopicMetadata actualTopicMetadata =
@@ -5762,7 +5762,7 @@ public class GroupMetadataManagerTest {
                 if (expectedPartitionMetadataList.size() != actualPartitionMetadataList.size()) {
                     fail("Partition metadata lists have different sizes");
                 } else if (!expectedPartitionMetadataList.isEmpty() && !actualPartitionMetadataList.isEmpty()) {
-                    for (int j = 0; j < expectedTopicMetadata.numPartitions(); j++) {
+                    for (int j = 0; j < expectedTopicMetadataList.size(); j++) {
                         ConsumerGroupPartitionMetadataValue.PartitionMetadata expectedPartitionMetadata =
                             expectedPartitionMetadataList.get(j);
                         ConsumerGroupPartitionMetadataValue.PartitionMetadata actualPartitionMetadata =
@@ -5771,10 +5771,10 @@ public class GroupMetadataManagerTest {
                         assertEquals(expectedPartitionMetadata.partition(), actualPartitionMetadata.partition());
                         assertUnorderedListEquals(expectedPartitionMetadata.racks(), actualPartitionMetadata.racks());
                     }
-                } else {
-                    assertEquals(expected.message(), actual.message());
                 }
             }
+        } else {
+            assertEquals(expected.message(), actual.message());
         }
     }
 

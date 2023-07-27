@@ -718,7 +718,7 @@ public class RangeAssignorTest {
     }
 
     // When rack awareness is enabled for this assignor, rack information can be updated in this method.
-    private Map<Integer, Set<String>> createPartitionMetadata(int numPartitions) {
+    private static Map<Integer, Set<String>> createPartitionMetadata(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
         Set<String> emptySet = Collections.emptySet();
         for (int i = 0; i < numPartitions; i++) {
