@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -291,53 +290,44 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             throw new IllegalStateException("At least one non-null offset store must be provided");
         }
 
-        List<ByteBuffer> tombstoneOffsetPartitions = values.entrySet().stream()
+        List<ByteBuffer> partitionsWithTombstoneOffsets = values.entrySet().stream()
                 .filter(offsetEntry -> offsetEntry.getValue() == null)
                 .map(Map.Entry::getKey).collect(Collectors.toList());
 
         Map<ByteBuffer, ByteBuffer> tombstoneOffsets = new HashMap<>();
-        for (ByteBuffer partition : tombstoneOffsetPartitions) {
+        for (ByteBuffer partition : partitionsWithTombstoneOffsets) {
             tombstoneOffsets.put(partition, null);
         }
         Map<ByteBuffer, ByteBuffer> regularOffsets = values.entrySet().stream()
                 .filter(offsetEntry -> offsetEntry.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        // If the supplied offsets contain tombstone values, then tombstone offsets are extracted first and
-        // we first write to the secondary store in a synchronous manner and then to primary store.
+        // If the supplied offsets contain tombstone values, then tombstone offsets are extracted first,
+        // written to the secondary store in a synchronous manner and then to the primary store.
         // This is because, if a tombstone offset is successfully written to the per-connector offsets topic,
         // but cannot be written to the global offsets topic, then the global offsets topic will still contain that
         // source offset, but the per-connector topic will not. Due to the fallback-on-global logic used by the worker,
         // if a task requests offsets for one of the tombstoned partitions, the worker will provide it with the
         // offsets present in the global offsets topic, instead of indicating to the task that no offsets can be found.
-        KafkaFutureImpl<Void> write = new KafkaFutureImpl<>();
-        write.thenApply(v -> {
-            FutureCallback<Void> secondaryWriteFuture = new FutureCallback<>();
-            if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-                secondaryStore.set(tombstoneOffsets, secondaryWriteFuture);
+        CompletableFuture<Void> offsetWriteFuture = CompletableFuture.completedFuture(null);
+        if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
+            offsetWriteFuture.thenApply((v) -> {
+                Future<Void> secondaryWriteFuture = secondaryStore.set(tombstoneOffsets, new FutureCallback<>());
                 try {
                     if (exactlyOnce) {
                         secondaryWriteFuture.get();
                     } else {
                         secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
                     }
-                } catch (InterruptedException e) {
-                    log.warn("{} Flush of tombstone(s) offsets to secondary store interrupted, cancelling", this);
                 } catch (ExecutionException e) {
                     log.error("{} Flush of tombstone(s) offsets to secondary store threw an unexpected exception: ", this, e.getCause());
-                } catch (TimeoutException e) {
-                    log.error("{} Timed out waiting to flush tombstone(s) offsets to secondary store ", this);
                 } catch (Exception e) {
                     log.error("{} Got Exception when trying to flush tombstone(s) offsets to secondary store", this, e);
                 }
-            }
-            return secondaryWriteFuture;
-        });
-
-        // Need to explicitly invoke complete as otherwise the subsequent write to primary store doesn't work since it's
-        // waiting for this future to complete.
-        write.complete(null);
-        write.thenApply(v -> primaryStore.set(values, new FutureCallback<>((primaryWriteError, ignored) -> {
+                return null;
+            });
+        }
+        offsetWriteFuture.thenApply(v -> primaryStore.set(values, new FutureCallback<>((primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
                 if (primaryWriteError != null) {
                     log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
@@ -361,7 +351,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             }
         })));
 
-        return write.whenComplete((ignored, writeError) -> {
+        return offsetWriteFuture.whenComplete((ignored, writeError) -> {
             try (LoggingContext context = loggingContext()) {
                 callback.onCompletion(writeError, ignored);
             }
