@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -33,10 +34,19 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
      * The topic Ids mapped to their corresponding {@link TopicMetadata}
      * object, which contains topic and partition metadata.
      */
-    Map<Uuid, TopicMetadata> topicMetadata;
+    private final Map<Uuid, TopicMetadata> topicMetadata;
 
     public SubscribedTopicMetadata(Map<Uuid, TopicMetadata> topicMetadata) {
-        this.topicMetadata = topicMetadata;
+        this.topicMetadata = Objects.requireNonNull(topicMetadata);
+    }
+
+    /**
+     * Map of topic Ids to topic metadata.
+     *
+     * @return The map of topic Ids to topic metadata.
+     */
+    public Map<Uuid, TopicMetadata> topicMetadata() {
+        return this.topicMetadata;
     }
 
     /**

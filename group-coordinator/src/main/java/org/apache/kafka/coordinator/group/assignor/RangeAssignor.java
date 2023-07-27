@@ -76,12 +76,12 @@ public class RangeAssignor implements PartitionAssignor {
     }
 
     /**
-     * Returns a map of topic IDs to a list of members subscribed to them, based on the given assignment specification and metadata.
+     * Returns a map of topic Ids to a list of members subscribed to them, based on the given assignment specification and metadata.
      *
      * @param assignmentSpec           The specification for member assignments.
      * @param subscribedTopicDescriber The metadata describer for subscribed topics and clusters.
      *
-     * @return A map of topic IDs to a list of member IDs subscribed to them.
+     * @return A map of topic Ids to a list of member Ids subscribed to them.
      *
      * @throws PartitionAssignorException If a member is subscribed to a non-existent topic.
      */

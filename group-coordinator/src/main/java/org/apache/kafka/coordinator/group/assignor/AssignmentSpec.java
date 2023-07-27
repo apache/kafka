@@ -24,7 +24,7 @@ import java.util.Objects;
  */
 public class AssignmentSpec {
     /**
-     * The members keyed by member Id.
+     * The member metadata keyed by member Id.
      */
     private final Map<String, AssignmentMemberSpec> members;
 
