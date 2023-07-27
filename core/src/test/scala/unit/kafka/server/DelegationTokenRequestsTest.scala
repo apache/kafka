@@ -21,6 +21,7 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils, TestInfoUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException
+import org.apache.kafka.common.errors.DelegationTokenNotFoundException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.jupiter.api.Assertions._
@@ -136,7 +137,18 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     //create token with invalid principal type
     val renewer4 = List(SecurityUtils.parseKafkaPrincipal("Group:Renewer4")).asJava
     val createResult4 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer4))
-    assertThrows(classOf[ExecutionException], () => createResult4.delegationToken().get()).getCause.isInstanceOf[InvalidPrincipalTypeException]
+    val createResult4Error = assertThrows(classOf[ExecutionException], () => createResult4.delegationToken().get())
+    assertTrue(createResult4Error.getCause.isInstanceOf[InvalidPrincipalTypeException])
+
+    // Try to renew a deleted token
+    val renewResultPostDelete = adminClient.renewDelegationToken(token1.hmac())
+    val renewResultPostDeleteError = assertThrows(classOf[ExecutionException], () => renewResultPostDelete.expiryTimestamp().get())
+    assertTrue(renewResultPostDeleteError.getCause.isInstanceOf[DelegationTokenNotFoundException])
+
+    // Try to expire a deleted token
+    val expireResultPostDelete = adminClient.expireDelegationToken(token1.hmac())
+    val expireResultPostDeleteError = assertThrows(classOf[ExecutionException], () => expireResultPostDelete.expiryTimestamp().get())
+    assertTrue(expireResultPostDeleteError.getCause.isInstanceOf[DelegationTokenNotFoundException])
 
     // try describing tokens for unknown owner
     val unknownOwner = List(SecurityUtils.parseKafkaPrincipal("User:Unknown")).asJava
