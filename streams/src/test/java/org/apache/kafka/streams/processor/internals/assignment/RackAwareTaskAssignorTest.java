@@ -23,6 +23,8 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_0_NAME;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_1;
@@ -64,9 +66,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -104,6 +111,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
+import org.mockito.Mockito;
 
 @RunWith(Parameterized.class)
 public class RackAwareTaskAssignorTest {
@@ -147,9 +155,14 @@ public class RackAwareTaskAssignorTest {
     }
 
     private Map<String, Object> configProps() {
-        final Map<String, Object> configurationMap = new HashMap<>();
+        return configProps(0);
+    }
+
+    private Map<String, Object> configProps(final int standbyNum) {
+         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
+        configurationMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, standbyNum);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         /*
@@ -165,34 +178,40 @@ public class RackAwareTaskAssignorTest {
 
     @Test
     public void shouldDisableActiveWhenMissingClusterInfo() {
-        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+        final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(true),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        );
+        ));
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
         assertFalse(assignor.canEnableRackAwareAssignor());
-        assertFalse(assignor.populateTopicsToDescribe(new HashSet<>()));
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(true));
+        assertFalse(assignor.populateTopicsToDescribe(new HashSet<>(), false));
     }
 
     @Test
     public void shouldDisableActiveWhenRackMissingInNode() {
-        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+        final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterWithPartitionMissingRack(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        );
+        ));
 
-        assertFalse(assignor.populateTopicsToDescribe(new HashSet<>()));
         // False since nodeMissingRack has one node which doesn't have rack
         assertFalse(assignor.canEnableRackAwareAssignor());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(true));
+        assertFalse(assignor.populateTopicsToDescribe(new HashSet<>(), false));
     }
 
     @Test
@@ -200,6 +219,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(true),
             mockInternalTopicManager,
@@ -214,6 +234,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessWithNoConsumerRacks(),
             mockInternalTopicManager,
@@ -229,6 +250,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -250,6 +272,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             processRacks,
             mockInternalTopicManager,
@@ -264,6 +287,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -272,6 +296,28 @@ public class RackAwareTaskAssignorTest {
 
         // partitionWithoutInfo00 has rackInfo in cluster metadata
         assertTrue(assignor.canEnableRackAwareAssignor());
+    }
+
+    @Test
+    public void shouldEnableRackAwareAssignorWithCacheResult() {
+        final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
+            getClusterForTopic0(),
+            getTaskTopicPartitionMapForTask0(),
+            mkMap(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
+            mockInternalTopicManager,
+            new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
+        ));
+
+        // partitionWithoutInfo00 has rackInfo in cluster metadata
+        assertTrue(assignor.canEnableRackAwareAssignor());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+
+        // Should use cache result
+        Mockito.reset(assignor);
+        assertTrue(assignor.canEnableRackAwareAssignor());
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(false));
     }
 
     @Test
@@ -289,6 +335,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterWithNoNode(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
@@ -299,22 +346,100 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
+    public void shouldEnableRackAwareAssignorWithStandbyDescribingTopics() {
+        final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
+        doReturn(
+            Collections.singletonMap(
+                TP_0_NAME,
+                Collections.singletonList(
+                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
+                )
+            )
+        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TP_0_NAME));
+
+        doReturn(
+            Collections.singletonMap(
+                CHANGELOG_TP_0_NAME,
+                Collections.singletonList(
+                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
+                )
+            )
+        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(CHANGELOG_TP_0_NAME));
+
+        final StreamsConfig streamsConfig1 = new StreamsConfig(configProps(1));
+        final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
+            getClusterWithNoNode(),
+            getTaskTopicPartitionMapForTask0(),
+            getTaskChangeLogTopicPartitionMapForTask0(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
+            spyTopicManager,
+            new AssignorConfiguration(streamsConfig1.originals()).assignmentConfigs()
+        ));
+
+        assertTrue(assignor.canEnableRackAwareAssignor());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(true));
+
+        final Map<TopicPartition, Set<String>> racksForPartition = assignor.racksForPartition();
+        final Map<TopicPartition, Set<String>> expected = mkMap(
+            mkEntry(TP_0_0, mkSet(RACK_1, RACK_2)),
+            mkEntry(CHANGELOG_TP_0_0, mkSet(RACK_1, RACK_2))
+        );
+        assertEquals(expected, racksForPartition);
+    }
+
+    @Test
+    public void shouldDisableRackAwareAssignorWithStandbyDescribingTopicsFailure() {
+        final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
+        doReturn(
+            Collections.singletonMap(
+                TP_0_NAME,
+                Collections.singletonList(
+                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
+                )
+            )
+        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TP_0_NAME));
+
+        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(
+            CHANGELOG_TP_0_NAME));
+
+        final StreamsConfig streamsConfig1 = new StreamsConfig(configProps(1));
+        final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
+            getClusterWithNoNode(),
+            getTaskTopicPartitionMapForTask0(),
+            getTaskChangeLogTopicPartitionMapForTask0(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForProcess0(),
+            spyTopicManager,
+            new AssignorConfiguration(streamsConfig1.originals()).assignmentConfigs()
+        ));
+
+        assertFalse(assignor.canEnableRackAwareAssignor());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(true));
+    }
+
+    @Test
     public void shouldDisableRackAwareAssignorWithDescribingTopicsFailure() {
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(
             TP_0_NAME));
 
-        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+        final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterWithNoNode(),
             getTaskTopicPartitionMapForTask0(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        );
+        ));
 
         assertFalse(assignor.canEnableRackAwareAssignor());
-        assertTrue(assignor.populateTopicsToDescribe(new HashSet<>()));
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(true));
+        assertTrue(assignor.populateTopicsToDescribe(new HashSet<>(), false));
     }
 
     @Test
@@ -322,6 +447,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -352,6 +478,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -401,6 +528,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getRandomCluster(nodeSize, tpSize),
             taskTopicPartitionMap,
+            mkMap(),
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
@@ -432,6 +560,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getRandomCluster(nodeSize, tpSize),
             taskTopicPartitionMap,
+            mkMap(),
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
@@ -467,6 +596,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -511,6 +641,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -555,6 +686,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -596,6 +728,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -624,6 +757,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -654,6 +788,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -819,6 +954,12 @@ public class RackAwareTaskAssignorTest {
 
     private Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForTask0() {
         return getTaskTopicPartitionMapForTask0(false);
+    }
+
+    private Map<TaskId, Set<TopicPartition>> getTaskChangeLogTopicPartitionMapForTask0() {
+        return mkMap(
+            mkEntry(TASK_0_0, mkSet(CHANGELOG_TP_0_0))
+        );
     }
 
     private Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForTask0(final boolean extraTopic) {

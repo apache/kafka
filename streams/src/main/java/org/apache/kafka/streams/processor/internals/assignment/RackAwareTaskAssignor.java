@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -53,20 +54,24 @@ public class RackAwareTaskAssignor {
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
+    private final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask;
     private final AssignmentConfigs assignmentConfigs;
     private final Map<TopicPartition, Set<String>> racksForPartition;
     private final Map<UUID, String> racksForProcess;
     private final InternalTopicManager internalTopicManager;
     private final boolean validClientRack;
+    private Boolean canEnable = null;
 
     public RackAwareTaskAssignor(final Cluster fullMetadata,
                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                 final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
                                  final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
                                  final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
                                  final InternalTopicManager internalTopicManager,
                                  final AssignmentConfigs assignmentConfigs) {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
+        this.changelogPartitionsForTask = changelogPartitionsForTask;
         this.internalTopicManager = internalTopicManager;
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
@@ -86,12 +91,27 @@ public class RackAwareTaskAssignor {
             return false;
         }
          */
-        return validClientRack && validateTopicPartitionRack();
         // TODO: add changelog topic, standby task validation
+        if (canEnable != null) {
+            return canEnable;
+        }
+        canEnable = validClientRack && validateTopicPartitionRack(false);
+        if (assignmentConfigs.numStandbyReplicas == 0 || !canEnable) {
+            return canEnable;
+        }
+
+        canEnable = validateTopicPartitionRack(true);
+        return canEnable;
     }
 
     // Visible for testing. This method also checks if all TopicPartitions exist in cluster
-    public boolean populateTopicsToDescribe(final Set<String> topicsToDescribe) {
+    public boolean populateTopicsToDescribe(final Set<String> topicsToDescribe, final boolean changelog) {
+        if (changelog) {
+            // Changelog topics are not in metadata, we need to describe them
+            changelogPartitionsForTask.values().stream().flatMap(Collection::stream).forEach(tp -> topicsToDescribe.add(tp.topic()));
+            return true;
+        }
+
         // Make sure rackId exist for all TopicPartitions needed
         for (final Set<TopicPartition> topicPartitions : partitionsForTask.values()) {
             for (final TopicPartition topicPartition : topicPartitions) {
@@ -118,10 +138,10 @@ public class RackAwareTaskAssignor {
         return true;
     }
 
-    private boolean validateTopicPartitionRack() {
+    private boolean validateTopicPartitionRack(final boolean changelogTopics) {
         // Make sure rackId exist for all TopicPartitions needed
         final Set<String> topicsToDescribe = new HashSet<>();
-        if (!populateTopicsToDescribe(topicsToDescribe)) {
+        if (!populateTopicsToDescribe(topicsToDescribe, changelogTopics)) {
             return false;
         }
 
@@ -205,6 +225,10 @@ public class RackAwareTaskAssignor {
         return Collections.unmodifiableMap(racksForProcess);
     }
 
+    public Map<TopicPartition, Set<String>> racksForPartition() {
+        return Collections.unmodifiableMap(racksForPartition);
+    }
+
     private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost) {
         final String clientRack = racksForProcess.get(processId);
         if (clientRack == null) {
@@ -248,12 +272,14 @@ public class RackAwareTaskAssignor {
         return tasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasActiveTask);
     }
 
-    // For testing. canEnableRackAwareAssignor must be called first
-    long standByTasksCost(final SortedSet<TaskId> activeTasks,
+    /**
+     * Compute the cost for the provided {@code standbyTasks}. The passed in standby tasks must be contained in {@code clientState}.
+     */
+    long standByTasksCost(final SortedSet<TaskId> standbyTasks,
                           final SortedMap<UUID, ClientState> clientStates,
                           final int trafficCost,
                           final int nonOverlapCost) {
-        return tasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasStandbyTask);
+        return tasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasStandbyTask);
     }
 
     private long tasksCost(final SortedSet<TaskId> tasks,

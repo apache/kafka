@@ -91,6 +91,10 @@ public final class AssignmentTestUtils {
     public static final String TP_0_NAME = "topic0";
     public static final String TP_1_NAME = "topic1";
 
+    public static final String CHANGELOG_TP_0_NAME = "store-0-changelog";
+
+    public static final TopicPartition CHANGELOG_TP_0_0 = new TopicPartition(CHANGELOG_TP_0_NAME, 0);
+
     public static final TopicPartition TP_0_0 = new TopicPartition(TP_0_NAME, 0);
     public static final TopicPartition TP_0_1 = new TopicPartition(TP_0_NAME, 1);
     public static final TopicPartition TP_0_2 = new TopicPartition(TP_0_NAME, 2);
