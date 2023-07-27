@@ -1115,9 +1115,9 @@ class KafkaConfigTest {
         case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG =>
           assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
         case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG =>
-          assertDynamic(kafkaConfigProp, 10015L, () => config.localLogRetentionMs)
+          assertDynamic(kafkaConfigProp, 10015L, () => config.logLocalRetentionMs)
         case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG =>
-          assertDynamic(kafkaConfigProp, 10016L, () => config.localLogRetentionBytes)
+          assertDynamic(kafkaConfigProp, 10016L, () => config.logLocalRetentionBytes)
         case TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG =>
         // not dynamically updatable
         case LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
