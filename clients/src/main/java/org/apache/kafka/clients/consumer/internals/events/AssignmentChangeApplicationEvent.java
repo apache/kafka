@@ -14,33 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.consumer.internals.events;
 
-package org.apache.kafka.image.loader;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
-import org.apache.kafka.image.MetadataProvenance;
+import java.util.Map;
 
+public class AssignmentChangeApplicationEvent extends ApplicationEvent {
+    final Map<TopicPartition, OffsetAndMetadata> offsets;
+    final long currentTimeMs;
 
-/**
- * An interface for the metadata loader metrics.
- */
-public interface MetadataLoaderMetrics extends AutoCloseable {
-    /**
-     * Update the batch processing time histogram.
-     */
-    void updateBatchProcessingTime(long elapsedNs);
-
-    /**
-     * Update the batch size histogram.
-     */
-    void updateBatchSize(int size);
-
-    /**
-     * Set the provenance of the last image which has been processed by all publishers.
-     */
-    void updateLastAppliedImageProvenance(MetadataProvenance provenance);
-
-    /**
-     * Retrieve the last offset which has been processed by all publishers.
-     */
-    long lastAppliedOffset();
+    public AssignmentChangeApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long currentTimeMs) {
+        super(Type.ASSIGNMENT_CHANGE);
+        this.offsets = offsets;
+        this.currentTimeMs = currentTimeMs;
+    }
 }

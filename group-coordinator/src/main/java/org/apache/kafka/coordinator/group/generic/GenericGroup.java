@@ -698,7 +698,7 @@ public class GenericGroup implements Group {
     }
 
     // For testing only.
-    Set<String> allDynamicMemberIds() {
+    public Set<String> allDynamicMemberIds() {
         Set<String> dynamicMemberSet = new HashSet<>(allMemberIds());
         staticMembers.values().forEach(dynamicMemberSet::remove);
         return dynamicMemberSet;
@@ -1155,6 +1155,15 @@ public class GenericGroup implements Group {
             .setGroupId(groupId)
             .setProtocolType(protocolType.orElse(""))
             .setGroupState(state.toString());
+    }
+
+    /**
+     * @return All member assignments keyed by member id.
+     */
+    public Map<String, byte[]> groupAssignment() {
+        return allMembers().stream().collect(Collectors.toMap(
+            GenericGroupMember::memberId, GenericGroupMember::assignment
+        ));
     }
 
     /**

@@ -39,6 +39,8 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -85,16 +87,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
+import static org.easymock.EasyMock.createMock;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -183,11 +188,16 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR, Collections::emptyList);
+    }
+
+    private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
+                            RetryWithToleranceOperator retryWithToleranceOperator, Supplier<List<ErrorReporter>> errorReportersSupplier) {
         workerTask = new WorkerSinkTask(
-            taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
-            keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
-            transformationChain, consumer, pluginLoader, time,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
+                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
+                keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
+                transformationChain, consumer, pluginLoader, time,
+                retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier);
     }
 
     @After
@@ -1947,6 +1957,44 @@ public class WorkerSinkTaskTest {
         SinkRecord record = recordCapture.getValue().iterator().next();
         assertEquals(TOPIC, record.originalTopic());
         assertEquals("newtopic_" + TOPIC, record.topic());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testErrorReportersConfigured() {
+        RetryWithToleranceOperator retryWithToleranceOperator = createMock(RetryWithToleranceOperator.class);
+        List<ErrorReporter> errorReporters = Collections.singletonList(createMock(ErrorReporter.class));
+        createTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator,
+                () -> errorReporters);
+
+        expectInitializeTask();
+        Capture<List<ErrorReporter>> errorReportersCapture = EasyMock.newCapture();
+        retryWithToleranceOperator.reporters(EasyMock.capture(errorReportersCapture));
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll(retryWithToleranceOperator);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+
+        assertEquals(errorReporters, errorReportersCapture.getValue());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testErrorReporterConfigurationExceptionPropagation() {
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
+                () -> {
+                    throw new ConnectException("Failed to create error reporters");
+                }
+        );
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        assertThrows(ConnectException.class, () -> workerTask.initializeAndStart());
 
         PowerMock.verifyAll();
     }

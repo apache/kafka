@@ -48,6 +48,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1832,12 +1833,12 @@ final public class KafkaRaftClientSnapshotTest {
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
         private ByteBuffer data;
-        private boolean frozen;
+        private AtomicLong frozenPosition;
 
         public MemorySnapshotWriter(OffsetAndEpoch snapshotId) {
             this.snapshotId = snapshotId;
             this.data = ByteBuffer.allocate(0);
-            this.frozen = false;
+            this.frozenPosition = new AtomicLong(-1L);
         }
 
         @Override
@@ -1847,16 +1848,13 @@ final public class KafkaRaftClientSnapshotTest {
 
         @Override
         public long sizeInBytes() {
-            if (frozen) {
-                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
-            }
-
-            return data.position();
+            long position = frozenPosition.get();
+            return (position < 0) ? data.position() : position;
         }
 
         @Override
         public void append(UnalignedMemoryRecords records) {
-            if (frozen) {
+            if (isFrozen()) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
             append(records.buffer());
@@ -1864,7 +1862,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         @Override
         public void append(MemoryRecords records) {
-            if (frozen) {
+            if (isFrozen()) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
             append(records.buffer());
@@ -1885,16 +1883,14 @@ final public class KafkaRaftClientSnapshotTest {
 
         @Override
         public boolean isFrozen() {
-            return frozen;
+            return frozenPosition.get() >= 0;
         }
 
         @Override
         public void freeze() {
-            if (frozen) {
+            if (!frozenPosition.compareAndSet(-1L, data.position())) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-
-            frozen = true;
             data.flip();
         }
 
