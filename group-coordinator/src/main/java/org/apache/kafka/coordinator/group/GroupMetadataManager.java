@@ -125,7 +125,7 @@ public class GroupMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private CoordinatorTimer<Void, Record> timer = null;
-        private List<PartitionAssignor> assignors = null;
+        private List<PartitionAssignor> consumerGroupAssignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -157,8 +157,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withAssignors(List<PartitionAssignor> assignors) {
-            this.assignors = assignors;
+        Builder withConsumerGroupAssignors(List<PartitionAssignor> consumerGroupAssignors) {
+            this.consumerGroupAssignors = consumerGroupAssignors;
             return this;
         }
 
@@ -220,7 +220,7 @@ public class GroupMetadataManager {
 
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
-            if (assignors == null || assignors.isEmpty())
+            if (consumerGroupAssignors == null || consumerGroupAssignors.isEmpty())
                 throw new IllegalArgumentException("Assignors must be set before building.");
 
             return new GroupMetadataManager(
@@ -228,7 +228,7 @@ public class GroupMetadataManager {
                 logContext,
                 time,
                 timer,
-                assignors,
+                consumerGroupAssignors,
                 metadataImage,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,

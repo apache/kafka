@@ -92,7 +92,7 @@ public class OffsetMetadataManagerTest {
                     .withSnapshotRegistry(snapshotRegistry)
                     .withLogContext(logContext)
                     .withMetadataImage(metadataImage)
-                    .withAssignors(Collections.singletonList(new RangeAssignor()))
+                    .withConsumerGroupAssignors(Collections.singletonList(new RangeAssignor()))
                     .build();
 
                 OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()

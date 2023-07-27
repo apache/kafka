@@ -130,7 +130,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withTimer(timer)
-                .withAssignors(config.consumerGroupAssignors)
+                .withConsumerGroupAssignors(config.consumerGroupAssignors)
                 .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
                 .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
                 .withGenericGroupInitialRebalanceDelayMs(config.genericGroupInitialRebalanceDelayMs)
