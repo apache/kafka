@@ -2287,27 +2287,22 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public long scheduleAppend(int epoch, List<T> records) {
-        return append(epoch, records, false);
+        return append(epoch, records, OptionalLong.empty(), false);
     }
 
     @Override
-    public long scheduleAtomicAppend(int epoch, List<T> records) {
-        return append(epoch, records, true);
+    public long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records) {
+        return append(epoch, records, requiredBaseOffset, true);
     }
 
-    private long append(int epoch, List<T> records, boolean isAtomic) {
+    private long append(int epoch, List<T> records, OptionalLong requiredBaseOffset, boolean isAtomic) {
         LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
             () -> new NotLeaderException("Append failed because the replication is not the current leader")
         );
 
         BatchAccumulator<T> accumulator = leaderState.accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
-        final long offset;
-        if (isAtomic) {
-            offset = accumulator.appendAtomic(epoch, records);
-        } else {
-            offset = accumulator.append(epoch, records);
-        }
+        final long offset = accumulator.append(epoch, records, requiredBaseOffset, isAtomic);
 
         // Wakeup the network channel if either this is the first append
         // or the accumulator is ready to drain now. Checking for the first
@@ -2397,6 +2392,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public Optional<OffsetAndEpoch> latestSnapshotId() {
         return log.latestSnapshotId();
+    }
+
+    @Override
+    public long logEndOffset() {
+        return log.endOffset().offset;
     }
 
     @Override
@@ -2570,10 +2570,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         /**
          * This API is used for committed records originating from {@link #scheduleAppend(int, List)}
-         * or {@link #scheduleAtomicAppend(int, List)} on this instance. In this case, we are able to
-         * save the original record objects, which saves the need to read them back from disk. This is
-         * a nice optimization for the leader which is typically doing more work than all of the
-         * followers.
+         * or {@link #scheduleAtomicAppend(int, OptionalLong, List)} on this instance. In this case,
+         * we are able to save the original record objects, which saves the need to read them back
+         * from disk. This is a nice optimization for the leader which is typically doing more work
+         * than all of the * followers.
          */
         private void fireHandleCommit(
             long baseOffset,
