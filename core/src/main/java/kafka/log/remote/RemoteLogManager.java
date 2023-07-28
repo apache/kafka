@@ -92,6 +92,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -919,30 +920,33 @@ public class RemoteLogManager implements Closeable {
             Collections.sort(remoteLeaderEpochs);
 
             LeaderEpochFileCache leaderEpochCache = leaderEpochCacheOption.get();
-            List<EpochEntry> epochEntries = leaderEpochCache.epochEntries();
+            NavigableMap<Integer, Long> epochWithOffsets = leaderEpochCache.epochWithOffsets();
             Optional<EpochEntry> earliestEpochEntryOptional = leaderEpochCache.earliestEntry();
 
-            Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(log.config().retentionSize, log.onlyLocalLogSegmentsSize(), epochEntries);
+            Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(log.config().retentionSize,
+                    log.onlyLocalLogSegmentsSize(), log.logEndOffset(), epochWithOffsets);
             Optional<RetentionTimeData> retentionTimeData = buildRetentionTimeData(log.config().retentionMs);
+
             RemoteLogRetentionHandler remoteLogRetentionHandler = new RemoteLogRetentionHandler(retentionSizeData, retentionTimeData);
-
-            Iterator<EpochEntry> epochEntryIterator = epochEntries.iterator();
-
+            Iterator<Integer> epochIterator = epochWithOffsets.navigableKeySet().iterator();
             boolean isSegmentDeleted = true;
-            while (isSegmentDeleted && epochEntryIterator.hasNext()) {
-                EpochEntry epochEntry = epochEntryIterator.next();
-                Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epochEntry.epoch);
+            while (isSegmentDeleted && epochIterator.hasNext()) {
+                Integer epoch = epochIterator.next();
+                Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
                 while (isSegmentDeleted && segmentsIterator.hasNext()) {
                     if (isCancelled() || !isLeader()) {
                         logger.info("Returning from remote log segments cleanup for the remaining segments as the task state is changed.");
                         return;
                     }
-
                     RemoteLogSegmentMetadata metadata = segmentsIterator.next();
-                    isSegmentDeleted =
-                            remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
-                                    remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata) ||
-                                    remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(metadata, log.logStartOffset());
+
+                    // check whether the segment contains the required epoch range with in the current leader epoch lineage.
+                    if (isRemoteSegmentWithinLeaderEpochs(metadata, log.logEndOffset(), epochWithOffsets)) {
+                        isSegmentDeleted =
+                                remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
+                                        remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata) ||
+                                        remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(metadata, log.logStartOffset());
+                    }
                 }
             }
 
@@ -976,11 +980,22 @@ public class RemoteLogManager implements Closeable {
 
         private Optional<RetentionSizeData> buildRetentionSizeData(long retentionSize,
                                                                    long onlyLocalLogSegmentsSize,
-                                                                   List<EpochEntry> epochEntries) throws RemoteStorageException {
+                                                                   long logEndOffset,
+                                                                   NavigableMap<Integer, Long> epochEntries) throws RemoteStorageException {
             if (retentionSize > -1) {
                 long remoteLogSizeBytes = 0L;
-                for (EpochEntry epochEntry : epochEntries) {
-                    remoteLogSizeBytes += remoteLogMetadataManager.remoteLogSize(topicIdPartition, epochEntry.epoch);
+                for (Integer epoch : epochEntries.navigableKeySet()) {
+                    // remoteLogSize(topicIdPartition, epochEntry.epoch) may not be completely accurate as the remote
+                    // log size may be computed for all the segments but not for segments with in the current
+                    // partition's leader epoch lineage. Better to revisit this API.
+                    // remoteLogSizeBytes += remoteLogMetadataManager.remoteLogSize(topicIdPartition, epochEntry.epoch);
+                    Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
+                    while (segmentsIterator.hasNext()) {
+                        RemoteLogSegmentMetadata segmentMetadata = segmentsIterator.next();
+                        if (isRemoteSegmentWithinLeaderEpochs(segmentMetadata, logEndOffset, epochEntries)) {
+                            remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
+                        }
+                    }
                 }
 
                 // This is the total size of segments in local log that have their base-offset > local-log-start-offset
@@ -999,6 +1014,75 @@ public class RemoteLogManager implements Closeable {
         public String toString() {
             return this.getClass().toString() + "[" + topicIdPartition + "]";
         }
+    }
+
+    /**
+     * Returns true if the remote segment's epoch/offsets are within the leader epoch lineage of the partition.
+     * The constraints here are as follows:
+     * - The segment's first epoch's offset should be more than or equal to the respective leader epoch's offset in the partition leader epoch lineage.
+     * - The segment's end offset should be less than or equal to the respective leader epoch's offset in the partition leader epoch lineage.
+     * - The segment's epoch lineage(epoch and offset) should be same as leader epoch lineage((epoch and offset)) except
+     * for the first and the last epochs in the segment.
+     *
+     * @param segmentMetadata The remote segment metadata to be validated.
+     * @param logEndOffset    The log end offset of the partition.
+     * @param leaderEpochs    The leader epoch lineage of the partition.
+     * @return true if the remote segment's epoch/offsets are within the leader epoch lineage of the partition.
+     */
+    public static boolean isRemoteSegmentWithinLeaderEpochs(RemoteLogSegmentMetadata segmentMetadata,
+                                                            long logEndOffset,
+                                                            NavigableMap<Integer, Long> leaderEpochs) {
+        long segmentEndOffset = segmentMetadata.endOffset();
+        NavigableMap<Integer, Long> segmentLeaderEpochs = segmentMetadata.segmentLeaderEpochs();
+        // Check for out of bound epochs between segment epochs and current leader epochs.
+        Integer segmentFirstEpoch = segmentLeaderEpochs.firstKey();
+        Integer segmentLastEpoch = segmentLeaderEpochs.lastKey();
+        if (segmentFirstEpoch < leaderEpochs.firstKey() || segmentLastEpoch > leaderEpochs.lastKey()) {
+            LOGGER.debug("Remote segment {} is not within the partition leader epoch lineage. Remote segment epochs: {} and partition leader epochs: {}",
+                    segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
+            return false;
+        }
+
+        for (Map.Entry<Integer, Long> entry : segmentLeaderEpochs.entrySet()) {
+            int epoch = entry.getKey();
+            long offset = entry.getValue();
+
+            // If segment's epoch does not exist in the leader epoch lineage then it is not a valid segment.
+            if (!leaderEpochs.containsKey(epoch)) {
+                LOGGER.debug("[{}]  Remote segment {}'s epoch {} is not within the leader epoch lineage. Remote segment epochs: {} and partition leader epochs: {}",
+                        segmentMetadata.topicIdPartition(), segmentMetadata.remoteLogSegmentId(), epoch, segmentLeaderEpochs, leaderEpochs);
+                return false;
+            }
+
+            // Segment's first epoch's offset can be more than or equal to the respective leader epoch's offset.
+            if (epoch == segmentFirstEpoch && offset < leaderEpochs.get(epoch)) {
+                LOGGER.debug("[{}]  Remote segment {}'s first epoch {}'s offset is more than leader epoch's offset {}.",
+                        segmentMetadata.topicIdPartition(), segmentMetadata.remoteLogSegmentId(), epoch, leaderEpochs.get(epoch));
+                return false;
+            }
+
+            // Segment's end offset should be less than or equal to the respective leader epoch's offset.
+            if (epoch == segmentLastEpoch) {
+                Map.Entry<Integer, Long> nextEntry = leaderEpochs.higherEntry(epoch);
+                if (nextEntry != null && segmentEndOffset > nextEntry.getValue() - 1) {
+                    LOGGER.debug("[{}]  Remote segment {}'s end offset {} is more than leader epoch's offset {}.",
+                            segmentMetadata.topicIdPartition(), segmentMetadata.remoteLogSegmentId(), segmentEndOffset, nextEntry.getValue() - 1);
+                    return false;
+                }
+            }
+
+            // Next segment epoch entry and next leader epoch entry should be same to ensure that the segment's epoch
+            // is within the leader epoch lineage.
+            if (epoch != segmentLastEpoch && !leaderEpochs.higherEntry(epoch).equals(segmentLeaderEpochs.higherEntry(epoch))) {
+                LOGGER.debug("[{}]  Remote segment {}'s epoch {} is not within the leader epoch lineage. Remote segment epochs: {} and partition leader epochs: {}",
+                        segmentMetadata.topicIdPartition(), segmentMetadata.remoteLogSegmentId(), epoch, segmentLeaderEpochs, leaderEpochs);
+                return false;
+            }
+
+        }
+
+        // segment end offset should be with in the log end offset.
+        return segmentEndOffset < logEndOffset;
     }
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
