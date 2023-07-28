@@ -24,7 +24,12 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_0_NAME;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_1_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_1_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_1_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_1_NAME;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_1;
@@ -41,7 +46,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_4;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.REPLICA_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.REPLICA_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.REPLICA_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -59,6 +66,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_4;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_5;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_6;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_7;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
@@ -90,6 +99,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Cluster;
@@ -102,7 +112,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.junit.Before;
@@ -520,7 +532,7 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldOptimizeRandom() {
+    public void shouldOptimizeRandomActive() {
         final int nodeSize = 30;
         final int tpSize = 40;
         final int clientSize = 30;
@@ -813,6 +825,94 @@ public class RackAwareTaskAssignorTest {
             "Task 1_0 not assigned to any client", exception.getMessage());
     }
 
+    @Test
+    public void shouldNotCrashForEmptyStandby() {
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+            getClusterForTopic0And1(),
+            getTaskTopicPartitionMapForAllTasks(),
+            mkMap(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForAllProcess(),
+            mockInternalTopicManagerForChangelog(),
+            new AssignorConfiguration(new StreamsConfig(configProps(1)).originals()).assignmentConfigs()
+        );
+
+        final ClientState clientState0 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_1);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_2);
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_3);
+
+        clientState0.assignActiveTasks(mkSet(TASK_0_1, TASK_1_1));
+        clientState1.assignActive(TASK_1_0);
+        clientState2.assignActive(TASK_0_0);
+
+        final SortedMap<UUID, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(UUID_1, clientState0),
+            mkEntry(UUID_2, clientState1),
+            mkEntry(UUID_3, clientState2)
+        ));
+
+        final long originalCost = assignor.standByTasksCost(new TreeSet<>(), clientStateMap, 10, 1);
+        assertEquals(0, originalCost);
+
+        final Map<UUID, String> racksForProcess = assignor.racksForProcess();
+        final long cost = assignor.optimizeStandbyTasks(clientStateMap, 10, 1,
+            (client1, client2) -> racksForProcess.get(client1.processId()).equals(racksForProcess.get(client2.processId()))
+        );
+        assertEquals(0, cost);
+    }
+
+    @Test
+    public void shouldOptimizeStandbyTasks() {
+        final AssignmentConfigs assignorConfiguration = new AssignorConfiguration(new StreamsConfig(configProps(2)).originals()).assignmentConfigs();
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
+            getClusterForTopic0And1(),
+            getTaskTopicPartitionMapForAllTasks(),
+            getTaskChangelogMapForAllTasks(),
+            getTopologyGroupTaskMap(),
+            getProcessRacksForAllProcess(),
+            mockInternalTopicManagerForChangelog(),
+            assignorConfiguration
+        );
+
+        final ClientState clientState0 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_1);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_2);
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_3);
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_4);
+
+        final SortedMap<UUID, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(UUID_1, clientState0),
+            mkEntry(UUID_2, clientState1),
+            mkEntry(UUID_3, clientState2),
+            mkEntry(UUID_4, clientState3)
+        ));
+
+        clientState0.assignActive(TASK_0_0);
+        clientState1.assignActive(TASK_0_1);
+        clientState2.assignActive(TASK_1_0);
+        clientState3.assignActive(TASK_1_1);
+
+        clientState0.assignStandbyTasks(mkSet(TASK_0_1, TASK_1_0, TASK_1_1)); // Cost 20
+        clientState1.assignStandbyTasks(mkSet(TASK_0_0, TASK_1_0)); // Cost 0
+        clientState2.assignStandbyTasks(mkSet(TASK_0_0, TASK_1_1)); // Cost 10
+        clientState3.assignStandbyTasks(mkSet(TASK_0_1)); // Cost 10
+
+        final SortedSet<TaskId> taskIds = new TreeSet<>(mkSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1));
+
+        assertTrue(assignor.canEnableRackAwareAssignor());
+
+        final long originalCost = assignor.standByTasksCost(taskIds, clientStateMap, 10, 1);
+        assertEquals(40, originalCost);
+
+        final long cost = assignor.optimizeStandbyTasks(clientStateMap, 10, 1,
+            (client1, client2) -> true
+        );
+        assertEquals(30, cost);
+        assertEquals(mkSet(TASK_0_1, TASK_1_0, TASK_1_1), clientState0.standbyTasks()); // Cost 20
+        assertEquals(mkSet(TASK_0_0, TASK_1_0), clientState1.standbyTasks()); // Cost 0
+        assertEquals(mkSet(TASK_0_1, TASK_1_1), clientState2.standbyTasks()); // Cost 0
+        assertEquals(mkSet(TASK_0_0), clientState3.standbyTasks()); // Cost 10
+    }
+
     private Cluster getRandomCluster(final int nodeSize, final int tpSize) {
         final List<Node> nodeList = new ArrayList<>(nodeSize);
         for (int i = 0; i < nodeSize; i++) {
@@ -931,7 +1031,9 @@ public class RackAwareTaskAssignorTest {
             mkEntry(UUID_2, mkMap(mkEntry("1", Optional.of(RACK_1)))),
             mkEntry(UUID_3, mkMap(mkEntry("1", Optional.of(RACK_2)))),
             mkEntry(UUID_4, mkMap(mkEntry("1", Optional.of(RACK_3)))),
-            mkEntry(UUID_5, mkMap(mkEntry("1", Optional.of(RACK_4))))
+            mkEntry(UUID_5, mkMap(mkEntry("1", Optional.of(RACK_4)))),
+            mkEntry(UUID_6, mkMap(mkEntry("1", Optional.of(RACK_0)))),
+            mkEntry(UUID_7, mkMap(mkEntry("1", Optional.of(RACK_1))))
         );
     }
 
@@ -979,6 +1081,38 @@ public class RackAwareTaskAssignorTest {
             mkEntry(TASK_1_1, mkSet(TP_1_1)),
             mkEntry(TASK_1_2, mkSet(TP_1_2))
         );
+    }
+
+    private Map<TaskId, Set<TopicPartition>> getTaskChangelogMapForAllTasks() {
+        return mkMap(
+            mkEntry(TASK_0_0, mkSet(CHANGELOG_TP_0_0)),
+            mkEntry(TASK_0_1, mkSet(CHANGELOG_TP_0_1)),
+            mkEntry(TASK_1_0, mkSet(CHANGELOG_TP_1_0)),
+            mkEntry(TASK_1_1, mkSet(CHANGELOG_TP_1_1)),
+            mkEntry(TASK_1_2, mkSet(CHANGELOG_TP_1_2))
+        );
+    }
+
+    private InternalTopicManager mockInternalTopicManagerForChangelog() {
+        final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
+        doReturn(
+            mkMap(
+                mkEntry(
+                    CHANGELOG_TP_0_NAME, Arrays.asList(
+                        new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
+                        new TopicPartitionInfo(1, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList())
+                    )
+                ),
+                mkEntry(
+                    CHANGELOG_TP_1_NAME, Arrays.asList(
+                        new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
+                        new TopicPartitionInfo(1, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
+                        new TopicPartitionInfo(2, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList())
+                    )
+                )
+            )
+        ).when(spyTopicManager).getTopicPartitionInfo(mkSet(CHANGELOG_TP_0_NAME, CHANGELOG_TP_1_NAME));
+        return spyTopicManager;
     }
 
     private Map<Subtopology, Set<TaskId>> getTopologyGroupTaskMap() {
