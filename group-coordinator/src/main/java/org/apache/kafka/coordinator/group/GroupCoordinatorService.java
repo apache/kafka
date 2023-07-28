@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
@@ -369,9 +370,31 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(new HeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+        }
+
+        // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
+        // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
+        return runtime.scheduleReadOperation("generic-group-heartbeat",
+            topicPartitionFor(request.groupId()),
+            (coordinator, __) -> coordinator.genericGroupHeartbeat(context, request)
+        ).exceptionally(exception -> {
+            if (!(exception instanceof KafkaException)) {
+                log.error("Heartbeat request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+            }
+
+            if (exception instanceof CoordinatorLoadInProgressException) {
+                // The group is still loading, so blindly respond
+                return new HeartbeatResponseData()
+                    .setErrorCode(Errors.NONE.code());
+            }
+
+            return new HeartbeatResponseData()
+                .setErrorCode(Errors.forException(exception).code());
+        });
     }
 
     /**

@@ -20,9 +20,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -30,6 +32,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -90,6 +94,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
+import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -2832,6 +2837,77 @@ public class GroupMetadataManager {
                 break;
             default:
                 throw new IllegalStateException("Unknown group state: " + group.stateAsString());
+        }
+    }
+
+    /**
+     * Handle a generic group HeartbeatRequest.
+     *
+     * @param context        The request context.
+     * @param request        The actual Heartbeat request.
+     *
+     * @return The Heartbeat response.
+     */
+    public HeartbeatResponseData genericGroupHeartbeat(
+        RequestContext context,
+        HeartbeatRequestData request
+    ) {
+        GenericGroup group = getOrMaybeCreateGenericGroup(request.groupId(), false);
+
+        validateGenericGroupHeartbeat(group, request.memberId(), request.groupInstanceId(), request.generationId());
+
+        switch (group.currentState()) {
+            case EMPTY:
+                return new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+
+            case PREPARING_REBALANCE:
+                rescheduleGenericGroupMemberHeartbeat(group, group.member(request.memberId()));
+                return new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
+
+            case COMPLETING_REBALANCE:
+            case STABLE:
+                // Consumers may start sending heartbeats after join-group response, while the group
+                // is in CompletingRebalance state. In this case, we should treat them as
+                // normal heartbeat requests and reset the timer
+                rescheduleGenericGroupMemberHeartbeat(group, group.member(request.memberId()));
+                return new HeartbeatResponseData();
+
+            default:
+                throw new IllegalStateException("Reached unexpected state " +
+                    group.currentState() + " for group " + group.groupId());
+        }
+    }
+
+    /**
+     * Validates a generic group heartbeat request.
+     *
+     * @param group              The group.
+     * @param memberId           The member id.
+     * @param groupInstanceId    The group instance id.
+     * @param generationId       The generation id.
+     *
+     * @throws CoordinatorNotAvailableException If group is Dead.
+     * @throws IllegalGenerationException       If the generation id in the request and the generation id of the
+     *                                          group does not match.
+     */
+    private void validateGenericGroupHeartbeat(
+        GenericGroup group,
+        String memberId,
+        String groupInstanceId,
+        int generationId
+    ) throws CoordinatorNotAvailableException, IllegalGenerationException {
+        if (group.isInState(DEAD)) {
+            throw COORDINATOR_NOT_AVAILABLE.exception();
+        } else {
+            group.validateMember(
+                memberId,
+                groupInstanceId,
+                "heartbeat"
+            );
+
+            if (generationId != group.generationId()) {
+                throw ILLEGAL_GENERATION.exception();
+            }
         }
     }
 
