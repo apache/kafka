@@ -730,9 +730,9 @@ public abstract class AbstractStickyAssignorTest {
     @ValueSource(booleans = {false, true})
     public void testAssignmentAndGroupWithNonEqualSubscriptionNotTimeout(boolean hasConsumerRack) {
         initializeRacks(hasConsumerRack ? RackConfig.BROKER_AND_CONSUMER_RACK : RackConfig.NO_CONSUMER_RACK);
-        int topicCount = hasConsumerRack ? 50 : 500;
+        int topicCount = hasConsumerRack ? 50 : 100;
         int partitionCount = 2_00;
-        int consumerCount = 2_0;
+        int consumerCount = 5_00;
 
         List<String> topics = new ArrayList<>();
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
