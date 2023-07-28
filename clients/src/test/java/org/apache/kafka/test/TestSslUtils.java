@@ -36,7 +36,6 @@ import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyPurposeId;
-import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -552,8 +551,7 @@ public class TestSslUtils {
                 }
                 if (isServerCert || isClientCert) {
                     ASN1EncodableVector purposes = new ASN1EncodableVector();
-                    if (isServerCert) 
-                    {
+                    if (isServerCert) {
                         purposes.add(KeyPurposeId.id_kp_serverAuth);
                     }
                     if (isClientCert) {
@@ -561,8 +559,7 @@ public class TestSslUtils {
                     }
                     v3CertGen.addExtension(Extension.extendedKeyUsage, false, new DERSequence(purposes));
                 }
-                if (subjectAltName != null)
-                {
+                if (subjectAltName != null) {
                     v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);
                 }
                 X509CertificateHolder certificateHolder = v3CertGen.build(sigGen);
