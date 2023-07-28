@@ -302,7 +302,7 @@ public class GroupMetadataManagerTest {
             final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
             final private TopicPartition groupMetadataTopicPartition = new TopicPartition("topic", 0);
             private MetadataImage metadataImage;
-            private List<PartitionAssignor> assignors = Collections.singletonList(new MockPartitionAssignor("range"));
+            private List<PartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
             private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
             private int consumerGroupMaxSize = Integer.MAX_VALUE;
             private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -318,7 +318,7 @@ public class GroupMetadataManagerTest {
             }
 
             public Builder withAssignors(List<PartitionAssignor> assignors) {
-                this.assignors = assignors;
+                this.consumerGroupAssignors = assignors;
                 return this;
             }
 
@@ -359,14 +359,13 @@ public class GroupMetadataManagerTest {
 
             public GroupMetadataManagerTestContext build() {
                 if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
-                if (assignors == null) assignors = Collections.emptyList();
+                if (consumerGroupAssignors == null) consumerGroupAssignors = Collections.emptyList();
 
                 GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext(
                     time,
                     timer,
                     snapshotRegistry,
                     new GroupMetadataManager.Builder()
-                        .withTopicPartition(groupMetadataTopicPartition)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
                         .withTime(time)
@@ -375,7 +374,7 @@ public class GroupMetadataManagerTest {
                         .withConsumerGroupHeartbeatInterval(5000)
                         .withConsumerGroupSessionTimeout(45000)
                         .withConsumerGroupMaxSize(consumerGroupMaxSize)
-                        .withAssignors(assignors)
+                        .withConsumerGroupAssignors(consumerGroupAssignors)
                         .withConsumerGroupMetadataRefreshIntervalMs(consumerGroupMetadataRefreshIntervalMs)
                         .withGenericGroupMaxSize(genericGroupMaxSize)
                         .withGenericGroupMinSessionTimeoutMs(genericGroupMinSessionTimeoutMs)
