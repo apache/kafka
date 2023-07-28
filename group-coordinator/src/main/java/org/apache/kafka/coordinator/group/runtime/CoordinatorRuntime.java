@@ -1008,14 +1008,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * Constructor.
      *
-     * @param logPrefix                     The log prefix.
-     * @param logContext                    The log context.
-     * @param processor                     The event processor.
-     * @param partitionWriter               The partition writer.
-     * @param loader                        The coordinator loader.
-     * @param coordinatorShardBuilderSupplier    The coordinator builder.
-     * @param time                          The system time.
-     * @param timer                         The system timer.
+     * @param logPrefix                         The log prefix.
+     * @param logContext                        The log context.
+     * @param processor                         The event processor.
+     * @param partitionWriter                   The partition writer.
+     * @param loader                            The coordinator loader.
+     * @param coordinatorShardBuilderSupplier   The coordinator builder.
+     * @param time                              The system time.
+     * @param timer                             The system timer.
      */
     private CoordinatorRuntime(
         String logPrefix,
