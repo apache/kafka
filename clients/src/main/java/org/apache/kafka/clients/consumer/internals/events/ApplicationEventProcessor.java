@@ -75,7 +75,7 @@ public class ApplicationEventProcessor<K, V> {
             case FETCH_COMMITTED_OFFSET:
                 return process((OffsetFetchApplicationEvent) event);
             case METADATA_UPDATE:
-                return process((MetadataUpdateApplicationEvent) event);
+                return process((NewTopicsMetadataUpdateRequestEvent) event);
             case TOPIC_METADATA:
                 return process((TopicMetadataApplicationEvent) event);
             case UNSUBSCRIBE:
@@ -88,6 +88,8 @@ public class ApplicationEventProcessor<K, V> {
                 return process((ResetPositionsApplicationEvent) event);
             case VALIDATE_POSITIONS:
                 return process((ValidatePositionsApplicationEvent) event);
+            case ASSIGNMENT_CHANGE:
+                return process((AssignmentChangeApplicationEvent) event);
         }
         return false;
     }
@@ -146,7 +148,7 @@ public class ApplicationEventProcessor<K, V> {
         return true;
     }
 
-    private boolean process(final MetadataUpdateApplicationEvent event) {
+    private boolean process(final NewTopicsMetadataUpdateRequestEvent event) {
         metadata.requestUpdateForNewTopics();
         return true;
     }
@@ -200,6 +202,16 @@ public class ApplicationEventProcessor<K, V> {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
                 this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic());
         event.chain(future);
+        return true;
+    }
+
+    private boolean process(final AssignmentChangeApplicationEvent event) {
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            return false;
+        }
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        manager.updateAutoCommitTimer(event.currentTimeMs);
+        manager.maybeAutoCommit(event.offsets);
         return true;
     }
 

@@ -61,7 +61,7 @@ public class ConsumerTestBuilder implements Closeable {
     static final int REQUEST_TIMEOUT_MS = 500;
 
     final LogContext logContext = new LogContext();
-    final Time time = new MockTime(1, 0, 0);
+    final Time time = new MockTime(0);
     final BlockingQueue<ApplicationEvent> applicationEventQueue;
     final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue;
     final ConsumerConfig config;

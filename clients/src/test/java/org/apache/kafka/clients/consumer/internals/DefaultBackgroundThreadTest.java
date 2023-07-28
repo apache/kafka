@@ -17,11 +17,13 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
@@ -131,7 +133,7 @@ public class DefaultBackgroundThreadTest {
     public void testMetadataUpdateEvent() {
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
-        ApplicationEvent e = new MetadataUpdateApplicationEvent(time.milliseconds());
+        ApplicationEvent e = new NewTopicsMetadataUpdateRequestEvent();
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
         verify(metadata).requestUpdateForNewTopics();
@@ -180,6 +182,26 @@ public class DefaultBackgroundThreadTest {
         assertThrows(TopicAuthorizationException.class, () -> backgroundThread.runOnce());
 
         verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testAssignmentChangeEvent() {
+        HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
+
+        final long currentTimeMs = time.milliseconds();
+        ApplicationEvent e = new AssignmentChangeApplicationEvent(offset, currentTimeMs);
+        this.applicationEventsQueue.add(e);
+
+        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(AssignmentChangeApplicationEvent.class));
+        verify(networkClient, times(1)).poll(anyLong(), anyLong());
+        verify(commitManager, times(1)).updateAutoCommitTimer(currentTimeMs);
+        verify(commitManager, times(1)).maybeAutoCommit(offset);
+
         backgroundThread.close();
     }
 
@@ -233,6 +255,15 @@ public class DefaultBackgroundThreadTest {
         backgroundThread.runOnce();
         verify(this.metadata, times(1)).updateWithCurrentRequestVersion(eq(metadataResponse), eq(false), anyLong());
         backgroundThread.close();
+    }
+
+    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
+        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
+        return topicPartitionOffsets;
     }
 
     private NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest() {
