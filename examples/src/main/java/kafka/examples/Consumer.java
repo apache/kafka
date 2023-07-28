@@ -151,11 +151,13 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
         Utils.printOut("Revoked partitions: %s", partitions);
+        // this can be used to commit pending offsets when using manual commit and EOS is disabled
     }
 
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
         Utils.printOut("Assigned partitions: %s", partitions);
+        // this can be used to read the offsets from an external store or some other initialization
     }
 
     @Override
