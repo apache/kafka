@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -39,6 +38,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.mockito.MockedConstruction;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -68,7 +68,7 @@ import static org.mockito.Mockito.when;
 
 public class PrototypeAsyncConsumerTest {
 
-    private Consumer<?, ?> consumer;
+    private PrototypeAsyncConsumer<?, ?> consumer;
     private Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
@@ -153,12 +153,14 @@ public class PrototypeAsyncConsumerTest {
     @SuppressWarnings("unchecked")
     public void testCommitted() {
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
-        mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
-            when(mock.complete(any())).thenReturn(new HashMap<>());
-        });
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-        assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
-        verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction = mockConstruction(OffsetFetchApplicationEvent.class,
+            (mock, ctx) -> {
+                when(mock.future()).thenReturn(new CompletableFuture<>());
+            })) {
+            consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+            assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
+            verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        }
     }
 
     @Test

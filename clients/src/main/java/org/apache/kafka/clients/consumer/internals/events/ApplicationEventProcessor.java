@@ -106,12 +106,18 @@ public class ApplicationEventProcessor {
     private boolean process(final OffsetFetchApplicationEvent event) {
         Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
         if (!commitRequestManger.isPresent()) {
-            event.future.completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
+            event.future().completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
                     "CommittedRequestManager is not available. Check if group.id was set correctly"));
             return false;
         }
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.addOffsetFetchRequest(event.partitions);
+        manager.addOffsetFetchRequest(event.partitions()).whenComplete((r, e) -> {
+            if (e != null) {
+                event.future().completeExceptionally(e);
+                return;
+            }
+            event.future().complete(r);
+        });
         return true;
     }
 
