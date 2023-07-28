@@ -17,14 +17,14 @@
 package org.apache.kafka.coordinator.group.runtime;
 
 /**
- * Supplies a {@link CoordinatorBuilder} to the {@link CoordinatorRuntime}.
+ * Supplies a {@link CoordinatorShardBuilder} to the {@link CoordinatorRuntime}.
  *
  * @param <S> The type of the coordinator.
  * @param <U> The record type.
  */
-public interface CoordinatorBuilderSupplier<S extends Coordinator<U>, U> {
+public interface CoordinatorShardBuilderSupplier<S extends CoordinatorShard<U>, U> {
     /**
-     * @return A {@link CoordinatorBuilder}.
+     * @return A {@link CoordinatorShardBuilder}.
      */
-    CoordinatorBuilder<S, U> get();
+    CoordinatorShardBuilder<S, U> get();
 }
