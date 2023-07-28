@@ -480,8 +480,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                         "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 completionHandler.accept(null);
+                // If the driver is active and dual-write is not yet enabled, then the migration has not yet begun.
+                // Only wake up the thread if the broker registrations have changed
                 if (delta.clusterDelta() != null) {
-                    // Only wake up the thread if we've possibly seen new brokers register
                     wakeup();
                 }
                 return;
