@@ -241,7 +241,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        CompletableFuture<Void> future = commit(offsets);
+        CompletableFuture<Void> future = commit(offsets, false);
         final OffsetCommitCallback commitCallback = callback == null ? new DefaultOffsetCommitCallback() : callback;
         future.whenComplete((r, t) -> {
             if (t != null) {
@@ -256,9 +256,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     // Visible for testing
-    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets, final boolean isWakeupable) {
         maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
+        if (isWakeupable) {
+            // the task can only be woken up if the top level API call is commitSync
+            wakeupTrigger.setActiveTask(commitEvent.future());
+        }
         eventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -331,6 +335,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (e.getCause() instanceof WakeupException)
                 throw new WakeupException();
             throw new KafkaException(e);
+        } finally {
+            wakeupTrigger.clearActiveTask();
         }
     }
 
@@ -473,7 +479,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        CompletableFuture<Void> commitFuture = wakeupTrigger.setActiveTask(commit(offsets));
+        CompletableFuture<Void> commitFuture = commit(offsets, true);
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
@@ -484,6 +490,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (e.getCause() instanceof WakeupException)
                 throw new WakeupException();
             throw new KafkaException(e);
+        } finally {
+            wakeupTrigger.clearActiveTask();
         }
     }
 

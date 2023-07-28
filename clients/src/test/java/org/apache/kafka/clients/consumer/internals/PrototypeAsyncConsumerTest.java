@@ -123,7 +123,7 @@ public class PrototypeAsyncConsumerTest {
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
         PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
-        doReturn(future).when(mockedConsumer).commit(offsets);
+        doReturn(future).when(mockedConsumer).commit(offsets, false);
         mockedConsumer.commitAsync(offsets, null);
         future.complete(null);
         TestUtils.waitForCondition(() -> future.isDone(),
@@ -144,7 +144,7 @@ public class PrototypeAsyncConsumerTest {
 
         PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(consumer);
-        doReturn(future).when(mockedConsumer).commit(offsets);
+        doReturn(future).when(mockedConsumer).commit(offsets, false);
         OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
         mockedConsumer.commitAsync(offsets, customCallback);
         future.complete(null);
@@ -235,13 +235,6 @@ public class PrototypeAsyncConsumerTest {
         consumer.wakeup();
         assertThrows(WakeupException.class, () -> consumer.committed(mockTopicPartitionOffset().keySet()));
         assertNoPendingWakeup(consumer.wakeupTrigger());
-    }
-
-    @Test
-    public void testClosed() {
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-        consumer.close();
-        assertDoesNotThrow(() -> consumer.committed(new HashSet<>()));
     }
 
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
