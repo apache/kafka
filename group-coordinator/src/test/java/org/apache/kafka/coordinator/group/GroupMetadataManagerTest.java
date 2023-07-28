@@ -92,7 +92,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.opentest4j.AssertionFailedError;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
@@ -122,6 +121,8 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGr
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.genericGroupHeartbeatKey;
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.assertRecordEquals;
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
@@ -1605,6 +1606,12 @@ public class GroupMetadataManagerTest {
 
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember3),
+            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                }
+            }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1),
@@ -1622,9 +1629,9 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
-        assertRecordsEquals(expectedRecords.subList(0, 2), result.records().subList(0, 2));
-        assertUnorderedListEquals(expectedRecords.subList(2, 5), result.records().subList(2, 5));
-        assertRecordsEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
+        assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
+        assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
+        assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
     }
 
     @Test
@@ -5653,134 +5660,6 @@ public class GroupMetadataManagerTest {
     ) {
         if (assignment == null) return null;
 
-        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignment.forEach(topicPartitions -> {
-            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
-        });
-        return assignmentMap;
-    }
-
-    private void assertRecordsEquals(
-        List<Record> expectedRecords,
-        List<Record> actualRecords
-    ) {
-        try {
-            assertEquals(expectedRecords.size(), actualRecords.size());
-
-            for (int i = 0; i < expectedRecords.size(); i++) {
-                Record expectedRecord = expectedRecords.get(i);
-                Record actualRecord = actualRecords.get(i);
-                assertRecordEquals(expectedRecord, actualRecord);
-            }
-        } catch (AssertionFailedError e) {
-            assertionFailure()
-                .expected(expectedRecords)
-                .actual(actualRecords)
-                .buildAndThrow();
-        }
-    }
-
-    public static void assertRecordEquals(
-        Record expected,
-        Record actual
-    ) {
-        try {
-            assertApiMessageAndVersionEquals(expected.key(), actual.key());
-            assertApiMessageAndVersionEquals(expected.value(), actual.value());
-        } catch (AssertionFailedError e) {
-            assertionFailure()
-                .expected(expected)
-                .actual(actual)
-                .buildAndThrow();
-        }
-    }
-
-    private static void assertApiMessageAndVersionEquals(
-        ApiMessageAndVersion expected,
-        ApiMessageAndVersion actual
-    ) {
-        if (expected == actual) return;
-
-        assertEquals(expected.version(), actual.version());
-
-        if (actual.message() instanceof ConsumerGroupCurrentMemberAssignmentValue) {
-            // The order of the topics stored in ConsumerGroupCurrentMemberAssignmentValue is not
-            // always guaranteed. Therefore, we need a special comparator.
-            ConsumerGroupCurrentMemberAssignmentValue expectedValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) expected.message();
-            ConsumerGroupCurrentMemberAssignmentValue actualValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) actual.message();
-
-            assertEquals(expectedValue.memberEpoch(), actualValue.memberEpoch());
-            assertEquals(expectedValue.previousMemberEpoch(), actualValue.previousMemberEpoch());
-            assertEquals(expectedValue.targetMemberEpoch(), actualValue.targetMemberEpoch());
-            assertEquals(expectedValue.error(), actualValue.error());
-            assertEquals(expectedValue.metadataVersion(), actualValue.metadataVersion());
-            assertEquals(expectedValue.metadataBytes(), actualValue.metadataBytes());
-
-            // We transform those to Maps before comparing them.
-            assertEquals(fromTopicPartitions(expectedValue.assignedPartitions()),
-                fromTopicPartitions(actualValue.assignedPartitions()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingRevocation()),
-                fromTopicPartitions(actualValue.partitionsPendingRevocation()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
-                fromTopicPartitions(actualValue.partitionsPendingAssignment()));
-        } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
-            // The order of the racks stored in PartitionMetadata of ConsumerGroupPartitionMetadataValue is not
-            // always guaranteed. Therefore, we need a special comparator.
-            ConsumerGroupPartitionMetadataValue expectedValue =
-                (ConsumerGroupPartitionMetadataValue) expected.message();
-            ConsumerGroupPartitionMetadataValue actualValue =
-                (ConsumerGroupPartitionMetadataValue) actual.message();
-
-            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> expectedTopicMetadataList =
-                expectedValue.topics();
-            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> actualTopicMetadataList =
-                actualValue.topics();
-
-            if (expectedTopicMetadataList.size() != actualTopicMetadataList.size()) {
-                fail("Topic metadata lists have different sizes");
-            }
-
-            for (int i = 0; i < expectedTopicMetadataList.size(); i++) {
-                ConsumerGroupPartitionMetadataValue.TopicMetadata expectedTopicMetadata =
-                    expectedTopicMetadataList.get(i);
-                ConsumerGroupPartitionMetadataValue.TopicMetadata actualTopicMetadata =
-                    actualTopicMetadataList.get(i);
-
-                assertEquals(expectedTopicMetadata.topicId(), actualTopicMetadata.topicId());
-                assertEquals(expectedTopicMetadata.topicName(), actualTopicMetadata.topicName());
-                assertEquals(expectedTopicMetadata.numPartitions(), actualTopicMetadata.numPartitions());
-
-                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> expectedPartitionMetadataList =
-                    expectedTopicMetadata.partitionMetadata();
-                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> actualPartitionMetadataList =
-                    actualTopicMetadata.partitionMetadata();
-
-                // If the list is empty, rack information wasn't available for any replica of
-                // the partition and hence, the entry wasn't added to the record.
-                if (expectedPartitionMetadataList.size() != actualPartitionMetadataList.size()) {
-                    fail("Partition metadata lists have different sizes");
-                } else if (!expectedPartitionMetadataList.isEmpty() && !actualPartitionMetadataList.isEmpty()) {
-                    for (int j = 0; j < expectedTopicMetadataList.size(); j++) {
-                        ConsumerGroupPartitionMetadataValue.PartitionMetadata expectedPartitionMetadata =
-                            expectedPartitionMetadataList.get(j);
-                        ConsumerGroupPartitionMetadataValue.PartitionMetadata actualPartitionMetadata =
-                            actualPartitionMetadataList.get(j);
-
-                        assertEquals(expectedPartitionMetadata.partition(), actualPartitionMetadata.partition());
-                        assertUnorderedListEquals(expectedPartitionMetadata.racks(), actualPartitionMetadata.racks());
-                    }
-                }
-            }
-        } else {
-            assertEquals(expected.message(), actual.message());
-        }
-    }
-
-    private static Map<Uuid, Set<Integer>> fromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
-    ) {
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
         assignment.forEach(topicPartitions -> {
             assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
