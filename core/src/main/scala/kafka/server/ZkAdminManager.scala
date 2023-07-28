@@ -848,7 +848,7 @@ class ZkAdminManager(val config: KafkaConfig,
     try {
       if (describingAllUsers)
         adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
-          case (user, properties) => addToResultsIfHasScramCredential(user, properties) }
+          case (user, properties) => addToResultsIfHasScramCredential(Sanitizer.desanitize(user), properties) }
       else {
         // describing specific users
         val illegalUsers = users.get.filter(_.isEmpty).toSet

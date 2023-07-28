@@ -16,19 +16,18 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 
 /**
- * A builder to build a {@link Coordinator} replicated state machine.
+ * A builder to build a {@link CoordinatorShard} replicated state machine.
  *
  * @param <S> The type of the coordinator.
  * @param <U> The record type.
  */
-public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
+public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
 
     /**
      * Sets the snapshot registry used to back all the timeline
@@ -38,7 +37,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withSnapshotRegistry(
+    CoordinatorShardBuilder<S, U> withSnapshotRegistry(
         SnapshotRegistry snapshotRegistry
     );
 
@@ -49,18 +48,8 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withLogContext(
+    CoordinatorShardBuilder<S, U> withLogContext(
         LogContext logContext
-    );
-
-    /**
-     * Sets the topic partition.
-     * @param topicPartition The topic partition.
-     *
-     * @return The builder.
-     */
-    CoordinatorBuilder<S, U> withTopicPartition(
-        TopicPartition topicPartition
     );
 
     /**
@@ -70,7 +59,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withTime(
+    CoordinatorShardBuilder<S, U> withTime(
         Time time
     );
 
@@ -81,7 +70,7 @@ public interface CoordinatorBuilder<S extends Coordinator<U>, U> {
      *
      * @return The builder.
      */
-    CoordinatorBuilder<S, U> withTimer(
+    CoordinatorShardBuilder<S, U> withTimer(
         CoordinatorTimer<Void, U> timer
     );
 

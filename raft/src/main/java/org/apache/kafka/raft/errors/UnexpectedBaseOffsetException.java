@@ -14,17 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.runtime;
+package org.apache.kafka.raft.errors;
 
 /**
- * Supplies a {@link CoordinatorBuilder} to the {@link CoordinatorRuntime}.
- *
- * @param <S> The type of the coordinator.
- * @param <U> The record type.
+ * Indicates that an append operation cannot be completed because it would have resulted in an
+ * unexpected base offset.
  */
-public interface CoordinatorBuilderSupplier<S extends Coordinator<U>, U> {
-    /**
-     * @return A {@link CoordinatorBuilder}.
-     */
-    CoordinatorBuilder<S, U> get();
+public class UnexpectedBaseOffsetException extends RaftException {
+    private final static long serialVersionUID = 1L;
+
+    public UnexpectedBaseOffsetException(String s) {
+        super(s);
+    }
 }

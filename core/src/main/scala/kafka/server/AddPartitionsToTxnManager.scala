@@ -142,9 +142,9 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
         if (addPartitionsToTxnResponseData.errorCode != 0) {
           error(s"AddPartitionsToTxnRequest for node ${response.destination} returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
           // The client should not be exposed to CLUSTER_AUTHORIZATION_FAILED so modify the error to signify the verification did not complete.
-          // Older clients return with INVALID_RECORD and newer ones can return with INVALID_TXN_STATE.
+          // Return INVALID_TXN_STATE.
           val finalError = if (addPartitionsToTxnResponseData.errorCode == Errors.CLUSTER_AUTHORIZATION_FAILED.code)
-            Errors.INVALID_RECORD.code
+            Errors.INVALID_TXN_STATE.code
           else
             addPartitionsToTxnResponseData.errorCode
 
@@ -160,9 +160,6 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
-                    // Older clients return INVALID_RECORD
-                    else if (partitionResult.partitionErrorCode == Errors.INVALID_TXN_STATE.code)
-                      Errors.INVALID_RECORD.code
                     else
                       partitionResult.partitionErrorCode
                   unverified.put(tp, Errors.forCode(code))
