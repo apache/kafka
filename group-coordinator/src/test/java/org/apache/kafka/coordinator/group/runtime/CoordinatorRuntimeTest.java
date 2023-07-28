@@ -247,7 +247,7 @@ public class CoordinatorRuntimeTest {
     /**
      * A CoordinatorBuilderSupplier that returns a MockCoordinatorBuilder.
      */
-    private static class MockCoordinatorBuilderSupplier implements CoordinatorBuilderSupplier<MockCoordinatorShard, String> {
+    private static class MockCoordinatorShardBuilderSupplier implements CoordinatorShardBuilderSupplier<MockCoordinatorShard, String> {
         @Override
         public CoordinatorShardBuilder<MockCoordinatorShard, String> get() {
             return new MockCoordinatorShardBuilder();
@@ -259,7 +259,7 @@ public class CoordinatorRuntimeTest {
         MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
-        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
 
@@ -270,7 +270,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(supplier)
+                .withCoordinatorShardBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -323,7 +323,7 @@ public class CoordinatorRuntimeTest {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
-        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
 
@@ -334,7 +334,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(supplier)
+                .withCoordinatorShardBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -374,7 +374,7 @@ public class CoordinatorRuntimeTest {
     public void testScheduleLoadingWithStalePartitionEpoch() {
         MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
-        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
 
@@ -385,7 +385,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(supplier)
+                .withCoordinatorShardBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -423,7 +423,7 @@ public class CoordinatorRuntimeTest {
     public void testScheduleLoadingAfterLoadingFailure() {
         MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
-        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
 
@@ -434,7 +434,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(supplier)
+                .withCoordinatorShardBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -489,7 +489,7 @@ public class CoordinatorRuntimeTest {
     public void testScheduleUnloading() {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
-        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
 
@@ -500,7 +500,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(supplier)
+                .withCoordinatorShardBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -537,7 +537,7 @@ public class CoordinatorRuntimeTest {
     @Test
     public void testScheduleUnloadingWithStalePartitionEpoch() {
         MockTimer timer = new MockTimer();
-        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
 
@@ -548,7 +548,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(supplier)
+                .withCoordinatorShardBuilderSupplier(supplier)
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -586,7 +586,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Schedule the loading.
@@ -694,7 +694,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Scheduling a write fails with a NotCoordinatorException because the coordinator
@@ -714,7 +714,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -738,7 +738,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -783,7 +783,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -830,7 +830,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -884,7 +884,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Schedule a read. It fails because the coordinator does not exist.
@@ -905,7 +905,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -946,7 +946,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -1001,7 +1001,7 @@ public class CoordinatorRuntimeTest {
         MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
-        MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
@@ -1011,7 +1011,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
-                .withCoordinatorBuilderSupplier(supplier)
+                .withCoordinatorShardBuilderSupplier(supplier)
                 .build();
 
         MockCoordinatorShard coordinator0 = mock(MockCoordinatorShard.class);
@@ -1066,7 +1066,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -1117,7 +1117,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -1188,7 +1188,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -1256,7 +1256,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.
@@ -1312,7 +1312,7 @@ public class CoordinatorRuntimeTest {
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
-                .withCoordinatorBuilderSupplier(new MockCoordinatorBuilderSupplier())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .build();
 
         // Loads the coordinator.

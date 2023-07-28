@@ -84,7 +84,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorEventProcessor eventProcessor;
         private PartitionWriter<U> partitionWriter;
         private CoordinatorLoader<U> loader;
-        private CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
+        private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
         private Time time = Time.SYSTEM;
         private Timer timer;
 
@@ -113,8 +113,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withCoordinatorBuilderSupplier(CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier) {
-            this.coordinatorBuilderSupplier = coordinatorBuilderSupplier;
+        public Builder<S, U> withCoordinatorShardBuilderSupplier(CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier) {
+            this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
             return this;
         }
 
@@ -139,7 +139,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("Partition write must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
-            if (coordinatorBuilderSupplier == null)
+            if (coordinatorShardBuilderSupplier == null)
                 throw new IllegalArgumentException("State machine supplier must be set.");
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
@@ -152,7 +152,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 eventProcessor,
                 partitionWriter,
                 loader,
-                coordinatorBuilderSupplier,
+                coordinatorShardBuilderSupplier,
                 time,
                 timer
             );
@@ -499,7 +499,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             switch (newState) {
                 case LOADING:
                     state = CoordinatorState.LOADING;
-                    coordinator = coordinatorBuilderSupplier
+                    coordinator = coordinatorShardBuilderSupplier
                         .get()
                         .withLogContext(logContext)
                         .withSnapshotRegistry(snapshotRegistry)
@@ -980,7 +980,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * The coordinator state machine builder used by the runtime
      * to instantiate a coordinator.
      */
-    private final CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
+    private final CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
 
     /**
      * Atomic boolean indicating whether the runtime is running.
@@ -1000,7 +1000,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param processor                     The event processor.
      * @param partitionWriter               The partition writer.
      * @param loader                        The coordinator loader.
-     * @param coordinatorBuilderSupplier    The coordinator builder.
+     * @param coordinatorShardBuilderSupplier    The coordinator builder.
      * @param time                          The system time.
      * @param timer                         The system timer.
      */
@@ -1010,7 +1010,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorEventProcessor processor,
         PartitionWriter<U> partitionWriter,
         CoordinatorLoader<U> loader,
-        CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier,
+        CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
         Timer timer
     ) {
@@ -1024,7 +1024,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.partitionWriter = partitionWriter;
         this.highWatermarklistener = new HighWatermarkListener();
         this.loader = loader;
-        this.coordinatorBuilderSupplier = coordinatorBuilderSupplier;
+        this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
     }
 
     /**

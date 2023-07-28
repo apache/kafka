@@ -57,7 +57,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilderSupplier;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
@@ -133,7 +133,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
-            CoordinatorBuilderSupplier<GroupCoordinatorShard, Record> supplier = () ->
+            CoordinatorShardBuilderSupplier<GroupCoordinatorShard, Record> supplier = () ->
                 new GroupCoordinatorShard.Builder(config);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
@@ -151,7 +151,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withEventProcessor(processor)
                     .withPartitionWriter(writer)
                     .withLoader(loader)
-                    .withCoordinatorBuilderSupplier(supplier)
+                    .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
                     .build();
 
