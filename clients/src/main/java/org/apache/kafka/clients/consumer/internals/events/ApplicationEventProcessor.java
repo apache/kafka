@@ -144,7 +144,7 @@ public class ApplicationEventProcessor<K, V> {
             return false;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.addOffsetFetchRequest(event.partitions());
+        event.chain(manager.addOffsetFetchRequest(event.partitions()));
         return true;
     }
 
