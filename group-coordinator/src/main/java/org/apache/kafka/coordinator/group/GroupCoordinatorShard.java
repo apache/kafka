@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -233,6 +235,24 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             context,
             request,
             responseFuture
+        );
+    }
+
+    /**
+     * Handles a generic group HeartbeatRequest.
+     *
+     * @param context The request context.
+     * @param request The actual Heartbeat request.
+     *
+     * @return The HeartbeatResponse.
+     */
+    public HeartbeatResponseData genericGroupHeartbeat(
+        RequestContext context,
+        HeartbeatRequestData request
+    ) {
+        return groupMetadataManager.genericGroupHeartbeat(
+            context,
+            request
         );
     }
 

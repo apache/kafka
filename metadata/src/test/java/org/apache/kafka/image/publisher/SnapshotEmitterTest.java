@@ -82,7 +82,11 @@ public class SnapshotEmitterTest {
         }
 
         @Override
-        public long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> records) {
+        public long scheduleAtomicAppend(
+            int epoch,
+            OptionalLong requiredEndOffset,
+            List<ApiMessageAndVersion> records
+        ) {
             return 0;
         }
 
@@ -117,6 +121,11 @@ public class SnapshotEmitterTest {
             } else {
                 return Optional.of(descendingSet.first());
             }
+        }
+
+        @Override
+        public long logEndOffset() {
+            return 0;
         }
 
         @Override
