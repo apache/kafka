@@ -181,8 +181,8 @@ public class GroupMetadataManagerTest {
             int numPartitions
         ) {
             // For testing purposes, the following criteria are used:
-//              - Number of replicas for each partition: 2
-//              - Number of brokers available in the cluster: 4
+            // - Number of replicas for each partition: 2
+            // - Number of brokers available in the cluster: 4
             delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
             for (int i = 0; i < numPartitions; i++) {
                 delta.replay(new PartitionRecord()
