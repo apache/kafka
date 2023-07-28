@@ -317,8 +317,6 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDistributeStandbyTasksUsingFunctionAndSupplierTags() {
-        final RackAwareTaskAssignor rackAwareTaskAssignor = mock(RackAwareTaskAssignor.class);
-        when(rackAwareTaskAssignor.canEnableRackAwareAssignor()).thenReturn(true);
         final Map<UUID, String> racksForProcess = mkMap(
             mkEntry(UUID_1, "rack1"),
             mkEntry(UUID_2, "rack2"),
@@ -330,6 +328,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_8, "rack2"),
             mkEntry(UUID_9, "rack3")
         );
+        final RackAwareTaskAssignor rackAwareTaskAssignor = mock(RackAwareTaskAssignor.class);
+        when(rackAwareTaskAssignor.validClientRack()).thenReturn(true);
         when(rackAwareTaskAssignor.racksForProcess()).thenReturn(racksForProcess);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2);
         standbyTaskAssignor = StandbyTaskAssignorFactory.create(assignmentConfigs, rackAwareTaskAssignor);
@@ -381,59 +381,47 @@ public class ClientTagAwareStandbyTaskAssignorTest {
                 assertTotalNumberOfStandbyTasksEqualsTo(cs, 12);
 
                 assertTrue(
-                    standbyClientsHonorRackAwareness(
+                    containsStandbyTasks(
                         TASK_0_0,
                         cs,
-                        singletonList(
-                            mkSet(UUID_6, UUID_8)
-                        )
+                        mkSet(UUID_2, UUID_3, UUID_5, UUID_6, UUID_8, UUID_9)
                     )
                 );
                 assertTrue(
-                    standbyClientsHonorRackAwareness(
+                    containsStandbyTasks(
                         TASK_1_0,
                         cs,
-                        singletonList(
-                            mkSet(UUID_5, UUID_6)
-                        )
+                        mkSet(UUID_2, UUID_3, UUID_5, UUID_6, UUID_8, UUID_9)
                     )
                 );
 
                 assertTrue(
-                    standbyClientsHonorRackAwareness(
+                    containsStandbyTasks(
                         TASK_0_1,
                         cs,
-                        singletonList(
-                            mkSet(UUID_7, UUID_9)
-                        )
+                        mkSet(UUID_1, UUID_3, UUID_4, UUID_6, UUID_7, UUID_9)
                     )
                 );
                 assertTrue(
-                    standbyClientsHonorRackAwareness(
+                    containsStandbyTasks(
                         TASK_1_1,
                         cs,
-                        singletonList(
-                            mkSet(UUID_7, UUID_9)
-                        )
+                        mkSet(UUID_1, UUID_3, UUID_4, UUID_6, UUID_7, UUID_9)
                     )
                 );
 
                 assertTrue(
-                    standbyClientsHonorRackAwareness(
+                    containsStandbyTasks(
                         TASK_0_2,
                         cs,
-                        singletonList(
-                            mkSet(UUID_4, UUID_8)
-                        )
+                        mkSet(UUID_1, UUID_2, UUID_4, UUID_5, UUID_7, UUID_8)
                     )
                 );
                 assertTrue(
-                    standbyClientsHonorRackAwareness(
+                    containsStandbyTasks(
                         TASK_1_2,
                         cs,
-                        singletonList(
-                            mkSet(UUID_4, UUID_5)
-                        )
+                        mkSet(UUID_1, UUID_2, UUID_4, UUID_5, UUID_7, UUID_8)
                     )
                 );
             }
@@ -769,6 +757,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         return validClientIdsBasedOnRackAwareAssignmentTags.stream()
                                                            .filter(it -> it.equals(standbyTaskClientIds))
                                                            .count() == 1;
+    }
+
+    private static boolean containsStandbyTasks(final TaskId activeTaskId,
+                                                final Map<UUID, ClientState> clientStates,
+                                                final Set<UUID> validClientIdsBasedOnRackAwareAssignmentTags) {
+        final Set<UUID> standbyTaskClientIds = findAllStandbyTaskClients(clientStates, activeTaskId);
+        return validClientIdsBasedOnRackAwareAssignmentTags.containsAll(standbyTaskClientIds);
     }
 
     private static Set<UUID> findAllStandbyTaskClients(final Map<UUID, ClientState> clientStates, final TaskId task) {

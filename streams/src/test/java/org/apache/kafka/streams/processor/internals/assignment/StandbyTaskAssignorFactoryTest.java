@@ -36,6 +36,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @RunWith(Parameterized.class)
 public class StandbyTaskAssignorFactoryTest {
@@ -50,6 +51,7 @@ public class StandbyTaskAssignorFactoryTest {
     enum State {
         DISABLED,
         ENABLED,
+        NULL
     }
 
     private RackAwareTaskAssignor rackAwareTaskAssignor;
@@ -59,14 +61,18 @@ public class StandbyTaskAssignorFactoryTest {
 
     @Parameterized.Parameters(name = "RackAwareTaskAssignor={0}")
     public static Collection<State> parameters() {
-        return Arrays.asList(State.DISABLED, State.ENABLED);
+        return Arrays.asList(State.DISABLED, State.ENABLED, State.NULL);
     }
 
     @Before
     public void setUp() {
         if (state == State.ENABLED) {
             rackAwareTaskAssignor = mock(RackAwareTaskAssignor.class);
+            when(rackAwareTaskAssignor.validClientRack()).thenReturn(true);
         } else if (state == State.DISABLED) {
+            rackAwareTaskAssignor = mock(RackAwareTaskAssignor.class);
+            when(rackAwareTaskAssignor.validClientRack()).thenReturn(false);
+        } else {
             rackAwareTaskAssignor = null;
         }
     }
@@ -75,8 +81,9 @@ public class StandbyTaskAssignorFactoryTest {
     public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
         final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(singletonList("az")), rackAwareTaskAssignor);
         assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
-        if (state == State.ENABLED) {
+        if (state != State.NULL) {
             verify(rackAwareTaskAssignor, never()).racksForProcess();
+            verify(rackAwareTaskAssignor, never()).validClientRack();
         }
     }
 
@@ -86,6 +93,11 @@ public class StandbyTaskAssignorFactoryTest {
         if (state == State.ENABLED) {
             assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
             verify(rackAwareTaskAssignor, times(1)).racksForProcess();
+            verify(rackAwareTaskAssignor, times(1)).validClientRack();
+        } else if (state == State.DISABLED) {
+            assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
+            verify(rackAwareTaskAssignor, never()).racksForProcess();
+            verify(rackAwareTaskAssignor, times(1)).validClientRack();
         } else {
             assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
         }

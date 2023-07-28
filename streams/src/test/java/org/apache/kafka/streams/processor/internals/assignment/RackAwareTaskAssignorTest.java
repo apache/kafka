@@ -196,31 +196,31 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldThrowWhenRackMissingInClientConsumer() {
-        // Throws since process1 doesn't have rackId
-        final Exception exception = assertThrows(IllegalArgumentException.class, () -> new RackAwareTaskAssignor(
+    public void shouldReturnInvalidClientRackWhenRackMissingInClientConsumer() {
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(true),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        ));
-        assertEquals("RackId doesn't exist for process 00000000-0000-0000-0000-000000000001 and consumer consumer1", exception.getMessage());
+        );
+        // False since process1 doesn't have rackId
+        assertFalse(assignor.validClientRack());
     }
 
     @Test
-    public void shouldThrowWhenRackMissingInProcess() {
-        // Throws since process1 doesn't have rackId
-        final Exception exception = assertThrows(IllegalArgumentException.class, () -> new RackAwareTaskAssignor(
+    public void shouldReturnFalseWhenRackMissingInProcess() {
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
             getTopologyGroupTaskMap(),
             getProcessWithNoConsumerRacks(),
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        ));
-        assertEquals("RackId doesn't exist for process 00000000-0000-0000-0000-000000000001", exception.getMessage());
+        );
+        // False since process1 doesn't have rackId
+        assertFalse(assignor.validClientRack());
     }
 
     @Test
@@ -239,7 +239,7 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldThrowWhenRackDiffersInSameProcess() {
+    public void shouldReturnInvalidClientRackWhenRackDiffersInSameProcess() {
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
 
         // Different consumers in same process have different rack ID. This shouldn't happen.
@@ -247,17 +247,16 @@ public class RackAwareTaskAssignorTest {
         processRacks.computeIfAbsent(UUID_1, k -> new HashMap<>()).put("consumer1", Optional.of("rack1"));
         processRacks.computeIfAbsent(UUID_1, k -> new HashMap<>()).put("consumer2", Optional.of("rack2"));
 
-        final Exception exception = assertThrows(IllegalArgumentException.class, () -> new RackAwareTaskAssignor(
+        final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
             getTopologyGroupTaskMap(),
             processRacks,
             mockInternalTopicManager,
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
-        ));
+        );
 
-        assertEquals("Consumers consumer2 and consumer1 for same process 00000000-0000-0000-0000-000000000001 "
-            + "has different rackId rack2 and rack1. File a ticket for this bug", exception.getMessage());
+        assertFalse(assignor.validClientRack());
     }
 
     @Test

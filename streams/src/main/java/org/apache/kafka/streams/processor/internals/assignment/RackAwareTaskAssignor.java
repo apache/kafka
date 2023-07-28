@@ -53,6 +53,7 @@ public class RackAwareTaskAssignor {
     private final Map<TopicPartition, Set<String>> racksForPartition;
     private final Map<UUID, String> racksForProcess;
     private final InternalTopicManager internalTopicManager;
+    private final boolean validClientRack;
 
     public RackAwareTaskAssignor(final Cluster fullMetadata,
                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
@@ -66,7 +67,11 @@ public class RackAwareTaskAssignor {
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
         this.racksForProcess = new HashMap<>();
-        validateClientRack(racksForProcessConsumer);
+        validClientRack = validateClientRack(racksForProcessConsumer);
+    }
+
+    public boolean validClientRack() {
+        return validClientRack;
     }
 
     public synchronized boolean canEnableRackAwareAssignor() {
@@ -77,7 +82,7 @@ public class RackAwareTaskAssignor {
             return false;
         }
          */
-        return validateTopicPartitionRack();
+        return validClientRack && validateTopicPartitionRack();
         // TODO: add changelog topic, standby task validation
     }
 
@@ -152,7 +157,7 @@ public class RackAwareTaskAssignor {
         return true;
     }
 
-    private void validateClientRack(final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer) {
+    private boolean validateClientRack(final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer) {
         /*
          * Check rack information is populated correctly in clients
          * 1. RackId exist for all clients
@@ -163,13 +168,14 @@ public class RackAwareTaskAssignor {
             KeyValue<String, String> previousRackInfo = null;
             for (final Map.Entry<String, Optional<String>> rackEntry : entry.getValue().entrySet()) {
                 if (!rackEntry.getValue().isPresent()) {
-                    throw new IllegalArgumentException(String.format("RackId doesn't exist for process %s and consumer %s",
+                    log.error(String.format("RackId doesn't exist for process %s and consumer %s",
                         processId, rackEntry.getKey()));
+                    return false;
                 }
                 if (previousRackInfo == null) {
                     previousRackInfo = KeyValue.pair(rackEntry.getKey(), rackEntry.getValue().get());
                 } else if (!previousRackInfo.value.equals(rackEntry.getValue().get())) {
-                    throw new IllegalArgumentException(
+                    log.error(
                         String.format("Consumers %s and %s for same process %s has different rackId %s and %s. File a ticket for this bug",
                             previousRackInfo.key,
                             rackEntry.getKey(),
@@ -178,13 +184,17 @@ public class RackAwareTaskAssignor {
                             rackEntry.getValue().get()
                         )
                     );
+                    return false;
                 }
             }
             if (previousRackInfo == null) {
-                throw new IllegalArgumentException(String.format("RackId doesn't exist for process %s", processId));
+                log.error(String.format("RackId doesn't exist for process %s", processId));
+                return false;
             }
             racksForProcess.put(entry.getKey(), previousRackInfo.value);
         }
+
+        return true;
     }
 
     public Map<UUID, String> racksForProcess() {
