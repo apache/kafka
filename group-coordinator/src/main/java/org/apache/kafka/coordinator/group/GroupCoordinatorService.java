@@ -375,9 +375,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()));
         }
 
+        // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
+        // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
         return runtime.scheduleReadOperation("generic-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            (coordinator, offset) -> coordinator.genericGroupHeartbeat(context, request)
+            (coordinator, __) -> coordinator.genericGroupHeartbeat(context, request)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("Heartbeat request {} hit an unexpected exception: {}",

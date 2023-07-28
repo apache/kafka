@@ -2865,10 +2865,10 @@ public class GroupMetadataManager {
                 return new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
 
             case COMPLETING_REBALANCE:
-                // Consumers may start sending heartbeat after join-group response, in which case
-                // we should treat them as normal hb request and reset the timer
-
             case STABLE:
+                // Consumers may start sending heartbeats after join-group response, while the group
+                // is in CompletingRebalance state. In this case, we should treat them as
+                // normal heartbeat requests and reset the timer
                 rescheduleGenericGroupMemberHeartbeat(group, group.member(request.memberId()));
                 return new HeartbeatResponseData();
 

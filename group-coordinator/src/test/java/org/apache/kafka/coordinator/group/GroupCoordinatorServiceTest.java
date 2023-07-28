@@ -594,4 +594,5 @@ public class GroupCoordinatorServiceTest {
             new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()),
             future.get()
         );
-    }}
+    }
+}
