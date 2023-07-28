@@ -174,9 +174,9 @@ public class GroupMetadataManagerTest {
             String topicName,
             int numPartitions
         ) {
-            // For the purpose of testing let:
-            // a) Number of replicas for each partition = 2
-            // b) Number of brokers available in the cluster = 4
+            // For testing purposes, the following criteria are used:
+//              - Number of replicas for each partition: 2
+//              - Number of brokers available in the cluster: 4
             delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
             for (int i = 0; i < numPartitions; i++) {
                 delta.replay(new PartitionRecord()
@@ -190,8 +190,8 @@ public class GroupMetadataManagerTest {
         /**
          * Add rack Ids for 4 broker Ids.
          *
-         * For the purpose of testing, each broker is mapped
-         * to a rack Id with the broker Id as a suffix.
+         * For testing purposes, each broker is mapped
+         * to a rack Id with the same broker Id as a suffix.
          */
         public MetadataImageBuilder addRacks() {
             for (int i = 0; i < 4; i++) {

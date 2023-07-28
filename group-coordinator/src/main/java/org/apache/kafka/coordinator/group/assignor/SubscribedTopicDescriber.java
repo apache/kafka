@@ -42,10 +42,10 @@ public interface SubscribedTopicDescriber {
     /**
      * Returns all the available racks associated with the replicas of the given partition.
      *
-     * @param topicId   Uuid corresponding to the partition's topic.
-     * @param partition Partition number within topic.
-     * @return The set of racks corresponding to the replicas of the topics partition.
-     *         If the topic Id does not exist, an empty set is returned
+     * @param topicId       Uuid corresponding to the partition's topic.
+     * @param partition     Partition Id within topic.
+     * @return The set of racks corresponding to the replicas of the topic's partition.
+     *         If the topic Id does not exist, an empty set is returned.
      */
     Set<String> racksForPartition(Uuid topicId, int partition);
 }

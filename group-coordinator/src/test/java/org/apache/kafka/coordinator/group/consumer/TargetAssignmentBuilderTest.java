@@ -33,12 +33,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentRecord;
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -551,29 +550,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Set<String> rackSet1 = new HashSet<>(Arrays.asList("Rack1", "Rack2"));
-        Set<String> rackSet2 = new HashSet<>(Arrays.asList("Rack2", "Rack3"));
-
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6,
-            mkMap(
-                mkEntry(0, rackSet1),
-                mkEntry(1, rackSet1),
-                mkEntry(2, rackSet2),
-                mkEntry(3, rackSet2),
-                mkEntry(4, rackSet1),
-                mkEntry(5, rackSet2)
-            )
-        );
-        Uuid barTopicId = context.addTopicMetadata("bar", 6,
-            mkMap(
-                mkEntry(0, rackSet2),
-                mkEntry(1, rackSet1),
-                mkEntry(2, rackSet2),
-                mkEntry(3, rackSet1),
-                mkEntry(4, rackSet2),
-                mkEntry(5, rackSet2)
-            )
-        );
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6, mkMapOfPartitionRacks(6));
+        Uuid barTopicId = context.addTopicMetadata("bar", 6, mkMapOfPartitionRacks(6));
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),

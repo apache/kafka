@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkListOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -35,6 +36,7 @@ public class TopicMetadataTest {
         Uuid topicId = Uuid.randomUuid();
         Map<Integer, Set<String>> partitionRacks = mkMapOfPartitionRacks(15);
         TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, partitionRacks);
+
         assertEquals(topicId, topicMetadata.id());
         assertEquals("foo", topicMetadata.name());
         assertEquals(15, topicMetadata.numPartitions());
@@ -50,9 +52,11 @@ public class TopicMetadataTest {
     @Test
     public void testEquals() {
         Uuid topicId = Uuid.randomUuid();
-        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, Collections.emptyMap());
-        assertEquals(new TopicMetadata(topicId, "foo", 15, Collections.emptyMap()), topicMetadata);
-        assertNotEquals(new TopicMetadata(topicId, "foo", 5, Collections.emptyMap()), topicMetadata);
+        Map<Integer, Set<String>> partitionRacks = mkMapOfPartitionRacks(15);
+        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, partitionRacks);
+
+        assertEquals(new TopicMetadata(topicId, "foo", 15, partitionRacks), topicMetadata);
+        assertNotEquals(new TopicMetadata(topicId, "foo", 5, mkMapOfPartitionRacks(5)), topicMetadata);
     }
 
     @Test
@@ -64,10 +68,10 @@ public class TopicMetadataTest {
             .setTopicId(topicId)
             .setTopicName(topicName)
             .setNumPartitions(15)
-            .setPartitionMetadata(Collections.emptyList());
+            .setPartitionMetadata(mkListOfPartitionRacks(15));
 
         assertEquals(
-            new TopicMetadata(topicId, topicName, 15, Collections.emptyMap()),
+            new TopicMetadata(topicId, topicName, 15, mkMapOfPartitionRacks(15)),
             TopicMetadata.fromRecord(record)
         );
     }

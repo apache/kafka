@@ -57,7 +57,7 @@ public class RangeAssignorTest {
                     topic1Uuid,
                     topic1Name,
                     3,
-                    createPartitionMetadata(3)
+                    createPartitionRacks(3)
                 )
             )
         );
@@ -87,7 +87,7 @@ public class RangeAssignorTest {
                     topic1Uuid,
                     topic1Name,
                     3,
-                    createPartitionMetadata(3)
+                    createPartitionRacks(3)
                 )
             )
         );
@@ -115,13 +115,13 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionMetadata(2)
+            createPartitionRacks(2)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -167,19 +167,19 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionMetadata(2)
+            createPartitionRacks(2)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -236,13 +236,13 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionMetadata(2)
+            createPartitionRacks(2)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -299,13 +299,13 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             2,
-            createPartitionMetadata(2)
+            createPartitionRacks(2)
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             2,
-            createPartitionMetadata(2)
+            createPartitionRacks(2)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -372,13 +372,13 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             4,
-            createPartitionMetadata(4)
+            createPartitionRacks(4)
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             4,
-            createPartitionMetadata(4)
+            createPartitionRacks(4)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -434,13 +434,13 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -510,13 +510,13 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             4,
-            createPartitionMetadata(4)
+            createPartitionRacks(4)
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -584,13 +584,13 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -630,19 +630,19 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionMetadata(3)
+            createPartitionRacks(3)
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionMetadata(2)
+            createPartitionRacks(2)
         ));
 
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -718,7 +718,7 @@ public class RangeAssignorTest {
     }
 
     // When rack awareness is enabled for this assignor, rack information can be updated in this method.
-    private static Map<Integer, Set<String>> createPartitionMetadata(int numPartitions) {
+    private static Map<Integer, Set<String>> createPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
         Set<String> emptySet = Collections.emptySet();
         for (int i = 0; i < numPartitions; i++) {

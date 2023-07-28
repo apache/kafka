@@ -33,8 +33,9 @@ import static java.lang.Math.min;
  * This Range Assignor inherits properties of both the range assignor and the sticky assignor.
  * The properties are as follows:
  * <ol>
- *      <li> Each member must get at least one partition from every topic that it is subscribed to. The only exception is when
- *           the number of subscribed members is greater than the number of partitions for that topic. (Range) </li>
+ *      <li> Each member must get at least one partition from every topic that it is subscribed to.
+ *           The only exception is when the number of subscribed members is greater than the
+ *           number of partitions for that topic. (Range) </li>
  *      <li> Partitions should be assigned to members in a way that facilitates the join operation when required. (Range)
  *           This can only be done if every member is subscribed to the same topics and the topics are co-partitioned.
  *           Two streams are co-partitioned if the following conditions are met:
@@ -76,11 +77,11 @@ public class RangeAssignor implements PartitionAssignor {
     }
 
     /**
-     * Returns a map of topic Ids to a list of members subscribed to them, based on the given assignment specification and metadata.
+     * Returns a map of topic Ids to a list of members subscribed to them,
+     * based on the given assignment specification and metadata.
      *
      * @param assignmentSpec           The specification for member assignments.
      * @param subscribedTopicDescriber The metadata describer for subscribed topics and clusters.
-     *
      * @return A map of topic Ids to a list of member Ids subscribed to them.
      *
      * @throws PartitionAssignorException If a member is subscribed to a non-existent topic.

@@ -172,12 +172,14 @@ public class RecordHelpersTest {
             fooTopicId,
             "foo",
             10,
-            mkMapOfPartitionRacks(10)));
+            mkMapOfPartitionRacks(10)
+        ));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
             20,
-            mkMapOfPartitionRacks(20)));
+            mkMapOfPartitionRacks(20)
+        ));
 
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
@@ -231,12 +233,14 @@ public class RecordHelpersTest {
             fooTopicId,
             "foo",
             10,
-            Collections.emptyMap()));
+            Collections.emptyMap()
+        ));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
             20,
-            Collections.emptyMap()));
+            Collections.emptyMap()
+        ));
 
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
@@ -681,6 +685,7 @@ public class RecordHelpersTest {
         short expectedGroupMetadataValueVersion
     ) {
         Time time = new MockTime();
+
         List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
 
         Record expectedRecord = new Record(
@@ -822,9 +827,9 @@ public class RecordHelpersTest {
      *
      * @param numPartitions The number of partitions for the topic.
      *
-     * NOTE : - For the purpose of testing let:
-     *              a) Number of replicas for each partition = 2
-     *              b) Number of racks available to the cluster = 4
+     * For testing purposes, the following criteria are used:
+     *      - Number of replicas for each partition: 2
+     *      - Number of racks available to the cluster: 4
      */
     public static List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
         List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
@@ -844,9 +849,9 @@ public class RecordHelpersTest {
      *
      * @param numPartitions The number of partitions for the topic.
      *
-     * NOTE : - For the purpose of testing let:
-     *              a) Number of replicas for each partition = 2
-     *              b) Number of racks available to the cluster = 4
+     * For testing purposes, the following criteria are used:
+     *      - Number of replicas for each partition: 2
+     *      - Number of racks available to the cluster: 4
      */
     public static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
@@ -934,8 +939,8 @@ public class RecordHelpersTest {
             assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
                 fromTopicPartitions(actualValue.partitionsPendingAssignment()));
         } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
-            // The order of the racks stored in PartitionMetadata of ConsumerGroupPartitionMetadataValue is not
-            // always guaranteed. Therefore, we need a special comparator.
+            // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
+            // is not always guaranteed. Therefore, we need a special comparator.
             ConsumerGroupPartitionMetadataValue expectedValue =
                 (ConsumerGroupPartitionMetadataValue) expected.message();
             ConsumerGroupPartitionMetadataValue actualValue =

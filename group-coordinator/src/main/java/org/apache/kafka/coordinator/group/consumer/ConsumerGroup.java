@@ -406,8 +406,8 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return An immutable Map of subscription metadata for each topic that
-     *         the consumer group is subscribed to.
+     * @return An immutable Map of subscription metadata for
+     *         each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> subscriptionMetadata() {
         return Collections.unmodifiableMap(subscribedTopicMetadata);
@@ -461,7 +461,7 @@ public class ConsumerGroup implements Group {
                         rackOptional.ifPresent(racks::add);
                     }
                     // If rack information is unavailable for all replicas of this partition,
-                    // no entry will be stored for it in the map.
+                    // no corresponding entry will be stored for it in the map.
                     if (!racks.isEmpty())
                         partitionRacks.put(partition, racks);
                 });
