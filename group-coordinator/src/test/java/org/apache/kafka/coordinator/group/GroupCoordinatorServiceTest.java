@@ -18,17 +18,21 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -494,5 +498,101 @@ public class GroupCoordinatorServiceTest {
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
 
         assertEquals(expectedResponse, response.get());
+    }
+
+    @Test
+    public void testHeartbeat() throws Exception {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new HeartbeatResponseData()
+        ));
+
+        CompletableFuture<HeartbeatResponseData> future = service.heartbeat(
+            requestContext(ApiKeys.HEARTBEAT),
+            request
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(new HeartbeatResponseData(), future.get());
+    }
+
+    @Test
+    public void testHeartbeatCoordinatorNotAvailableException() throws Exception {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new CoordinatorLoadInProgressException(null)
+        ));
+
+        CompletableFuture<HeartbeatResponseData> future = service.heartbeat(
+            requestContext(ApiKeys.HEARTBEAT),
+            request
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(new HeartbeatResponseData(), future.get());
+    }
+
+    @Test
+    public void testHeartbeatCoordinatorException() throws Exception {
+        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new RebalanceInProgressException()
+        ));
+
+        CompletableFuture<HeartbeatResponseData> future = service.heartbeat(
+            requestContext(ApiKeys.HEARTBEAT),
+            request
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(
+            new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()),
+            future.get()
+        );
     }
 }
