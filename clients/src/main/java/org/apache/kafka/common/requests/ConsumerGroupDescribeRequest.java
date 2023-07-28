@@ -20,14 +20,10 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 
-/**
- * Possible error codes:
- *
- * GROUP_ID_NOT_FOUND (69)
- */
 public class ConsumerGroupDescribeRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ConsumerGroupDescribeRequest> {
@@ -59,10 +55,17 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
 
     @Override
     public ConsumerGroupDescribeResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new ConsumerGroupDescribeResponse(
-            new ConsumerGroupDescribeResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
+        ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData()
+            .setThrottleTimeMs(throttleTimeMs);
+        // Set error based on e for each group present in the request
+        this.data.groupIds().forEach(
+            groupId -> data.groups().add(
+                new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.forException(e).code())
+            )
         );
+        return new ConsumerGroupDescribeResponse(data);
     }
 
     @Override

@@ -51,11 +51,11 @@ public class ConsumerGroupDescribeResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errors = new HashMap<>();
+        HashMap<Errors, Integer> counts = new HashMap<>();
         data.groups().forEach(
-            group -> errors.merge(Errors.forCode(group.errorCode()), 1, Integer::sum)
+            group -> updateErrorCounts(counts, Errors.forCode(group.errorCode()))
         );
-        return errors;
+        return counts;
     }
 
     @Override

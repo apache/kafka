@@ -20,13 +20,13 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   // Supported errors:
-  // - GROUP_AUTHORIZATION_FAILED¬
-  // - NOT_COORDINATOR
-  // - COORDINATOR_NOT_AVAILABLE
-  // - COORDINATOR_LOAD_IN_PROGRESS
-  // - INVALID_REQUEST
-  // - INVALID_GROUP_ID
-  // - GROUP_ID_NOT_FOUND
+  // - GROUP_AUTHORIZATION_FAILED (version 0+)
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - INVALID_REQUEST (version 0+)
+  // - INVALID_GROUP_ID (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -69,29 +69,24 @@
             { "name": "Assignment", "type": "Assignment", "versions": "0+",
               "about": "The current assignment." },
             { "name": "TargetAssignment", "type": "Assignment", "versions": "0+",
-              "about": "The target assignment." },
-            { "name": "AuthorizedOperations", "type": "int32", "versions": "3+", "default": "-2147483648",
-              "about": "32-bit bitfield to represent authorized operations for this group." }
-          ]}
+              "about": "The target assignment." }
+            ]},
+        { "name": "AuthorizedOperations", "type": "int32", "versions": "3+", "default": "-2147483648",
+          "about": "32-bit bitfield to represent authorized operations for this group." }
         ]}
   ],
   "commonStructs": [
     { "name": "TopicPartitions", "versions": "0+", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic ID." },
+      { "name": "TopicName", "type":  "string", "versions": "0+",
+        "about":  "The topic name."},
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions." }
     ]},
     { "name": "Assignment", "versions": "0+", "fields": [
       { "name": "Partitions", "type": "[]TopicPartitions", "versions": "0+",
-        "about": "The assigned topic-partitions to the member.", "fields": [
-        { "name": "TopicId", "type": "uuid", "versions": "0+",
-          "about": "The topic ID." },
-        { "name": "TopicName", "type": "string", "versions": "0+",
-          "about": "The topic name." },
-        { "name": "Partitions", "type": "[]int32", "versions": "0+",
-          "about": "The partitions." }
-      ]},
+        "about":  "The assigned topic-partitions to the member."},
       { "name": "Error", "type": "int8", "versions": "0+",
         "about": "The assigned error." },
       { "name": "MetadataVersion", "type": "int32", "versions": "0+",
