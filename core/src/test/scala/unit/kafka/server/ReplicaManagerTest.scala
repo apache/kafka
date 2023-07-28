@@ -2231,8 +2231,8 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
-      callback(Map(tp0 -> Errors.INVALID_RECORD).toMap)
-      assertEquals(Errors.INVALID_RECORD, result.assertFired.error)
+      callback(Map(tp0 -> Errors.INVALID_TXN_STATE).toMap)
+      assertEquals(Errors.INVALID_TXN_STATE, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time verification is successful.

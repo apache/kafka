@@ -17,8 +17,10 @@
 package kafka.api
 
 import kafka.utils.TestUtils.waitUntilTrue
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+import scala.jdk.CollectionConverters._
 
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
   @Test
@@ -29,10 +31,12 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
     consumer.commitAsync(cb)
     waitUntilTrue(() => {
       cb.successCount == 1
     }, "wait until commit is completed successfully", 5000)
+    assertTrue(consumer.assignment.contains(tp))
   }
 
   @Test
@@ -42,6 +46,9 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
     consumer.commitSync();
+
+    assertTrue(consumer.assignment.contains(tp))
   }
 }
