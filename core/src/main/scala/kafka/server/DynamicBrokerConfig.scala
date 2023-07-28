@@ -663,6 +663,8 @@ object DynamicLogConfig {
 
   val ReconfigurableConfigs = ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values.asScala.toSet -- ExcludedConfigs
   val KafkaConfigToLogConfigName = ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
+  val ReconfigurableLogConfigs = ReconfigurableConfigs.map(config => KafkaConfigToLogConfigName.get(config))
+    .filter(config => config.nonEmpty).map(config => config.get)
 }
 
 class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
@@ -692,19 +694,20 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    val newLogConfigProps = newConfig.extractLogConfigMap
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](originalLogConfig.originals)
-    newConfig.valuesFromThisConfig.forEach { (k, v) =>
-      if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
-        DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
-          if (v == null)
-             newBrokerDefaults.remove(configName)
-          else
-            newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
-        }
+    // Only pick new configs for the log configs that are configurable
+    DynamicLogConfig.ReconfigurableLogConfigs.foreach(k => {
+      val value = newLogConfigProps.get(k)
+      if (value == null) {
+        newBrokerDefaults.remove(k)
       }
-    }
+      else {
+        newBrokerDefaults.put(k, value)
+      }
+    })
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 
