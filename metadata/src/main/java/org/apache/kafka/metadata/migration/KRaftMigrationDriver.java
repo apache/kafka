@@ -475,12 +475,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             Map<String, Integer> dualWriteCounts = new TreeMap<>();
+            long startTime = time.nanoseconds();
             if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
             } else {
-                zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                if (zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
+                      dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation))) {
+                    // Only record delta write time if we changed something. Otherwise, no-op records will skew timings.
+                    controllerMetrics.updateZkWriteDeltaTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
+                }
             }
             if (dualWriteCounts.isEmpty()) {
                 log.trace("Did not make any ZK writes when handling KRaft {}", isSnapshot ? "snapshot" : "delta");
@@ -556,6 +561,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         log.error("KRaft controller indicates a completed migration, but the migration driver is somehow active.");
                         transitionTo(MigrationDriverState.INACTIVE);
                         break;
+                    default:
+                        throw new IllegalStateException("Unsupported ZkMigrationState " + zkMigrationState);
                 }
             }
         }
@@ -658,8 +665,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (migrationState == MigrationDriverState.SYNC_KRAFT_TO_ZK) {
                 log.info("Performing a full metadata sync from KRaft to ZK.");
                 Map<String, Integer> dualWriteCounts = new TreeMap<>();
+                long startTime = time.nanoseconds();
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                long endTime = time.nanoseconds();
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(startTime - endTime));
                 log.info("Made the following ZK writes when reconciling with KRaft state: {}", dualWriteCounts);
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             }

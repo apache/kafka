@@ -1031,7 +1031,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // ongoing. If the transaction is expected to be ongoing, we will not set a verification guard. If the transaction is aborted, hasOngoingTransaction is false and
           // requestVerificationGuard is null, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
           if (batch.isTransactional && !hasOngoingTransaction(batch.producerId) && batchMissingRequiredVerification(batch, requestVerificationGuard))
-            throw new InvalidRecordException("Record was not part of an ongoing transaction")
+            throw new InvalidTxnStateException("Record was not part of an ongoing transaction")
         }
 
         // We cache offset metadata for the start of each transaction. This allows us to
