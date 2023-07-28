@@ -150,6 +150,11 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         if (remoteLogMetadataCache == null) {
             throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
         }
+        try {
+            remoteLogMetadataCache.ensureInitialized();
+        } catch (InterruptedException e) {
+            throw new RemoteResourceNotFoundException("Couldn't initialize remote log metadata cache for partition: " + topicIdPartition);
+        }
 
         return remoteLogMetadataCache;
     }
@@ -180,9 +185,21 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         idToRemoteLogMetadataCache = Collections.emptyMap();
     }
 
+    @Override
     public void maybeLoadPartition(TopicIdPartition partition) {
         idToRemoteLogMetadataCache.computeIfAbsent(partition,
             topicIdPartition -> new FileBasedRemoteLogMetadataCache(topicIdPartition, partitionLogDirectory(topicIdPartition.topicPartition())));
     }
 
+    @Override
+    public void markInitialized(TopicIdPartition partition) {
+        idToRemoteLogMetadataCache.get(partition).markInitialized();
+        log.trace("Remote log components are initialized for user-partition: {}", partition);
+    }
+
+    @Override
+    public boolean isInitialized(TopicIdPartition topicIdPartition) {
+        RemoteLogMetadataCache metadataCache = idToRemoteLogMetadataCache.get(topicIdPartition);
+        return metadataCache != null && metadataCache.isInitialized();
+    }
 }

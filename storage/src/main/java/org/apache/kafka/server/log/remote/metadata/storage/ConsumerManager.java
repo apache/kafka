@@ -27,9 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
@@ -40,8 +38,6 @@ import java.util.concurrent.TimeoutException;
  * {@link TopicBasedRemoteLogMetadataManagerConfig#consumeWaitMs()}.
  */
 public class ConsumerManager implements Closeable {
-
-    public static final String COMMITTED_OFFSETS_FILE_NAME = "_rlmm_committed_offsets";
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerManager.class);
     private static final long CONSUME_RECHECK_INTERVAL_MS = 50L;
@@ -60,15 +56,10 @@ public class ConsumerManager implements Closeable {
 
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
-        Path committedOffsetsPath = new File(rlmmConfig.logDir(), COMMITTED_OFFSETS_FILE_NAME).toPath();
         consumerTask = new ConsumerTask(
-                consumer,
-                rlmmConfig.remoteLogMetadataTopicName(),
-                remotePartitionMetadataEventHandler,
-                topicPartitioner,
-                committedOffsetsPath,
-                time,
-                60_000L
+            remotePartitionMetadataEventHandler,
+            topicPartitioner,
+            consumer
         );
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
@@ -110,7 +101,7 @@ public class ConsumerManager implements Closeable {
         log.info("Waiting until consumer is caught up with the target partition: [{}]", partition);
 
         // If the current assignment does not have the subscription for this partition then return immediately.
-        if (!consumerTask.isPartitionAssigned(partition)) {
+        if (!consumerTask.isMetadataPartitionAssigned(partition)) {
             throw new KafkaException("This consumer is not assigned to the target partition " + partition + ". " +
                     "Partitions currently assigned: " + consumerTask.metadataPartitionsAssigned());
         }
