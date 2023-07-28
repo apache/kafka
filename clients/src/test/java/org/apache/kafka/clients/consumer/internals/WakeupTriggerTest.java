@@ -36,6 +36,7 @@ public class WakeupTriggerTest {
     public void setup() {
         this.wakeupTrigger = new WakeupTrigger();
     }
+    
     @Test
     public void testEnsureActiveFutureCanBeWakeUp() {
         CompletableFuture<Void> task = new CompletableFuture<>();
@@ -58,7 +59,7 @@ public class WakeupTriggerTest {
     public void testUnsetActiveFuture() {
         CompletableFuture<Void> task = new CompletableFuture<>();
         wakeupTrigger.setActiveTask(task);
-        wakeupTrigger.unsetActiveTask();
+        wakeupTrigger.clearActiveTask();
         assertNull(wakeupTrigger.getPendingTask());
     }
 
