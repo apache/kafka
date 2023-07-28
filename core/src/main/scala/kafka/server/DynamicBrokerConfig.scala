@@ -678,31 +678,31 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     // validation, no additional validation is performed.
 
     def validateLogLocalRetentionMs(): Unit = {
-      val retentionMs = newConfig.logRetentionTimeMillis
-      val localRetentionMs: java.lang.Long = newConfig.logLocalRetentionMs
-      if (retentionMs != -1L && localRetentionMs != -2L) {
-        if (localRetentionMs == -1L) {
-          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, localRetentionMs,
-            s"Value must not be -1 as ${KafkaConfig.LogRetentionTimeMillisProp} value is set as $retentionMs.")
+      val logRetentionMs = newConfig.logRetentionTimeMillis
+      val logLocalRetentionMs: java.lang.Long = newConfig.logLocalRetentionMs
+      if (logRetentionMs != -1L && logLocalRetentionMs != -2L) {
+        if (logLocalRetentionMs == -1L) {
+          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
+            s"Value must not be -1 as ${KafkaConfig.LogRetentionTimeMillisProp} value is set as $logRetentionMs.")
         }
-        if (localRetentionMs > retentionMs) {
-          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, localRetentionMs,
-            s"Value must not be more than ${KafkaConfig.LogRetentionTimeMillisProp} property value: $retentionMs")
+        if (logLocalRetentionMs > logRetentionMs) {
+          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
+            s"Value must not be more than ${KafkaConfig.LogRetentionTimeMillisProp} property value: $logRetentionMs")
         }
       }
     }
 
     def validateLogLocalRetentionBytes(): Unit = {
-      val retentionBytes = newConfig.logRetentionBytes
-      val localRetentionBytes: java.lang.Long = newConfig.logLocalRetentionBytes
-      if (retentionBytes > -1 && localRetentionBytes != -2) {
-        if (localRetentionBytes == -1) {
-          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, localRetentionBytes,
-            s"Value must not be -1 as ${KafkaConfig.LogRetentionBytesProp} value is set as $retentionBytes.")
+      val logRetentionBytes = newConfig.logRetentionBytes
+      val logLocalRetentionBytes: java.lang.Long = newConfig.logLocalRetentionBytes
+      if (logRetentionBytes > -1 && logLocalRetentionBytes != -2) {
+        if (logLocalRetentionBytes == -1) {
+          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
+            s"Value must not be -1 as ${KafkaConfig.LogRetentionBytesProp} value is set as $logRetentionBytes.")
         }
-        if (localRetentionBytes > retentionBytes) {
-          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, localRetentionBytes,
-            s"Value must not be more than ${KafkaConfig.LogRetentionBytesProp} property value: $retentionBytes")
+        if (logLocalRetentionBytes > logRetentionBytes) {
+          throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
+            s"Value must not be more than ${KafkaConfig.LogRetentionBytesProp} property value: $logRetentionBytes")
         }
       }
     }
