@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import org.apache.kafka.common.protocol.types.Field.Str;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -158,6 +161,34 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         }
 
         return true;
+    }
+
+    @Override
+    public boolean isAllowedTaskMovement(final ClientState source,
+                                         final ClientState destination,
+                                         final TaskId sourceTask,
+                                         final Map<UUID, ClientState> clientStateMap) {
+        final BiConsumer<ClientState, Set<Map.Entry<String, String>>> addTags = (cs, tagSet) -> {
+            final Map<String, String> tags = clientTagFunction.apply(cs.processId(), cs);
+            if (tags != null) {
+                tagSet.addAll(tags.entrySet());
+            }
+        };
+
+        final Set<Map.Entry<String, String>> tagsWithSource = new HashSet<>();
+        final Set<Map.Entry<String, String>> tagsWithDestination = new HashSet<>();
+        for (final ClientState clientState : clientStateMap.values()) {
+            if (clientState.hasAssignedTask(sourceTask)
+                && !clientState.processId().equals(source.processId())
+                && !clientState.processId().equals(destination.processId())) {
+                addTags.accept(clientState, tagsWithSource);
+                addTags.accept(clientState, tagsWithDestination);
+            }
+        }
+        addTags.accept(source, tagsWithSource);
+        addTags.accept(destination, tagsWithDestination);
+
+        return tagsWithDestination.size() >= tagsWithSource.size();
     }
 
     // Visible for testing

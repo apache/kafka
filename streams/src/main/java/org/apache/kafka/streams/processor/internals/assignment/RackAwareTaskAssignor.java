@@ -32,6 +32,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -49,6 +50,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RackAwareTaskAssignor {
+
+    @FunctionalInterface
+    public interface MoveStandbyTaskPredicate {
+        boolean canMove(final ClientState source,
+                        final ClientState destination,
+                        final TaskId taskId,
+                        final Map<UUID, ClientState> clientStateMap);
+    }
+
     private static final Logger log = LoggerFactory.getLogger(RackAwareTaskAssignor.class);
 
     private static final int SOURCE_ID = -1;
@@ -259,8 +269,16 @@ public class RackAwareTaskAssignor {
         return cost;
     }
 
-    private static int getSinkID(final List<UUID> clientList, final List<TaskId> taskIdList) {
+    private static int getSinkNodeID(final List<UUID> clientList, final List<TaskId> taskIdList) {
         return clientList.size() + taskIdList.size();
+    }
+
+    private static int getClientNodeId(final List<TaskId> taskIdList, final int clientIndex) {
+        return clientIndex + taskIdList.size();
+    }
+
+    private static int getClientIndex(final List<TaskId> taskIdList, final int clientNodeId) {
+        return clientNodeId - taskIdList.size();
     }
 
     /**
@@ -342,7 +360,12 @@ public class RackAwareTaskAssignor {
     public long optimizeStandbyTasks(final SortedMap<UUID, ClientState> clientStates,
                                      final int trafficCost,
                                      final int nonOverlapCost,
-                                     final BiPredicate<ClientState, ClientState> canSwap) {
+                                     final MoveStandbyTaskPredicate moveStandbyTask) {
+        final BiFunction<ClientState, ClientState, List<TaskId>> getMovableTasks = (source, destination) -> source.standbyTasks().stream()
+            .filter(task -> !destination.hasAssignedTask(task))
+            .filter(task -> moveStandbyTask.canMove(source, destination, task, clientStates))
+            .collect(Collectors.toList());
+
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final SortedSet<TaskId> standbyTasks = new TreeSet<>();
         for (int i = 0; i < clientList.size(); i++) {
@@ -350,22 +373,16 @@ public class RackAwareTaskAssignor {
             standbyTasks.addAll(clientState1.standbyTasks());
             for (int j = i + 1; j < clientList.size(); j++) {
                 final ClientState clientState2 = clientStates.get(clientList.get(j));
-                if (!canSwap.test(clientState1, clientState2)) {
-                    continue;
-                }
-                final List<TaskId> swappable1 = clientState1.standbyTasks().stream()
-                    .filter(task -> !clientState2.hasAssignedTask(task))
-                    .collect(Collectors.toList());
-                final List<TaskId> swappable2 = clientState2.standbyTasks().stream()
-                    .filter(task -> !clientState1.hasAssignedTask(task))
-                    .collect(Collectors.toList());
+
+                final List<TaskId> movable1 = getMovableTasks.apply(clientState1, clientState2);
+                final List<TaskId> movable2 = getMovableTasks.apply(clientState2, clientState1);
 
                 // There's no needed to optimize if one is empty
-                if (swappable1.isEmpty() || swappable2.isEmpty()) {
+                if (movable1.isEmpty() || movable2.isEmpty()) {
                     continue;
                 }
 
-                final List<TaskId> taskIdList = Stream.concat(swappable1.stream(), swappable2.stream())
+                final List<TaskId> taskIdList = Stream.concat(movable1.stream(), movable2.stream())
                     .sorted()
                     .collect(Collectors.toList());
 
@@ -409,7 +426,7 @@ public class RackAwareTaskAssignor {
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
             final TaskId taskId = taskIdList.get(taskNodeId);
             for (int j = 0; j < clientList.size(); j++) {
-                final int clientNodeId = taskIdList.size() + j;
+                final int clientNodeId = getClientNodeId(taskIdList, j);
                 final UUID processId = clientList.get(j);
 
                 final int flow = hasAssignedTask.test(clientStates.get(processId), taskId) ? 1 : 0;
@@ -432,11 +449,11 @@ public class RackAwareTaskAssignor {
             graph.addEdge(SOURCE_ID, taskNodeId, 1, 0, 1);
         }
 
-        final int sinkId = getSinkID(clientList, taskIdList);
+        final int sinkId = getSinkNodeID(clientList, taskIdList);
         // It's possible that some clients have 0 task assign. These clients will have 0 tasks assigned
         // even though it may have higher traffic cost. This is to maintain the original assigned task count
         for (int i = 0; i < clientList.size(); i++) {
-            final int clientNodeId = taskIdList.size() + i;
+            final int clientNodeId = getClientNodeId(taskIdList, i);
             final int capacity = originalAssignedTaskNumber.getOrDefault(clientList.get(i), 0);
             // Flow equals to capacity for edges to sink
             graph.addEdge(clientNodeId, sinkId, capacity, 0, capacity);
@@ -464,7 +481,7 @@ public class RackAwareTaskAssignor {
             for (final Graph<Integer>.Edge edge : edges.values()) {
                 if (edge.flow > 0) {
                     tasksAssigned++;
-                    final int clientIndex = edge.destination - taskIdList.size();
+                    final int clientIndex = getClientIndex(taskIdList, edge.destination);
                     final UUID processId = clientList.get(clientIndex);
                     final UUID originalProcessId = taskClientMap.get(taskId);
 
