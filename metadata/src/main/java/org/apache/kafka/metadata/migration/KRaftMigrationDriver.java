@@ -112,7 +112,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private volatile MetadataImage image;
     private volatile boolean firstPublish;
 
-    public KRaftMigrationDriver(
+    KRaftMigrationDriver(
         int nodeId,
         ZkRecordConsumer zkRecordConsumer,
         MigrationClient zkMigrationClient,
@@ -145,20 +145,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.recordRedactor = new RecordRedactor(configSchema);
     }
 
-    public KRaftMigrationDriver(
-        int nodeId,
-        ZkRecordConsumer zkRecordConsumer,
-        MigrationClient zkMigrationClient,
-        LegacyPropagator propagator,
-        Consumer<MetadataPublisher> initialZkLoadHandler,
-        FaultHandler faultHandler,
-        QuorumFeatures quorumFeatures,
-        KafkaConfigSchema configSchema,
-        QuorumControllerMetrics controllerMetrics
-    ) {
-        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, configSchema, controllerMetrics, Time.SYSTEM);
+    public static Builder newBuilder() {
+        return new Builder();
     }
-
 
     public void start() {
         eventQueue.prepend(new PollEvent());
@@ -486,12 +475,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             Map<String, Integer> dualWriteCounts = new TreeMap<>();
+            long startTime = time.nanoseconds();
             if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
             } else {
-                zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                if (zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
+                      dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation))) {
+                    // Only record delta write time if we changed something. Otherwise, no-op records will skew timings.
+                    controllerMetrics.updateZkWriteDeltaTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
+                }
             }
             if (dualWriteCounts.isEmpty()) {
                 log.trace("Did not make any ZK writes when handling KRaft {}", isSnapshot ? "snapshot" : "delta");
@@ -567,6 +561,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         log.error("KRaft controller indicates a completed migration, but the migration driver is somehow active.");
                         transitionTo(MigrationDriverState.INACTIVE);
                         break;
+                    default:
+                        throw new IllegalStateException("Unsupported ZkMigrationState " + zkMigrationState);
                 }
             }
         }
@@ -669,8 +665,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (migrationState == MigrationDriverState.SYNC_KRAFT_TO_ZK) {
                 log.info("Performing a full metadata sync from KRaft to ZK.");
                 Map<String, Integer> dualWriteCounts = new TreeMap<>();
+                long startTime = time.nanoseconds();
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                long endTime = time.nanoseconds();
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(startTime - endTime));
                 log.info("Made the following ZK writes when reconciling with KRaft state: {}", dualWriteCounts);
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             }
@@ -755,5 +754,110 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             });
             operationConsumer.accept(logMsg, operation);
         };
+    }
+
+    public static class Builder {
+        private Integer nodeId;
+        private ZkRecordConsumer zkRecordConsumer;
+        private MigrationClient zkMigrationClient;
+        private LegacyPropagator propagator;
+        private Consumer<MetadataPublisher> initialZkLoadHandler;
+        private FaultHandler faultHandler;
+        private QuorumFeatures quorumFeatures;
+        private KafkaConfigSchema configSchema;
+        private QuorumControllerMetrics controllerMetrics;
+        private Time time;
+
+        public Builder setNodeId(int nodeId) {
+            this.nodeId = nodeId;
+            return this;
+        }
+
+        public Builder setZkRecordConsumer(ZkRecordConsumer zkRecordConsumer) {
+            this.zkRecordConsumer = zkRecordConsumer;
+            return this;
+        }
+
+        public Builder setZkMigrationClient(MigrationClient zkMigrationClient) {
+            this.zkMigrationClient = zkMigrationClient;
+            return this;
+        }
+
+        public Builder setPropagator(LegacyPropagator propagator) {
+            this.propagator = propagator;
+            return this;
+        }
+
+        public Builder setInitialZkLoadHandler(Consumer<MetadataPublisher> initialZkLoadHandler) {
+            this.initialZkLoadHandler = initialZkLoadHandler;
+            return this;
+        }
+
+        public Builder setFaultHandler(FaultHandler faultHandler) {
+            this.faultHandler = faultHandler;
+            return this;
+        }
+
+        public Builder setQuorumFeatures(QuorumFeatures quorumFeatures) {
+            this.quorumFeatures = quorumFeatures;
+            return this;
+        }
+
+        public Builder setConfigSchema(KafkaConfigSchema configSchema) {
+            this.configSchema = configSchema;
+            return this;
+        }
+
+        public Builder setControllerMetrics(QuorumControllerMetrics controllerMetrics) {
+            this.controllerMetrics = controllerMetrics;
+            return this;
+        }
+
+        public Builder setTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public KRaftMigrationDriver build() {
+            if (nodeId == null) {
+                throw new IllegalStateException("You must specify the node ID of this controller.");
+            }
+            if (zkRecordConsumer == null) {
+                throw new IllegalStateException("You must specify the ZkRecordConsumer.");
+            }
+            if (zkMigrationClient == null) {
+                throw new IllegalStateException("You must specify the MigrationClient.");
+            }
+            if (propagator == null) {
+                throw new IllegalStateException("You must specify the MetadataPropagator.");
+            }
+            if (initialZkLoadHandler == null) {
+                throw new IllegalStateException("You must specify the initial ZK load callback.");
+            }
+            if (faultHandler == null) {
+                throw new IllegalStateException("You must specify the FaultHandler.");
+            }
+            if (configSchema == null) {
+                throw new IllegalStateException("You must specify the KafkaConfigSchema.");
+            }
+            if (controllerMetrics == null) {
+                throw new IllegalStateException("You must specify the QuorumControllerMetrics.");
+            }
+            if (time == null) {
+                throw new IllegalStateException("You must specify the Time.");
+            }
+            return new KRaftMigrationDriver(
+                nodeId,
+                zkRecordConsumer,
+                zkMigrationClient,
+                propagator,
+                initialZkLoadHandler,
+                faultHandler,
+                quorumFeatures,
+                configSchema,
+                controllerMetrics,
+                time
+            );
+        }
     }
 }

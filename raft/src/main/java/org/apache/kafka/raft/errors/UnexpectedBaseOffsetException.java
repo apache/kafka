@@ -14,33 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.image.loader;
-
-import org.apache.kafka.image.MetadataProvenance;
-
+package org.apache.kafka.raft.errors;
 
 /**
- * An interface for the metadata loader metrics.
+ * Indicates that an append operation cannot be completed because it would have resulted in an
+ * unexpected base offset.
  */
-public interface MetadataLoaderMetrics extends AutoCloseable {
-    /**
-     * Update the batch processing time histogram.
-     */
-    void updateBatchProcessingTime(long elapsedNs);
+public class UnexpectedBaseOffsetException extends RaftException {
+    private final static long serialVersionUID = 1L;
 
-    /**
-     * Update the batch size histogram.
-     */
-    void updateBatchSize(int size);
-
-    /**
-     * Set the provenance of the last image which has been processed by all publishers.
-     */
-    void updateLastAppliedImageProvenance(MetadataProvenance provenance);
-
-    /**
-     * Retrieve the last offset which has been processed by all publishers.
-     */
-    long lastAppliedOffset();
+    public UnexpectedBaseOffsetException(String s) {
+        super(s);
+    }
 }
