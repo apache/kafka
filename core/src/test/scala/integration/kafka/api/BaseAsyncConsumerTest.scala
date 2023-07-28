@@ -17,7 +17,7 @@
 package kafka.api
 
 import kafka.utils.TestUtils.waitUntilTrue
-import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull}
+import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.time.Duration
@@ -35,11 +35,14 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
     consumer.commitAsync(cb)
     waitUntilTrue(() => {
       cb.successCount == 1
     }, "wait until commit is completed successfully", defaultBlockingAPITimeoutMs)
     val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
+
+    assertTrue(consumer.assignment.contains(tp))
     assertNotNull(committedOffset)
     assertNull(committedOffset.get(tp))
   }
@@ -51,9 +54,11 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
     consumer.commitSync()
     val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
     assertNotNull(committedOffset)
     assertNull(committedOffset.get(tp))
+    assertTrue(consumer.assignment.contains(tp))
   }
 }

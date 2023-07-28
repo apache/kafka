@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplic
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -153,12 +154,30 @@ public class PrototypeAsyncConsumerTest {
     @SuppressWarnings("unchecked")
     public void testCommitted() {
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
-        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction = mockConstruction(OffsetFetchApplicationEvent.class,
-            (mock, ctx) -> {
-                when(mock.future()).thenReturn(new CompletableFuture<>());
-            })) {
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction =
+                 mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
+                     when(mock.future()).thenReturn(committedFuture);
+                 })) {
+            committedFuture.complete(mockTopicPartitionOffset());
             consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-            assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
+            assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1000)));
+            verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCommitted_ExceptionThrown() {
+        Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction =
+                 mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
+                     when(mock.future()).thenReturn(committedFuture);
+                 })) {
+            committedFuture.completeExceptionally(new KafkaException("Test exception"));
+            consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+            assertThrows(KafkaException.class, () -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1000)));
             verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
         }
     }
