@@ -201,4 +201,13 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param partitions topic partitions that have been stopped.
      */
     void onStopPartitions(Set<TopicIdPartition> partitions);
+
+    /**
+     * Returns total size of the log for the given leader epoch in remote storage.
+     *
+     * @param topicIdPartition topic partition for which size needs to be calculated.
+     * @param leaderEpoch Size will only include segments belonging to this epoch.
+     * @return Total size of the log stored in remote storage in bytes.
+     */
+    long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException;
 }
