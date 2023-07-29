@@ -508,6 +508,7 @@ public class DefaultSslEngineFactoryTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
             assertDoesNotThrow(() -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertEquals(appender.getMessages().size(), nrOfInitialMessagges);
@@ -538,18 +539,19 @@ public class DefaultSslEngineFactoryTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
             Exception origException = assertThrows(CertificateException.class,
                     () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             Exception testException = assertThrows(CertificateException.class,
                     () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assert origException.getMessage().equals(testException.getMessage());
-            assertEquals(appender.getMessages().size(), nrOfInitialMessagges);
+            assertEquals(nrOfInitialMessagges, appender.getMessages().size());
             origException = assertThrows(CertificateException.class,
                     () -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,
                     () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             assert origException.getMessage().equals(testException.getMessage());
-            assertEquals(appender.getMessages().size(), nrOfInitialMessagges);
+            assertEquals(nrOfInitialMessagges, appender.getMessages().size());
             assertArrayEquals(origTrustManager.getAcceptedIssuers(), testTrustManager.getAcceptedIssuers());
         }
     }
@@ -575,6 +577,8 @@ public class DefaultSslEngineFactoryTest {
             int nrOfInitialMessagges = appender.getMessages().size();
 
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            assertEquals(origTrustManager, testTrustManager.getOriginalTrustManager());
+            // Call original method, then method of wrapped trust manager and compare result
             Exception origException = assertThrows(CertificateException.class,
                     () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             Exception testException = assertThrows(CertificateException.class,
@@ -582,16 +586,17 @@ public class DefaultSslEngineFactoryTest {
             assert origException.getMessage().equals(testException.getMessage());
             // Check that there is exactly one new message
             List<String> logMessages = appender.getMessages();
-            assertEquals(logMessages.size(), nrOfInitialMessagges+1);
-            assertEquals(logMessages.get(logMessages.size()-1), "Certificate with common name \""+endCert.getSubjectX500Principal()+
-            "\" expired on "+endCert.getNotAfter());
+            assertEquals(nrOfInitialMessagges+1, logMessages.size());
+            assertEquals("Certificate with common name \""+endCert.getSubjectX500Principal()+
+            "\" expired on "+endCert.getNotAfter(), logMessages.get(logMessages.size()-1));
+            // Call original method, then method of wrapped trust manager and compare result
             origException = assertThrows(CertificateException.class,
-                    () -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+                    () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,
                     () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             assert origException.getMessage().equals(testException.getMessage());
             // Check that there are no new messages
-            assertEquals(appender.getMessages().size(), nrOfInitialMessagges+1);
+            assertEquals(nrOfInitialMessagges+1, appender.getMessages().size());
             assertArrayEquals(origTrustManager.getAcceptedIssuers(), testTrustManager.getAcceptedIssuers());
         }
     }

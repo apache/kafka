@@ -655,8 +655,12 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
 
         private X509TrustManager origTm;
 
-        public CommonNameLoggingTrustManager(X509TrustManager origTm) {
-            this.origTm = origTm;
+        public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager) {
+            this.origTm = originalTrustManager;
+        }
+
+        public X509TrustManager getOriginalTrustManager() {
+            return this.origTm;
         }
 
         @Override
