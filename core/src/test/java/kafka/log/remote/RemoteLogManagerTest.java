@@ -269,15 +269,38 @@ public class RemoteLogManagerTest {
     void testCopyLogSegmentsToRemoteShouldCopyExpectedLogSegment() throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
-        long oldSegmentEndOffset = nextSegmentStartOffset - 1;
+        long lso = 250L;
+        long leo = 300L;
+        assertCopyExpectedLogSegmentsToRemote(oldSegmentStartOffset, nextSegmentStartOffset, lso, leo);
+    }
 
+    /**
+     * The following values will be equal when the active segment gets rotated to passive when there are no new messages:
+     * last-stable-offset = high-water-mark = log-end-offset = base-offset-of-active-segment
+     *
+     * This test asserts that the active log segment that was rotated after log.roll.ms are copied to remote storage.
+     */
+    @Test
+    void testCopyLogSegmentToRemoteForStaleTopic() throws Exception {
+        long oldSegmentStartOffset = 0L;
+        long nextSegmentStartOffset = 150L;
+        long lso = 150L;
+        long leo = 150L;
+        assertCopyExpectedLogSegmentsToRemote(oldSegmentStartOffset, nextSegmentStartOffset, lso, leo);
+    }
+
+    private void assertCopyExpectedLogSegmentsToRemote(long oldSegmentStartOffset,
+                                                       long nextSegmentStartOffset,
+                                                       long lastStableOffset,
+                                                       long logEndOffset) throws Exception {
+        long oldSegmentEndOffset = nextSegmentStartOffset - 1;
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
-        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(-1L));
 
         File tempFile = TestUtils.tempFile();
         File mockProducerSnapshotIndex = TestUtils.tempFile();
@@ -287,7 +310,9 @@ public class RemoteLogManagerTest {
         LogSegment activeSegment = mock(LogSegment.class);
 
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
+        when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+        when(activeSegment.readNextOffset()).thenReturn(logEndOffset);
 
         FileRecords fileRecords = mock(FileRecords.class);
         when(oldSegment.log()).thenReturn(fileRecords);
@@ -297,12 +322,21 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong()))
+                .thenAnswer(invocation -> {
+                    Object[] args = invocation.getArguments();
+                    long fromOffset = (Long) args[0]; // inclusive
+                    long toOffset = (Long) args[1]; // exclusive
+                    return JavaConverters.collectionAsScalaIterable(
+                            Arrays.asList(oldSegment, activeSegment).stream()
+                                    .filter(segment -> segment.baseOffset() >= fromOffset && segment.readNextOffset() < toOffset)
+                                    .collect(Collectors.toList()));
+                });
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
-        when(mockLog.lastStableOffset()).thenReturn(250L);
+        when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
 
         LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
         LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
@@ -349,7 +383,7 @@ public class RemoteLogManagerTest {
         assertEquals(remoteLogSegmentMetadataArg.getValue(), remoteLogSegmentMetadataArg2.getValue());
         // The old segment should only contain leader epoch [0->0, 1->100] since its offset range is [0, 149]
         verifyLogSegmentData(logSegmentDataArg.getValue(), idx, timeIdx, txnIndex, tempFile, mockProducerSnapshotIndex,
-            Arrays.asList(epochEntry0, epochEntry1));
+                Arrays.asList(epochEntry0, epochEntry1));
 
         // verify remoteLogMetadataManager did add the expected RemoteLogSegmentMetadataUpdate
         ArgumentCaptor<RemoteLogSegmentMetadataUpdate> remoteLogSegmentMetadataUpdateArg = ArgumentCaptor.forClass(RemoteLogSegmentMetadataUpdate.class);

@@ -84,12 +84,10 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -538,35 +536,33 @@ public class RemoteLogManager implements Closeable {
                 if (lso < 0) {
                     logger.warn("lastStableOffset for partition {} is {}, which should not be negative.", topicIdPartition, lso);
                 } else if (lso > 0 && copiedOffset < lso) {
-                    // Copy segments only till the last-stable-offset as remote storage should contain only committed/acked
-                    // messages
-                    long toOffset = lso;
-                    logger.debug("Checking for segments to copy, copiedOffset: {} and toOffset: {}", copiedOffset, toOffset);
                     long activeSegBaseOffset = log.activeSegment().baseOffset();
                     // log-start-offset can be ahead of the read-offset, when:
                     // 1) log-start-offset gets incremented via delete-records API (or)
                     // 2) enabling the remote log for the first time
                     long fromOffset = Math.max(copiedOffset + 1, log.logStartOffset());
-                    ArrayList<LogSegment> sortedSegments = new ArrayList<>(JavaConverters.asJavaCollection(log.logSegments(fromOffset, toOffset)));
-                    sortedSegments.sort(Comparator.comparingLong(LogSegment::baseOffset));
-                    List<Long> sortedBaseOffsets = sortedSegments.stream().map(LogSegment::baseOffset).collect(Collectors.toList());
-                    int activeSegIndex = Collections.binarySearch(sortedBaseOffsets, activeSegBaseOffset);
 
-                    // sortedSegments becomes empty list when fromOffset and toOffset are same, and activeSegIndex becomes -1
-                    if (activeSegIndex < 0) {
+                    // Segments which match the following criteria are eligible for copying to remote storage:
+                    // 1) Segment is not the active segment and
+                    // 2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
+                    //    committed/acked messages
+                    List<LogSegment> candidateSegments = JavaConverters.asJavaCollection(log.logSegments(fromOffset, Long.MAX_VALUE))
+                            .stream()
+                            .filter(segment -> segment.baseOffset() != activeSegBaseOffset && segment.readNextOffset() <= lso)
+                            .collect(Collectors.toList());
+                    logger.debug("Checking for segments to copy, copiedOffset: {} and lso: {}, candidateSegments: {}",
+                            copiedOffset, lso, candidateSegments);
+                    if (candidateSegments.isEmpty()) {
                         logger.debug("No segments found to be copied for partition {} with copiedOffset: {} and active segment's base-offset: {}",
                                 topicIdPartition, copiedOffset, activeSegBaseOffset);
                     } else {
-                        ListIterator<LogSegment> logSegmentsIter = sortedSegments.subList(0, activeSegIndex).listIterator();
-                        while (logSegmentsIter.hasNext()) {
-                            LogSegment segment = logSegmentsIter.next();
+                        for (LogSegment segment : candidateSegments) {
                             if (isCancelled() || !isLeader()) {
                                 logger.info("Skipping copying log segments as the current task state is changed, cancelled: {} leader:{}",
                                         isCancelled(), isLeader());
                                 return;
                             }
-
-                            copyLogSegment(log, segment, getNextSegmentBaseOffset(activeSegBaseOffset, logSegmentsIter));
+                            copyLogSegment(log, segment, segment.readNextOffset());
                         }
                     }
                 } else {
@@ -581,18 +577,6 @@ public class RemoteLogManager implements Closeable {
                     logger.error("Error occurred while copying log segments of partition: {}", topicIdPartition, ex);
                 }
             }
-        }
-
-        private long getNextSegmentBaseOffset(long activeSegBaseOffset, ListIterator<LogSegment> logSegmentsIter) {
-            long nextSegmentBaseOffset;
-            if (logSegmentsIter.hasNext()) {
-                nextSegmentBaseOffset = logSegmentsIter.next().baseOffset();
-                logSegmentsIter.previous();
-            } else {
-                nextSegmentBaseOffset = activeSegBaseOffset;
-            }
-
-            return nextSegmentBaseOffset;
         }
 
         private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException {
