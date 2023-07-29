@@ -718,47 +718,47 @@ class DynamicBrokerConfigTest {
   @Test
   def testDynamicLogLocalRetentionMsConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put(KafkaConfig.LogRetentionTimeMillisProp, "1000")
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "2592000000")
     val config = KafkaConfig(props)
     val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
     config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "999")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2160000000")
     // update default config
     config.dynamicConfig.validate(newProps, perBrokerConfig = false)
     config.dynamicConfig.updateDefaultConfig(newProps)
-    assertEquals(999, config.logLocalRetentionMs)
+    assertEquals(2160000000L, config.logLocalRetentionMs)
 
     // update per broker config
     config.dynamicConfig.validate(newProps, perBrokerConfig = true)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "998")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2150000000")
     config.dynamicConfig.updateBrokerConfig(0, newProps)
-    assertEquals(998, config.logLocalRetentionMs)
+    assertEquals(2150000000L, config.logLocalRetentionMs)
   }
 
   @Test
   def testDynamicLogLocalRetentionSizeConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put(KafkaConfig.LogRetentionBytesProp, "1024")
+    props.put(KafkaConfig.LogRetentionBytesProp, "4294967296")
     val config = KafkaConfig(props)
     val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
     config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1023")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967295")
     // update default config
     config.dynamicConfig.validate(newProps, perBrokerConfig = false)
     config.dynamicConfig.updateDefaultConfig(newProps)
-    assertEquals(1023, config.logLocalRetentionBytes)
+    assertEquals(4294967295L, config.logLocalRetentionBytes)
 
     // update per broker config
     config.dynamicConfig.validate(newProps, perBrokerConfig = true)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1022")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967294")
     config.dynamicConfig.updateBrokerConfig(0, newProps)
-    assertEquals(1022, config.logLocalRetentionBytes)
+    assertEquals(4294967294L, config.logLocalRetentionBytes)
   }
 
   @Test
