@@ -705,6 +705,9 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
          * @throws NoSuchAlgorithmException
          */
         public static X509Certificate[] sortChainAnWrapEndCertificate(X509Certificate[] origChain) throws CertificateException, NoSuchAlgorithmException {
+            if (origChain == null || origChain.length < 1) {
+                throw new CertificateException("Certificate chain is null or empty");
+            }
             // Find the end certificate by looking at all issuers and find the one not referred to by any other certificate
             // There might be multiple end certificates if the chain is invalid!
             // Create a map from principal to certificate
