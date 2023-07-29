@@ -364,6 +364,7 @@ public class RackAwareTaskAssignor {
         final BiFunction<ClientState, ClientState, List<TaskId>> getMovableTasks = (source, destination) -> source.standbyTasks().stream()
             .filter(task -> !destination.hasAssignedTask(task))
             .filter(task -> moveStandbyTask.canMove(source, destination, task, clientStates))
+            .sorted()
             .collect(Collectors.toList());
 
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());

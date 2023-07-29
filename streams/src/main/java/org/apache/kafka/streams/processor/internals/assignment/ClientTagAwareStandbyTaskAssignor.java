@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import org.apache.kafka.common.protocol.types.Field.Str;
+import java.util.stream.Collectors;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -168,15 +168,19 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                                          final ClientState destination,
                                          final TaskId sourceTask,
                                          final Map<UUID, ClientState> clientStateMap) {
-        final BiConsumer<ClientState, Set<Map.Entry<String, String>>> addTags = (cs, tagSet) -> {
+
+        final BiConsumer<ClientState, Set<KeyValue<String, String>>> addTags = (cs, tagSet) -> {
             final Map<String, String> tags = clientTagFunction.apply(cs.processId(), cs);
             if (tags != null) {
-                tagSet.addAll(tags.entrySet());
+                tagSet.addAll(tags.entrySet().stream()
+                    .map(entry -> KeyValue.pair(entry.getKey(), entry.getValue()))
+                    .collect(Collectors.toList())
+                );
             }
         };
 
-        final Set<Map.Entry<String, String>> tagsWithSource = new HashSet<>();
-        final Set<Map.Entry<String, String>> tagsWithDestination = new HashSet<>();
+        final Set<KeyValue<String, String>> tagsWithSource = new HashSet<>();
+        final Set<KeyValue<String, String>> tagsWithDestination = new HashSet<>();
         for (final ClientState clientState : clientStateMap.values()) {
             if (clientState.hasAssignedTask(sourceTask)
                 && !clientState.processId().equals(source.processId())
