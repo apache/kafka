@@ -16,27 +16,36 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Set;
+
 /**
- * Server side partition assignor used by the GroupCoordinator.
+ * The subscribed topic describer is used by the {@link PartitionAssignor}
+ * to obtain topic and partition metadata of the subscribed topics.
  *
  * The interface is kept in an internal module until KIP-848 is fully
  * implemented and ready to be released.
  */
 @InterfaceStability.Unstable
-public interface PartitionAssignor {
+public interface SubscribedTopicDescriber {
     /**
-     * Unique name for this assignor.
+     * The number of partitions for the given topic Id.
+     *
+     * @param topicId   Uuid corresponding to the topic.
+     * @return The number of partitions corresponding to the given topic Id,
+     *         or -1 if the topic Id does not exist.
      */
-    String name();
+    int numPartitions(Uuid topicId);
 
     /**
-     * Assigns partitions to group members based on the given assignment specification and topic metadata.
+     * Returns all the available racks associated with the replicas of the given partition.
      *
-     * @param assignmentSpec           The assignment spec which includes member metadata.
-     * @param subscribedTopicDescriber The topic and partition metadata describer.
-     * @return The new assignment for the group.
+     * @param topicId       Uuid corresponding to the partition's topic.
+     * @param partition     Partition Id within topic.
+     * @return The set of racks corresponding to the replicas of the topic's partition.
+     *         If the topic Id does not exist, an empty set is returned.
      */
-    GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException;
+    Set<String> racksForPartition(Uuid topicId, int partition);
 }

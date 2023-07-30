@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
@@ -57,7 +58,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilderSupplier;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
@@ -133,8 +134,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
-            CoordinatorBuilderSupplier<ReplicatedGroupCoordinator, Record> supplier = () ->
-                new ReplicatedGroupCoordinator.Builder(config);
+            CoordinatorShardBuilderSupplier<GroupCoordinatorShard, Record> supplier = () ->
+                new GroupCoordinatorShard.Builder(config);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
@@ -142,8 +143,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 config.numThreads
             );
 
-            CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime =
-                new CoordinatorRuntime.Builder<ReplicatedGroupCoordinator, Record>()
+            CoordinatorRuntime<GroupCoordinatorShard, Record> runtime =
+                new CoordinatorRuntime.Builder<GroupCoordinatorShard, Record>()
                     .withTime(time)
                     .withTimer(timer)
                     .withLogPrefix(logPrefix)
@@ -151,7 +152,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withEventProcessor(processor)
                     .withPartitionWriter(writer)
                     .withLoader(loader)
-                    .withCoordinatorBuilderSupplier(supplier)
+                    .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
                     .build();
 
@@ -176,7 +177,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * The coordinator runtime.
      */
-    private final CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime;
+    private final CoordinatorRuntime<GroupCoordinatorShard, Record> runtime;
 
     /**
      * Boolean indicating whether the coordinator is active or not.
@@ -198,7 +199,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     GroupCoordinatorService(
         LogContext logContext,
         GroupCoordinatorConfig config,
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime
     ) {
         this.log = logContext.logger(CoordinatorLoader.class);
         this.config = config;
@@ -369,9 +370,31 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(new HeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+        }
+
+        // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
+        // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
+        return runtime.scheduleReadOperation("generic-group-heartbeat",
+            topicPartitionFor(request.groupId()),
+            (coordinator, __) -> coordinator.genericGroupHeartbeat(context, request)
+        ).exceptionally(exception -> {
+            if (!(exception instanceof KafkaException)) {
+                log.error("Heartbeat request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+            }
+
+            if (exception instanceof CoordinatorLoadInProgressException) {
+                // The group is still loading, so blindly respond
+                return new HeartbeatResponseData()
+                    .setErrorCode(Errors.NONE.code());
+            }
+
+            return new HeartbeatResponseData()
+                .setErrorCode(Errors.forException(exception).code());
+        });
     }
 
     /**
