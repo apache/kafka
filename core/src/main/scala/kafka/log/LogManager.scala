@@ -1045,7 +1045,11 @@ class LogManager(logDirs: Seq[File],
         if (removedLog != null) {
           try {
             removedLog.delete()
-            info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
+            if(removedLog.config.move){
+              info(s"Moved log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
+            }else{
+              info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
+            }
           } catch {
             case e: KafkaStorageException =>
               error(s"Exception while deleting $removedLog in dir ${removedLog.parentDir}.", e)

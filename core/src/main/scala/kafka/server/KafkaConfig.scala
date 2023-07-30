@@ -439,6 +439,7 @@ object KafkaConfig {
   val LogRetentionBytesProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_BYTES_CONFIG)
   val LogCleanupIntervalMsProp = LogConfigPrefix + "retention.check.interval.ms"
   val LogCleanupPolicyProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG)
+  val LogCleanupMoveDirProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_MOVE_DIR_CONFIG)
   val LogCleanerThreadsProp = LogConfigPrefix + "cleaner.threads"
   val LogCleanerIoMaxBytesPerSecondProp = LogConfigPrefix + "cleaner.io.max.bytes.per.second"
   val LogCleanerDedupeBufferSizeProp = LogConfigPrefix + "cleaner.dedupe.buffer.size"
@@ -1827,6 +1828,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val logFlushStartOffsetCheckpointIntervalMs = getInt(KafkaConfig.LogFlushStartOffsetCheckpointIntervalMsProp).toLong
   val logCleanupIntervalMs = getLong(KafkaConfig.LogCleanupIntervalMsProp)
   def logCleanupPolicy = getList(KafkaConfig.LogCleanupPolicyProp)
+  def logCleanupMoveDirPolicy = getList(KafkaConfig.LogCleanupMoveDirProp)
   val offsetsRetentionMinutes = getInt(KafkaConfig.OffsetsRetentionMinutesProp)
   val offsetsRetentionCheckIntervalMs = getLong(KafkaConfig.OffsetsRetentionCheckIntervalMsProp)
   def logRetentionBytes = getLong(KafkaConfig.LogRetentionBytesProp)
@@ -2434,6 +2436,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, logDeleteDelayMs)
     logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, logCleanerMinCleanRatio)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy)
+    logProps.put(TopicConfig.CLEANUP_MOVE_DIR_CONFIG, logCleanupMoveDirPolicy)
     logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas)
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable)

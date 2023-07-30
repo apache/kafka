@@ -235,7 +235,11 @@ class LocalLog(@volatile private var _dir: File,
       if (!isMemoryMappedBufferClosed) {
         throw new IllegalStateException(s"Can not delete directory when memory mapped buffer for log of $topicPartition is still open.")
       }
-      Utils.delete(dir)
+      if (config.move && config.moveDir != null) {
+        Utils.atomicMoveWithFallback(dir.toPath, new File(Utils.replaceSuffix(config.moveDir, LogFileUtils.DELETED_FILE_SUFFIX, "")).toPath)
+      } else {
+        Utils.delete(dir)
+      }
     }
   }
 
@@ -604,14 +608,10 @@ object LocalLog extends Logging {
   /** a directory that is scheduled to be deleted */
   private[log] val DeleteDirSuffix = "-delete"
 
-  /** a directory that is scheduled to be move */
-  private[log] val MoveDirSuffix = "-move"
-
   /** a directory that is used for future partition */
   private[log] val FutureDirSuffix = "-future"
 
   private[log] val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
-  private[log] val MoveDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$MoveDirSuffix")
   private[log] val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
 
   private[log] val UnknownOffset = -1L
@@ -666,7 +666,7 @@ object LocalLog extends Logging {
     val dirName = dir.getName
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
-    if (dirName.endsWith(MoveDirSuffix) && !MoveDirPattern.matcher(dirName).matches || dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
+    if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
       dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
       throw exception(dir)
 

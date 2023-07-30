@@ -327,6 +327,8 @@ public class LogConfig extends AbstractConfig {
     public final double minCleanableRatio;
     public final boolean compact;
     public final boolean delete;
+    public final boolean move;
+    public final String  moveDir;
     public final boolean uncleanLeaderElectionEnable;
     public final int minInSyncReplicas;
     public final String compressionType;
@@ -379,6 +381,11 @@ public class LogConfig extends AbstractConfig {
             .map(c -> c.toLowerCase(Locale.ROOT))
             .collect(Collectors.toList())
             .contains(TopicConfig.CLEANUP_POLICY_DELETE);
+        this.move = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
+            .map(c -> c.toLowerCase(Locale.ROOT))
+            .collect(Collectors.toList())
+            .contains(TopicConfig.CLEANUP_POLICY_MOVE);
+        this.moveDir = getString(TopicConfig.CLEANUP_MOVE_DIR_CONFIG);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
         this.compressionType = getString(TopicConfig.COMPRESSION_TYPE_CONFIG).toLowerCase(Locale.ROOT);
