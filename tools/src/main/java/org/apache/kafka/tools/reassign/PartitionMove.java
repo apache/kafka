@@ -17,6 +17,7 @@
 
 package org.apache.kafka.tools.reassign;
 
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -34,5 +35,26 @@ final class PartitionMove {
     public PartitionMove(Set<Integer> sources, Set<Integer> destinations) {
         this.sources = sources;
         this.destinations = destinations;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PartitionMove that = (PartitionMove) o;
+        return Objects.equals(sources, that.sources) && Objects.equals(destinations, that.destinations);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sources, destinations);
+    }
+
+    @Override
+    public String toString() {
+        return "PartitionMove{" +
+            "sources=" + sources +
+            ", destinations=" + destinations +
+            '}';
     }
 }

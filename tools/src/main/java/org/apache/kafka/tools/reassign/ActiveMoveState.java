@@ -17,6 +17,8 @@
 
 package org.apache.kafka.tools.reassign;
 
+import java.util.Objects;
+
 /**
  * A replica log directory move state where the move is in progress.
  */
@@ -41,5 +43,18 @@ final class ActiveMoveState implements LogDirMoveState {
     @Override
     public boolean done() {
         return false;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ActiveMoveState that = (ActiveMoveState) o;
+        return Objects.equals(currentLogDir, that.currentLogDir) && Objects.equals(targetLogDir, that.targetLogDir) && Objects.equals(futureLogDir, that.futureLogDir);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(currentLogDir, targetLogDir, futureLogDir);
     }
 }

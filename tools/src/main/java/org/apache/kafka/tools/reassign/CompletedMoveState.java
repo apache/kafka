@@ -17,6 +17,8 @@
 
 package org.apache.kafka.tools.reassign;
 
+import java.util.Objects;
+
 /**
  * The completed replica log directory move state.
  */
@@ -33,5 +35,18 @@ final class CompletedMoveState implements LogDirMoveState {
     @Override
     public boolean done() {
         return true;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CompletedMoveState that = (CompletedMoveState) o;
+        return Objects.equals(targetLogDir, that.targetLogDir);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(targetLogDir);
     }
 }

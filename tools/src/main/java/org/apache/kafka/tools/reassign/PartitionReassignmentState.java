@@ -18,6 +18,7 @@
 package org.apache.kafka.tools.reassign;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The state of a partition reassignment.  The current replicas and target replicas
@@ -39,5 +40,18 @@ final class PartitionReassignmentState {
         this.currentReplicas = currentReplicas;
         this.targetReplicas = targetReplicas;
         this.done = done;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PartitionReassignmentState state = (PartitionReassignmentState) o;
+        return done == state.done && Objects.equals(currentReplicas, state.currentReplicas) && Objects.equals(targetReplicas, state.targetReplicas);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(currentReplicas, targetReplicas, done);
     }
 }
