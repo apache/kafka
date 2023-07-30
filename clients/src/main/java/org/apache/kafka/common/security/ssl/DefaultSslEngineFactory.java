@@ -596,7 +596,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     }
 
     /**
-     * A trust manager factory for creating common name logging trust managers.
+     * A wrapper around the original trust manager factory for creating common name logging trust managers.
      * These trust managers log the common name of an expired but otherwise valid (client) certificate before rejecting the connection attempt.
      * This allows to identify misconfigured clients in complex network environments, where the IP address is not sufficient.
      */
@@ -621,6 +621,14 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
          */
         public static CommonNameLoggingTrustManagerFactoryWrapper getInstance(String kmfAlgorithm) throws NoSuchAlgorithmException {
             return new CommonNameLoggingTrustManagerFactoryWrapper(kmfAlgorithm);
+        }
+
+        public TrustManagerFactory getOriginalTrustManagerFactory() {
+            return this.origTmf;
+        }
+
+        public String getAlgorithm() {
+            return this.origTmf.getAlgorithm();
         }
 
         public void init(KeyStore ts) throws KeyStoreException {
