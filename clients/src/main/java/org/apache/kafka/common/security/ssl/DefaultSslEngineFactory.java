@@ -689,8 +689,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                     log.info("Certificate with common name \"" + commonName + "\" expired on " + notValidAfter);
                 } catch (CertificateException innerException) {
                     // Ignore this exception as we throw the original one below
-                } catch (NoSuchAlgorithmException innerException) {
-                    // Ignore this exception as we throw the original one below
                 }
             }
             if (origException != null) {
@@ -716,7 +714,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
          * @throws CertificateException
          * @throws NoSuchAlgorithmException
          */
-        public static X509Certificate[] sortChainAnWrapEndCertificate(X509Certificate[] origChain) throws CertificateException, NoSuchAlgorithmException {
+        public static X509Certificate[] sortChainAnWrapEndCertificate(X509Certificate[] origChain) throws CertificateException {
             if (origChain == null || origChain.length < 1) {
                 throw new CertificateException("Certificate chain is null or empty");
             }
@@ -731,7 +729,10 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                 X500Principal issuerPrincipal = cert.getIssuerX500Principal();
                 if (issuerPrincipal.equals(principal)) {
                     // self-signed certificate in chain! This should not happen
-                    throw new CertificateException("Self-signed certificate in chain!");
+                    boolean isCA = cert.getBasicConstraints() >= 0;
+                    if (!isCA) {
+                        throw new CertificateException("Self-signed certificate in chain that is not a CA!");
+                    }
                 }
                 issuedbyPrincipalToCertificatesMap.put(issuerPrincipal, cert);
                 principalToCertMap.put(principal, cert);
@@ -745,7 +746,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                     endCertificates.add(cert);
                 }
             }
-            // There should be exactly one end certificate
+            // There should be exactly one end certificate, otherwise we don't know which one to wrap
             if (endCertificates.size() != 1) {
                 throw new CertificateException("Multiple end certificates in chain");
             }
@@ -763,7 +764,8 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                 }
             }
             return wrappedChain;
-        }    }
+        }
+    }
 
     static class NeverExpiringX509Certificate extends X509Certificate {
 
