@@ -100,7 +100,7 @@ public class ReassignPartitionsCommand {
     static final String BROKER_LEVEL_FOLLOWER_THROTTLE = "follower.replication.throttled.rate";
     //DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp
     static final String BROKER_LEVEL_LOG_DIR_THROTTLE = "replica.alter.log.dirs.io.max.bytes.per.second";
-    private static final List<String> BROKER_LEVEL_THROTTLES = Arrays.asList(
+    static final List<String> BROKER_LEVEL_THROTTLES = Arrays.asList(
         BROKER_LEVEL_LEADER_THROTTLE,
         BROKER_LEVEL_FOLLOWER_THROTTLE,
         BROKER_LEVEL_LOG_DIR_THROTTLE
