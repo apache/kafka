@@ -166,7 +166,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => zkClient.getControllerId.contains(3000),
         "Timed out waiting for KRaft controller to take over",
-        30_000)
+        30000)
 
       def inDualWrite(): Boolean = {
         val migrationState = kraftCluster.controllers().get(3000).migrationSupport.get.migrationDriver.migrationState().get(10, TimeUnit.SECONDS)
@@ -292,7 +292,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => zkClient.getControllerId.contains(3000),
         "Timed out waiting for KRaft controller to take over",
-        30_000)
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -367,7 +367,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => zkClient.getControllerId.contains(3000),
         "Timed out waiting for KRaft controller to take over",
-        30_000)
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -434,7 +434,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => zkClient.getControllerId.contains(3000),
         "Timed out waiting for KRaft controller to take over",
-        30_000)
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -496,7 +496,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => zkClient.getControllerId.contains(3000),
         "Timed out waiting for KRaft controller to take over",
-        30_000)
+        30000)
 
       // Alter the metadata
       log.info("Create new topic with AdminClient")
