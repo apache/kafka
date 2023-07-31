@@ -1804,6 +1804,6 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
     props.put(KafkaConfig.LogDirsProp, "/tmp/a")
-    KafkaConfig.fromProps(props)
+    assertDoesNotThrow(() => KafkaConfig.fromProps(props))
   }
 }

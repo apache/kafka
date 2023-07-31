@@ -229,17 +229,17 @@ public final class RemoteLogManagerConfig {
                                   MEDIUM,
                                   REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC)
                   .defineInternal(LOG_LOCAL_RETENTION_MS_PROP,
-                          LONG,
-                          DEFAULT_LOG_LOCAL_RETENTION_MS,
-                          atLeast(DEFAULT_LOG_LOCAL_RETENTION_MS),
-                          MEDIUM,
-                          LOG_LOCAL_RETENTION_MS_DOC)
+                                  LONG,
+                                  DEFAULT_LOG_LOCAL_RETENTION_MS,
+                                  atLeast(DEFAULT_LOG_LOCAL_RETENTION_MS),
+                                  MEDIUM,
+                                  LOG_LOCAL_RETENTION_MS_DOC)
                   .defineInternal(LOG_LOCAL_RETENTION_BYTES_PROP,
-                          LONG,
-                          DEFAULT_LOG_LOCAL_RETENTION_BYTES,
-                          atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
-                          MEDIUM,
-                          LOG_LOCAL_RETENTION_BYTES_DOC);
+                                  LONG,
+                                  DEFAULT_LOG_LOCAL_RETENTION_BYTES,
+                                  atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
+                                  MEDIUM,
+                                  LOG_LOCAL_RETENTION_BYTES_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;

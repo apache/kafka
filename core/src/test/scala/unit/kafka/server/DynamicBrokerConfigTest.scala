@@ -778,19 +778,19 @@ class DynamicBrokerConfigTest {
   @Test
   def testDynamicLogLocalRetentionThrowsOnIncorrectConfig(): Unit = {
     // Check for incorrect case of logLocalRetentionMs > retentionMs
-    verifyIncorrectLogLocalRetentionProps(2000L, 2, 100, 1000L)
+    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, 2, 100)
     // Check for incorrect case of logLocalRetentionBytes > retentionBytes
-    verifyIncorrectLogLocalRetentionProps(500L, 200, 100, 1000L)
+    verifyIncorrectLogLocalRetentionProps(500L, 1000L, 200, 100)
     // Check for incorrect case of logLocalRetentionMs (-1 viz unlimited) > retentionMs,
-    verifyIncorrectLogLocalRetentionProps(-1, 200, 100, 1000L)
+    verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
     // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
-    verifyIncorrectLogLocalRetentionProps(2000L, -1, 100, 1000L)
+    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
   }
 
   def verifyIncorrectLogLocalRetentionProps(logLocalRetentionMs: Long,
+                                            retentionMs: Long,
                                             logLocalRetentionBytes: Long,
-                                            retentionBytes: Long,
-                                            retentionMs: Long): Unit = {
+                                            retentionBytes: Long): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRetentionTimeMillisProp, retentionMs.toString)
     props.put(KafkaConfig.LogRetentionBytesProp, retentionBytes.toString)
