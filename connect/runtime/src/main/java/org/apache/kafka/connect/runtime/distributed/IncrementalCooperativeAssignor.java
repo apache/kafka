@@ -240,6 +240,13 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             previousRevocation.tasks().clear();
         }
 
+        final long now = time.milliseconds();
+        // Before any operations, check if the rebalance delay has expired. In that case,
+        // we will reset the revoking rebalance state.
+        if (scheduledRebalance > 0 && now >= scheduledRebalance) {
+            resetPreviousRevocationsState();
+        }
+
         // Derived set: The set of deleted connectors-and-tasks is a derived set from the set
         // difference of previous - configured
         ConnectorsAndTasks deleted = diff(previousAssignment, configured);
@@ -324,15 +331,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 // have converged to a balanced load. We can reset the rebalance clock
                 log.debug("Previous round had revocations but this round didn't. Probably, the cluster has reached a " +
                         "balanced load. Resetting the exponential backoff clock");
-                revokedInPrevious = false;
-                numSuccessiveRevokingRebalances = 0;
+                resetPreviousRevocationsState();
             } else {
                 // no-op
                 log.debug("No revocations in previous and current round.");
             }
         } else {
             log.debug("Delayed rebalance is active. Delaying {}ms before revoking connectors and tasks: {}", delay, toRevoke);
-            revokedInPrevious = false;
+            resetPreviousRevocationsState();
         }
 
         // The complete set of connectors and tasks that should be newly-assigned during this round
@@ -442,8 +448,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks.Builder lostAssignmentsToReassign,
                                          List<WorkerLoad> completeWorkerAssignment) {
-        // There are no lost assignments and there were no revocations in the previous round
-        if (lostAssignments.isEmpty() && !revokedInPrevious) {
+
+        if (lostAssignments.isEmpty()) {
             resetDelay();
             return;
         }
@@ -502,9 +508,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 lostAssignmentsToReassign.addTasks(lostAssignments.tasks());
             }
             resetDelay();
-            // Resetting the flag as now we can permit successive revoking rebalances.
-            // since we have gone through the full rebalance delay
-            revokedInPrevious = false;
         } else {
             candidateWorkersForReassignment
                     .addAll(candidateWorkersForReassignment(completeWorkerAssignment));
@@ -533,6 +536,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             log.debug("Resetting delay from previous value: {} to 0", delay);
         }
         delay = 0;
+    }
+
+    private void resetPreviousRevocationsState() {
+        revokedInPrevious = false;
+        numSuccessiveRevokingRebalances = 0;
     }
 
     private Set<String> candidateWorkersForReassignment(List<WorkerLoad> completeWorkerAssignment) {
