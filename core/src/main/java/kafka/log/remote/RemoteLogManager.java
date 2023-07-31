@@ -1023,6 +1023,14 @@ public class RemoteLogManager implements Closeable {
         public int hashCode() {
             return Objects.hash(logSegment, nextSegmentOffset);
         }
+
+        @Override
+        public String toString() {
+            return "EnrichedLogSegment{" +
+                    "logSegment=" + logSegment +
+                    ", nextSegmentOffset=" + nextSegmentOffset +
+                    '}';
+        }
     }
 
 }
