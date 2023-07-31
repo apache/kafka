@@ -151,7 +151,6 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testCommitted() {
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
@@ -167,7 +166,6 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testCommitted_ExceptionThrown() {
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
