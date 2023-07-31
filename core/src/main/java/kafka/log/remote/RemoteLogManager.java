@@ -89,6 +89,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -523,6 +524,26 @@ public class RemoteLogManager implements Closeable {
             }
         }
 
+        List<EnrichedLogSegment> enrichedLogSegments(UnifiedLog log, Long fromOffset, Long lastStableOffset) {
+            List<EnrichedLogSegment> enrichedLogSegments = new ArrayList<>();
+            List<LogSegment> segments = JavaConverters.seqAsJavaList(log.nonActiveLogSegmentsFrom(fromOffset).toSeq());
+            if (!segments.isEmpty()) {
+                int idx = 1;
+                for (; idx < segments.size(); idx++) {
+                    LogSegment previous = segments.get(idx - 1);
+                    LogSegment current = segments.get(idx);
+                    enrichedLogSegments.add(new EnrichedLogSegment(previous, current.baseOffset()));
+                }
+                // LogSegment#readNextOffset() is an expensive call, so we only call it when necessary.
+                int lastIdx = idx - 1;
+                if (segments.get(lastIdx).baseOffset() < lastStableOffset) {
+                    LogSegment last = segments.get(lastIdx);
+                    enrichedLogSegments.add(new EnrichedLogSegment(last, last.readNextOffset()));
+                }
+            }
+            return enrichedLogSegments;
+        }
+
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException {
             if (isCancelled())
                 return;
@@ -536,7 +557,6 @@ public class RemoteLogManager implements Closeable {
                 if (lso < 0) {
                     logger.warn("lastStableOffset for partition {} is {}, which should not be negative.", topicIdPartition, lso);
                 } else if (lso > 0 && copiedOffset < lso) {
-                    long activeSegBaseOffset = log.activeSegment().baseOffset();
                     // log-start-offset can be ahead of the read-offset, when:
                     // 1) log-start-offset gets incremented via delete-records API (or)
                     // 2) enabling the remote log for the first time
@@ -546,23 +566,23 @@ public class RemoteLogManager implements Closeable {
                     // 1) Segment is not the active segment and
                     // 2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
                     //    committed/acked messages
-                    List<LogSegment> candidateSegments = JavaConverters.asJavaCollection(log.logSegments(fromOffset, Long.MAX_VALUE))
+                    List<EnrichedLogSegment> candidateSegments = enrichedLogSegments(log, fromOffset, lso)
                             .stream()
-                            .filter(segment -> segment.baseOffset() != activeSegBaseOffset && segment.readNextOffset() <= lso)
+                            .filter(enriched ->  enriched.segment.readNextOffset() <= lso)
                             .collect(Collectors.toList());
                     logger.debug("Checking for segments to copy, copiedOffset: {} and lso: {}, candidateSegments: {}",
                             copiedOffset, lso, candidateSegments);
                     if (candidateSegments.isEmpty()) {
                         logger.debug("No segments found to be copied for partition {} with copiedOffset: {} and active segment's base-offset: {}",
-                                topicIdPartition, copiedOffset, activeSegBaseOffset);
+                                topicIdPartition, copiedOffset, log.activeSegment().baseOffset());
                     } else {
-                        for (LogSegment segment : candidateSegments) {
+                        for (EnrichedLogSegment enrichedLogSegment : candidateSegments) {
                             if (isCancelled() || !isLeader()) {
                                 logger.info("Skipping copying log segments as the current task state is changed, cancelled: {} leader:{}",
                                         isCancelled(), isLeader());
                                 return;
                             }
-                            copyLogSegment(log, segment, segment.readNextOffset());
+                            copyLogSegment(log, enrichedLogSegment.segment, enrichedLogSegment.readNextOffset);
                         }
                     }
                 } else {
@@ -983,6 +1003,30 @@ public class RemoteLogManager implements Closeable {
 
         public void close() {
             shutdownAndAwaitTermination(scheduledThreadPool, "RLMScheduledThreadPool", 10, TimeUnit.SECONDS);
+        }
+    }
+
+    static class EnrichedLogSegment {
+        private final LogSegment segment;
+        private final long readNextOffset;
+
+        public EnrichedLogSegment(LogSegment segment,
+                                  long readNextOffset) {
+            this.segment = segment;
+            this.readNextOffset = readNextOffset;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            EnrichedLogSegment that = (EnrichedLogSegment) o;
+            return readNextOffset == that.readNextOffset && Objects.equals(segment, that.segment);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(segment, readNextOffset);
         }
     }
 
