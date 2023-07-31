@@ -76,7 +76,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -102,12 +104,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -557,11 +561,10 @@ public class RackAwareTaskAssignorTest {
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize);
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, 1);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
 
-        final Map<UUID, Integer> clientTaskCount = clientStateMap.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().activeTasks().size()));
+        final Map<UUID, Integer> clientTaskCount = clientTaskCount(clientStateMap, ClientState::activeTaskCount);
 
         assertTrue(assignor.canEnableRackAwareAssignor());
         final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
@@ -589,7 +592,7 @@ public class RackAwareTaskAssignorTest {
             new AssignorConfiguration(streamsConfig.originals()).assignmentConfigs()
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize);
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, 1);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
 
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
@@ -871,7 +874,8 @@ public class RackAwareTaskAssignorTest {
 
     @Test
     public void shouldOptimizeStandbyTasksWhenTasksAllMovable() {
-        final AssignmentConfigs assignorConfiguration = new AssignorConfiguration(new StreamsConfig(configProps(2)).originals()).assignmentConfigs();
+        final int replicaCount = 2;
+        final AssignmentConfigs assignorConfiguration = new AssignorConfiguration(new StreamsConfig(configProps(replicaCount)).originals()).assignmentConfigs();
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
@@ -913,9 +917,10 @@ public class RackAwareTaskAssignorTest {
         clientState6.assignStandbyTasks(mkSet(TASK_0_2, TASK_1_1)); // Cost 10
 
         final SortedSet<TaskId> taskIds = new TreeSet<>(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2));
+        final Map<UUID, Integer> standbyTaskCount = clientTaskCount(clientStateMap, ClientState::standbyTaskCount);
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        assertTrue(verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, 2, false));
+        verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, replicaCount, false, null);
 
         final long originalCost = assignor.standByTasksCost(taskIds, clientStateMap, 10, 1);
         assertEquals(60, originalCost);
@@ -926,12 +931,13 @@ public class RackAwareTaskAssignorTest {
             (source, destination, task, clients) -> true);
         assertEquals(30, cost);
         // Don't validate tasks in different racks after moving
-        assertTrue(verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, 2, true));
+        verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, replicaCount, true, standbyTaskCount);
     }
 
     @Test
     public void shouldOptimizeStandbyTasksWithMovingConstraint() {
-        final AssignmentConfigs assignorConfiguration = new AssignorConfiguration(new StreamsConfig(configProps(2)).originals()).assignmentConfigs();
+        final int replicaCount = 2;
+        final AssignmentConfigs assignorConfiguration = new AssignorConfiguration(new StreamsConfig(configProps(replicaCount)).originals()).assignmentConfigs();
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0And1(),
             getTaskTopicPartitionMapForAllTasks(),
@@ -973,9 +979,10 @@ public class RackAwareTaskAssignorTest {
         clientState6.assignStandbyTasks(mkSet(TASK_0_2, TASK_1_1)); // Cost 10
 
         final SortedSet<TaskId> taskIds = new TreeSet<>(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2));
+        final Map<UUID, Integer> standbyTaskCount = clientTaskCount(clientStateMap, ClientState::standbyTaskCount);
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        assertTrue(verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, 2, false));
+        verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, replicaCount, false, null);
 
         final long originalCost = assignor.standByTasksCost(taskIds, clientStateMap, 10, 1);
         assertEquals(60, originalCost);
@@ -986,16 +993,20 @@ public class RackAwareTaskAssignorTest {
             standbyTaskAssignor::isAllowedTaskMovement);
         assertEquals(50, cost);
         // Validate tasks in different racks after moving
-        assertTrue(verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, 2, false));
+        verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, replicaCount, false, standbyTaskCount);
     }
 
     @Test
     public void shouldOptimizeRandomStandby() {
         final int nodeSize = 50;
-        final int tpSize = 50;
+        final int tpSize = 60;
         final int clientSize = 50;
-        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, false);
-        final AssignmentConfigs assignorConfiguration = new AssignorConfiguration(new StreamsConfig(configProps(3)).originals()).assignmentConfigs();
+        final int replicaCount = 3;
+        final int maxCapacity = 3;
+        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(
+            tpSize, false);
+        final AssignmentConfigs assignorConfiguration = new AssignorConfiguration(
+            new StreamsConfig(configProps(replicaCount)).originals()).assignmentConfigs();
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getRandomCluster(nodeSize, tpSize),
@@ -1007,17 +1018,21 @@ public class RackAwareTaskAssignorTest {
             assignorConfiguration
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize);
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+            tpSize, maxCapacity);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
 
-
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(assignorConfiguration, assignor);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(
+            assignorConfiguration, assignor);
         assertInstanceOf(ClientTagAwareStandbyTaskAssignor.class, standbyTaskAssignor);
         // Get a standby assignment
         standbyTaskAssignor.assign(clientStateMap, taskIds, taskIds, assignorConfiguration);
+        final Map<UUID, Integer> standbyTaskCount = clientTaskCount(clientStateMap,
+            ClientState::standbyTaskCount);
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, 3, false);
+        verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap,
+            replicaCount, false, null);
 
         final long originalCost = assignor.standByTasksCost(taskIds, clientStateMap, 10, 1);
         assertThat(originalCost, greaterThanOrEqualTo(0L));
@@ -1026,7 +1041,8 @@ public class RackAwareTaskAssignorTest {
             standbyTaskAssignor::isAllowedTaskMovement);
         assertThat(cost, lessThanOrEqualTo(originalCost));
         // Validate tasks in different racks after moving
-        assertTrue(verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap, 3, false));
+        verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap,
+            replicaCount, false, standbyTaskCount);
     }
 
     private List<Node> getRandomNodes(final int nodeSize) {
@@ -1100,15 +1116,17 @@ public class RackAwareTaskAssignorTest {
         return spyTopicManager;
     }
 
-    private SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize) {
+    private SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int maxCapacity) {
         final SortedMap<UUID, ClientState> clientStates = new TreeMap<>();
         final List<TaskId> taskIds = new ArrayList<>(tpSize);
         for (int i = 0; i < tpSize; i++) {
             taskIds.add(new TaskId(i, 0));
         }
         Collections.shuffle(taskIds);
+        final Random random = new Random();
         for (int i = 0; i < clientSize; i++) {
-            final ClientState clientState = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, uuidForInt(i));
+            final int capacity = random.nextInt(maxCapacity) + 1;
+            final ClientState clientState = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, capacity, uuidForInt(i));
             clientStates.put(uuidForInt(i), clientState);
         }
         Iterator<Entry<UUID, ClientState>> iterator = clientStates.entrySet().iterator();
@@ -1264,11 +1282,19 @@ public class RackAwareTaskAssignorTest {
         return Collections.singletonMap(SUBTOPOLOGY_0, Collections.singleton(new TaskId(1, 1)));
     }
 
-    private boolean verifyStandbySatisfyRackReplica(final Set<TaskId> taskIds,
-                                                   final Map<UUID, String> racksForProcess,
-                                                   final Map<UUID, ClientState> clientStateMap,
-                                                   final int replica,
-                                                   final boolean relaxRackCheck) {
+    private void verifyStandbySatisfyRackReplica(final Set<TaskId> taskIds,
+                                                 final Map<UUID, String> racksForProcess,
+                                                 final Map<UUID, ClientState> clientStateMap,
+                                                 final int replica,
+                                                 final boolean relaxRackCheck,
+                                                 final Map<UUID, Integer> standbyTaskCount) {
+        if (standbyTaskCount != null) {
+            for (final Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
+                final int expected = standbyTaskCount.get(entry.getKey());
+                final int actual = entry.getValue().standbyTaskCount();
+                assertEquals("StandbyTaskCount for " + entry.getKey() + " doesn't match", expected, actual);
+            }
+        }
         for (final TaskId taskId : taskIds) {
             int activeCount = 0;
             int standbyCount = 0;
@@ -1279,12 +1305,7 @@ public class RackAwareTaskAssignorTest {
 
                 if (!relaxRackCheck && clientState.hasAssignedTask(taskId)) {
                     final String rack = racksForProcess.get(processId);
-                    if (racks.containsKey(rack)) {
-                        System.out.println(
-                            "For task " + taskId + " Rack " + rack + " appears in both " + processId
-                                + " and " + racks.get(rack));
-                        return false;
-                    }
+                    assertThat("Task " + taskId + " appears in both " + processId + " and " + racks.get(rack), racks.keySet(), not(hasItems(rack)));
                     racks.put(rack, processId);
                 }
 
@@ -1300,23 +1321,16 @@ public class RackAwareTaskAssignorTest {
                     hasStandby = true;
                 }
 
-                if (hasActive && hasStandby) {
-                    System.out.println(clientState + " has both active and standby task " + taskId);
-                    return false;
-                }
+                assertFalse(clientState + " has both active and standby task " + taskId, hasActive && hasStandby);
             }
 
-            if (activeCount != 1) {
-                System.out.println("Task " + taskId + " has more than 1 active task");
-                return false;
-            }
-
-            if (standbyCount != replica) {
-                System.out.println("Task " + taskId + " has " + standbyCount + " replicas which doesn't match " + replica);
-                return false;
-            }
+            assertEquals("Task " + taskId + " should have 1 active task", 1, activeCount);
+            assertEquals("Task " + taskId + " has wrong replica count", replica, standbyCount);
         }
+    }
 
-        return true;
+    private Map<UUID, Integer> clientTaskCount(final Map<UUID, ClientState> clientStateMap,
+                                               final Function<ClientState, Integer> taskFunc) {
+        return clientStateMap.entrySet().stream().collect(Collectors.toMap(Entry::getKey, v -> taskFunc.apply(v.getValue())));
     }
 }
