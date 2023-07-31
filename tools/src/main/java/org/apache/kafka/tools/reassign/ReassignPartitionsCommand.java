@@ -196,7 +196,7 @@ public class ReassignPartitionsCommand {
      *
      * @return                      A result that is useful for testing.
      */
-    private static VerifyAssignmentResult verifyAssignment(Admin adminClient, String jsonString, Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
+    static VerifyAssignmentResult verifyAssignment(Admin adminClient, String jsonString, Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
         Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
 
         List<Tuple<TopicPartition, List<Integer>>> targetParts = t0.v1;
@@ -1230,11 +1230,11 @@ public class ReassignPartitionsCommand {
      * @return                      A tuple of the partition reassignments that were cancelled,
      *                              and the replica movements that were cancelled.
      */
-    private static Tuple<Set<TopicPartition>, Set<TopicPartitionReplica>> cancelAssignment(Admin adminClient,
-                                                                                           String jsonString,
-                                                                                           Boolean preserveThrottles,
-                                                                                           Long timeoutMs,
-                                                                                           Time time) throws ExecutionException, InterruptedException, JsonProcessingException {
+    static Tuple<Set<TopicPartition>, Set<TopicPartitionReplica>> cancelAssignment(Admin adminClient,
+                                                                                   String jsonString,
+                                                                                   Boolean preserveThrottles,
+                                                                                   Long timeoutMs,
+                                                                                   Time time) throws ExecutionException, InterruptedException, JsonProcessingException {
         Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
 
         List<Tuple<TopicPartition, List<Integer>>> targetParts = t0.v1;

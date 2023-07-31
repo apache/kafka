@@ -17,17 +17,19 @@
 
 package org.apache.kafka.tools.reassign;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import kafka.server.IsrChangePropagationConfig;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
 import kafka.server.QuorumTestHarness;
 import kafka.server.ZkAlterPartitionManager;
-import kafka.utils.TestInfoUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
@@ -44,16 +46,24 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(300)
 public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
@@ -119,8 +129,162 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    private void executeAndVerifyReassignment() {
-        // TODO: fixme.
+    private void executeAndVerifyReassignment() throws ExecutionException, InterruptedException, JsonProcessingException {
+        String assignment = "{\"version\":1,\"partitions\":" +
+            "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
+            "{\"topic\":\"bar\",\"partition\":0,\"replicas\":[3,2,0],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+            "]}";
+
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        TopicPartition bar0 = new TopicPartition("bar", 0);
+
+        // Check that the assignment has not yet been started yet.
+        Map<TopicPartition, PartitionReassignmentState> initialAssignment = new HashMap<>();
+
+        initialAssignment.put(foo0, new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 3), true));
+        initialAssignment.put(bar0, new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 0), true));
+
+        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+            new VerifyAssignmentResult(initialAssignment));
+
+/*
+        // Execute the assignment
+        runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L);
+        assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
+        val finalAssignment = Map(
+            foo0 -> PartitionReassignmentState(Seq(0, 1, 3), Seq(0, 1, 3), true),
+            bar0 -> PartitionReassignmentState(Seq(3, 2, 0), Seq(3, 2, 0), true)
+        )
+
+        val verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false)
+        assertFalse(verifyAssignmentResult.movesOngoing)
+
+        // Wait for the assignment to complete
+        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+            VerifyAssignmentResult(finalAssignment))
+
+        assertEquals(unthrottledBrokerConfigs,
+            describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
+
+        // Verify that partitions are removed from brokers no longer assigned
+        verifyReplicaDeleted(topicPartition = foo0, replicaId = 2)
+        verifyReplicaDeleted(topicPartition = bar0, replicaId = 1)
+*/
+    }
+
+    class LogDirReassignment {
+        final String json;
+        final String currentDir;
+        final String targetDir;
+
+        public LogDirReassignment(String json, String currentDir, String targetDir) {
+            this.json = json;
+            this.currentDir = currentDir;
+            this.targetDir = targetDir;
+        }
+    }
+
+    private LogDirReassignment buildLogDirReassignment(TopicPartition topicPartition,
+                                                       int brokerId,
+                                                       List<Integer> replicas) throws ExecutionException, InterruptedException {
+
+        DescribeLogDirsResult describeLogDirsResult = cluster.adminClient.describeLogDirs(
+            IntStream.range(0, 4).boxed().collect(Collectors.toList()));
+
+        BrokerDirs logDirInfo = new BrokerDirs(describeLogDirsResult, brokerId);
+        assertTrue(logDirInfo.futureLogDirs.isEmpty());
+
+        String currentDir = logDirInfo.curLogDirs.get(topicPartition);
+        String newDir = logDirInfo.logDirs.stream().filter(dir -> !dir.equals(currentDir)).findFirst().get();
+
+        List<String> logDirs = replicas.stream().map(replicaId -> {
+            if (replicaId == brokerId)
+                return "\"" + newDir + "\"";
+            else
+                return "\"any\"";
+        }).collect(Collectors.toList());
+
+        String reassignmentJson =
+         " { \"version\": 1," +
+         "  \"partitions\": [" +
+         "    {" +
+         "     \"topic\": \"" + topicPartition.topic() + "\"," +
+         "     \"partition\": " + topicPartition.partition() + "," +
+         "     \"replicas\": [" + replicas.stream().map(Object::toString).collect(Collectors.joining(",")) + "]," +
+         "     \"log_dirs\": [" + String.join(",", logDirs) + "]" +
+         "    }" +
+         "   ]" +
+         "  }";
+
+        return new LogDirReassignment(reassignmentJson, currentDir, newDir);
+    }
+
+
+
+    private VerifyAssignmentResult runVerifyAssignment(Admin adminClient, String jsonString,
+                                                       Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
+        System.out.println("==> verifyAssignment(adminClient, jsonString=" + jsonString);
+        return verifyAssignment(adminClient, jsonString, preserveThrottles);
+    }
+
+    private void waitForVerifyAssignment(Admin adminClient,
+                                        String jsonString,
+                                        Boolean preserveThrottles,
+                                        VerifyAssignmentResult expectedResult) {
+        final VerifyAssignmentResult[] latestResult = {null};
+        TestUtils.waitUntilTrue(
+            () -> {
+                try {
+                    latestResult[0] = runVerifyAssignment(adminClient, jsonString, preserveThrottles);
+                } catch (ExecutionException | InterruptedException | JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
+                return expectedResult.equals(latestResult[0]);
+            }, () -> "Timed out waiting for verifyAssignment result " + expectedResult + ".  " +
+                "The latest result was " + latestResult[0], org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 10L);
+    }
+
+    private void runExecuteAssignment(Admin adminClient,
+                                      Boolean additional,
+                                      String reassignmentJson,
+                                      Long interBrokerThrottle,
+                                      Long replicaAlterLogDirsThrottle) throws ExecutionException, InterruptedException, JsonProcessingException {
+        System.out.println("==> executeAssignment(adminClient, additional=" + additional + ", " +
+            "reassignmentJson=" + reassignmentJson + ", " +
+            "interBrokerThrottle=" + interBrokerThrottle + ", " +
+            "replicaAlterLogDirsThrottle=" + replicaAlterLogDirsThrottle + "))");
+        executeAssignment(adminClient, additional, reassignmentJson,
+            interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM);
+    }
+
+    private void runCancelAssignment(Admin adminClient, String jsonString, Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
+        System.out.println("==> cancelAssignment(adminClient, jsonString=" + jsonString);
+        cancelAssignment(adminClient, jsonString, preserveThrottles, 10000L, Time.SYSTEM);
+    }
+
+    class BrokerDirs {
+        final DescribeLogDirsResult result;
+        final int brokerId;
+
+        final Set<String> logDirs = new HashSet<>();
+        final Map<TopicPartition, String> curLogDirs = new HashMap<>();
+        final Map<TopicPartition, String> futureLogDirs = new HashMap<>();
+
+        public BrokerDirs(DescribeLogDirsResult result, int brokerId) throws ExecutionException, InterruptedException {
+            this.result = result;
+            this.brokerId = brokerId;
+
+            result.descriptions().get(brokerId).get().forEach((logDirName, logDirInfo) -> {
+                logDirs.add(logDirName);
+                logDirInfo.replicaInfos().forEach((part, info) -> {
+                    if (info.isFuture()) {
+                        futureLogDirs.put(part, logDirName);
+                    } else {
+                        curLogDirs.put(part, logDirName);
+                    }
+                });
+            });
+        }
     }
 
     class ReassignPartitionsTestCluster implements Closeable {
