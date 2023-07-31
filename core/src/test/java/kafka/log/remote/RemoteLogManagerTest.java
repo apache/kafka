@@ -321,8 +321,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.nonActiveLogSegmentsFrom(anyLong()))
-                .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -374,7 +373,7 @@ public class RemoteLogManagerTest {
         assertEquals(remoteLogSegmentMetadataArg.getValue(), remoteLogSegmentMetadataArg2.getValue());
         // The old segment should only contain leader epoch [0->0, 1->100] since its offset range is [0, 149]
         verifyLogSegmentData(logSegmentDataArg.getValue(), idx, timeIdx, txnIndex, tempFile, mockProducerSnapshotIndex,
-                Arrays.asList(epochEntry0, epochEntry1));
+            Arrays.asList(epochEntry0, epochEntry1));
 
         // verify remoteLogMetadataManager did add the expected RemoteLogSegmentMetadataUpdate
         ArgumentCaptor<RemoteLogSegmentMetadataUpdate> remoteLogSegmentMetadataUpdateArg = ArgumentCaptor.forClass(RemoteLogSegmentMetadataUpdate.class);
@@ -505,7 +504,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.nonActiveLogSegmentsFrom(anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -569,7 +568,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.nonActiveLogSegmentsFrom(anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
@@ -853,40 +852,14 @@ public class RemoteLogManagerTest {
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
-        LogSegment segment3 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
 
         when(segment1.baseOffset()).thenReturn(5L);
         when(segment2.baseOffset()).thenReturn(10L);
-        when(segment3.baseOffset()).thenReturn(15L);
-        when(segment3.readNextOffset()).thenReturn(22L);
+        when(activeSegment.baseOffset()).thenReturn(15L);
 
-        when(log.nonActiveLogSegmentsFrom(5L))
-                .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, segment3)));
-
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
-        List<RemoteLogManager.EnrichedLogSegment> expected =
-                Arrays.asList(
-                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
-                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L),
-                        new RemoteLogManager.EnrichedLogSegment(segment3, 22L)
-                );
-
-        assertEquals(expected, task.enrichedLogSegments(log, 5L, 20L));
-    }
-
-    @Test
-    public void testEnrichedLogSegmentsSkipsNextReadOffsetCall() {
-        UnifiedLog log = mock(UnifiedLog.class);
-        LogSegment segment1 = mock(LogSegment.class);
-        LogSegment segment2 = mock(LogSegment.class);
-        LogSegment segment3 = mock(LogSegment.class);
-
-        when(segment1.baseOffset()).thenReturn(5L);
-        when(segment2.baseOffset()).thenReturn(10L);
-        when(segment3.baseOffset()).thenReturn(15L);
-
-        when(log.nonActiveLogSegmentsFrom(5L))
-                .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, segment3)));
+        when(log.logSegments(5L, Long.MAX_VALUE))
+                .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, activeSegment)));
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         List<RemoteLogManager.EnrichedLogSegment> expected =
@@ -894,8 +867,8 @@ public class RemoteLogManagerTest {
                         new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
                         new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
                 );
-
-        assertEquals(expected, task.enrichedLogSegments(log, 5L, 15L));
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.enrichedLogSegments(log, 5L);
+        assertEquals(expected, actual);
     }
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
