@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
 public class RemoteLogReaderTest {
     public static final String TOPIC = "test";
     RemoteLogManager mockRLM = mock(RemoteLogManager.class);
-    BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    BrokerTopicStats brokerTopicStats = new BrokerTopicStats(true);
     LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
     Records records = mock(Records.class);
 

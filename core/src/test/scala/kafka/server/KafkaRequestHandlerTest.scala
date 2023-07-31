@@ -25,8 +25,10 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, when}
@@ -76,5 +78,29 @@ class KafkaRequestHandlerTest {
     assertEquals(startTime + 2000000, request.apiLocalCompleteTimeNanos)
     assertEquals(Some(startTime + 2000000), request.callbackRequestDequeueTimeNanos)
     assertEquals(Some(startTime + 3000000), request.callbackRequestCompleteTimeNanos)
+  }
+
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicStats(systemRemoteStorageEnabled: Boolean): Unit = {
+    val topic = "topic"
+    val brokerTopicStats = new BrokerTopicStats(systemRemoteStorageEnabled)
+    brokerTopicStats.topicStats(topic)
+    if (systemRemoteStorageEnabled) {
+      assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteBytesInPerSec))
+      assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteBytesOutPerSec))
+      assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteReadRequestsPerSec))
+      assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteWriteRequestsPerSec))
+      assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.FailedRemoteReadRequestsPerSec))
+      assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.FailedRemoteWriteRequestsPerSec))
+    } else {
+      assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteBytesInPerSec))
+      assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteBytesOutPerSec))
+      assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteReadRequestsPerSec))
+      assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteWriteRequestsPerSec))
+      assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.FailedRemoteReadRequestsPerSec))
+      assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.FailedRemoteWriteRequestsPerSec))
+    }
   }
 }

@@ -127,7 +127,7 @@ public class RemoteLogManagerTest {
     RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
     RemoteLogManagerConfig remoteLogManagerConfig = null;
-    BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    BrokerTopicStats brokerTopicStats = new BrokerTopicStats(true);
     RemoteLogManager remoteLogManager = null;
 
     TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));

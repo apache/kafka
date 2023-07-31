@@ -227,7 +227,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 }
 
-class BrokerTopicMetrics(name: Option[String]) {
+class BrokerTopicMetrics(name: Option[String], systemRemoteStorageEnabled: Boolean) {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val tags: java.util.Map[String, String] = name match {
@@ -277,17 +277,21 @@ class BrokerTopicMetrics(name: Option[String]) {
     BrokerTopicStats.TotalFetchRequestsPerSec -> MeterWrapper(BrokerTopicStats.TotalFetchRequestsPerSec, "requests"),
     BrokerTopicStats.FetchMessageConversionsPerSec -> MeterWrapper(BrokerTopicStats.FetchMessageConversionsPerSec, "requests"),
     BrokerTopicStats.ProduceMessageConversionsPerSec -> MeterWrapper(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests"),
-    BrokerTopicStats.RemoteBytesOutPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesOutPerSec, "bytes"),
-    BrokerTopicStats.RemoteBytesInPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesInPerSec, "bytes"),
-    BrokerTopicStats.RemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteReadRequestsPerSec, "requests"),
-    BrokerTopicStats.RemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteWriteRequestsPerSec, "requests"),
-    BrokerTopicStats.FailedRemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteReadRequestsPerSec, "requests"),
-    BrokerTopicStats.FailedRemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteWriteRequestsPerSec, "requests"),
     BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec -> MeterWrapper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMagicNumberRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMessageCrcRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests")
   ).asJava)
+  if (systemRemoteStorageEnabled) {
+    metricTypeMap.putAll(Map(
+      BrokerTopicStats.RemoteBytesOutPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesOutPerSec, "bytes"),
+      BrokerTopicStats.RemoteBytesInPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesInPerSec, "bytes"),
+      BrokerTopicStats.RemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteReadRequestsPerSec, "requests"),
+      BrokerTopicStats.RemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteWriteRequestsPerSec, "requests"),
+      BrokerTopicStats.FailedRemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteReadRequestsPerSec, "requests"),
+      BrokerTopicStats.FailedRemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteWriteRequestsPerSec, "requests")
+    ).asJava)
+  }
   if (name.isEmpty) {
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesInPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesInPerSec, "bytes"))
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesOutPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes"))
@@ -390,15 +394,13 @@ object BrokerTopicStats {
   val InvalidMagicNumberRecordsPerSec = "InvalidMagicNumberRecordsPerSec"
   val InvalidMessageCrcRecordsPerSec = "InvalidMessageCrcRecordsPerSec"
   val InvalidOffsetOrSequenceRecordsPerSec = "InvalidOffsetOrSequenceRecordsPerSec"
-
-  private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
 }
 
-class BrokerTopicStats extends Logging {
-  import BrokerTopicStats._
+class BrokerTopicStats(systemRemoteStorageEnabled: Boolean = false) extends Logging {
 
+  private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k), systemRemoteStorageEnabled)
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
-  val allTopicsStats = new BrokerTopicMetrics(None)
+  val allTopicsStats = new BrokerTopicMetrics(None, systemRemoteStorageEnabled)
 
   def topicStats(topic: String): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)
@@ -439,12 +441,14 @@ class BrokerTopicStats extends Logging {
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesOutPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesInPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteReadRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteWriteRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteReadRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteWriteRequestsPerSec)
+      if (systemRemoteStorageEnabled) {
+        topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesOutPerSec)
+        topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesInPerSec)
+        topicMetrics.closeMetric(BrokerTopicStats.RemoteReadRequestsPerSec)
+        topicMetrics.closeMetric(BrokerTopicStats.RemoteWriteRequestsPerSec)
+        topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteReadRequestsPerSec)
+        topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteWriteRequestsPerSec)
+      }
     }
   }
 
