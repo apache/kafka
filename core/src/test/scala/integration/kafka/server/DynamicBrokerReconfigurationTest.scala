@@ -252,7 +252,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val expectedProps = new Properties
     expectedProps.setProperty(KafkaConfig.LogRetentionTimeMillisProp, "1680000000")
     expectedProps.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "168")
-    expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp, "168")
+    expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp, "24")
     expectedProps.setProperty(KafkaConfig.LogCleanerThreadsProp, "1")
     val logRetentionMs = configEntry(configDesc, KafkaConfig.LogRetentionTimeMillisProp)
     verifyConfig(KafkaConfig.LogRetentionTimeMillisProp, logRetentionMs,
@@ -276,7 +276,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertEquals(List((KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.STATIC_BROKER_CONFIG),
       (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.DEFAULT_CONFIG)),
       synonymsList(logRetentionHours))
-    assertEquals(List((KafkaConfig.LogRollTimeHoursProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
+    assertEquals(List((KafkaConfig.LogRollTimeHoursProp, ConfigSource.STATIC_BROKER_CONFIG),
+      (KafkaConfig.LogRollTimeHoursProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
     assertEquals(List((KafkaConfig.LogCleanerThreadsProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
   }
 
