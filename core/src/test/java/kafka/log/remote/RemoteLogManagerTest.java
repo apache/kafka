@@ -848,7 +848,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testEnrichedLogSegments() {
+    public void testCandidateLogSegmentsSkipsActiveSegment() {
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
@@ -862,12 +862,38 @@ public class RemoteLogManagerTest {
                 .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, activeSegment)));
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
-        List<RemoteLogManager.EnrichedLogSegment> expected =
+        List<RemoteLogManager.CandidateLogSegment> expected =
                 Arrays.asList(
-                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
-                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
+                        new RemoteLogManager.CandidateLogSegment(segment1, 10L),
+                        new RemoteLogManager.CandidateLogSegment(segment2, 15L)
                 );
-        List<RemoteLogManager.EnrichedLogSegment> actual = task.enrichedLogSegments(log, 5L);
+        List<RemoteLogManager.CandidateLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCandidateLogSegmentsSkipsSegmentsBelowLastStableOffset() {
+        UnifiedLog log = mock(UnifiedLog.class);
+        LogSegment segment1 = mock(LogSegment.class);
+        LogSegment segment2 = mock(LogSegment.class);
+        LogSegment segment3 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(segment1.baseOffset()).thenReturn(5L);
+        when(segment2.baseOffset()).thenReturn(10L);
+        when(segment3.baseOffset()).thenReturn(15L);
+        when(activeSegment.baseOffset()).thenReturn(20L);
+
+        when(log.logSegments(5L, Long.MAX_VALUE))
+                .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, segment3, activeSegment)));
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        List<RemoteLogManager.CandidateLogSegment> expected =
+                Arrays.asList(
+                        new RemoteLogManager.CandidateLogSegment(segment1, 10L),
+                        new RemoteLogManager.CandidateLogSegment(segment2, 15L)
+                );
+        List<RemoteLogManager.CandidateLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
         assertEquals(expected, actual);
     }
 

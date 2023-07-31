@@ -524,18 +524,30 @@ public class RemoteLogManager implements Closeable {
             }
         }
 
-        List<EnrichedLogSegment> enrichedLogSegments(UnifiedLog log, Long fromOffset) {
-            List<EnrichedLogSegment> enrichedLogSegments = new ArrayList<>();
+        /**
+         *  Segments which match the following criteria are eligible for copying to remote storage:
+         *  1) Segment is not the active segment and
+         *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
+         *     committed/acked messages
+         * @param log The log from which the segments are to be copied
+         * @param fromOffset The offset from which the segments are to be copied
+         * @param lastStableOffset The last stable offset of the log
+         * @return candidate log segments to be copied to remote storage
+         */
+        List<CandidateLogSegment> candidateLogSegments(UnifiedLog log, Long fromOffset, Long lastStableOffset) {
+            List<CandidateLogSegment> candidateLogSegments = new ArrayList<>();
             List<LogSegment> segments = JavaConverters.seqAsJavaList(log.logSegments(fromOffset, Long.MAX_VALUE).toSeq());
             if (!segments.isEmpty()) {
                 for (int idx = 1; idx < segments.size(); idx++) {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
-                    enrichedLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
+                    if (currentSeg.baseOffset() <= lastStableOffset) {
+                        candidateLogSegments.add(new CandidateLogSegment(previousSeg, currentSeg.baseOffset()));
+                    }
                 }
                 // Discard the last active segment
             }
-            return enrichedLogSegments;
+            return candidateLogSegments;
         }
 
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException {
@@ -557,27 +569,20 @@ public class RemoteLogManager implements Closeable {
                     long fromOffset = Math.max(copiedOffset + 1, log.logStartOffset());
                     long activeSegmentBaseOffset = log.activeSegment().baseOffset();
 
-                    // Segments which match the following criteria are eligible for copying to remote storage:
-                    // 1) Segment is not the active segment and
-                    // 2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
-                    //    committed/acked messages
-                    List<EnrichedLogSegment> candidateSegments = enrichedLogSegments(log, fromOffset)
-                            .stream()
-                            .filter(enrichedSegment ->  enrichedSegment.logSegment.baseOffset() != activeSegmentBaseOffset && enrichedSegment.nextSegmentOffset <= lso)
-                            .collect(Collectors.toList());
+                    List<CandidateLogSegment> candidateSegments = candidateLogSegments(log, fromOffset, lso);
                     logger.debug("Checking for segments to copy, copiedOffset: {} and lso: {}, candidateSegments: {}",
                             copiedOffset, lso, candidateSegments);
                     if (candidateSegments.isEmpty()) {
                         logger.debug("No segments found to be copied for partition {} with copiedOffset: {} and active segment's base-offset: {}",
                                 topicIdPartition, copiedOffset, activeSegmentBaseOffset);
                     } else {
-                        for (EnrichedLogSegment enrichedLogSegment : candidateSegments) {
+                        for (CandidateLogSegment candidateLogSegment : candidateSegments) {
                             if (isCancelled() || !isLeader()) {
                                 logger.info("Skipping copying log segments as the current task state is changed, cancelled: {} leader:{}",
                                         isCancelled(), isLeader());
                                 return;
                             }
-                            copyLogSegment(log, enrichedLogSegment.logSegment, enrichedLogSegment.nextSegmentOffset);
+                            copyLogSegment(log, candidateLogSegment.logSegment, candidateLogSegment.nextSegmentOffset);
                         }
                     }
                 } else {
@@ -1001,12 +1006,12 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    static class EnrichedLogSegment {
+    static class CandidateLogSegment {
         private final LogSegment logSegment;
         private final long nextSegmentOffset;
 
-        public EnrichedLogSegment(LogSegment logSegment,
-                                  long nextSegmentOffset) {
+        public CandidateLogSegment(LogSegment logSegment,
+                                   long nextSegmentOffset) {
             this.logSegment = logSegment;
             this.nextSegmentOffset = nextSegmentOffset;
         }
@@ -1015,7 +1020,7 @@ public class RemoteLogManager implements Closeable {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-            EnrichedLogSegment that = (EnrichedLogSegment) o;
+            CandidateLogSegment that = (CandidateLogSegment) o;
             return nextSegmentOffset == that.nextSegmentOffset && Objects.equals(logSegment, that.logSegment);
         }
 
@@ -1026,7 +1031,7 @@ public class RemoteLogManager implements Closeable {
 
         @Override
         public String toString() {
-            return "EnrichedLogSegment{" +
+            return "CandidateLogSegment{" +
                     "logSegment=" + logSegment +
                     ", nextSegmentOffset=" + nextSegmentOffset +
                     '}';
