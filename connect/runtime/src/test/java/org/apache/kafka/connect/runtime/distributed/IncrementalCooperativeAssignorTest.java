@@ -142,6 +142,7 @@ public class IncrementalCooperativeAssignorTest {
         // We should revoke.
         addNewEmptyWorkers("worker2");
         performStandardRebalance();
+        assertEquals(0, assignor.delay); // First revoking rebalance
         assertWorkers("worker1", "worker2");
         assertConnectorAllocations(0, 2);
         assertTaskAllocations(0, 6);
@@ -161,7 +162,7 @@ public class IncrementalCooperativeAssignorTest {
         time.sleep(assignor.delay);
         addNewEmptyWorkers("worker4");
         performStandardRebalance();
-        assertEquals(0, assignor.delay); // No revocations in this round.
+        assertEquals(0, assignor.delay); // First revoking rebalance after delay
         assertWorkers("worker1", "worker2", "worker3", "worker4");
         assertConnectorAllocations(0, 0, 1, 1);
         assertTaskAllocations(0, 3, 3, 3);
@@ -170,7 +171,7 @@ public class IncrementalCooperativeAssignorTest {
         // We shouldn't revoke and set a delay equal to initial interval
         addNewEmptyWorkers("worker5");
         performStandardRebalance();
-        assertEquals(40, assignor.delay); // First successive revoking rebalance.
+        assertEquals(40, assignor.delay); // First successive revoking rebalance after delay
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5");
         assertConnectorAllocations(0, 0, 1, 1, 1);
         assertTaskAllocations(1, 2, 3, 3, 3);
@@ -179,7 +180,7 @@ public class IncrementalCooperativeAssignorTest {
         // There should not be any revocations and delay should be extended further.
         addNewEmptyWorkers("worker6");
         performStandardRebalance();
-        assertTrue(assignor.delay > 40); // Second successive revoking rebalance.
+        assertTrue(assignor.delay > 40); // Second successive revoking rebalance after delay
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5", "worker6");
         assertConnectorAllocations(0, 0, 0, 1, 1, 1);
         assertTaskAllocations(0, 1, 2, 3, 3, 3);
