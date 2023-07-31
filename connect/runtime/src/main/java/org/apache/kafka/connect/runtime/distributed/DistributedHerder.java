@@ -275,7 +275,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                       List<String> restNamespace,
                       ExecutorService forwardRequestExecutor,
-                      AutoCloseable... uponShutdown) {
+                      // https://github.com/mockito/mockito/issues/2601 explains why we can't use varargs here
+                      AutoCloseable[] uponShutdown) {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
 
         this.time = time;
