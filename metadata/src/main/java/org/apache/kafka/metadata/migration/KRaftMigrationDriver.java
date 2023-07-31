@@ -296,6 +296,16 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
+    private boolean checkDriverState(MigrationDriverState expectedState) {
+        if (migrationState.equals(expectedState)) {
+            return true;
+        } else {
+            log.info("Expected driver state {} but found {}. Not running this event {}.",
+                expectedState, migrationState, this.getClass().getSimpleName());
+            return false;
+        }
+    }
+
     private void transitionTo(MigrationDriverState newState) {
         if (!isValidStateChange(newState)) {
             throw new IllegalStateException(
@@ -459,11 +469,21 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
+            if (migrationState.equals(MigrationDriverState.INACTIVE)) {
+                // No need to log anything if this node is not the active controller
+                completionHandler.accept(null);
+                return;
+            }
+
             if (!migrationState.allowDualWrite()) {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                         "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 completionHandler.accept(null);
-                wakeup();
+                // If the driver is active and dual-write is not yet enabled, then the migration has not yet begun.
+                // Only wake up the thread if the broker registrations have changed
+                if (delta.clusterDelta() != null) {
+                    wakeup();
+                }
                 return;
             }
 
@@ -474,12 +494,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             Map<String, Integer> dualWriteCounts = new TreeMap<>();
+            long startTime = time.nanoseconds();
             if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
             } else {
-                zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                if (zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
+                      dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation))) {
+                    // Only record delta write time if we changed something. Otherwise, no-op records will skew timings.
+                    controllerMetrics.updateZkWriteDeltaTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
+                }
             }
             if (dualWriteCounts.isEmpty()) {
                 log.trace("Did not make any ZK writes when handling KRaft {}", isSnapshot ? "snapshot" : "delta");
@@ -519,7 +544,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
-            if (migrationState.equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM)) {
+            if (checkDriverState(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM)) {
                 if (!firstPublish) {
                     log.trace("Waiting until we have received metadata before proceeding with migration");
                     return;
@@ -555,6 +580,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         log.error("KRaft controller indicates a completed migration, but the migration driver is somehow active.");
                         transitionTo(MigrationDriverState.INACTIVE);
                         break;
+                    default:
+                        throw new IllegalStateException("Unsupported ZkMigrationState " + zkMigrationState);
                 }
             }
         }
@@ -563,16 +590,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class WaitForZkBrokersEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            switch (migrationState) {
-                case WAIT_FOR_BROKERS:
-                    if (areZkBrokersReadyForMigration()) {
-                        log.info("Zk brokers are registered and ready for migration");
-                        transitionTo(MigrationDriverState.BECOME_CONTROLLER);
-                    }
-                    break;
-                default:
-                    // Ignore the event as we're not in the appropriate state anymore.
-                    break;
+            if (checkDriverState(MigrationDriverState.WAIT_FOR_BROKERS)) {
+                if (areZkBrokersReadyForMigration()) {
+                    log.info("Zk brokers are registered and ready for migration");
+                    transitionTo(MigrationDriverState.BECOME_CONTROLLER);
+                }
             }
         }
     }
@@ -580,7 +602,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class BecomeZkControllerEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
+            if (checkDriverState(MigrationDriverState.BECOME_CONTROLLER)) {
                 applyMigrationOperation("Claiming ZK controller leadership", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                     log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
@@ -598,6 +620,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class MigrateMetadataEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
+            if (!checkDriverState(MigrationDriverState.ZK_MIGRATION)) {
+                return;
+            }
             Set<Integer> brokersInMetadata = new HashSet<>();
             log.info("Starting ZK migration");
             MigrationManifest.Builder manifestBuilder = MigrationManifest.newBuilder(time);
@@ -654,11 +679,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class SyncKRaftMetadataEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (migrationState == MigrationDriverState.SYNC_KRAFT_TO_ZK) {
+            if (checkDriverState(MigrationDriverState.SYNC_KRAFT_TO_ZK)) {
                 log.info("Performing a full metadata sync from KRaft to ZK.");
                 Map<String, Integer> dualWriteCounts = new TreeMap<>();
+                long startTime = time.nanoseconds();
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                long endTime = time.nanoseconds();
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(startTime - endTime));
                 log.info("Made the following ZK writes when reconciling with KRaft state: {}", dualWriteCounts);
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             }
@@ -670,7 +698,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
-            if (migrationState == MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
+            if (checkDriverState(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM)) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
                     log.trace("Sending RPCs to broker before moving to dual-write mode using " +
                             "at offset and epoch {}", image.highestOffsetAndEpoch());

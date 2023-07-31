@@ -20,7 +20,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,19 +47,19 @@ public class GraphTest {
         graph.addEdge(0, 3, 1, 1, 0);
         graph.addEdge(2, 1, 1, 1, 0);
         graph.addEdge(2, 3, 1, 2, 1);
-        graph.addEdge(4, 0, 1, 0, 1);
-        graph.addEdge(4, 2, 1, 0, 1);
-        graph.addEdge(1, 5, 1, 0, 1);
-        graph.addEdge(3, 5, 1, 0, 1);
-        graph.setSourceNode(4);
-        graph.setSinkNode(5);
+        graph.addEdge(-1, 0, 1, 0, 1);
+        graph.addEdge(-1, 2, 1, 0, 1);
+        graph.addEdge(1, 99, 1, 0, 1);
+        graph.addEdge(3, 99, 1, 0, 1);
+        graph.setSourceNode(-1);
+        graph.setSinkNode(99);
     }
 
     @Test
     public void testBasic() {
         final Set<Integer> nodes = graph.nodes();
         assertEquals(6, nodes.size());
-        assertThat(nodes, contains(0, 1, 2, 3, 4, 5));
+        assertThat(nodes, contains(-1, 0, 1, 2, 3, 99));
 
         Map<Integer, Graph<Integer>.Edge> edges = graph.edges(0);
         assertEquals(2, edges.size());
@@ -74,19 +73,19 @@ public class GraphTest {
 
         edges = graph.edges(1);
         assertEquals(1, edges.size());
-        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(99, 1, 0, 0, 1), edges.get(99));
 
         edges = graph.edges(3);
         assertEquals(1, edges.size());
-        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(99, 1, 0, 0, 1), edges.get(99));
 
-        edges = graph.edges(4);
+        edges = graph.edges(-1);
         assertEquals(2, edges.size());
         assertEquals(getEdge(0, 1, 0, 0, 1), edges.get(0));
         assertEquals(getEdge(2, 1, 0, 0, 1), edges.get(2));
 
-        edges = graph.edges(5);
-        assertNull(edges);
+        edges = graph.edges(99);
+        assertTrue(edges.isEmpty());
 
         assertFalse(graph.isResidualGraph());
     }
@@ -99,31 +98,31 @@ public class GraphTest {
 
         final Set<Integer> nodes = residualGraph.nodes();
         assertEquals(6, nodes.size());
-        assertThat(nodes, contains(0, 1, 2, 3, 4, 5));
+        assertThat(nodes, contains(-1, 0, 1, 2, 3, 99));
 
         Map<Integer, Graph<Integer>.Edge> edges = residualGraph.edges(0);
         assertEquals(3, edges.size());
         assertEquals(getEdge(1, 1, 3, 0, 1), edges.get(1));
         assertEquals(getEdge(3, 1, 1, 1, 0), edges.get(3));
-        assertEquals(getEdge(4, 1, 0, 1, 0, false), edges.get(4));
+        assertEquals(getEdge(-1, 1, 0, 1, 0, false), edges.get(-1));
 
         edges = residualGraph.edges(2);
         assertEquals(3, edges.size());
         assertEquals(getEdge(1, 1, 1, 1, 0), edges.get(1));
         assertEquals(getEdge(3, 1, 2, 0, 1), edges.get(3));
-        assertEquals(getEdge(4, 1, 0, 1, 0, false), edges.get(4));
+        assertEquals(getEdge(-1, 1, 0, 1, 0, false), edges.get(-1));
 
         edges = residualGraph.edges(1);
         assertEquals(3, edges.size());
         assertEquals(getEdge(0, 1, -3, 1, 0, false), edges.get(0));
         assertEquals(getEdge(2, 1, -1, 0, 0, false), edges.get(2));
-        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(99, 1, 0, 0, 1), edges.get(99));
 
         edges = residualGraph.edges(3);
         assertEquals(3, edges.size());
         assertEquals(getEdge(0, 1, -1, 0, 0, false), edges.get(0));
         assertEquals(getEdge(2, 1, -2, 1, 0, false), edges.get(2));
-        assertEquals(getEdge(5, 1, 0, 0, 1), edges.get(5));
+        assertEquals(getEdge(99, 1, 0, 0, 1), edges.get(99));
 
         assertTrue(residualGraph.isResidualGraph());
     }
@@ -288,8 +287,8 @@ public class GraphTest {
     public void testMinCostDetectNodeNotInNegativeCycle() {
         final Graph<Integer> graph1 = new Graph<>();
 
-        graph1.addEdge(5, 0, 1, 0, 1);
-        graph1.addEdge(5, 1, 1, 0, 1);
+        graph1.addEdge(-1, 0, 1, 0, 1);
+        graph1.addEdge(-1, 1, 1, 0, 1);
 
         graph1.addEdge(0, 2, 1, 1, 0);
         graph1.addEdge(0, 3, 1, 1, 0);
@@ -299,12 +298,12 @@ public class GraphTest {
         graph1.addEdge(1, 3, 1, 10, 1);
         graph1.addEdge(1, 4, 1, 1, 0);
 
-        graph1.addEdge(2, 6, 0, 0, 0);
-        graph1.addEdge(3, 6, 1, 0, 1);
-        graph1.addEdge(4, 6, 1, 0, 1);
+        graph1.addEdge(2, 99, 0, 0, 0);
+        graph1.addEdge(3, 99, 1, 0, 1);
+        graph1.addEdge(4, 99, 1, 0, 1);
 
-        graph1.setSourceNode(5);
-        graph1.setSinkNode(6);
+        graph1.setSourceNode(-1);
+        graph1.setSinkNode(99);
 
         assertEquals(20, graph1.totalCost());
 
@@ -313,7 +312,7 @@ public class GraphTest {
         graph1.solveMinCostFlow();
         assertEquals(2, graph1.totalCost());
 
-        Map<Integer, Graph<Integer>.Edge> edges = graph1.edges(5);
+        Map<Integer, Graph<Integer>.Edge> edges = graph1.edges(-1);
         assertEquals(getEdge(0, 1, 0, 0, 1), edges.get(0));
         assertEquals(getEdge(1, 1, 0, 0, 1), edges.get(1));
 
@@ -328,13 +327,13 @@ public class GraphTest {
         assertEquals(getEdge(4, 1, 1, 0, 1), edges.get(4));
 
         edges = graph1.edges(2);
-        assertEquals(getEdge(6, 0, 0, 0, 0), edges.get(6));
+        assertEquals(getEdge(99, 0, 0, 0, 0), edges.get(99));
 
         edges = graph1.edges(3);
-        assertEquals(getEdge(6, 1, 0, 0, 1), edges.get(6));
+        assertEquals(getEdge(99, 1, 0, 0, 1), edges.get(99));
 
         edges = graph1.edges(4);
-        assertEquals(getEdge(6, 1, 0, 0, 1), edges.get(6));
+        assertEquals(getEdge(99, 1, 0, 0, 1), edges.get(99));
     }
 
     @Test

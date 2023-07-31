@@ -20,10 +20,10 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
 /**
- * Coordinator is basically a replicated state machine managed by the
+ * CoordinatorShard is basically a replicated state machine managed by the
  * {@link CoordinatorRuntime}.
  */
-public interface Coordinator<U> extends CoordinatorPlayback<U> {
+public interface CoordinatorShard<U> extends CoordinatorPlayback<U> {
 
     /**
      * The coordinator has been loaded. This is used to apply any
@@ -34,7 +34,7 @@ public interface Coordinator<U> extends CoordinatorPlayback<U> {
     default void onLoaded(MetadataImage newImage) {}
 
     /**
-     * A new metadata image is available. This is only called after {@link Coordinator#onLoaded(MetadataImage)}
+     * A new metadata image is available. This is only called after {@link CoordinatorShard#onLoaded(MetadataImage)}
      * is called to signal that the coordinator has been fully loaded.
      *
      * @param newImage  The new metadata image.
