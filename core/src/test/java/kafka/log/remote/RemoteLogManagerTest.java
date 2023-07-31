@@ -867,7 +867,7 @@ public class RemoteLogManagerTest {
                         new RemoteLogManager.CandidateLogSegment(segment1, 10L),
                         new RemoteLogManager.CandidateLogSegment(segment2, 15L)
                 );
-        List<RemoteLogManager.CandidateLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
+        List<RemoteLogManager.CandidateLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
         assertEquals(expected, actual);
     }
 
