@@ -563,18 +563,16 @@ public class RemoteLogManager implements Closeable {
                 if (lso < 0) {
                     logger.warn("lastStableOffset for partition {} is {}, which should not be negative.", topicIdPartition, lso);
                 } else if (lso > 0 && copiedOffset < lso) {
-                    // log-start-offset can be ahead of the read-offset, when:
+                    // log-start-offset can be ahead of the copied-offset, when:
                     // 1) log-start-offset gets incremented via delete-records API (or)
                     // 2) enabling the remote log for the first time
                     long fromOffset = Math.max(copiedOffset + 1, log.logStartOffset());
-                    long activeSegmentBaseOffset = log.activeSegment().baseOffset();
-
                     List<CandidateLogSegment> candidateSegments = candidateLogSegments(log, fromOffset, lso);
-                    logger.debug("Checking for segments to copy, copiedOffset: {} and lso: {}, candidateSegments: {}",
-                            copiedOffset, lso, candidateSegments);
+                    logger.debug("Candidate log segments, logStartOffset: {}, copiedOffset: {}, fromOffset: {}, lso: {} " +
+                            "and candidateSegments: {}", log.logStartOffset(), copiedOffset, fromOffset, lso, candidateSegments);
                     if (candidateSegments.isEmpty()) {
                         logger.debug("No segments found to be copied for partition {} with copiedOffset: {} and active segment's base-offset: {}",
-                                topicIdPartition, copiedOffset, activeSegmentBaseOffset);
+                                topicIdPartition, copiedOffset, log.activeSegment().baseOffset());
                     } else {
                         for (CandidateLogSegment candidateLogSegment : candidateSegments) {
                             if (isCancelled() || !isLeader()) {
