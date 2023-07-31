@@ -172,7 +172,7 @@ public class WorkerConfig extends AbstractConfig {
      * bootstrap their own ConfigDef.
      * @return a ConfigDef with all the common options specified
      */
-    protected static ConfigDef baseConfigDef() {
+    public static ConfigDef baseConfigDef() {
         ConfigDef result = new ConfigDef()
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)

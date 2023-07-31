@@ -173,7 +173,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // Visible for testing
     ExecutorService forwardRequestExecutor;
-    private final ExecutorService herderExecutor;
+    final ExecutorService herderExecutor;
     // Visible for testing
     ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
@@ -360,7 +360,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Herder starting");
             herderThread = Thread.currentThread();
 
-            startServices();
+            try {
+                startServices();
+            } catch (WakeupException e) {
+                log.info("Herder couldn't be started, exiting");
+                if(!stopping.get()){
+                    stop();
+                }
+                return;
+            }
 
             log.info("Herder started");
             running = true;
@@ -802,8 +810,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public void stop() {
         log.info("Herder stopping");
-
         stopping.set(true);
+        if (!running) {
+            stopServices();
+        }
         member.wakeup();
         ThreadUtils.shutdownExecutorServiceQuietly(herderExecutor, herderExecutorTimeoutMs(), TimeUnit.MILLISECONDS);
         ThreadUtils.shutdownExecutorServiceQuietly(forwardRequestExecutor, FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);

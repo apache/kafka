@@ -278,7 +278,12 @@ public class KafkaBasedLog<K, V> {
         // when a 'group.id' is specified (if offsets happen to have been committed unexpectedly).
         consumer.seekToBeginning(partitions);
 
-        readToLogEnd(true);
+        try {
+            readToLogEnd(true);
+        } catch (WakeupException e) {
+            log.error("Stopping consumption to end", e);
+            throw e;
+        }
 
         thread = new WorkThread();
         thread.start();
@@ -477,10 +482,10 @@ public class KafkaBasedLog<K, V> {
                     log.trace("Read to end offset {} for {}", endOffset, topicPartition);
                     it.remove();
                 } else {
-                    log.trace("Behind end offset {} for {}; last-read offset is {}",
+                    log.debug("Behind end offset {} for {}; last-read offset is {}",
                             endOffset, topicPartition, lastConsumedOffset);
-                    poll(Integer.MAX_VALUE);
-                    break;
+                  poll(Integer.MAX_VALUE);
+                  break;
                 }
             }
         }

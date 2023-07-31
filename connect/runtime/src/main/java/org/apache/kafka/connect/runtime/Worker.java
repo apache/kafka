@@ -43,6 +43,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -149,10 +150,10 @@ public class Worker {
     private final ConnectMetrics metrics;
     private final WorkerMetricsGroup workerMetricsGroup;
     private ConnectorStatusMetricsGroup connectorStatusMetricsGroup;
-    private final WorkerConfig config;
+    public WorkerConfig config;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
-    private final OffsetBackingStore globalOffsetBackingStore;
+    public OffsetBackingStore globalOffsetBackingStore;
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
@@ -228,16 +229,26 @@ public class Worker {
      */
     public void start() {
         log.info("Worker starting");
+        try {
+            globalOffsetBackingStore.start();
+        } catch (WakeupException e) {
+            log.error("Caught WakeupException while reading to start will return");
+            throw e;
+        }
 
-        globalOffsetBackingStore.start();
-
-        sourceTaskOffsetCommitter = config.exactlyOnceSourceEnabled()
-                ? Optional.empty()
-                : Optional.of(new SourceTaskOffsetCommitter(config));
-
-        connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics, tasks, herder);
-
+        setupSourceTaskOffsetCommitter();
+        setupConnectorStatusMetricsGroup();
         log.info("Worker started");
+    }
+
+    public void setupSourceTaskOffsetCommitter(){
+        sourceTaskOffsetCommitter = config.exactlyOnceSourceEnabled()
+                                    ? Optional.empty()
+                                    : Optional.of(new SourceTaskOffsetCommitter(config));
+    }
+
+    public void setupConnectorStatusMetricsGroup(){
+        connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics, tasks, herder);
     }
 
     /**
@@ -246,32 +257,68 @@ public class Worker {
     public void stop() {
         log.info("Worker stopping");
 
-        long started = time.milliseconds();
-        long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
+        long limit = getShutdownTimeLimit();
 
+        stopWorkerConnectorsAndTasks();
+        closeSourceTaskOffsetCommitter(limit);
+
+        globalOffsetBackingStore.stop();
+        stopMetricGroups();
+        log.info("Worker stopped");
+        closeWorkerConfigTransformer();
+        if (executor != null) {
+            ThreadUtils.shutdownExecutorServiceQuietly(
+                executor,
+                EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS,
+                TimeUnit.MILLISECONDS
+            );
+        }
+
+    }
+
+    public void closeSourceTaskOffsetCommitter(long limit) {
+        long timeoutMs = limit - getCurrentTime();
+        sourceTaskOffsetCommitter.ifPresent(committer -> committer.close(timeoutMs));
+    }
+
+    public void stopMetricGroups() {
+        metrics.stop();
+
+        workerMetricsGroup.close();
+        connectorStatusMetricsGroup.close();
+    }
+
+    public void closeWorkerConfigTransformer() {
+        workerConfigTransformer.close();
+    }
+
+    public long getShutdownTimeLimit() {
+        long started = getCurrentTime();
+        return started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
+    }
+
+    public long getCurrentTime() {
+        return time.milliseconds();
+    }
+
+    public void stopWorkerConnectorsAndTasks() {
         if (!connectors.isEmpty()) {
-            log.warn("Shutting down connectors {} uncleanly; herder should have shut down connectors before the Worker is stopped", connectors.keySet());
+            log.warn(
+                "Shutting down connectors {} uncleanly; herder should have shut down connectors "
+                    + "before the Worker is stopped",
+                connectors.keySet()
+            );
             stopAndAwaitConnectors();
         }
 
         if (!tasks.isEmpty()) {
-            log.warn("Shutting down tasks {} uncleanly; herder should have shut down tasks before the Worker is stopped", tasks.keySet());
+            log.warn(
+                "Shutting down tasks {} uncleanly; herder should have shut down tasks before the "
+                + "Worker is stopped",
+                tasks.keySet()
+            );
             stopAndAwaitTasks();
         }
-
-        long timeoutMs = limit - time.milliseconds();
-        sourceTaskOffsetCommitter.ifPresent(committer -> committer.close(timeoutMs));
-
-        globalOffsetBackingStore.stop();
-        metrics.stop();
-
-        log.info("Worker stopped");
-
-        workerMetricsGroup.close();
-        connectorStatusMetricsGroup.close();
-
-        workerConfigTransformer.close();
-        ThreadUtils.shutdownExecutorServiceQuietly(executor, EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
     /**

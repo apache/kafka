@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
@@ -254,7 +255,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
             }
             throw new ConnectException(message, e);
         }
-        log.info("Finished reading offsets topic and starting KafkaOffsetBackingStore");
+      log.info("Finished reading offsets topic and starting KafkaOffsetBackingStore");
     }
 
     /**

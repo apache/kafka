@@ -82,7 +82,7 @@ public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "connect-offsets";
     private static final short TOPIC_PARTITIONS = 2;
     private static final short TOPIC_REPLICATION_FACTOR = 5;
-    private static final Map<String, String> DEFAULT_PROPS = new HashMap<>();
+    public static final Map<String, String> DEFAULT_PROPS = new HashMap<>();
     static {
         DEFAULT_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
         DEFAULT_PROPS.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, TOPIC);

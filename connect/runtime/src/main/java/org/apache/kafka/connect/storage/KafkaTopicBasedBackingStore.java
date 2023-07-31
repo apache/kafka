@@ -58,11 +58,13 @@ public abstract class KafkaTopicBasedBackingStore {
     }
 
     // visible for testing
-    <K> KafkaBasedLog<K, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                     Map<String, Object> consumerProps,
-                                                     Callback<ConsumerRecord<K, byte[]>> consumedCallback,
-                                                     final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier,
-                                                     WorkerConfig config, Time time) {
+    public <K> KafkaBasedLog<K, byte[]> createKafkaBasedLog(
+        String topic, Map<String, Object> producerProps,
+        Map<String, Object> consumerProps,
+        Callback<ConsumerRecord<K, byte[]>> consumedCallback,
+        final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier,
+        WorkerConfig config, Time time
+    ) {
         Consumer<TopicAdmin> createTopics = topicInitializer(topic, topicDescription, config, time);
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, time, createTopics);
     }
