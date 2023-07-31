@@ -275,9 +275,8 @@ public class RemoteLogManagerTest {
     }
 
     /**
-     * The following values will be equal when the active segment gets rotated to passive when there are no new messages:
-     * last-stable-offset = high-water-mark = log-end-offset = base-offset-of-active-segment
-     *
+     * The following values will be equal when the active segment gets rotated to passive and there are no new messages:
+     * last-stable-offset = high-water-mark = log-end-offset = base-offset-of-active-segment.
      * This test asserts that the active log segment that was rotated after log.roll.ms are copied to remote storage.
      */
     @Test

@@ -568,7 +568,7 @@ public class RemoteLogManager implements Closeable {
                     //    committed/acked messages
                     List<EnrichedLogSegment> candidateSegments = enrichedLogSegments(log, fromOffset, lso)
                             .stream()
-                            .filter(enriched ->  enriched.segment.readNextOffset() <= lso)
+                            .filter(enrichedSegment ->  enrichedSegment.readNextOffset <= lso)
                             .collect(Collectors.toList());
                     logger.debug("Checking for segments to copy, copiedOffset: {} and lso: {}, candidateSegments: {}",
                             copiedOffset, lso, candidateSegments);
