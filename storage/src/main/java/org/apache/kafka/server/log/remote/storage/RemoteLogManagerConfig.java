@@ -176,7 +176,8 @@ public final class RemoteLogManagerConfig {
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_DOC)
-                  .defineInternal(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_PROP, INT,
+                  .defineInternal(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_PROP,
+                                  INT,
                                   DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE,
                                   atLeast(0),
                                   LOW,
@@ -408,12 +409,12 @@ public final class RemoteLogManagerConfig {
                 && remoteLogManagerTaskRetryJitter == that.remoteLogManagerTaskRetryJitter
                 && remoteLogReaderThreads == that.remoteLogReaderThreads
                 && remoteLogReaderMaxPendingTasks == that.remoteLogReaderMaxPendingTasks
+                && remoteLogMetadataCustomMetadataMaxSize == that.remoteLogMetadataCustomMetadataMaxSize
                 && Objects.equals(remoteStorageManagerClassName, that.remoteStorageManagerClassName)
                 && Objects.equals(remoteStorageManagerClassPath, that.remoteStorageManagerClassPath)
                 && Objects.equals(remoteLogMetadataManagerClassName, that.remoteLogMetadataManagerClassName)
                 && Objects.equals(remoteLogMetadataManagerClassPath, that.remoteLogMetadataManagerClassPath)
                 && Objects.equals(remoteLogMetadataManagerListenerName, that.remoteLogMetadataManagerListenerName)
-                && remoteLogMetadataCustomMetadataMaxSize == that.remoteLogMetadataCustomMetadataMaxSize
                 && Objects.equals(remoteStorageManagerProps, that.remoteStorageManagerProps)
                 && Objects.equals(remoteLogMetadataManagerProps, that.remoteLogMetadataManagerProps)
                 && Objects.equals(remoteStorageManagerPrefix, that.remoteStorageManagerPrefix)
