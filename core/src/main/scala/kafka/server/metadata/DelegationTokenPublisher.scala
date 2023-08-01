@@ -52,7 +52,7 @@ class DelegationTokenPublisher(
     val deltaName = if (_firstPublish) {
       s"initial MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     } else {
-      s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
+      s"update MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     }
     try {
       if (_firstPublish) {
