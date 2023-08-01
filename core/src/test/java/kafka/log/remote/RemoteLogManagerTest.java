@@ -309,9 +309,7 @@ public class RemoteLogManagerTest {
         LogSegment activeSegment = mock(LogSegment.class);
 
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
-        when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
-        when(activeSegment.readNextOffset()).thenReturn(logEndOffset);
 
         FileRecords fileRecords = mock(FileRecords.class);
         when(oldSegment.log()).thenReturn(fileRecords);
@@ -872,7 +870,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testCandidateLogSegmentsSkipsSegmentsBelowLastStableOffset() {
+    public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() {
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
