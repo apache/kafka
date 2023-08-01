@@ -286,7 +286,7 @@ public class ConnectPluginPath {
             // Emit a loadable row for this scan result, since it was found during plugin discovery
             rows.add(newRow(source, pluginDesc.className(), pluginDesc.type(), pluginDesc.version(), true, manifests, aliases));
             // Remove the ManifestEntry if it has the same className and type as one of the loadable plugins.
-            unloadablePlugins.get(pluginDesc.className()).removeIf(entry -> entry.type == pluginDesc.type());
+            unloadablePlugins.getOrDefault(pluginDesc.className(), Collections.emptySet()).removeIf(entry -> entry.type == pluginDesc.type());
         });
         unloadablePlugins.values().forEach(entries -> entries.forEach(entry -> {
             // Emit a non-loadable row, since all the loadable rows showed up in the previous iteration.

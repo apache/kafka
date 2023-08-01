@@ -299,7 +299,7 @@ public class ConnectPluginPathTest {
         CommandResult res = runCommand(
                 "list",
                 "--plugin-location",
-                setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.SAMPLING_CONVERTER)
+                setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN)
         );
         assertEquals(0, res.returnCode);
     }
@@ -310,7 +310,7 @@ public class ConnectPluginPathTest {
         CommandResult res = runCommand(
                 "list",
                 "--plugin-location",
-                setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.SAMPLING_CONVERTER),
+                setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN),
                 "--plugin-location",
                 setupLocation(workspace.resolve("location-b"), type, TestPlugins.TestPlugin.SAMPLING_CONFIGURABLE)
         );
@@ -324,7 +324,7 @@ public class ConnectPluginPathTest {
                 "list",
                 "--plugin-path",
                 setupPluginPathElement(workspace.resolve("path-a"), type,
-                        TestPlugins.TestPlugin.SAMPLING_CONVERTER, TestPlugins.TestPlugin.SAMPLING_CONFIGURABLE)
+                        TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN, TestPlugins.TestPlugin.SAMPLING_CONFIGURABLE)
         );
         assertEquals(0, res.returnCode);
     }
@@ -336,7 +336,7 @@ public class ConnectPluginPathTest {
                 "list",
                 "--plugin-path",
                 setupPluginPathElement(workspace.resolve("path-a"), type,
-                        TestPlugins.TestPlugin.SAMPLING_CONVERTER, TestPlugins.TestPlugin.SAMPLING_CONFIGURABLE),
+                        TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN, TestPlugins.TestPlugin.SAMPLING_CONFIGURABLE),
                 "--plugin-path",
                 setupPluginPathElement(workspace.resolve("path-b"), type,
                         TestPlugins.TestPlugin.SAMPLING_HEADER_CONVERTER, TestPlugins.TestPlugin.ALIASED_STATIC_FIELD)
@@ -352,7 +352,7 @@ public class ConnectPluginPathTest {
                 "--worker-config",
                 setupWorkerConfig(workspace.resolve("worker.properties"),
                         setupPluginPathElement(workspace.resolve("path-a"), type,
-                                TestPlugins.TestPlugin.SAMPLING_CONVERTER))
+                                TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN))
         );
         assertEquals(0, res.returnCode);
     }
@@ -365,7 +365,7 @@ public class ConnectPluginPathTest {
                 "--worker-config",
                 setupWorkerConfig(workspace.resolve("worker-a.properties"),
                         setupPluginPathElement(workspace.resolve("path-a"), type,
-                                TestPlugins.TestPlugin.SAMPLING_CONVERTER)),
+                                TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN)),
                 "--worker-config",
                 setupWorkerConfig(workspace.resolve("worker-b.properties"),
                         setupPluginPathElement(workspace.resolve("path-b"), type,

@@ -173,7 +173,15 @@ public class TestPlugins {
         /**
          * A ServiceLoader discovered plugin which subclasses another plugin which is present on the classpath
          */
-        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY("subclass-of-classpath", "test.plugins.SubclassOfClasspathOverridePolicy");
+        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY("subclass-of-classpath", "test.plugins.SubclassOfClasspathOverridePolicy"),
+        NON_MIGRATED_CONVERTER("non-migrated", "test.plugins.NonMigratedConverter", false),
+        NON_MIGRATED_HEADER_CONVERTER("non-migrated", "test.plugins.NonMigratedHeaderConverter", false),
+        NON_MIGRATED_MULTI_PLUGIN("non-migrated", "test.plugins.NonMigratedMultiPlugin", false),
+        NON_MIGRATED_PREDICATE("non-migrated", "test.plugins.NonMigratedPredicate", false),
+        NON_MIGRATED_SINK_CONNECTOR("non-migrated", "test.plugins.NonMigratedSinkConnector", false),
+        NON_MIGRATED_SOURCE_CONNECTOR("non-migrated", "test.plugins.NonMigratedSourceConnector", false),
+        NON_MIGRATED_TRANSFORMATION("non-migrated", "test.plugins.NonMigratedTransformation", false)
+        ;
 
         private final String resourceDir;
         private final String className;
