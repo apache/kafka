@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -39,4 +40,17 @@ interface StandbyTaskAssignor extends TaskAssignor {
                                           final Map<UUID, ClientState> clientStateMap) {
         return true;
     }
+
+    default boolean assign(final Map<UUID, ClientState> clients,
+                           final Set<TaskId> allTaskIds,
+                           final Set<TaskId> statefulTaskIds,
+                           final RackAwareTaskAssignor rackAwareTaskAssignor,
+                           final AssignorConfiguration.AssignmentConfigs configs) {
+        return assign(clients, allTaskIds, statefulTaskIds, configs);
+    }
+
+    boolean assign(final Map<UUID, ClientState> clients,
+                   final Set<TaskId> allTaskIds,
+                   final Set<TaskId> statefulTaskIds,
+                   final AssignorConfiguration.AssignmentConfigs configs);
 }

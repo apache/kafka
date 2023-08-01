@@ -57,6 +57,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
+                          final RackAwareTaskAssignor rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;

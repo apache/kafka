@@ -26,8 +26,9 @@ public interface TaskAssignor {
     /**
      * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
      */
-    boolean assign(Map<UUID, ClientState> clients,
-                   Set<TaskId> allTaskIds,
-                   Set<TaskId> statefulTaskIds,
-                   AssignorConfiguration.AssignmentConfigs configs);
+    boolean assign(final Map<UUID, ClientState> clients,
+                   final Set<TaskId> allTaskIds,
+                   final Set<TaskId> statefulTaskIds,
+                   final RackAwareTaskAssignor rackAwareTaskAssignor,
+                   final AssignorConfiguration.AssignmentConfigs configs);
 }
