@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -85,7 +86,9 @@ class KafkaRequestHandlerTest {
   @ValueSource(booleans = Array(true, false))
   def testTopicStats(systemRemoteStorageEnabled: Boolean): Unit = {
     val topic = "topic"
-    val brokerTopicStats = new BrokerTopicStats(systemRemoteStorageEnabled)
+    val props = kafka.utils.TestUtils.createDummyBrokerConfig()
+    props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
+    val brokerTopicStats = new BrokerTopicStats(Some(KafkaConfig.fromProps(props)))
     brokerTopicStats.topicStats(topic)
     if (systemRemoteStorageEnabled) {
       assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteBytesInPerSec))

@@ -38,6 +38,8 @@ import org.apache.kafka.server.authorizer.Authorizer;
 
 import java.util.Collections;
 import java.util.Optional;
+
+import scala.Option;
 import scala.compat.java8.OptionConverters;
 
 
@@ -171,7 +173,7 @@ public class KafkaApisBuilder {
         if (metrics == null) throw new RuntimeException("You must set metrics");
         if (quotas == null) throw new RuntimeException("You must set quotas");
         if (fetchManager == null) throw new RuntimeException("You must set fetchManager");
-        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig().enableRemoteStorageSystem());
+        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(Option.apply(config));
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
 
         return new KafkaApis(requestChannel,
