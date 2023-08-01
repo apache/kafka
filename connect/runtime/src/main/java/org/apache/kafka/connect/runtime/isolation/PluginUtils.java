@@ -342,33 +342,32 @@ public class PluginUtils {
     }
 
     public static Set<PluginSource> pluginSources(Set<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
-        Set<PluginSource> pluginSources = new HashSet<>(isolatedPluginSources(pluginLocations, classLoader, factory));
-        pluginSources.add(classpathPluginSource(classLoader.getParent()));
-        return pluginSources;
-    }
-
-    public static Set<PluginSource> isolatedPluginSources(Set<Path> pluginLocations, ClassLoader parent, PluginClassLoaderFactory factory) {
         Set<PluginSource> pluginSources = new LinkedHashSet<>();
         for (Path pluginLocation : pluginLocations) {
             try {
-                List<URL> pluginUrls = new ArrayList<>();
-                for (Path path : pluginUrls(pluginLocation)) {
-                    pluginUrls.add(path.toUri().toURL());
-                }
-                URL[] urls = pluginUrls.toArray(new URL[0]);
-                PluginClassLoader loader = factory.newPluginClassLoader(
-                        pluginLocation.toUri().toURL(),
-                        urls,
-                        parent
-                );
-                pluginSources.add(new PluginSource(pluginLocation, loader, urls));
+                pluginSources.add(isolatedPluginSource(pluginLocation, classLoader, factory));
             } catch (InvalidPathException | MalformedURLException e) {
                 log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
             } catch (IOException e) {
                 log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
             }
         }
+        pluginSources.add(classpathPluginSource(classLoader.getParent()));
         return pluginSources;
+    }
+
+    public static PluginSource isolatedPluginSource(Path pluginLocation, ClassLoader parent, PluginClassLoaderFactory factory) throws IOException {
+        List<URL> pluginUrls = new ArrayList<>();
+        for (Path path : pluginUrls(pluginLocation)) {
+            pluginUrls.add(path.toUri().toURL());
+        }
+        URL[] urls = pluginUrls.toArray(new URL[0]);
+        PluginClassLoader loader = factory.newPluginClassLoader(
+                pluginLocation.toUri().toURL(),
+                urls,
+                parent
+        );
+        return new PluginSource(pluginLocation, loader, urls);
     }
 
     public static PluginSource classpathPluginSource(ClassLoader classLoader) {
@@ -388,6 +387,11 @@ public class PluginUtils {
         return plugin.pluginClass().getSimpleName();
     }
 
+    public static String simpleName(String fullClassName) {
+        return fullClassName.substring(fullClassName.lastIndexOf('.') + 1);
+    }
+
+
     /**
      * Remove the plugin type name at the end of a plugin class name, if such suffix is present.
      * This method is meant to be used to extract plugin aliases.
@@ -396,18 +400,22 @@ public class PluginUtils {
      * @return the pruned simple class name of the plugin.
      */
     public static String prunedName(PluginDesc<?> plugin) {
+        return prunedName(plugin.className(), plugin.type());
+    }
+
+    public static String prunedName(String fullClassName, PluginType type) {
         // It's currently simpler to switch on type than do pattern matching.
-        switch (plugin.type()) {
+        switch (type) {
             case SOURCE:
             case SINK:
-                return prunePluginName(plugin, "Connector");
+                return prunePluginName(fullClassName, "Connector");
             default:
-                return prunePluginName(plugin, plugin.type().simpleName());
+                return prunePluginName(fullClassName, type.simpleName());
         }
     }
 
-    private static String prunePluginName(PluginDesc<?> plugin, String suffix) {
-        String simple = plugin.pluginClass().getSimpleName();
+    private static String prunePluginName(String fullClassName, String suffix) {
+        String simple = simpleName(fullClassName);
         int pos = simple.lastIndexOf(suffix);
         if (pos > 0) {
             return simple.substring(0, pos);

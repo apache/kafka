@@ -231,7 +231,7 @@ public class ConnectPluginPathTest {
             ClassLoader parent = ConnectPluginPath.class.getClassLoader();
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                Set<PluginSource> sources = PluginUtils.isolatedPluginSources(pluginLocations, delegatingClassLoader, factory);
+                Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory);
                 String stdout = new String(out.toByteArray(), StandardCharsets.UTF_8);
                 String stderr = new String(err.toByteArray(), StandardCharsets.UTF_8);
                 log.info("STDOUT:\n{}", stdout);

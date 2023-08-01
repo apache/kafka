@@ -50,19 +50,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -70,7 +68,7 @@ public class ConnectPluginPath {
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
     private static final int LIST_TABLE_COLUMN_COUNT = 8;
-    private static final int LIST_SUMMARY_COLUMN_COUNT = 4;
+    private static final int LIST_SUMMARY_COLUMN_COUNT = 6;
 
     public static void main(String[] args) {
         Exit.exit(mainNoExit(args, System.out, System.err));
@@ -218,21 +216,19 @@ public class ConnectPluginPath {
 
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                Set<PluginSource> isolatedSources = PluginUtils.isolatedPluginSources(config.locations, delegatingClassLoader, factory);
-                Map<PluginSource, Map<String, Set<ManifestEntry>>> isolatedManifests = isolatedSources.stream()
-                        .collect(Collectors.toMap(Function.identity(),
-                                // Exclude manifest entries which are visible from the classpath
-                                source -> findManifests(source, classpathManifests)));
-                Map<PluginSource, PluginScanResult> isolatedPlugins = isolatedSources.stream()
-                        .collect(Collectors.toMap(Function.identity(),
-                                source -> discoverPlugins(source, reflectionScanner, serviceLoaderScanner)));
-                // Calculate aliases including collisions with classpath plugins
-                Map<String, List<String>> aliases = computeAliases(classpathPlugins, isolatedPlugins.values());
-                // Merge the plugins and manifest results to get the individual units of work
-                Map<PluginSource, Set<Row>> isolatedRows = isolatedSources.stream()
-                        .collect(Collectors.toMap(Function.identity(),
-                                source -> enumerateRows(source, isolatedManifests.get(source), aliases, isolatedPlugins.get(source))));
-                runCommand(config, isolatedManifests, isolatedPlugins, isolatedRows);
+                beginCommand(config);
+                Map<Path, Set<Row>> isolatedRows = new LinkedHashMap<>();
+                for (Path pluginLocation : config.locations) {
+                    PluginSource source = PluginUtils.isolatedPluginSource(pluginLocation, delegatingClassLoader, factory);
+                    Map<String, Set<ManifestEntry>> manifests = findManifests(source, classpathManifests);
+                    PluginScanResult plugins = discoverPlugins(source, reflectionScanner, serviceLoaderScanner);
+                    Set<Row> rows = enumerateRows(source, manifests, plugins);
+                    isolatedRows.put(pluginLocation, rows);
+                    for (Row row : rows) {
+                        handlePlugin(config, row);
+                    }
+                }
+                endCommand(config, isolatedRows);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -245,7 +241,7 @@ public class ConnectPluginPath {
      * that pertains to this specific plugin.
      */
     private static class Row {
-        private final PluginSource source;
+        private final Path pluginLocation;
         private final String className;
         private final PluginType type;
         private final String version;
@@ -253,8 +249,8 @@ public class ConnectPluginPath {
         private final boolean loadable;
         private final boolean hasManifest;
 
-        public Row(PluginSource source, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
-            this.source = source;
+        public Row(Path pluginLocation, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
+            this.pluginLocation = pluginLocation;
             this.className = className;
             this.version = version;
             this.type = type;
@@ -263,58 +259,57 @@ public class ConnectPluginPath {
             this.hasManifest = hasManifest;
         }
 
+        private boolean loadable() {
+            return loadable;
+        }
+
+        private boolean hasManifest() {
+            return hasManifest;
+        }
+
+        private boolean compatible() {
+            return loadable && hasManifest;
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             Row row = (Row) o;
-            return source.equals(row.source) && className.equals(row.className) && type == row.type;
+            return pluginLocation.equals(row.pluginLocation) && className.equals(row.className) && type == row.type;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(source, className, type);
+            return Objects.hash(pluginLocation, className, type);
         }
     }
 
-    private static Set<Row> enumerateRows(PluginSource source, Map<String, Set<ManifestEntry>> manifests, Map<String, List<String>> aliases, PluginScanResult scanResult) {
+    private static Set<Row> enumerateRows(PluginSource source, Map<String, Set<ManifestEntry>> manifests, PluginScanResult scanResult) {
         Set<Row> rows = new HashSet<>();
         // Perform a deep copy of the manifests because we're going to be mutating our copy.
         Map<String, Set<ManifestEntry>> unloadablePlugins = manifests.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())));
         scanResult.forEach(pluginDesc -> {
             // Emit a loadable row for this scan result, since it was found during plugin discovery
-            rows.add(newRow(source, pluginDesc.className(), pluginDesc.type(), pluginDesc.version(), true, manifests, aliases));
+            rows.add(newRow(source, pluginDesc.className(), pluginDesc.type(), pluginDesc.version(), true, manifests));
             // Remove the ManifestEntry if it has the same className and type as one of the loadable plugins.
             unloadablePlugins.getOrDefault(pluginDesc.className(), Collections.emptySet()).removeIf(entry -> entry.type == pluginDesc.type());
         });
         unloadablePlugins.values().forEach(entries -> entries.forEach(entry -> {
             // Emit a non-loadable row, since all the loadable rows showed up in the previous iteration.
             // Two ManifestEntries may produce the same row if they have different URIs
-            rows.add(newRow(source, entry.className, entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests, aliases));
+            rows.add(newRow(source, entry.className, entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests));
         }));
         return rows;
     }
 
-    private static Row newRow(PluginSource source, String className, PluginType type, String version, boolean loadable, Map<String, Set<ManifestEntry>> manifests, Map<String, List<String>> aliases) {
-        List<String> rowAliases = aliases.getOrDefault(className, Collections.emptyList());
+    private static Row newRow(PluginSource source, String className, PluginType type, String version, boolean loadable, Map<String, Set<ManifestEntry>> manifests) {
+        Set<String> rowAliases = new LinkedHashSet<>();
+        rowAliases.add(PluginUtils.simpleName(className));
+        rowAliases.add(PluginUtils.prunedName(className, type));
         boolean hasManifest = manifests.containsKey(className);
-        return new Row(source, className, type, version, rowAliases, loadable, hasManifest);
-    }
-
-    private static void runCommand(
-            Config config,
-            Map<PluginSource, Map<String, Set<ManifestEntry>>> manifests,
-            Map<PluginSource, PluginScanResult> plugins,
-            Map<PluginSource, Set<Row>> rows
-    ) {
-        beginCommand(config);
-        for (Map.Entry<PluginSource, Set<Row>> entry : rows.entrySet()) {
-            for (Row row : entry.getValue()) {
-                handlePlugin(config, row);
-            }
-        }
-        endCommand(config, manifests, plugins, rows);
+        return new Row(source.location(), className, type, version, new ArrayList<>(rowAliases), loadable, hasManifest);
     }
 
     private static void beginCommand(Config config) {
@@ -333,7 +328,6 @@ public class ConnectPluginPath {
     }
 
     private static void handlePlugin(Config config, Row row) {
-        Path pluginLocation = row.source.location();
         if (config.command == Command.LIST) {
             String firstAlias = row.aliases.size() > 0 ? row.aliases.get(0) : "null";
             String secondAlias = row.aliases.size() > 1 ? row.aliases.get(1) : "null";
@@ -345,44 +339,41 @@ public class ConnectPluginPath {
                     row.type,
                     row.loadable,
                     row.hasManifest,
-                    pluginLocation // last because it is least important and most repetitive
+                    row.pluginLocation // last because it is least important and most repetitive
             );
         }
     }
 
     private static void endCommand(
             Config config,
-            Map<PluginSource, Map<String, Set<ManifestEntry>>> manifests,
-            Map<PluginSource, PluginScanResult> plugins,
-            Map<PluginSource, Set<Row>> rows) {
+            Map<Path, Set<Row>> rowsByLocation
+    ) {
         if (config.command == Command.LIST) {
             // end the table with an empty line
             config.out.println();
             listTablePrint(config, LIST_SUMMARY_COLUMN_COUNT,
-                    "totalPlugins", // Total units of work
-                    "loadable",
-                    "hasManifest",
-                    "pluginLocation"
+                    "totalPlugins",
+                    "loadablePlugins",
+                    "compatiblePlugins",
+                    "totalLocations",
+                    "compatibleLocations",
+                    "allLocationsCompatible"
             );
-            for (Map.Entry<PluginSource, Set<Row>> entry : rows.entrySet()) {
-                PluginSource source = entry.getKey();
-                int totalCount = entry.getValue().size();
-                AtomicInteger pluginCount = new AtomicInteger();
-                plugins.get(source).forEach(desc -> pluginCount.incrementAndGet());
-                int manifestCount = 0;
-                for (Set<ManifestEntry> manifestEntries : manifests.get(source).values()) {
-                    manifestCount += manifestEntries.stream()
-                            // If a plugin has multiple ManifestEntries for a single type, ignore the duplicates.
-                            .map(manifestEntry -> manifestEntry.type)
-                            .collect(Collectors.toSet()).size();
-                }
-                listTablePrint(config, LIST_SUMMARY_COLUMN_COUNT,
-                        totalCount,
-                        pluginCount,
-                        manifestCount,
-                        source.location()
-                );
-            }
+            Set<Row> allRows = rowsByLocation.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
+            long totalPlugins = allRows.size();
+            long loadablePlugins = allRows.stream().filter(Row::loadable).count();
+            long compatiblePlugins = allRows.stream().filter(Row::compatible).count();
+            long totalLocations = rowsByLocation.size();
+            long compatibleLocations = rowsByLocation.values().stream().filter(location -> location.stream().allMatch(Row::compatible)).count();
+            boolean allLocationsCompatible = allRows.stream().allMatch(Row::compatible);
+            listTablePrint(config, LIST_SUMMARY_COLUMN_COUNT,
+                    totalPlugins,
+                    loadablePlugins,
+                    compatiblePlugins,
+                    totalLocations,
+                    compatibleLocations,
+                    allLocationsCompatible
+            );
         }
     }
 
@@ -494,19 +485,5 @@ public class ConnectPluginPath {
             names.add(ln);
         }
         return lc + 1;
-    }
-
-    private static Map<String, List<String>> computeAliases(PluginScanResult classpathPlugins, Collection<PluginScanResult> isolatedPlugins) {
-        List<PluginScanResult> allResults = new ArrayList<>(isolatedPlugins);
-        allResults.add(classpathPlugins);
-        return PluginUtils.computeAliases(new PluginScanResult(allResults)).entrySet()
-                .stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getValue,
-                        e -> new ArrayList<>(Collections.singletonList(e.getKey())),
-                        (a, b) -> {
-                            a.addAll(b);
-                            return a;
-                        }));
     }
 }
