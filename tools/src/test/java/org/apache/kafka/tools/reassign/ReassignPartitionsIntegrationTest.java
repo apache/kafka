@@ -68,6 +68,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -100,7 +101,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     @ParameterizedTest(name = "{displayName}.quorum={0}")
     @ValueSource(strings = {"zk", "kraft"})
     public void testReassignment(String quorum) throws Exception {
-        ReassignPartitionsTestCluster cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
+        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
         cluster.setup();
         executeAndVerifyReassignment();
     }
@@ -482,16 +483,16 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     }
 
     private void waitForBrokerLevelThrottles(Map<Integer, Map<String, Long>> targetThrottles) {
-        Map<Integer, Map<String, Long>>[] curThrottles = new Map[]{Collections.emptyMap()};
+        AtomicReference<Map<Integer, Map<String, Long>>> curThrottles = new AtomicReference<>(new HashMap<>());
         TestUtils.waitUntilTrue(() -> {
             try {
-                curThrottles[0] = describeBrokerLevelThrottles(targetThrottles.keySet());
-                return targetThrottles.equals(curThrottles[0]);
+                curThrottles.set(describeBrokerLevelThrottles(targetThrottles.keySet()));
+                return targetThrottles.equals(curThrottles.get());
             } catch (ExecutionException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }, () -> "timed out waiting for broker throttle to become " + targetThrottles + ".  " +
-            "Latest throttles were " + curThrottles[0], org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 25);
+            "Latest throttles were " + curThrottles.get(), org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 25);
     }
 
     /**

@@ -395,7 +395,7 @@ public class ReassignPartitionsCommand {
                                                                                                   Map<TopicPartitionReplica, String> targetReassignments) throws ExecutionException, InterruptedException {
         Map<TopicPartitionReplica, LogDirMoveState> moveStates = findLogDirMoveStates(adminClient, targetReassignments);
         System.out.println(replicaMoveStatesToString(moveStates));
-        return new Tuple<>(moveStates, moveStates.values().stream().noneMatch(LogDirMoveState::done));
+        return new Tuple<>(moveStates, !moveStates.values().stream().allMatch(LogDirMoveState::done));
     }
 
     /**

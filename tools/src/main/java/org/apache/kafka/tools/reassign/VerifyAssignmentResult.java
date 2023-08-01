@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A result returned from verifyAssignment.
@@ -52,5 +53,18 @@ public final class VerifyAssignmentResult {
         this.partsOngoing = partsOngoing;
         this.moveStates = moveStates;
         this.movesOngoing = movesOngoing;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        VerifyAssignmentResult that = (VerifyAssignmentResult) o;
+        return partsOngoing == that.partsOngoing && movesOngoing == that.movesOngoing && Objects.equals(partStates, that.partStates) && Objects.equals(moveStates, that.moveStates);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(partStates, partsOngoing, moveStates, movesOngoing);
     }
 }
