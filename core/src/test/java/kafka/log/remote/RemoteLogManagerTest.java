@@ -310,6 +310,8 @@ public class RemoteLogManagerTest {
 
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+        verify(oldSegment, times(0)).readNextOffset();
+        verify(activeSegment, times(0)).readNextOffset();
 
         FileRecords fileRecords = mock(FileRecords.class);
         when(oldSegment.log()).thenReturn(fileRecords);
@@ -325,6 +327,7 @@ public class RemoteLogManagerTest {
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
+        when(mockLog.logEndOffset()).thenReturn(logEndOffset);
 
         LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
         LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
