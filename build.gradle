@@ -31,8 +31,9 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.46.0'
+  id 'com.github.ben-manes.versions' version '0.47.0'
   id 'idea'
+  id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.0"
@@ -735,9 +736,9 @@ subprojects {
         dependsOn tasks.test
         sourceSets sourceSets.main
         reports {
-          html.enabled = true
-          xml.enabled = true
-          csv.enabled = false
+          html.required = true
+          xml.required = true
+          csv.required = false
         }
       }
 
@@ -808,10 +809,9 @@ if (userEnableTestCoverage) {
     executionData.from = javaProjects.jacocoTestReport.executionData
 
     reports {
-      html.enabled = true
-      xml.enabled = true
+      html.required = true
+      xml.required = true
     }
-
     // workaround to ignore projects that don't have any tests at all
     onlyIf = { true }
     doFirst {
@@ -893,6 +893,10 @@ project(':core') {
       implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
+      exclude module: 'logback-classic'
+      exclude module: 'logback-core'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     implementation libs.commonsCli
@@ -2741,8 +2745,6 @@ project(':connect:runtime') {
     api project(':clients')
     api project(':connect:json')
     api project(':connect:transforms')
-
-    implementation project(':tools')
 
     implementation libs.slf4jApi
     implementation libs.log4j

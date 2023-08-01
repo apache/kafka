@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -39,8 +45,10 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.runtime.Coordinator;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorBuilder;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorShard;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilder;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
@@ -51,22 +59,21 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * The group coordinator replicated state machine that manages the metadata of all generic and
- * consumer groups. It holds the hard and the soft state of the groups. This class has two kinds
- * of methods:
+ * The group coordinator shard is a replicated state machine that manages the metadata of all
+ * generic and consumer groups. It holds the hard and the soft state of the groups. This class
+ * has two kinds of methods:
  * 1) The request handlers which handle the requests and generate a response and records to
  *    mutate the hard state. Those records will be written by the runtime and applied to the
  *    hard state via the replay methods.
  * 2) The replay methods which apply records to the hard state. Those are used in the request
  *    handling as well as during the initial loading of the records from the partitions.
  */
-public class ReplicatedGroupCoordinator implements Coordinator<Record> {
+public class GroupCoordinatorShard implements CoordinatorShard<Record> {
 
-    public static class Builder implements CoordinatorBuilder<ReplicatedGroupCoordinator, Record> {
+    public static class Builder implements CoordinatorShardBuilder<GroupCoordinatorShard, Record> {
         private final GroupCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
-        private TopicPartition topicPartition;
         private Time time;
         private CoordinatorTimer<Void, Record> timer;
 
@@ -77,7 +84,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         }
 
         @Override
-        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withLogContext(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withLogContext(
             LogContext logContext
         ) {
             this.logContext = logContext;
@@ -85,7 +92,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         }
 
         @Override
-        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withTime(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withTime(
             Time time
         ) {
             this.time = time;
@@ -93,7 +100,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         }
 
         @Override
-        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withTimer(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withTimer(
             CoordinatorTimer<Void, Record> timer
         ) {
             this.timer = timer;
@@ -101,7 +108,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         }
 
         @Override
-        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withSnapshotRegistry(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withSnapshotRegistry(
             SnapshotRegistry snapshotRegistry
         ) {
             this.snapshotRegistry = snapshotRegistry;
@@ -109,15 +116,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         }
 
         @Override
-        public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withTopicPartition(
-            TopicPartition topicPartition
-        ) {
-            this.topicPartition = topicPartition;
-            return this;
-        }
-
-        @Override
-        public ReplicatedGroupCoordinator build() {
+        public GroupCoordinatorShard build() {
             if (logContext == null) logContext = new LogContext();
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -127,24 +126,32 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
-            if (topicPartition == null)
-                throw new IllegalArgumentException("TopicPartition must be set.");
 
-            return new ReplicatedGroupCoordinator(
-                new GroupMetadataManager.Builder()
-                    .withLogContext(logContext)
-                    .withSnapshotRegistry(snapshotRegistry)
-                    .withTime(time)
-                    .withTimer(timer)
-                    .withAssignors(config.consumerGroupAssignors)
-                    .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
-                    .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
-                    .withTopicPartition(topicPartition)
-                    .withGenericGroupInitialRebalanceDelayMs(config.genericGroupInitialRebalanceDelayMs)
-                    .withGenericGroupNewMemberJoinTimeoutMs(config.genericGroupNewMemberJoinTimeoutMs)
-                    .withGenericGroupMinSessionTimeoutMs(config.genericGroupMinSessionTimeoutMs)
-                    .withGenericGroupMaxSessionTimeoutMs(config.genericGroupMaxSessionTimeoutMs)
-                    .build()
+            GroupMetadataManager groupMetadataManager = new GroupMetadataManager.Builder()
+                .withLogContext(logContext)
+                .withSnapshotRegistry(snapshotRegistry)
+                .withTime(time)
+                .withTimer(timer)
+                .withConsumerGroupAssignors(config.consumerGroupAssignors)
+                .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
+                .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
+                .withGenericGroupInitialRebalanceDelayMs(config.genericGroupInitialRebalanceDelayMs)
+                .withGenericGroupNewMemberJoinTimeoutMs(config.genericGroupNewMemberJoinTimeoutMs)
+                .withGenericGroupMinSessionTimeoutMs(config.genericGroupMinSessionTimeoutMs)
+                .withGenericGroupMaxSessionTimeoutMs(config.genericGroupMaxSessionTimeoutMs)
+                .build();
+
+            OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()
+                .withLogContext(logContext)
+                .withSnapshotRegistry(snapshotRegistry)
+                .withTime(time)
+                .withGroupMetadataManager(groupMetadataManager)
+                .withOffsetMetadataMaxSize(config.offsetMetadataMaxSize)
+                .build();
+
+            return new GroupCoordinatorShard(
+                groupMetadataManager,
+                offsetMetadataManager
             );
         }
     }
@@ -155,14 +162,22 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
     private final GroupMetadataManager groupMetadataManager;
 
     /**
+     * The offset metadata manager.
+     */
+    private final OffsetMetadataManager offsetMetadataManager;
+
+    /**
      * Constructor.
      *
-     * @param groupMetadataManager The group metadata manager.
+     * @param groupMetadataManager  The group metadata manager.
+     * @param offsetMetadataManager The offset metadata manager.
      */
-    ReplicatedGroupCoordinator(
-        GroupMetadataManager groupMetadataManager
+    GroupCoordinatorShard(
+        GroupMetadataManager groupMetadataManager,
+        OffsetMetadataManager offsetMetadataManager
     ) {
         this.groupMetadataManager = groupMetadataManager;
+        this.offsetMetadataManager = offsetMetadataManager;
     }
 
     /**
@@ -181,6 +196,15 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
     }
 
+    /**
+     * Handles a JoinGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual JoinGroup request.
+     *
+     * @return A Result containing the JoinGroup response and
+     *         a list of records to update the state machine.
+     */
     public CoordinatorResult<Void, Record> genericGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
@@ -194,6 +218,61 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
     }
 
     /**
+     * Handles a SyncGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual SyncGroup request.
+     *
+     * @return A Result containing the SyncGroup response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<Void, Record> genericGroupSync(
+        RequestContext context,
+        SyncGroupRequestData request,
+        CompletableFuture<SyncGroupResponseData> responseFuture
+    ) {
+        return groupMetadataManager.genericGroupSync(
+            context,
+            request,
+            responseFuture
+        );
+    }
+
+    /**
+     * Handles a generic group HeartbeatRequest.
+     *
+     * @param context The request context.
+     * @param request The actual Heartbeat request.
+     *
+     * @return The HeartbeatResponse.
+     */
+    public HeartbeatResponseData genericGroupHeartbeat(
+        RequestContext context,
+        HeartbeatRequestData request
+    ) {
+        return groupMetadataManager.genericGroupHeartbeat(
+            context,
+            request
+        );
+    }
+
+    /**
+     * Handles a OffsetCommit request.
+     *
+     * @param context The request context.
+     * @param request The actual OffsetCommit request.
+     *
+     * @return A Result containing the OffsetCommitResponse response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<OffsetCommitResponseData, Record> commitOffset(
+        RequestContext context,
+        OffsetCommitRequestData request
+    ) throws ApiException {
+        return offsetMetadataManager.commitOffset(context, request);
+    }
+
+    /**
      * The coordinator has been loaded. This is used to apply any
      * post loading operations (e.g. registering timers).
      *
@@ -201,7 +280,10 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
      */
     @Override
     public void onLoaded(MetadataImage newImage) {
-        groupMetadataManager.onNewMetadataImage(newImage, new MetadataDelta(newImage));
+        MetadataDelta emptyDelta = new MetadataDelta(newImage);
+        groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
+        offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
+
         groupMetadataManager.onLoaded();
     }
 
@@ -214,6 +296,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
     @Override
     public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         groupMetadataManager.onNewMetadataImage(newImage, delta);
+        offsetMetadataManager.onNewMetadataImage(newImage, delta);
     }
 
     /**
@@ -239,6 +322,14 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
         ApiMessageAndVersion value = record.value();
 
         switch (key.version()) {
+            case 0:
+            case 1:
+                offsetMetadataManager.replay(
+                    (OffsetCommitKey) key.message(),
+                    (OffsetCommitValue) messageOrNull(value)
+                );
+                break;
+
             case 2:
                 groupMetadataManager.replay(
                     (GroupMetadataKey) key.message(),

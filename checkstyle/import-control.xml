@@ -229,6 +229,7 @@
       <allow pkg="org.apache.kafka.common.metadata" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.deferred" />
@@ -378,10 +379,6 @@
       <allow pkg="kafka.admin" />
     </subpackage>
 
-    <subpackage name="tools">
-      <allow pkg="org.apache.kafka.tools" />
-    </subpackage>
-
     <subpackage name="state">
       <allow pkg="org.rocksdb" />
     </subpackage>
@@ -452,6 +449,7 @@
     <subpackage name="sink">
       <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.connect.connector" />
+      <allow pkg="org.apache.kafka.connect.transforms" />
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
@@ -565,7 +563,6 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.apache.kafka.tools" />
       <allow pkg="javax.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
@@ -588,7 +585,6 @@
 
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.apache.kafka.tools" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
