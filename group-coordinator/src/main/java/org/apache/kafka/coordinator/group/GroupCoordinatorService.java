@@ -71,10 +71,13 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 
@@ -426,9 +429,42 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        CompletableFuture<ListGroupsResponseData> responseFuture = new CompletableFuture<>();
+        List<CompletableFuture<ListGroupsResponseData>> futures = new java.util.ArrayList<>(Collections.emptyList());
+        for (int i = 0; i < numPartitions; i++) {
+            futures.add(runtime.scheduleReadOperation("list_groups",
+                    new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, i),
+                    (coordinator, __) -> coordinator.listGroups(context, request)
+            ).exceptionally(exception -> {
+                if (!(exception instanceof KafkaException)) {
+                    log.error("ListGroups request {} hit an unexpected exception: {}",
+                            request, exception.getMessage());
+                }
+
+                if (!responseFuture.isDone()) {
+                    responseFuture.complete(new ListGroupsResponseData()
+                            .setErrorCode(Errors.forException(exception).code()));
+                }
+                return null;
+            }));
+        }
+        List<ListGroupsResponseData.ListedGroup> listedGroups = new ArrayList<>();
+        futures.forEach(CompletableFuture::join);
+        for (CompletableFuture<ListGroupsResponseData> future : futures) {
+            try {
+                listedGroups.addAll(future.get().groups());
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("ListGroups request {} hit an unexpected exception: {}",
+                        request, e.getMessage());
+                if (!responseFuture.isDone()) {
+                    responseFuture.complete(new ListGroupsResponseData()
+                            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
+                    return responseFuture;
+                }
+            }
+        }
+        responseFuture.complete(new ListGroupsResponseData().setGroups(listedGroups));
+        return responseFuture;
     }
 
     /**

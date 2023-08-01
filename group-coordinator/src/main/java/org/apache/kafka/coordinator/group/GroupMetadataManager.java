@@ -37,6 +37,8 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -91,6 +93,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
@@ -406,6 +409,29 @@ public class GroupMetadataManager {
             throw new GroupIdNotFoundException(String.format("Group %s not found.", groupId));
         }
         return group;
+    }
+
+    /**
+     * @return The GenericGroup List filtered by statesFilter or typesFilter.
+     */
+    public ListGroupsResponseData listGenericGroups(ListGroupsRequestData request) throws GroupIdNotFoundException {
+        List<ListGroupsResponseData.ListedGroup> listedGroups = Collections.emptyList();
+        Stream<GenericGroup> genericGroupStream = groups.values().stream().
+                map(group -> getOrMaybeCreateGenericGroup(group.groupId(),
+                        false));
+        List<String> statesFilter = request.statesFilter();
+        if (!statesFilter.isEmpty()) {
+            genericGroupStream = genericGroupStream.filter(group -> statesFilter.contains(group.stateAsString()));
+        }
+        List<String> typesFilter = request.statesFilter();
+        if (!typesFilter.isEmpty()) {
+            genericGroupStream = genericGroupStream.filter(group -> typesFilter.contains(group.type().toString()));
+        }
+        return new ListGroupsResponseData().setGroups(
+                genericGroupStream.map(group -> new ListGroupsResponseData.ListedGroup()
+                        .setGroupId(group.groupId())
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().get())).collect(Collectors.toList()));
     }
 
     /**
