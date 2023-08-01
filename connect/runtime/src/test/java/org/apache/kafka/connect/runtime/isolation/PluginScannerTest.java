@@ -70,7 +70,7 @@ public class PluginScannerTest {
     @Test
     public void testScanningEmptyPluginPath() {
         PluginScanResult result = scan(
-                Collections.emptyList()
+                Collections.emptySet()
         );
         assertTrue(result.isEmpty());
     }
@@ -91,7 +91,7 @@ public class PluginScannerTest {
         pluginDir.newFile("invalid.jar");
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -102,7 +102,7 @@ public class PluginScannerTest {
         pluginDir.newFile("my-plugin/invalid.jar");
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -110,7 +110,7 @@ public class PluginScannerTest {
     @Test
     public void testScanningNoPlugins() {
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -120,7 +120,7 @@ public class PluginScannerTest {
         pluginDir.newFolder("my-plugin");
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -137,7 +137,7 @@ public class PluginScannerTest {
         }
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         Set<String> classes = new HashSet<>();
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
@@ -145,7 +145,7 @@ public class PluginScannerTest {
         assertEquals(expectedClasses, classes);
     }
 
-    private PluginScanResult scan(List<Path> pluginLocations) {
+    private PluginScanResult scan(Set<Path> pluginLocations) {
         ClassLoaderFactory factory = new ClassLoaderFactory();
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, PluginScannerTest.class.getClassLoader(), factory);
         return scanner.discoverPlugins(pluginSources);
