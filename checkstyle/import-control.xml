@@ -316,6 +316,12 @@
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
 
+    <subpackage name="reassign">
+      <allow pkg="kafka.cluster" />
+      <allow pkg="kafka.server" />
+      <allow pkg="kafka.log" />
+      <allow pkg="scala" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="trogdor">
