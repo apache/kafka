@@ -123,14 +123,14 @@ public final class RemoteLogManagerConfig {
     public static final int DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS = 100;
 
     public static final String LOG_LOCAL_RETENTION_MS_PROP = "log.local.retention.ms";
-    public static final String LOG_LOCAL_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
+    public static final String LOG_LOCAL_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segments before it gets eligible for deletion. " +
             "Default value is -2, it represents `log.retention.ms` value is to be used. The effective value should always be less than or equal " +
             "to `log.retention.ms` value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_MS = -2L;
 
     public static final String LOG_LOCAL_RETENTION_BYTES_PROP = "log.local.retention.bytes";
-    public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
-            "deletes the old segments. Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
+    public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it gets eligible for deletion. " +
+            "Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `log.retention.bytes` value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
