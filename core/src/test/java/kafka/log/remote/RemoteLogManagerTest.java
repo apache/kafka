@@ -862,12 +862,12 @@ public class RemoteLogManagerTest {
                 .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, activeSegment)));
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
-        List<RemoteLogManager.CandidateLogSegment> expected =
+        List<RemoteLogManager.EnrichedLogSegment> expected =
                 Arrays.asList(
-                        new RemoteLogManager.CandidateLogSegment(segment1, 10L),
-                        new RemoteLogManager.CandidateLogSegment(segment2, 15L)
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
+                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
                 );
-        List<RemoteLogManager.CandidateLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
         assertEquals(expected, actual);
     }
 
@@ -888,12 +888,12 @@ public class RemoteLogManagerTest {
                 .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, segment3, activeSegment)));
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
-        List<RemoteLogManager.CandidateLogSegment> expected =
+        List<RemoteLogManager.EnrichedLogSegment> expected =
                 Arrays.asList(
-                        new RemoteLogManager.CandidateLogSegment(segment1, 10L),
-                        new RemoteLogManager.CandidateLogSegment(segment2, 15L)
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
+                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
                 );
-        List<RemoteLogManager.CandidateLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
         assertEquals(expected, actual);
     }
 
