@@ -18,6 +18,7 @@ package kafka.utils
 
 import joptsimple.OptionParser
 import org.apache.kafka.common.{Metric, MetricName}
+import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.collection.mutable
 
@@ -32,8 +33,8 @@ object ToolsUtils {
       org.apache.kafka.common.utils.Utils.getPort(hostPortData) != null
     }
     val isValid = !validHostPort.isEmpty && validHostPort.size == hostPorts.length
-    if(!isValid)
-      CommandLineUtils.printUsageAndDie(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
+    if (!isValid)
+      CommandLineUtils.printUsageAndExit(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
   }
 
   /**
@@ -63,5 +64,19 @@ object ToolsUtils {
         }
         println(s"%-${maxLengthOfDisplayName}s : $specifier".format(metricName, value))
     }
+  }
+
+  /**
+   * This is a simple wrapper around `CommandLineUtils.printUsageAndExit`.
+   * It is needed for tools migration (KAFKA-14525), as there is no Java equivalent for return type `Nothing`.
+   * Can be removed once [[kafka.admin.ConsumerGroupCommand]], [[kafka.tools.ConsoleConsumer]]
+   * and [[kafka.tools.ConsoleProducer]] are migrated.
+   *
+   * @param parser Command line options parser.
+   * @param message Error message.
+   */
+  def printUsageAndExit(parser: OptionParser, message: String): Nothing = {
+    CommandLineUtils.printUsageAndExit(parser, message)
+    throw new AssertionError("printUsageAndExit should not return, but it did.")
   }
 }

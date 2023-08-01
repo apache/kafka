@@ -27,7 +27,7 @@ import java.util.Collections;
 import java.util.Set;
 
 /**
- * Serialize Jackson JsonNode tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
+ * Serialize Jackson {@link JsonNode} tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
  * structured data without corresponding Java classes. This serializer also supports Connect schemas.
  */
 public class JsonSerializer implements Serializer<JsonNode> {
@@ -41,7 +41,7 @@ public class JsonSerializer implements Serializer<JsonNode> {
     }
 
     /**
-     * A constructor that additionally specifies some {@link SerializationFeature}
+     * A constructor that additionally specifies some {@link SerializationFeature}s
      * for the serializer
      *
      * @param serializationFeatures the specified serialization features

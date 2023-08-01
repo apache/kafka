@@ -576,11 +576,6 @@ public class BlockingConnectorTest {
         }
 
         @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            return super.validate(connectorConfigs);
-        }
-
-        @Override
         public ConfigDef config() {
             return Block.config();
         }
@@ -698,11 +693,6 @@ public class BlockingConnectorTest {
 
         @Override
         public void stop() {
-        }
-
-        @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            return super.validate(connectorConfigs);
         }
 
         @Override

@@ -226,7 +226,7 @@ public class SchemaBuilder implements Schema {
 
     /**
      * Create a SchemaBuilder for the specified type.
-     *
+     * <p>
      * Usually it will be simpler to use one of the variants like {@link #string()} or {@link #struct()}, but this form
      * can be useful when generating schemas dynamically.
      *
@@ -313,7 +313,7 @@ public class SchemaBuilder implements Schema {
     }
 
     /**
-     * Add a field to this struct schema. Throws a SchemaBuilderException if this is not a struct schema.
+     * Add a field to this {@link Schema.Type#STRUCT} schema. Throws a {@link SchemaBuilderException} if this is not a struct schema.
      * @param fieldName the name of the field to add
      * @param fieldSchema the Schema for the field's value
      * @return the SchemaBuilder
@@ -333,7 +333,7 @@ public class SchemaBuilder implements Schema {
     }
 
     /**
-     * Get the list of fields for this Schema. Throws a DataException if this schema is not a struct.
+     * Get the list of fields for this Schema. Throws a {@link DataException} if this schema is not a {@link Schema.Type#STRUCT}.
      * @return the list of fields for this Schema
      */
     @Override

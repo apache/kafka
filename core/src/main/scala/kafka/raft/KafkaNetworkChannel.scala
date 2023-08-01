@@ -16,7 +16,6 @@
  */
 package kafka.raft
 
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, KafkaClient}
 import org.apache.kafka.common.Node
@@ -26,7 +25,9 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{NetworkChannel, RaftRequest, RaftResponse, RaftUtil}
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
+import java.util
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
@@ -42,11 +43,7 @@ object KafkaNetworkChannel {
       case endEpochRequest: EndQuorumEpochRequestData =>
         new EndQuorumEpochRequest.Builder(endEpochRequest)
       case fetchRequest: FetchRequestData =>
-        // Since we already have the request, we go through a simplified builder
-        new AbstractRequest.Builder[FetchRequest](ApiKeys.FETCH) {
-          override def build(version: Short): FetchRequest = new FetchRequest(fetchRequest, version)
-          override def toString: String = fetchRequest.toString
-        }
+        new FetchRequest.SimpleBuilder(fetchRequest)
       case fetchSnapshotRequest: FetchSnapshotRequestData =>
         new FetchSnapshotRequest.Builder(fetchSnapshotRequest)
       case _ =>
@@ -71,17 +68,17 @@ private[raft] class RaftSendThread(
 ) {
   private val queue = new ConcurrentLinkedQueue[RequestAndCompletionHandler]()
 
-  def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-    val buffer =  mutable.Buffer[RequestAndCompletionHandler]()
+  def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
+    val list =  new util.ArrayList[RequestAndCompletionHandler]()
     while (true) {
       val request = queue.poll()
       if (request == null) {
-        return buffer
+        return list
       } else {
-        buffer += request
+        list.add(request)
       }
     }
-    buffer
+    list
   }
 
   def sendRequest(request: RequestAndCompletionHandler): Unit = {
@@ -146,11 +143,11 @@ class KafkaNetworkChannel(
 
     endpoints.get(request.destinationId) match {
       case Some(node) =>
-        requestThread.sendRequest(RequestAndCompletionHandler(
+        requestThread.sendRequest(new RequestAndCompletionHandler(
           request.createdTimeMs,
-          destination = node,
-          request = buildRequest(request.data),
-          handler = onComplete
+          node,
+          buildRequest(request.data),
+          onComplete
         ))
 
       case None =>

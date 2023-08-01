@@ -704,4 +704,4 @@ public final class TaskManager {
             return null;
         }
     }
-};
+}

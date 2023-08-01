@@ -71,7 +71,7 @@ class RaftClusterSnapshotTest {
 
       assertEquals(numberOfControllers + numberOfBrokers, cluster.raftManagers.size())
 
-      // For every controller and broker perform some sanity checks against the lastest snapshot
+      // For every controller and broker perform some sanity checks against the latest snapshot
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
         TestUtils.resource(
           RecordsSnapshotReader.of(

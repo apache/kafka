@@ -27,10 +27,7 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -41,10 +38,11 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerGroupMemberTest {
     @Mock
     private ConfigBackingStore configBackingStore;
@@ -61,16 +59,13 @@ public class WorkerGroupMemberTest {
         workerProps.put("config.storage.topic", "topic-1");
         workerProps.put("status.storage.topic", "topic-1");
         workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockConnectMetrics.MockMetricsReporter.class.getName());
-        DistributedConfig config = new DistributedConfig(workerProps);
-
+        DistributedConfig config = spy(new DistributedConfig(workerProps));
+        doReturn("cluster-1").when(config).kafkaClusterId();
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
-        try (MockedStatic<WorkerConfig> utilities = mockStatic(WorkerConfig.class)) {
-            utilities.when(() -> WorkerConfig.lookupKafkaClusterId(any())).thenReturn("cluster-1");
-            member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
-            utilities.verify(() -> WorkerConfig.lookupKafkaClusterId(any()));
-        }
+        member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
 
+        verify(config, atLeastOnce()).kafkaClusterId();
         boolean foundMockReporter = false;
         boolean foundJmxReporter = false;
         assertEquals(2, member.metrics().reporters().size());
@@ -106,15 +101,13 @@ public class WorkerGroupMemberTest {
         workerProps.put("config.storage.topic", "topic-1");
         workerProps.put("status.storage.topic", "topic-1");
         workerProps.put("auto.include.jmx.reporter", "false");
-        DistributedConfig config = new DistributedConfig(workerProps);
+        DistributedConfig config = spy(new DistributedConfig(workerProps));
+        doReturn("cluster-1").when(config).kafkaClusterId();
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
-        try (MockedStatic<WorkerConfig> utilities = mockStatic(WorkerConfig.class)) {
-            utilities.when(() -> WorkerConfig.lookupKafkaClusterId(any())).thenReturn("cluster-1");
-            member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
-            utilities.verify(() -> WorkerConfig.lookupKafkaClusterId(any()));
-        }
+        member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
 
+        verify(config, atLeastOnce()).kafkaClusterId();
         assertTrue(member.metrics().reporters().isEmpty());
         member.stop();
     }

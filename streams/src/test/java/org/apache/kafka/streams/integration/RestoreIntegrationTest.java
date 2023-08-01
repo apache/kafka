@@ -77,6 +77,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,13 +86,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -433,45 +434,58 @@ public class RestoreIntegrationTest {
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         purgeLocalStreamsState(props1);
-        final KafkaStreams client1 = new KafkaStreams(builder.build(), props1);
+        final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
 
         final Properties props2 = props(stateUpdaterEnabled);
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         purgeLocalStreamsState(props2);
-        final KafkaStreams client2 = new KafkaStreams(builder.build(), props2);
+        final KafkaStreams streams2 = new KafkaStreams(builder.build(), props2);
 
+        final Set<KafkaStreams.State> transitionedStates1 = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<KafkaStreams.State> transitionedStates2 = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener();
-        client1.setGlobalStateRestoreListener(restoreListener);
+        streams1.setGlobalStateRestoreListener(restoreListener);
+        streams1.setStateListener((newState, oldState) -> transitionedStates1.add(newState));
+        streams2.setStateListener((newState, oldState) -> transitionedStates2.add(newState));
 
-        startApplicationAndWaitUntilRunning(asList(client1, client2), Duration.ofSeconds(60));
+        try {
+            startApplicationAndWaitUntilRunning(asList(streams1, streams2), Duration.ofSeconds(60));
 
-        waitForCompletion(client1, 1, 30 * 1000L);
-        waitForCompletion(client2, 1, 30 * 1000L);
-        waitForStandbyCompletion(client1, 1, 30 * 1000L);
-        waitForStandbyCompletion(client2, 1, 30 * 1000L);
+            waitForCompletion(streams1, 1, 30 * 1000L);
+            waitForCompletion(streams2, 1, 30 * 1000L);
+            waitForStandbyCompletion(streams1, 1, 30 * 1000L);
+            waitForStandbyCompletion(streams2, 1, 30 * 1000L);
+        } catch (final Exception e) {
+            streams1.close();
+            streams2.close();
+        }
 
         // Sometimes the store happens to have already been closed sometime during startup, so just keep track
         // of where it started and make sure it doesn't happen more times from there
         final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
         final long initialNunRestoredCount = restoreListener.totalNumRestored();
 
-        client2.close();
-        waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
-        waitForApplicationState(singletonList(client1), State.REBALANCING, Duration.ofSeconds(60));
-        waitForApplicationState(singletonList(client1), State.RUNNING, Duration.ofSeconds(60));
+        transitionedStates1.clear();
+        transitionedStates2.clear();
+        try {
+            streams2.close();
+            waitForTransitionTo(transitionedStates2, State.NOT_RUNNING, Duration.ofSeconds(60));
+            waitForTransitionTo(transitionedStates1, State.REBALANCING, Duration.ofSeconds(60));
+            waitForTransitionTo(transitionedStates1, State.RUNNING, Duration.ofSeconds(60));
 
-        waitForCompletion(client1, 1, 30 * 1000L);
-        waitForStandbyCompletion(client1, 1, 30 * 1000L);
+            waitForCompletion(streams1, 1, 30 * 1000L);
+            waitForStandbyCompletion(streams1, 1, 30 * 1000L);
 
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
+            assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
-        // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
-        // total: the active and standby tasks on instance 2
-        assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
-
-        client1.close();
-        waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
+            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
+            // total: the active and standby tasks on instance 2
+            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
+        } finally {
+            streams1.close();
+        }
+        waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
 
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
     }
@@ -575,5 +589,13 @@ public class RestoreIntegrationTest {
 
         consumer.commitSync();
         consumer.close();
+    }
+
+    private void waitForTransitionTo(final Set<KafkaStreams.State> observed, final KafkaStreams.State state, final Duration timeout) throws Exception {
+        waitForCondition(
+            () -> observed.contains(state),
+            timeout.toMillis(),
+            () -> "Client did not transition to " + state + " on time. Observed transitions: " + observed
+        );
     }
 }

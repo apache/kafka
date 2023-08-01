@@ -71,7 +71,8 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
-                                  final Serde<VR> valueSerde) {
+                                  final Serde<VR> valueSerde,
+                                  final boolean isOutputVersioned) {
         assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
 
         final String aggFunctionName = functionName.name();
@@ -102,6 +103,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
                 storeBuilder
             );
+        statefulProcessorNode.setOutputVersioned(isOutputVersioned);
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
 

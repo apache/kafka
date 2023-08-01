@@ -16,16 +16,18 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
+
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, K, V> {
 
@@ -98,7 +100,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     }
 
     private class KTableKTableJoinMergeProcessor extends ContextualProcessor<K, Change<V>, K, Change<V>> {
-        private TimestampedKeyValueStore<K, V> store;
+        private KeyValueStoreWrapper<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
@@ -106,9 +108,9 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         public void init(final ProcessorContext<K, Change<V>> context) {
             super.init(context);
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.getStore(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -118,13 +120,16 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         @Override
         public void process(final Record<K, Change<V>> record) {
             if (queryableName != null) {
-                store.put(record.key(), ValueAndTimestamp.make(record.value().newValue, record.timestamp()));
-                tupleForwarder.maybeForward(record);
+                final long putReturnCode = store.put(record.key(), record.value().newValue, record.timestamp());
+                // if not put to store, do not forward downstream either
+                if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
+                    tupleForwarder.maybeForward(record.withValue(new Change<>(record.value().newValue, record.value().oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
+                }
             } else {
                 if (sendOldValues) {
                     context().forward(record);
                 } else {
-                    context().forward(record.withValue(new Change<>(record.value().newValue, null)));
+                    context().forward(record.withValue(new Change<>(record.value().newValue, null, record.value().isLatest)));
                 }
             }
         }

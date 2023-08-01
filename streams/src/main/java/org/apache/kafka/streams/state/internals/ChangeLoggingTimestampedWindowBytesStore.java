@@ -32,10 +32,12 @@ class ChangeLoggingTimestampedWindowBytesStore extends ChangeLoggingWindowBytesS
     @Override
     void log(final Bytes key,
              final byte[] valueAndTimestamp) {
-        if (valueAndTimestamp != null) {
-            context.logChange(name(), key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp), wrapped().getPosition());
-        } else {
-            context.logChange(name(), key, null, context.timestamp(), wrapped().getPosition());
-        }
+        context.logChange(
+            name(),
+            key,
+            rawValue(valueAndTimestamp),
+            valueAndTimestamp != null ? timestamp(valueAndTimestamp) : context.timestamp(),
+            wrapped().getPosition()
+        );
     }
 }

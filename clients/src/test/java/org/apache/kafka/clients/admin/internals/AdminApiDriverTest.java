@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
@@ -23,6 +24,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -107,25 +109,32 @@ class AdminApiDriverTest {
 
     @Test
     public void testKeyLookupFailure() {
-        TestContext ctx = TestContext.dynamicMapped(map(
-            "foo", "c1",
-            "bar", "c2"
-        ));
+        // Ensure that both generic failures and unhandled UnsupportedVersionExceptions (which could be specifically
+        // handled in both the lookup and the fulfillment stages) result in the expected lookup failures.
+        Exception[] keyLookupExceptions = new Exception[] {
+            new UnknownServerException(), new UnsupportedVersionException("")
+        };
+        for (Exception keyLookupException : keyLookupExceptions) {
+            TestContext ctx = TestContext.dynamicMapped(map(
+                "foo", "c1",
+                "bar", "c2"
+            ));
 
-        Map<Set<String>, LookupResult<String>> lookupRequests = map(
-            mkSet("foo"), failedLookup("foo", new UnknownServerException()),
-            mkSet("bar"), mapped("bar", 1)
-        );
+            Map<Set<String>, LookupResult<String>> lookupRequests = map(
+                mkSet("foo"), failedLookup("foo", keyLookupException),
+                mkSet("bar"), mapped("bar", 1)
+            );
 
-        ctx.poll(lookupRequests, emptyMap());
+            ctx.poll(lookupRequests, emptyMap());
 
-        Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("bar"), completed("bar", 30L)
-        );
+            Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
+                mkSet("bar"), completed("bar", 30L)
+            );
 
-        ctx.poll(emptyMap(), fulfillmentResults);
+            ctx.poll(emptyMap(), fulfillmentResults);
 
-        ctx.poll(emptyMap(), emptyMap());
+            ctx.poll(emptyMap(), emptyMap());
+        }
     }
 
     @Test
@@ -254,6 +263,59 @@ class AdminApiDriverTest {
 
         ctx.poll(emptyMap(), barFulfillRetry);
 
+        ctx.poll(emptyMap(), emptyMap());
+    }
+
+    @Test
+    public void testFulfillmentFailureUnsupportedVersion() {
+        TestContext ctx = TestContext.staticMapped(map(
+            "foo", 0,
+            "bar", 1,
+            "baz", 1
+        ));
+
+        Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
+            mkSet("foo"), failed("foo", new UnsupportedVersionException("")),
+            mkSet("bar", "baz"), completed("bar", 30L, "baz", 45L)
+        );
+
+        ctx.poll(emptyMap(), fulfillmentResults);
+        ctx.poll(emptyMap(), emptyMap());
+    }
+
+    @Test
+    public void testFulfillmentRetriableUnsupportedVersion() {
+        TestContext ctx = TestContext.staticMapped(map(
+            "foo", 0,
+            "bar", 1,
+            "baz", 2
+        ));
+
+        ctx.handler.addRetriableUnsupportedVersionKey("foo");
+        // The mapped ApiResults are only used in the onResponse/handleResponse path - anything that needs
+        // to be handled in the onFailure path needs to be manually set up later.
+        ctx.handler.expectRequest(mkSet("foo"), failed("foo", new UnsupportedVersionException("")));
+        ctx.handler.expectRequest(mkSet("bar"), failed("bar", new UnsupportedVersionException("")));
+        ctx.handler.expectRequest(mkSet("baz"), completed("baz", 45L));
+        // Setting up specific fulfillment stage executions requires polling the driver in order to obtain
+        // the request specs needed for the onResponse/onFailure callbacks.
+        List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
+
+        requestSpecs.forEach(requestSpec -> {
+            if (requestSpec.keys.contains("foo") || requestSpec.keys.contains("bar")) {
+                ctx.driver.onFailure(ctx.time.milliseconds(), requestSpec, new UnsupportedVersionException(""));
+            } else {
+                ctx.driver.onResponse(
+                    ctx.time.milliseconds(),
+                    requestSpec,
+                    new MetadataResponse(new MetadataResponseData(), ApiKeys.METADATA.latestVersion()),
+                    Node.noNode());
+            }
+        });
+        // Verify retry for "foo" but not for "bar" or "baz"
+        ctx.poll(emptyMap(), map(
+            mkSet("foo"), failed("foo", new UnsupportedVersionException(""))
+        ));
         ctx.poll(emptyMap(), emptyMap());
     }
 
@@ -737,9 +799,11 @@ class AdminApiDriverTest {
     private static class MockAdminApiHandler<K, V> extends AdminApiHandler.Batched<K, V> {
         private final Map<Set<K>, ApiResult<K, V>> expectedRequests = new HashMap<>();
         private final MockLookupStrategy<K> lookupStrategy;
+        private final Map<K, Boolean> retriableUnsupportedVersionKeys;
 
         private MockAdminApiHandler(MockLookupStrategy<K> lookupStrategy) {
             this.lookupStrategy = lookupStrategy;
+            this.retriableUnsupportedVersionKeys = new ConcurrentHashMap<>();
         }
 
         @Override
@@ -770,8 +834,24 @@ class AdminApiDriverTest {
             );
         }
 
+        @Override
+        public Map<K, Throwable> handleUnsupportedVersionException(
+            int brokerId,
+            UnsupportedVersionException exception,
+            Set<K> keys
+        ) {
+            return keys
+                .stream()
+                .filter(k -> !retriableUnsupportedVersionKeys.containsKey(k))
+                .collect(Collectors.toMap(k -> k, k -> exception));
+        }
+
         public void reset() {
             expectedRequests.clear();
+        }
+
+        public void addRetriableUnsupportedVersionKey(K key) {
+            retriableUnsupportedVersionKeys.put(key, Boolean.TRUE);
         }
     }
 

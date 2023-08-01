@@ -186,8 +186,12 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), 2 * 60 * 60 * 1000L, renewResponseCallback)
     assertEquals(expectedExpiryStamp, expiryTimeStamp)
 
-    //try expire token immediately
-    time.sleep(1 * 60 * 60 * 1000L)
+    //try renewing an expired token
+    time.sleep(8 * 24 * 60 * 60 * 1000L)
+    tokenManager.renewToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
+    assertEquals(Errors.DELEGATION_TOKEN_EXPIRED, error)
+
+    //try expire token immediately, even if it is an expired token
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
     assert(tokenManager.getToken(tokenId).isEmpty)
     assertEquals(Errors.NONE, error)

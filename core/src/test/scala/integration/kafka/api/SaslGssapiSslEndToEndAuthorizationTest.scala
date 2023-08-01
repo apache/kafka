@@ -20,7 +20,8 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.config.SslConfigs
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth._
+
 import org.junit.jupiter.api.Assertions.assertNull
 
 import scala.collection.immutable.List
@@ -39,8 +40,10 @@ class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTe
   // client doesn't have a keystore. We want to cover the scenario where a broker requires either SSL client
   // authentication or SASL authentication with SSL as the transport layer (but not both).
   serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
+  controllerConfig.put(KafkaConfig.SslClientAuthProp, "required")
   assertNull(producerConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
   assertNull(consumerConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
   assertNull(adminClientConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+  assertNull(superuserClientConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
 
 }

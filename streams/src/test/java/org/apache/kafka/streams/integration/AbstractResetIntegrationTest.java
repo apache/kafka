@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.tools.StreamsResetter;
+import org.apache.kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -427,7 +427,7 @@ public abstract class AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
-        return new StreamsResetter().run(parameters, cleanUpConfig) == 0;
+        return new StreamsResetter().execute(parameters, cleanUpConfig) == 0;
     }
 
     protected void cleanGlobal(final boolean withIntermediateTopics,

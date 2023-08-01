@@ -16,23 +16,37 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Map;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
+
+import static java.util.Collections.singleton;
 
 /** Internal utility methods. */
 final class MirrorUtils {
+    private static final Logger log = LoggerFactory.getLogger(MirrorUtils.class);
 
     // utility class
     private MirrorUtils() {}
@@ -98,19 +112,52 @@ final class MirrorUtils {
         return compilePatternList(Arrays.asList(fields.split("\\W*,\\W*")));
     }
 
-    static void createCompactedTopic(String topicName, short partitions, short replicationFactor, Map<String, Object> adminProps) {
+    static void createCompactedTopic(String topicName, short partitions, short replicationFactor, Admin admin) {
         NewTopic topicDescription = TopicAdmin.defineTopic(topicName).
                 compacted().
                 partitions(partitions).
                 replicationFactor(replicationFactor).
                 build();
 
-        try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-            admin.createTopics(topicDescription);
+        CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
+        try {
+            admin.createTopics(singleton(topicDescription), args).values().get(topicName).get();
+            log.info("Created topic '{}'", topicName);
+        } catch (InterruptedException e) {
+            Thread.interrupted();
+            throw new ConnectException("Interrupted while attempting to create/find topic '" + topicName + "'", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof TopicExistsException) {
+                log.debug("Unable to create topic '{}' since it already exists.", topicName);
+                return;
+            }
+            if (cause instanceof UnsupportedVersionException) {
+                log.debug("Unable to create topic '{}' since the brokers do not support the CreateTopics API." +
+                                " Falling back to assume topic exists or will be auto-created by the broker.",
+                        topicName);
+            }
+            if (cause instanceof ClusterAuthorizationException) {
+                log.debug("Not authorized to create topic '{}'." +
+                                " Falling back to assume topic exists or will be auto-created by the broker.",
+                        topicName);
+            }
+            if (cause instanceof InvalidConfigurationException) {
+                throw new ConnectException("Unable to create topic '" + topicName + "': " + cause.getMessage(),
+                        cause);
+            }
+            if (cause instanceof TimeoutException) {
+                // Timed out waiting for the operation to complete
+                throw new ConnectException("Timed out while checking for or creating topic '" + topicName + "'." +
+                        " This could indicate a connectivity issue, unavailable topic partitions, or if" +
+                        " this is your first use of the topic it may have taken too long to create.", cause);
+            }
+            throw new ConnectException("Error while attempting to create/find topic '" + topicName + "'", e);
         }
+
     }
 
-    static void createSinglePartitionCompactedTopic(String topicName, short replicationFactor, Map<String, Object> adminProps) {
-        createCompactedTopic(topicName, (short) 1, replicationFactor, adminProps);
+    static void createSinglePartitionCompactedTopic(String topicName, short replicationFactor, Admin admin) {
+        createCompactedTopic(topicName, (short) 1, replicationFactor, admin);
     }
 }

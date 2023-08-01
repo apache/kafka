@@ -1,0 +1,55 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
+{
+  "type": "data",
+  "name": "ConsumerGroupMemberMetadataValue",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "InstanceId", "versions": "0+", "nullableVersions": "0+", "type": "string",
+      "about": "The (optional) instance id." },
+    { "name": "RackId", "versions": "0+", "nullableVersions": "0+", "type": "string",
+      "about": "The (optional) rack id." },
+    { "name": "ClientId", "versions": "0+", "type": "string",
+      "about": "The client id." },
+    { "name": "ClientHost", "versions": "0+", "type": "string",
+      "about": "The client host." },
+    { "name": "SubscribedTopicNames", "versions": "0+", "type": "[]string",
+      "about": "The list of subscribed topic names." },
+    { "name": "SubscribedTopicRegex", "versions": "0+", "nullableVersions": "0+", "type": "string",
+      "about": "The subscribed topic regular expression." },
+    { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
+      "about": "The rebalance timeout" },
+    { "name": "ServerAssignor", "versions": "0+", "nullableVersions": "0+", "type": "string",
+      "about": "The server assignor to use; or null if not used." },
+    { "name": "Assignors", "versions": "0+", "type": "[]Assignor",
+      "about": "The list of assignors.", "fields": [
+      { "name": "Name", "versions": "0+", "type": "string",
+        "about": "The assignor name." },
+      { "name": "MinimumVersion", "versions": "0+", "type": "int16",
+        "about": "The minimum version supported by the assignor." },
+      { "name": "MaximumVersion", "versions": "0+", "type": "int16",
+        "about": "The maximum version supported by the assignor." },
+      { "name": "Reason", "versions": "0+", "type": "int8",
+        "about": "The reason reported by the assignor." },
+      { "name": "Version", "versions": "0+", "type": "int16",
+        "about": "The version used to serialize the metadata." },
+      { "name": "Metadata", "versions": "0+", "type": "bytes",
+        "about": "The metadata." }
+    ]}
+  ]
+}

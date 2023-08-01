@@ -36,7 +36,7 @@ object Branched {
    *
    * @param chain A function that will be applied to the branch. If the provided function returns
    *              `null`, its result is ignored, otherwise it is added to the Map returned
-   *              by [[BranchedKStream.defaultBranch]] or [[BranchedKStream.noDefaultBranch]] (see
+   *              by [[BranchedKStream.defaultBranch()*]] or [[BranchedKStream.noDefaultBranch]] (see
    *              [[BranchedKStream]] description for details).
    * @param name  the branch name suffix to be used. If `null`, a default branch name suffix will be generated
    *              (see [[BranchedKStream]] description for details)
@@ -53,7 +53,7 @@ object Branched {
    *
    * @param chain A consumer to which the branch will be sent. If a non-null consumer is provided here,
    *              the respective branch will not be added to the resulting Map returned
-   *              by [[BranchedKStream.defaultBranch]] or [[BranchedKStream.noDefaultBranch]] (see
+   *              by [[BranchedKStream.defaultBranch()*]] or [[BranchedKStream.noDefaultBranch]] (see
    *              [[BranchedKStream]] description for details).
    * @param name  the branch name suffix to be used. If `null`, a default branch name suffix will be generated
    *              (see [[BranchedKStream]] description for details)

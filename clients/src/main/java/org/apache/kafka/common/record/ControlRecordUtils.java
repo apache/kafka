@@ -37,39 +37,39 @@ public class ControlRecordUtils {
             throw new IllegalArgumentException(
                 "Expected LEADER_CHANGE control record type(2), but found " + recordType.toString());
         }
-        return deserializeLeaderChangeMessage(record.value().duplicate());
+        return deserializeLeaderChangeMessage(record.value());
     }
 
     public static LeaderChangeMessage deserializeLeaderChangeMessage(ByteBuffer data) {
-        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.duplicate());
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.slice());
         return new LeaderChangeMessage(byteBufferAccessor, LEADER_CHANGE_CURRENT_VERSION);
     }
 
-    public static SnapshotHeaderRecord deserializedSnapshotHeaderRecord(Record record) {
+    public static SnapshotHeaderRecord deserializeSnapshotHeaderRecord(Record record) {
         ControlRecordType recordType = ControlRecordType.parse(record.key());
         if (recordType != ControlRecordType.SNAPSHOT_HEADER) {
             throw new IllegalArgumentException(
                 "Expected SNAPSHOT_HEADER control record type(3), but found " + recordType.toString());
         }
-        return deserializedSnapshotHeaderRecord(record.value().duplicate());
+        return deserializeSnapshotHeaderRecord(record.value());
     }
 
-    public static SnapshotHeaderRecord deserializedSnapshotHeaderRecord(ByteBuffer data) {
-        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.duplicate());
+    public static SnapshotHeaderRecord deserializeSnapshotHeaderRecord(ByteBuffer data) {
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.slice());
         return new SnapshotHeaderRecord(byteBufferAccessor, SNAPSHOT_HEADER_CURRENT_VERSION);
     }
 
-    public static SnapshotFooterRecord deserializedSnapshotFooterRecord(Record record) {
+    public static SnapshotFooterRecord deserializeSnapshotFooterRecord(Record record) {
         ControlRecordType recordType = ControlRecordType.parse(record.key());
         if (recordType != ControlRecordType.SNAPSHOT_FOOTER) {
             throw new IllegalArgumentException(
                 "Expected SNAPSHOT_FOOTER control record type(4), but found " + recordType.toString());
         }
-        return deserializedSnapshotFooterRecord(record.value().duplicate());
+        return deserializeSnapshotFooterRecord(record.value());
     }
 
-    public static SnapshotFooterRecord deserializedSnapshotFooterRecord(ByteBuffer data) {
-        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.duplicate());
+    public static SnapshotFooterRecord deserializeSnapshotFooterRecord(ByteBuffer data) {
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.slice());
         return new SnapshotFooterRecord(byteBufferAccessor, SNAPSHOT_FOOTER_CURRENT_VERSION);
     }
 }

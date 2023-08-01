@@ -73,7 +73,7 @@ public class ProduceRequestTest {
     @Test
     public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
-        assertFalse(RequestUtils.hasTransactionalRecords(request));
+        assertFalse(RequestTestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -271,18 +271,18 @@ public class ProduceRequestTest {
         final short producerEpoch = 5;
         final int sequence = 10;
 
-        final MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
+        final MemoryRecords nonIdempotentRecords = MemoryRecords.withRecords(CompressionType.NONE,
                 new SimpleRecord("foo".getBytes()));
-        final MemoryRecords txnRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+        final MemoryRecords idempotentRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
                 producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
 
         ProduceRequest.Builder builder = ProduceRequest.forMagic(RecordVersion.current().value,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
                                 new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
-                                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(txnRecords))),
+                                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(idempotentRecords))),
                                 new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
-                                        new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
+                                        new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonIdempotentRecords))))
                                 .iterator()))
                         .setAcks((short) -1)
                         .setTimeoutMs(5000));

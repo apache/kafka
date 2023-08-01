@@ -82,7 +82,7 @@ public class DirectoryConfigProviderTest {
     }
 
     @Test
-    public void testGetAllKeysAtPath() throws IOException {
+    public void testGetAllKeysAtPath() {
         ConfigData configData = provider.get(dir.getAbsolutePath());
         assertEquals(toSet(asList(foo.getName(), bar.getName())), configData.data().keySet());
         assertEquals("FOO", configData.data().get(foo.getName()));

@@ -28,7 +28,7 @@ import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 
 import javax.net.ssl.X509TrustManager
 import kafka.api._
@@ -61,7 +61,7 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName, Mode}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, FetchRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
@@ -71,11 +71,15 @@ import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
+import org.mockito.ArgumentMatchers.{any, anyBoolean}
+import org.mockito.Mockito
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -155,6 +159,21 @@ object TestUtils extends Logging {
   def tempFile(prefix: String, suffix: String): File = JTestUtils.tempFile(prefix, suffix)
 
   /**
+   * Create a file with the given contents in the default temporary-file directory,
+   * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
+   */
+  def tempFile(contents: String): File = JTestUtils.tempFile(contents)
+
+  def tempPropertiesFile(properties: Properties): File = {
+    return tempPropertiesFile(properties.asScala)
+  }
+
+  def tempPropertiesFile(properties: Map[String, String]): File = {
+    val content = properties.map{case (k, v) => k + "=" + v}.mkString(System.lineSeparator())
+    return tempFile(content)
+  }
+
+  /**
    * Create a temporary file and return an open file channel for this file
    */
   def tempChannel(): FileChannel =
@@ -179,7 +198,12 @@ object TestUtils extends Logging {
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
-    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = false)
+    createServer(config, time, threadNamePrefix, startup, enableZkApiForwarding = false)
+  }
+
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String],
+                   startup: Boolean, enableZkApiForwarding: Boolean) = {
+    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = enableZkApiForwarding)
     if (startup) server.startup()
     server
   }
@@ -214,14 +238,14 @@ object TestUtils extends Logging {
     enableToken: Boolean = false,
     numPartitions: Int = 1,
     defaultReplicationFactor: Short = 1,
-    startingIdNumber: Int = 0
-  ): Seq[Properties] = {
+    startingIdNumber: Int = 0,
+    enableFetchFromFollower: Boolean = false): Seq[Properties] = {
     val endingIdNumber = startingIdNumber + numConfigs - 1
     (startingIdNumber to endingIdNumber).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
         enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
-        numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor)
+        numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor, enableFetchFromFollower = enableFetchFromFollower)
     }
   }
 
@@ -280,7 +304,8 @@ object TestUtils extends Logging {
                          logDirCount: Int = 1,
                          enableToken: Boolean = false,
                          numPartitions: Int = 1,
-                         defaultReplicationFactor: Short = 1): Properties = {
+                         defaultReplicationFactor: Short = 1,
+                         enableFetchFromFollower: Boolean = false): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
@@ -299,6 +324,7 @@ object TestUtils extends Logging {
 
     val props = new Properties
     if (zkConnect == null) {
+      props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
       props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
       props.put(KafkaConfig.AdvertisedListenersProp, listeners)
@@ -345,6 +371,9 @@ object TestUtils extends Logging {
     if (!props.containsKey(KafkaConfig.GroupInitialRebalanceDelayMsProp))
       props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     rack.foreach(props.put(KafkaConfig.RackProp, _))
+    // Reduce number of threads per broker
+    props.put(KafkaConfig.NumNetworkThreadsProp, "2")
+    props.put(KafkaConfig.BackgroundThreadsProp, "2")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props ++= sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId")
@@ -362,6 +391,10 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
 
+    if (enableFetchFromFollower) {
+      props.put(KafkaConfig.RackProp, nodeId.toString)
+      props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
+    }
     props
   }
 
@@ -373,7 +406,7 @@ object TestUtils extends Logging {
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
   }
 
- def createAdminClient[B <: KafkaBroker](
+  def createAdminClient[B <: KafkaBroker](
     brokers: Seq[B],
     listenerName: ListenerName,
     adminConfig: Properties = new Properties
@@ -412,7 +445,7 @@ object TestUtils extends Logging {
     }
 
     result.topicId(topic).get()
-}
+  }
 
   def createTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
@@ -429,6 +462,14 @@ object TestUtils extends Logging {
       replicaAssignment.size
     }
 
+    def isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(cause: Throwable): Boolean = {
+      cause != null &&
+        cause.isInstanceOf[TopicExistsException] &&
+        // wait until all partitions metadata are propagated before verifying partitions number and replication factor
+        !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
+        topicHasSameNumPartitionsAndReplicationFactor(admin, topic, effectiveNumPartitions, replicationFactor)
+    }
+
     try {
       createTopicWithAdminRaw(
         admin,
@@ -439,12 +480,10 @@ object TestUtils extends Logging {
         topicConfig
       )
     } catch {
-      case e: ExecutionException => if (!(e.getCause != null &&
-          e.getCause.isInstanceOf[TopicExistsException] &&
-          topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
-            effectiveNumPartitions, replicationFactor))) {
-        throw e
-      }
+      case e: ExecutionException =>
+        if (!isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(e.getCause)) {
+          throw e
+        }
     }
 
     // wait until we've propagated all partitions metadata to all brokers
@@ -487,7 +526,7 @@ object TestUtils extends Logging {
       numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       brokers = brokers,
-      topicConfig = broker.groupCoordinator.offsetsTopicConfigs,
+      topicConfig = broker.groupCoordinator.groupMetadataTopicConfigs,
     )
   }
 
@@ -584,16 +623,39 @@ object TestUtils extends Logging {
   }
 
   /**
-    * Create the consumer offsets/group metadata topic and wait until the leader is elected and metadata is propagated
-    * to all brokers.
-    */
+   * Ensures that the consumer offsets/group metadata topic exists. If it does not, the topic is created and the method waits
+   * until the leader is elected and metadata is propagated to all brokers. If it does, the method verifies that it has
+   * the expected number of partition and replication factor however it does not guarantee that the topic is empty.
+   */
   def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
     val server = servers.head
-    createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME,
-      server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
-      server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
-      servers,
-      server.groupCoordinator.offsetsTopicConfigs)
+    val numPartitions = server.config.offsetsTopicPartitions
+    val replicationFactor = server.config.offsetsTopicReplicationFactor.toInt
+
+    try {
+      createTopic(
+        zkClient,
+        Topic.GROUP_METADATA_TOPIC_NAME,
+        numPartitions,
+        replicationFactor,
+        servers,
+        server.groupCoordinator.groupMetadataTopicConfigs
+      )
+    } catch {
+      case ex: TopicExistsException =>
+        val allPartitionsMetadata = waitForAllPartitionsMetadata(
+          servers,
+          Topic.GROUP_METADATA_TOPIC_NAME,
+          numPartitions
+        )
+
+        // If the topic already exists, we ensure that it has the required
+        // number of partitions and replication factor. If it has not, the
+        // exception is thrown further.
+        if (allPartitionsMetadata.size != numPartitions || allPartitionsMetadata.head._2.replicas.size != replicationFactor) {
+          throw ex
+        }
+    }
   }
 
   /**
@@ -818,7 +880,7 @@ object TestUtils extends Logging {
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): KafkaConsumer[K, V] = {
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): Consumer[K, V] = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
@@ -881,10 +943,12 @@ object TestUtils extends Logging {
     partition: Int,
     timeoutMs: Long = 30000L,
     oldLeaderOpt: Option[Int] = None,
-    newLeaderOpt: Option[Int] = None
+    newLeaderOpt: Option[Int] = None,
+    ignoreNoLeader: Boolean = false
   ): Int = {
     def getPartitionLeader(topic: String, partition: Int): Option[Int] = {
       zkClient.getLeaderForPartition(new TopicPartition(topic, partition))
+        .filter(p => !ignoreNoLeader || p != LeaderAndIsr.NoLeader)
     }
     doWaitUntilLeaderIsElectedOrChanged(getPartitionLeader, topic, partition, timeoutMs, oldLeaderOpt, newLeaderOpt)
   }
@@ -1019,7 +1083,7 @@ object TestUtils extends Logging {
   }
 
   def subscribeAndWaitForRecords(topic: String,
-                                 consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                 consumer: Consumer[Array[Byte], Array[Byte]],
                                  waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     pollRecordsUntilTrue(
@@ -1200,7 +1264,7 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => brokers.forall { broker =>
         broker.metadataCache.getPartitionInfo(topic, partition) match {
-          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
+          case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       },
@@ -1224,7 +1288,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(
       () => {
         brokers.forall { broker =>
-          val metadataOffset = broker.asInstanceOf[BrokerServer].metadataPublisher.publishedOffset
+          val metadataOffset = broker.asInstanceOf[BrokerServer].sharedServer.loader.lastAppliedOffset()
           metadataOffset >= controllerOffset
         }
       }, msg)
@@ -1317,10 +1381,17 @@ object TestUtils extends Logging {
   // Note: Call this method in the test itself, rather than the @AfterEach method.
   // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
   def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
-    val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
+    val nonDaemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
-    assertEquals(0, threadCount)
+    val threadCount = nonDaemonThreads.size
+    assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
+  }
+
+  def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {
+    Thread.getAllStackTraces.keySet.asScala.filter { t =>
+      isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+    }
   }
 
   def allThreadStackTraces(): String = {
@@ -1333,13 +1404,15 @@ object TestUtils extends Logging {
    * Create new LogManager instance with default configuration for testing
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
-                       defaultConfig: LogConfig = LogConfig(),
+                       defaultConfig: LogConfig = new LogConfig(new Properties),
                        configRepository: ConfigRepository = new MockConfigRepository,
-                       cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
+                       cleanerConfig: CleanerConfig = new CleanerConfig(false),
                        time: MockTime = new MockTime(),
                        interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
-                       recoveryThreadsPerDataDir: Int = 4): LogManager = {
-    new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
+                       recoveryThreadsPerDataDir: Int = 4,
+                       transactionVerificationEnabled: Boolean = false,
+                       log: Option[UnifiedLog] = None): LogManager = {
+    val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    configRepository = configRepository,
                    initialDefaultConfig = defaultConfig,
@@ -1350,14 +1423,22 @@ object TestUtils extends Logging {
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, transactionVerificationEnabled),
                    producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
                    keepPartitionMetadataFile = true,
-                   interBrokerProtocolVersion = interBrokerProtocolVersion)
+                   interBrokerProtocolVersion = interBrokerProtocolVersion,
+                   remoteStorageSystemEnable = false)
+
+    if (log.isDefined) {
+      val spyLogManager = Mockito.spy(logManager)
+      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]))
+      spyLogManager
+    } else
+      logManager
   }
 
   class MockAlterPartitionManager extends AlterPartitionManager {
@@ -1493,8 +1574,8 @@ object TestUtils extends Logging {
     waitUntilTrue(() =>
       brokers.forall(broker => topicPartitions.forall(tp => broker.replicaManager.onlinePartition(tp).isEmpty)),
       "Replica manager's should have deleted all of this topic's partitions")
-    // ensure that logs from all replicas are deleted if delete topic is marked successful in ZooKeeper
-    assertTrue(brokers.forall(broker => topicPartitions.forall(tp => broker.logManager.getLog(tp).isEmpty)),
+    // ensure that logs from all replicas are deleted
+    waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall(tp => broker.logManager.getLog(tp).isEmpty)),
       "Replica logs not deleted after delete topic is complete")
     // ensure that topic is removed from all cleaner offsets
     waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall { tp =>
@@ -1760,7 +1841,7 @@ object TestUtils extends Logging {
     *
     * @return All the records consumed by the consumer within the specified duration.
     */
-  def consumeRecordsFor[K, V](consumer: KafkaConsumer[K, V], duration: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+  def consumeRecordsFor[K, V](consumer: Consumer[K, V], duration: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val startTime = System.currentTimeMillis()
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     waitUntilTrue(() => {
@@ -1849,7 +1930,7 @@ object TestUtils extends Logging {
   }
 
   // Collect the current positions for all partition in the consumers current assignment.
-  def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
+  def consumerPositions(consumer: Consumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
     consumer.assignment.forEach { topicPartition =>
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
@@ -1857,7 +1938,7 @@ object TestUtils extends Logging {
     offsetsToCommit.toMap
   }
 
-  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+  def resetToCommittedPositions(consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
     val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
 
     consumer.assignment.forEach { topicPartition =>
@@ -1889,7 +1970,7 @@ object TestUtils extends Logging {
   def alterClientQuotas(adminClient: Admin, request: Map[ClientQuotaEntity, Map[String, Option[Double]]]): AlterClientQuotasResult = {
     val entries = request.map { case (entity, alter) =>
       val ops = alter.map { case (key, value) =>
-        new ClientQuotaAlteration.Op(key, value.map(Double.box).getOrElse(null))
+        new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull)
       }.asJavaCollection
       new ClientQuotaAlteration(entity, ops)
     }.asJavaCollection
@@ -2028,16 +2109,23 @@ object TestUtils extends Logging {
     )
   }
 
+  def currentIsr(admin: Admin, partition: TopicPartition): Set[Int] = {
+    val description = admin.describeTopics(Set(partition.topic).asJava)
+      .allTopicNames
+      .get
+      .asScala
+
+    description
+      .values
+      .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+      .map(_.id)
+      .toSet
+  }
+
   def waitForBrokersInIsr(client: Admin, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
     waitUntilTrue(
       () => {
-        val description = client.describeTopics(Set(partition.topic).asJava).allTopicNames.get.asScala
-        val isr = description
-          .values
-          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
-          .map(_.id)
-          .toSet
-
+        val isr = currentIsr(client, partition)
         brokerIds.subsetOf(isr)
       },
       s"Expected brokers $brokerIds to be in the ISR for $partition"
@@ -2146,6 +2234,16 @@ object TestUtils extends Logging {
       .count
   }
 
+  def metersCount(metricName: String): Long = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
+      .values.map {
+        case histogram: Histogram => histogram.count()
+        case meter: Meter => meter.count()
+        case _ => 0
+      }.sum
+  }
+
   def clearYammerMetrics(): Unit = {
     for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
@@ -2213,8 +2311,8 @@ object TestUtils extends Logging {
     val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
       case (topic, replicasByPartition) =>
         new ConfigResource(TOPIC, topic) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
+          new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
         ).asJavaCollection
     }
     adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
@@ -2224,8 +2322,8 @@ object TestUtils extends Logging {
     val throttles = partitions.map {
       tp =>
         new ConfigResource(TOPIC, tp.topic()) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE)
+          new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
         ).asJavaCollection
     }.toMap
     adminClient.incrementalAlterConfigs(throttles.asJava).all().get()

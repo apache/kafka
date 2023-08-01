@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -24,7 +25,6 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -54,7 +54,6 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -77,11 +76,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.util.Map.Entry.comparingByKey;
 import static java.util.UUID.randomUUID;
-
 import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsFuture;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsResult;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
@@ -422,7 +421,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             if (minReceivedMetadataVersion >= 2) {
                 populatePartitionsByHostMaps(partitionsByHost, standbyPartitionsByHost, partitionsForTask, clientMetadataMap);
             }
-            streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fullMetadata);
 
             // ---------------- Step Four ---------------- //
 
@@ -620,10 +618,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
-        log.info("All members participating in this rebalance: \n{}.",
-                 clientStates.entrySet().stream()
-                     .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
-                     .collect(Collectors.joining(Utils.NL)));
+        log.info("{} members participating in this rebalance: \n{}.",
+                clientStates.size(),
+                clientStates.entrySet().stream()
+                        .sorted(comparingByKey())
+                        .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
+                        .collect(Collectors.joining(Utils.NL)));
 
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         statefulTasks.addAll(changelogTopics.statefulTaskIds());
@@ -638,8 +638,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                    statefulTasks,
                                                                    assignmentConfigs);
 
-        log.info("Assigned tasks {} including stateful {} to clients as: \n{}.",
-                allTasks, statefulTasks, clientStates.entrySet().stream()
+        log.info("{} assigned tasks {} including stateful {} to {} clients as: \n{}.",
+                allTasks.size(),
+                allTasks,
+                statefulTasks,
+                clientStates.size(),
+                clientStates.entrySet().stream()
+                        .sorted(comparingByKey())
                         .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                         .collect(Collectors.joining(Utils.NL)));
 
@@ -680,14 +685,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         Map<TaskId, Long> allTaskEndOffsetSums;
         try {
             // Make the listOffsets request first so it can  fetch the offsets for non-source changelogs
-            // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets
-            final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture =
-                fetchEndOffsetsFuture(changelogTopics.preExistingNonSourceTopicBasedPartitions(), adminClient);
+            // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets;
+            // note that we would need to wrap all exceptions as Streams exception with partition-level fine-grained
+            // error messages
+            final ListOffsetsResult endOffsetsResult =
+                fetchEndOffsetsResult(changelogTopics.preExistingNonSourceTopicBasedPartitions(), adminClient);
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
                 fetchCommittedOffsets(changelogTopics.preExistingSourceTopicBasedPartitions(), mainConsumerSupplier.get());
 
-            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
+            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(
+                endOffsetsResult, changelogTopics.preExistingNonSourceTopicBasedPartitions());
 
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(
                 endOffsets,
@@ -696,6 +704,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException | TimeoutException e) {
+            log.info("Failed to retrieve all end offsets for changelogs, and hence could not calculate the per-task lag; " +
+                "this is not a fatal error but would cause the assignor to fallback to a naive algorithm", e);
             allTaskEndOffsetSums = changelogTopics.statefulTaskIds().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
             fetchEndOffsetsSuccessful = false;
         }
@@ -957,8 +967,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting followup rebalance be scheduled by {} for {} ms to probe for caught-up replica tasks.",
-                        consumer, nextRebalanceTimeMs);
+                log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
+                        consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
@@ -1334,8 +1344,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             partitionsByHost.keySet()
         );
 
-        final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
-        streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
+        streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, topicToPartitionInfo);
 
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread
@@ -1358,7 +1367,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
             log.info(
                 "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
-                Instant.ofEpochMilli(encodedNextScheduledRebalanceMs) // The Instant#toString format is more readable.
+                Utils.toLogDateTimeFormat(encodedNextScheduledRebalanceMs)
             );
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {
@@ -1425,7 +1434,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     "%sNumber of assigned partitions %d is not equal to "
                         + "the number of active taskIds %d, assignmentInfo=%s",
                     logPrefix, partitions.size(),
-                    info.activeTasks().size(), info.toString()
+                    info.activeTasks().size(), info
                 )
             );
         }

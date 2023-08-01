@@ -82,6 +82,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                             .setGroupInstanceId(groupInstanceId.orElse(null));
         }
 
+        public Builder(final TxnOffsetCommitRequestData data) {
+            super(ApiKeys.TXN_OFFSET_COMMIT);
+            this.data = data;
+        }
+
         @Override
         public TxnOffsetCommitRequest build(short version) {
             if (version < 3 && groupMetadataSet()) {
@@ -177,6 +182,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData()
                                                .setThrottleTimeMs(throttleTimeMs)
                                                .setTopics(responseTopicData));
+    }
+
+    @Override
+    public TxnOffsetCommitResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {

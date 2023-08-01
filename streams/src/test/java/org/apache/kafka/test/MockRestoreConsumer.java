@@ -122,7 +122,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
             throw new IllegalArgumentException("RestoreConsumer: offset should not be negative");
 
         if (seekOffset >= 0)
-            throw new IllegalStateException("RestoreConsumer: offset already seeked");
+            throw new IllegalStateException("RestoreConsumer: offset already sought");
 
         seekOffset = offset;
         currentOffset = offset;

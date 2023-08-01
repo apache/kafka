@@ -51,10 +51,24 @@ import scala.jdk.CollectionConverters._
  * In some cases we expose a volatile variable which can be read from any thread, but only
  * written from the event queue thread.
  */
-class BrokerLifecycleManager(val config: KafkaConfig,
-                             val time: Time,
-                             val threadNamePrefix: Option[String]) extends Logging {
-  val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
+class BrokerLifecycleManager(
+  val config: KafkaConfig,
+  val time: Time,
+  val threadNamePrefix: String,
+  val isZkBroker: Boolean
+) extends Logging {
+
+  private def logPrefix(): String = {
+    val builder = new StringBuilder("[BrokerLifecycleManager")
+    builder.append(" id=").append(config.nodeId)
+    if (isZkBroker) {
+      builder.append(" isZkBroker=true")
+    }
+    builder.append("] ")
+    builder.toString()
+  }
+
+  val logContext = new LogContext(logPrefix())
 
   this.logIdent = logContext.logPrefix()
 
@@ -176,7 +190,10 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   /**
    * The event queue.
    */
-  private[server] val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
+  private[server] val eventQueue = new KafkaEventQueue(time,
+    logContext,
+    threadNamePrefix + "lifecycle-manager-",
+    new ShutdownEvent())
 
   /**
    * Start the BrokerLifecycleManager.
@@ -235,7 +252,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * Start shutting down the BrokerLifecycleManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
+    eventQueue.beginShutdown("beginShutdown");
   }
 
   /**
@@ -266,9 +283,12 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       _clusterId = clusterId
       _advertisedListeners = advertisedListeners.duplicate()
       _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
-      eventQueue.scheduleDeferred("initialRegistrationTimeout",
-        new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
-        new RegistrationTimeoutEvent())
+      if (!isZkBroker) {
+        // Only KRaft brokers block on registration during startup
+        eventQueue.scheduleDeferred("initialRegistrationTimeout",
+          new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
+          new RegistrationTimeoutEvent())
+      }
       sendBrokerRegistration()
       info(s"Incarnation $incarnationId of broker $nodeId in cluster $clusterId " +
         "is now STARTING.")
@@ -285,6 +305,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     }
     val data = new BrokerRegistrationRequestData().
         setBrokerId(nodeId).
+        setIsMigratingZkBroker(isZkBroker).
         setClusterId(_clusterId).
         setFeatures(features).
         setIncarnationId(incarnationId).
@@ -462,7 +483,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
-        eventQueue.beginShutdown("registrationTimeout", new ShutdownEvent())
+        eventQueue.beginShutdown("registrationTimeout");
       }
     }
   }

@@ -145,7 +145,7 @@ class Benchmark(Test):
 
         for i in range(nblocks):
             subset = self.producer.stats[0][i*block_size:min((i+1)*block_size, len(self.producer.stats[0]))]
-            if len(subset) == 0:
+            if not subset:
                 summary.append(" Time block %d: (empty)" % i)
                 data[i] = None
             else:
@@ -173,7 +173,7 @@ class Benchmark(Test):
 
         Return aggregate latency statistics.
 
-        (Under the hood, this simply runs EndToEndLatency.scala)
+        (Under the hood, this simply runs EndToEndLatency.java)
         """
         client_version = KafkaVersion(client_version)
         broker_version = KafkaVersion(broker_version)
@@ -202,7 +202,7 @@ class Benchmark(Test):
 
         Return aggregate throughput statistics for both producer and consumer.
 
-        (Under the hood, this runs ProducerPerformance.java, and ConsumerPerformance.scala)
+        (Under the hood, this runs ProducerPerformance.java, and ConsumerPerformance.java)
         """
         client_version = KafkaVersion(client_version)
         broker_version = KafkaVersion(broker_version)

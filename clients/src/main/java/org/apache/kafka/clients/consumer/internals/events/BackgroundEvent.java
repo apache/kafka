@@ -26,6 +26,6 @@ abstract public class BackgroundEvent {
         this.type = type;
     }
     public enum EventType {
-        NOOP,
+        NOOP, ERROR,
     }
 }

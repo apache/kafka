@@ -793,11 +793,11 @@ public class RocksDBMetrics {
 
     private static Sensor createSensor(final StreamsMetricsImpl streamsMetrics,
                                        final RocksDBMetricContext metricContext,
-                                       final String sensorName) {
+                                       final String sensorSuffix) {
         return streamsMetrics.storeLevelSensor(
             metricContext.taskName(),
             metricContext.storeName(),
-            sensorName,
+            sensorSuffix,
             RecordingLevel.DEBUG);
     }
 }

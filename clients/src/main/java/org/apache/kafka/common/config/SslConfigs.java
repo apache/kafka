@@ -96,7 +96,7 @@ public class SslConfigs {
 
     public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
     public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or "
-        + "the PEM key specified in `ssl.keystore.key'.";
+        + "the PEM key specified in 'ssl.keystore.key'.";
 
     public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
     public static final String SSL_TRUSTSTORE_TYPE_DOC = "The file format of the trust store file. The values currently supported by the default `ssl.engine.factory.class` are [JKS, PKCS12, PEM].";

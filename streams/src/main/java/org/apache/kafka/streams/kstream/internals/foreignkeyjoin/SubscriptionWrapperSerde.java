@@ -93,6 +93,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 case StreamsConfig.UPGRADE_FROM_30:
                 case StreamsConfig.UPGRADE_FROM_31:
                 case StreamsConfig.UPGRADE_FROM_32:
+                case StreamsConfig.UPGRADE_FROM_33:
                     return true;
                 default:
                     return false;

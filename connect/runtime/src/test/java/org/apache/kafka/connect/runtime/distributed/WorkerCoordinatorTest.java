@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
@@ -538,11 +539,12 @@ public class WorkerCoordinatorTest {
         }
         return new JoinGroupResponse(
                 new JoinGroupResponseData().setErrorCode(error.code())
-                .setGenerationId(generationId)
-                .setProtocolName(EAGER.protocol())
-                .setLeader(memberId)
-                .setMemberId(memberId)
-                .setMembers(metadata)
+                        .setGenerationId(generationId)
+                        .setProtocolName(EAGER.protocol())
+                        .setLeader(memberId)
+                        .setMemberId(memberId)
+                        .setMembers(metadata),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
@@ -553,7 +555,8 @@ public class WorkerCoordinatorTest {
                         .setProtocolName(EAGER.protocol())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
-                        .setMembers(Collections.emptyList())
+                        .setMembers(Collections.emptyList()),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 

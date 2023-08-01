@@ -146,7 +146,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                         " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
                         " an application reset and state store directory cleanup will be required.",
                     tp.topic(),
-                    checkpointFile.toString()
+                    checkpointFile
                 );
                 throw new StreamsException("Encountered a topic-partition not associated with any global state store");
             }

@@ -72,6 +72,7 @@ public class WindowedStreamPartitionerTest {
                 final TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
                 final Windowed<Integer> windowedKey = new Windowed<>(key, window);
+                @SuppressWarnings("deprecation")
                 final Integer actual = streamPartitioner.partition(topicName, windowedKey, value, infos.size());
 
                 assertEquals(expected, actual);

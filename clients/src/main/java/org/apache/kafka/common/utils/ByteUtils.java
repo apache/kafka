@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -25,6 +26,9 @@ import java.nio.ByteBuffer;
 
 /**
  * This classes exposes low-level methods for reading/writing from byte streams or buffers.
+ *
+ * The implementation of these methods has been tuned for JVM and the empirical calculations could be found
+ * using ByteUtilsBenchmark.java
  */
 public final class ByteUtils {
 
@@ -82,6 +86,16 @@ public final class ByteUtils {
     }
 
     /**
+     * Read a big-endian integer from a byte array
+     */
+    public static int readIntBE(byte[] buffer, int offset) {
+        return ((buffer[offset] & 0xFF) << 24)
+            | ((buffer[offset + 1] & 0xFF) << 16)
+            | ((buffer[offset + 2] & 0xFF) << 8)
+            | (buffer[offset + 3] & 0xFF);
+    }
+
+    /**
      * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
      *
      * @param buffer The buffer to write to
@@ -134,47 +148,84 @@ public final class ByteUtils {
      * Read an integer stored in variable-length format using unsigned decoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
      *
+     * The implementation is based on Netty's decoding of varint.
+     * @see <a href="https://github.com/netty/netty/blob/59aa6e635b9996cf21cd946e64353270679adc73/codec/src/main/java/io/netty/handler/codec/protobuf/ProtobufVarint32FrameDecoder.java#L73">Netty's varint decoding</a>
+     *
      * @param buffer The buffer to read from
      * @return The integer read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
      */
     public static int readUnsignedVarint(ByteBuffer buffer) {
-        int value = 0;
-        int i = 0;
-        int b;
-        while (((b = buffer.get()) & 0x80) != 0) {
-            value |= (b & 0x7f) << i;
-            i += 7;
-            if (i > 28)
-                throw illegalVarintException(value);
+        byte tmp = buffer.get();
+        if (tmp >= 0) {
+            return tmp;
+        } else {
+            int result = tmp & 127;
+            if ((tmp = buffer.get()) >= 0) {
+                result |= tmp << 7;
+            } else {
+                result |= (tmp & 127) << 7;
+                if ((tmp = buffer.get()) >= 0) {
+                    result |= tmp << 14;
+                } else {
+                    result |= (tmp & 127) << 14;
+                    if ((tmp = buffer.get()) >= 0) {
+                        result |= tmp << 21;
+                    } else {
+                        result |= (tmp & 127) << 21;
+                        result |= (tmp = buffer.get()) << 28;
+                        if (tmp < 0) {
+                            throw illegalVarintException(result);
+                        }
+                    }
+                }
+            }
+            return result;
         }
-        value |= b << i;
-        return value;
     }
 
     /**
      * Read an integer stored in variable-length format using unsigned decoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
      *
+     * The implementation is based on Netty's decoding of varint.
+     * @see <a href="https://github.com/netty/netty/blob/59aa6e635b9996cf21cd946e64353270679adc73/codec/src/main/java/io/netty/handler/codec/protobuf/ProtobufVarint32FrameDecoder.java#L73">Netty's varint decoding</a>
+     *
      * @param in The input to read from
      * @return The integer read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
-     * @throws IOException              if {@link DataInput} throws {@link IOException}
+     * @throws IOException              if {@link InputStream} throws {@link IOException}
+     * @throws EOFException             if {@link InputStream} throws {@link EOFException}
      */
-    public static int readUnsignedVarint(DataInput in) throws IOException {
-        int value = 0;
-        int i = 0;
-        int b;
-        while (((b = in.readByte()) & 0x80) != 0) {
-            value |= (b & 0x7f) << i;
-            i += 7;
-            if (i > 28)
-                throw illegalVarintException(value);
+    static int readUnsignedVarint(InputStream in) throws IOException {
+        byte tmp = (byte) in.read();
+        if (tmp >= 0) {
+            return tmp;
+        } else {
+            int result = tmp & 127;
+            if ((tmp = (byte) in.read()) >= 0) {
+                result |= tmp << 7;
+            } else {
+                result |= (tmp & 127) << 7;
+                if ((tmp = (byte) in.read()) >= 0) {
+                    result |= tmp << 14;
+                } else {
+                    result |= (tmp & 127) << 14;
+                    if ((tmp = (byte) in.read()) >= 0) {
+                        result |= tmp << 21;
+                    } else {
+                        result |= (tmp & 127) << 21;
+                        result |= (tmp = (byte) in.read()) << 28;
+                        if (tmp < 0) {
+                            throw illegalVarintException(result);
+                        }
+                    }
+                }
+            }
+            return result;
         }
-        value |= b << i;
-        return value;
     }
 
     /**
@@ -201,7 +252,7 @@ public final class ByteUtils {
      * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
-    public static int readVarint(DataInput in) throws IOException {
+    public static int readVarint(InputStream in) throws IOException {
         int value = readUnsignedVarint(in);
         return (value >>> 1) ^ -(value & 1);
     }
@@ -216,11 +267,11 @@ public final class ByteUtils {
      * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
-    public static long readVarlong(DataInput in) throws IOException {
+    public static long readVarlong(InputStream in) throws IOException {
         long value = 0L;
         int i = 0;
         long b;
-        while (((b = in.readByte()) & 0x80) != 0) {
+        while (((b = in.read()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
             if (i > 63)
@@ -240,6 +291,12 @@ public final class ByteUtils {
      * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      */
     public static long readVarlong(ByteBuffer buffer)  {
+        long raw =  readUnsignedVarlong(buffer);
+        return (raw >>> 1) ^ -(raw & 1);
+    }
+
+    // visible for testing
+    static long readUnsignedVarlong(ByteBuffer buffer)  {
         long value = 0L;
         int i = 0;
         long b;
@@ -250,7 +307,7 @@ public final class ByteUtils {
                 throw illegalVarlongException(value);
         }
         value |= b << i;
-        return (value >>> 1) ^ -(value & 1);
+        return value;
     }
 
     /**
@@ -278,33 +335,68 @@ public final class ByteUtils {
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
      * into the buffer.
      *
+     * Implementation copied from https://github.com/astei/varint-writing-showdown/tree/dev (MIT License)
+     * @see <a href="https://github.com/astei/varint-writing-showdown/blob/6b1a4baec4b1f0ce65fa40cf0b282ec775fdf43e/src/jmh/java/me/steinborn/varintshowdown/res/SmartNoDataDependencyUnrolledVarIntWriter.java#L8"> Sample implementation </a>
+     *
      * @param value The value to write
      * @param buffer The output to write to
      */
     public static void writeUnsignedVarint(int value, ByteBuffer buffer) {
-        while ((value & 0xffffff80) != 0L) {
-            byte b = (byte) ((value & 0x7f) | 0x80);
-            buffer.put(b);
-            value >>>= 7;
+        if ((value & (0xFFFFFFFF << 7)) == 0) {
+            buffer.put((byte) value);
+        } else {
+            buffer.put((byte) (value & 0x7F | 0x80));
+            if ((value & (0xFFFFFFFF << 14)) == 0) {
+                buffer.put((byte) ((value >>> 7) & 0xFF));
+            } else {
+                buffer.put((byte) ((value >>> 7) & 0x7F | 0x80));
+                if ((value & (0xFFFFFFFF << 21)) == 0) {
+                    buffer.put((byte) ((value >>> 14) & 0xFF));
+                } else {
+                    buffer.put((byte) ((value >>> 14) & 0x7F | 0x80));
+                    if ((value & (0xFFFFFFFF << 28)) == 0) {
+                        buffer.put((byte) ((value >>> 21) & 0xFF));
+                    } else {
+                        buffer.put((byte) ((value >>> 21) & 0x7F | 0x80));
+                        buffer.put((byte) ((value >>> 28) & 0xFF));
+                    }
+                }
+            }
         }
-        buffer.put((byte) value);
     }
 
     /**
      * Write the given integer following the variable-length unsigned encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
      * into the buffer.
+     * 
+     * For implementation notes, see {@link #writeUnsignedVarint(int, ByteBuffer)}
      *
      * @param value The value to write
      * @param out The output to write to
      */
     public static void writeUnsignedVarint(int value, DataOutput out) throws IOException {
-        while ((value & 0xffffff80) != 0L) {
-            byte b = (byte) ((value & 0x7f) | 0x80);
-            out.writeByte(b);
-            value >>>= 7;
+        if ((value & (0xFFFFFFFF << 7)) == 0) {
+            out.writeByte(value);
+        } else {
+            out.writeByte(value & 0x7F | 0x80);
+            if ((value & (0xFFFFFFFF << 14)) == 0) {
+                out.writeByte(value >>> 7);
+            } else {
+                out.writeByte((value >>> 7) & 0x7F | 0x80);
+                if ((value & (0xFFFFFFFF << 21)) == 0) {
+                    out.writeByte(value >>> 14);
+                } else {
+                    out.writeByte((byte) ((value >>> 14) & 0x7F | 0x80));
+                    if ((value & (0xFFFFFFFF << 28)) == 0) {
+                        out.writeByte(value >>> 21);
+                    } else {
+                        out.writeByte((value >>> 21) & 0x7F | 0x80);
+                        out.writeByte(value >>> 28);
+                    }
+                }
+            }
         }
-        out.writeByte((byte) value);
     }
 
     /**
@@ -358,6 +450,11 @@ public final class ByteUtils {
      */
     public static void writeVarlong(long value, ByteBuffer buffer) {
         long v = (value << 1) ^ (value >> 63);
+        writeUnsignedVarlong(v, buffer);
+    }
+
+    // visible for testing and benchmarking
+    public static void writeUnsignedVarlong(long v, ByteBuffer buffer) {
         while ((v & 0xffffffffffffff80L) != 0L) {
             byte b = (byte) ((v & 0x7f) | 0x80);
             buffer.put(b);
@@ -427,8 +524,11 @@ public final class ByteUtils {
      * @see #sizeOfUnsignedVarint(int)
      */
     public static int sizeOfVarlong(long value) {
-        long v = (value << 1) ^ (value >> 63);
+        return sizeOfUnsignedVarlong((value << 1) ^ (value >> 63));
+    }
 
+    // visible for benchmarking
+    public static int sizeOfUnsignedVarlong(long v) {
         // For implementation notes @see #sizeOfUnsignedVarint(int)
         // Similar logic is applied to allow for 64bit input -> 1-9byte output.
         // return (70 - leadingZeros) / 7 + leadingZeros / 64;

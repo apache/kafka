@@ -19,12 +19,11 @@ package kafka.coordinator.transaction
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.{LogConfig, UnifiedLog}
-import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache, RequestLocal}
+import kafka.log.UnifiedLog
+import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -35,6 +34,7 @@ import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecor
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -43,6 +43,7 @@ import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
+import scala.util.Success
 
 class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[Transaction] {
   private val nTransactions = nThreads * 10
@@ -82,7 +83,11 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     val pidGenerator: ProducerIdManager = mock(classOf[ProducerIdManager])
     when(pidGenerator.generateProducerId())
-      .thenAnswer(_ => if (bumpProducerId) producerId + 1 else producerId)
+      .thenAnswer(_ => if (bumpProducerId) {
+        Success(producerId + 1)
+      } else {
+        Success(producerId)
+      })
     val brokerNode = new Node(0, "host", 10)
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     when(metadataCache.getPartitionLeaderEndpoint(
@@ -384,7 +389,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       new WriteTxnMarkersResponse(pidErrorMap)
     }
     synchronized {
-      txnMarkerChannelManager.generateRequests().foreach { requestAndHandler =>
+      txnMarkerChannelManager.generateRequests().asScala.foreach { requestAndHandler =>
         val request = requestAndHandler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
         val response = createResponse(request)
         requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
@@ -467,9 +472,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt,
-      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
-      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+      .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 
     when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
     val bufferCaptor: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
@@ -498,7 +503,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   abstract class TxnOperation[R] extends Operation {
     @volatile var result: Option[R] = None
+    @volatile var results: Map[TopicPartition, R] = _
+
     def resultCallback(r: R): Unit = this.result = Some(r)
+    
   }
 
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {

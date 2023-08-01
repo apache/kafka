@@ -17,11 +17,13 @@
 
 package kafka.server.metadata
 
+import kafka.coordinator.transaction.TransactionCoordinator
+
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import kafka.log.UnifiedLog
-import kafka.server.{BrokerServer, KafkaConfig}
+import kafka.log.{LogManager, UnifiedLog}
+import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
@@ -30,18 +32,22 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
+import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance, TopicImage, TopicsImage}
+import org.apache.kafka.image.loader.LogDeltaManifest
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.raft.LeaderAndEpoch
+import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
-import org.mockito.Mockito.doThrow
+import org.mockito.Mockito.{doThrow, mock, verify}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
+import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataPublisherTest {
@@ -154,16 +160,14 @@ class BrokerMetadataPublisherTest {
     partitions: Map[Int, Seq[Int]]
   ): TopicImage = {
     val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
-      Int.box(partitionId) -> new PartitionRegistration(
-        replicas.toArray,
-        replicas.toArray,
-        Array.empty[Int],
-        Array.empty[Int],
-        replicas.head,
-        LeaderRecoveryState.RECOVERED,
-        0,
-        0
-      )
+      Int.box(partitionId) -> new PartitionRegistration.Builder().
+        setReplicas(replicas.toArray).
+        setIsr(replicas.toArray).
+        setLeader(replicas.head).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(0).
+        setPartitionEpoch(0).
+        build()
     }
     new TopicImage(topic, topicId, partitionRegistrations.asJava)
   }
@@ -171,31 +175,22 @@ class BrokerMetadataPublisherTest {
   private def topicsImage(
     topics: Seq[TopicImage]
   ): TopicsImage = {
-    val idsMap = topics.map(t => t.id -> t).toMap
-    val namesMap = topics.map(t => t.name -> t).toMap
-    new TopicsImage(idsMap.asJava, namesMap.asJava)
+    var retval = TopicsImage.EMPTY
+    topics.foreach { t => retval = retval.including(t) }
+    retval
   }
 
-  private def newMockPublisher(
+  private def newMockDynamicConfigPublisher(
     broker: BrokerServer,
-    errorHandler: FaultHandler = new MockFaultHandler("publisher")
-  ): BrokerMetadataPublisher = {
-    Mockito.spy(new BrokerMetadataPublisher(
+    errorHandler: FaultHandler
+  ): DynamicConfigPublisher = {
+    Mockito.spy(new DynamicConfigPublisher(
       conf = broker.config,
-      metadataCache = broker.metadataCache,
-      logManager = broker.logManager,
-      replicaManager = broker.replicaManager,
-      groupCoordinator = broker.groupCoordinator,
-      txnCoordinator = broker.transactionCoordinator,
-      clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
+      faultHandler = errorHandler,
       dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
-      _authorizer = Option.empty,
-      errorHandler,
-      errorHandler
-    ))
+      nodeType = "broker"))
   }
 
-  @Disabled
   @Test
   def testReloadUpdatedFilesWithoutConfigChange(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
@@ -207,13 +202,14 @@ class BrokerMetadataPublisherTest {
       cluster.startup()
       cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
-      val publisher = newMockPublisher(broker)
+      val publisher = newMockDynamicConfigPublisher(broker, cluster.nonFatalFaultHandler())
+
       val numTimesReloadCalled = new AtomicInteger(0)
       Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
         thenAnswer(new Answer[Unit]() {
           override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
         })
-      broker.metadataListener.alterPublisher(publisher).get()
+      broker.brokerMetadataPublisher.dynamicConfigPublisher = publisher
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(0, numTimesReloadCalled.get())
@@ -240,23 +236,24 @@ class BrokerMetadataPublisherTest {
 
   @Test
   def testExceptionInUpdateCoordinator(): Unit = {
-    val errorHandler = new MockFaultHandler("publisher")
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
-      setMetadataFaultHandler(errorHandler).build()
+      build()
     try {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
       TestUtils.retry(60000) {
-        assertNotNull(broker.metadataPublisher)
+        assertNotNull(broker.brokerMetadataPublisher)
       }
-      val publisher = Mockito.spy(broker.metadataPublisher)
+      val publisher = Mockito.spy(broker.brokerMetadataPublisher)
       doThrow(new RuntimeException("injected failure")).when(publisher).updateCoordinator(any(), any(), any(), any(), any())
-      broker.metadataListener.alterPublisher(publisher).get()
+      broker.sharedServer.loader.removeAndClosePublisher(broker.brokerMetadataPublisher).get(1, TimeUnit.MINUTES)
+      broker.metadataPublishers.remove(broker.brokerMetadataPublisher)
+      broker.sharedServer.loader.installPublishers(List(publisher).asJava).get(1, TimeUnit.MINUTES)
       val admin = Admin.create(cluster.clientProperties())
       try {
         admin.createTopics(singletonList(new NewTopic("foo", 1, 1.toShort))).all().get()
@@ -264,12 +261,47 @@ class BrokerMetadataPublisherTest {
         admin.close()
       }
       TestUtils.retry(60000) {
-        assertTrue(Option(errorHandler.firstException()).
+        assertTrue(Option(cluster.nonFatalFaultHandler().firstException()).
           flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
       }
     } finally {
-      errorHandler.setIgnore(true)
+      cluster.nonFatalFaultHandler().setIgnore(true)
       cluster.close()
     }
+  }
+
+  @Test
+  def testNewImagePushedToGroupCoordinator(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
+    val metadataCache = new KRaftMetadataCache(0)
+    val logManager = mock(classOf[LogManager])
+    val replicaManager = mock(classOf[ReplicaManager])
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val faultHandler = mock(classOf[FaultHandler])
+
+    val metadataPublisher = new BrokerMetadataPublisher(
+      config,
+      metadataCache,
+      logManager,
+      replicaManager,
+      groupCoordinator,
+      mock(classOf[TransactionCoordinator]),
+      mock(classOf[DynamicConfigPublisher]),
+      mock(classOf[DynamicClientQuotaPublisher]),
+      mock(classOf[ScramPublisher]),
+      None,
+      faultHandler,
+      faultHandler
+    )
+
+    val image = MetadataImage.EMPTY
+    val delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
+
+    metadataPublisher.onMetadataUpdate(delta, image,
+      new LogDeltaManifest(MetadataProvenance.EMPTY, LeaderAndEpoch.UNKNOWN, 1, 100, 42));
+
+    verify(groupCoordinator).onNewMetadataImage(image, delta)
   }
 }

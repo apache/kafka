@@ -17,13 +17,20 @@
 
 package kafka.tools
 
-import kafka.tools.ConsoleProducer.LineMessageReader
-import kafka.utils.Exit
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
-import org.junit.jupiter.api.Test
+import kafka.common.MessageReader
 
+import kafka.tools.ConsoleProducer.LineMessageReader
+import kafka.utils.{Exit, TestUtils}
+import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.tools.api.RecordReader
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Test
+import org.mockito.Mockito
+
+import java.io.InputStream
 import java.util
+import java.util.Properties
+import scala.annotation.nowarn
 
 class ConsoleProducerTest {
 
@@ -135,9 +142,28 @@ class ConsoleProducerTest {
   def testParseKeyProp(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
     val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
-    reader.init(System.in,ConsoleProducer.getReaderProps(config))
-    assert(reader.keySeparator == "#")
-    assert(reader.parseKey)
+    reader.configure(ConsoleProducer.getReaderProps(config).asInstanceOf[java.util.Map[String, _]])
+    assertTrue(reader.keySeparator == "#")
+    assertTrue(reader.parseKey)
+  }
+
+  @Test
+  def testParseReaderConfigFile(): Unit = {
+    val propsFile = TestUtils.tempPropertiesFile(Map("parse.key" -> "true", "key.separator" -> "|"))
+
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "key.separator=;",
+      "--property", "parse.headers=true",
+      "--reader-config", propsFile.getAbsolutePath
+    )
+    val config = new ConsoleProducer.ProducerConfig(args)
+    val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
+    reader.configure(ConsoleProducer.getReaderProps(config).asInstanceOf[java.util.Map[String, _]])
+    assertEquals(";", reader.keySeparator)
+    assertTrue(reader.parseKey)
+    assertTrue(reader.parseHeaders)
   }
 
   @Test
@@ -196,4 +222,61 @@ class ConsoleProducerTest {
       producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG))
   }
 
+  @Test
+  def testNewReader(): Unit = {
+    ConsoleProducerTest.configureCount = 0
+    ConsoleProducerTest.closeCount = 0
+    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.TestMessageReader].getName, new Properties())
+    // the deprecated MessageReader get configured when creating records
+    assertEquals(0, ConsoleProducerTest.configureCount)
+    reader.readRecords(System.in)
+    assertEquals(1, ConsoleProducerTest.configureCount)
+    assertEquals(0, ConsoleProducerTest.closeCount)
+    assertThrows(classOf[IllegalStateException], () => reader.readRecords(System.in))
+    reader.close()
+    assertEquals(1, ConsoleProducerTest.closeCount)
+
+    ConsoleProducerTest.configureCount = 0
+    ConsoleProducerTest.closeCount = 0
+
+    val reader1 = ConsoleProducer.newReader(classOf[ConsoleProducerTest.TestRecordReader].getName, new Properties())
+    assertEquals(1, ConsoleProducerTest.configureCount)
+    assertEquals(0, ConsoleProducerTest.closeCount)
+    reader1.close()
+    assertEquals(1, ConsoleProducerTest.closeCount)
+  }
+
+  @Test
+  def testLoopReader(): Unit = {
+    ConsoleProducerTest.configureCount = 0
+    ConsoleProducerTest.closeCount = 0
+    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.TestRecordReader].getName, new Properties())
+
+    ConsoleProducer.loopReader(Mockito.mock(classOf[Producer[Array[Byte], Array[Byte]]]),
+      reader, System.in, false)
+
+    assertEquals(1, ConsoleProducerTest.configureCount)
+    assertEquals(1, ConsoleProducerTest.closeCount)
+  }
+}
+
+@nowarn("cat=deprecation")
+object ConsoleProducerTest {
+  var configureCount = 0
+  var closeCount = 0
+  class TestMessageReader extends MessageReader {
+    override def init(inputStream: InputStream, props: Properties): Unit = configureCount += 1
+    override def readMessage(): ProducerRecord[Array[Byte], Array[Byte]] = null
+
+    override def close(): Unit = closeCount += 1
+
+  }
+
+  class TestRecordReader extends RecordReader {
+    override def configure(configs: util.Map[String, _]): Unit = configureCount += 1
+    override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] =
+      java.util.Collections.emptyIterator()
+
+    override def close(): Unit = closeCount += 1
+  }
 }

@@ -4,7 +4,7 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11 and 17. We set the `release` parameter in javac and scalac
+We build and test Apache Kafka with Java 8, 11, 17 and 20. We set the `release` parameter in javac and scalac
 to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
 used for compilation). Java 8 support has been deprecated since Apache Kafka 3.0 and will be removed in Apache
 Kafka 4.0 (see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) for more details).
@@ -37,15 +37,15 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew integrationTest
     
 ### Force re-running tests without code change ###
-    ./gradlew -Prerun-tests test
-    ./gradlew -Prerun-tests unitTest
-    ./gradlew -Prerun-tests integrationTest
+    ./gradlew test --rerun
+    ./gradlew unitTest --rerun
+    ./gradlew integrationTest --rerun
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
 
 ### Repeatedly running a particular unit/integration test ###
-    I=0; while ./gradlew clients:test -Prerun-tests --tests RequestResponseTest --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
+    I=0; while ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
 
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
@@ -263,6 +263,10 @@ available to the JVM. The value must be between 1 and 16 (inclusive).
 * `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
 coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
 varies, but 15-20% is a reasonable estimate).
+* `keepAliveMode`: configures the keep alive mode for the Gradle compilation daemon - reuse improves start-up time. The values should 
+be one of `daemon` or `session` (the default is `daemon`). `daemon` keeps the daemon alive until it's explicitly stopped while
+`session` keeps it alive until the end of the build session. This currently only affects the Scala compiler, see
+https://github.com/gradle/gradle/pull/21034 for a PR that attempts to do the same for the Java compiler.
 * `scalaOptimizerMode`: configures the optimizing behavior of the scala compiler, the value should be one of `none`, `method`, `inline-kafka` or
 `inline-scala` (the default is `inline-kafka`). `none` is the scala compiler default, which only eliminates unreachable code. `method` also
 includes method-local optimizations. `inline-kafka` adds inlining of methods within the kafka packages. Finally, `inline-scala` also
@@ -284,4 +288,4 @@ See [vagrant/README.md](vagrant/README.md).
 Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
 
 To contribute follow the instructions here:
- * https://kafka.apache.org/contributing.html
+ * https://kafka.apache.org/contributing.html 

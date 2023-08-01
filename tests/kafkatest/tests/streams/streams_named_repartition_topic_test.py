@@ -57,7 +57,7 @@ class StreamsNamedRepartitionTopicTest(Test):
                                            acks=1)
 
     @cluster(num_nodes=8)
-    @matrix(metadata_quorum=[quorum.remote_kraft])
+    @matrix(metadata_quorum=[quorum.isolated_kraft])
     def test_upgrade_topology_with_named_repartition_topic(self, metadata_quorum):
         if self.zookeeper:
             self.zookeeper.start()

@@ -64,7 +64,7 @@ public class CompositeReadOnlySessionStoreTest {
     }
 
     @Test
-    public void shouldFetchResulstFromUnderlyingSessionStore() {
+    public void shouldFetchResultsFromUnderlyingSessionStore() {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(10, 10)), 2L);
 

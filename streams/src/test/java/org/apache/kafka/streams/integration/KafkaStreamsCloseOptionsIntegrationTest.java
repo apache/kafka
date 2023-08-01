@@ -57,7 +57,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 
 @Category({IntegrationTest.class})
@@ -162,7 +161,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(30));
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close(new CloseOptions().leaveGroup(true).timeout(Duration.ofSeconds(30)));

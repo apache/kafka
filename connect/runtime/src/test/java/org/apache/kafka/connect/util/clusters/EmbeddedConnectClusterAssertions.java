@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -37,6 +38,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.Assert.assertEquals;
 
 /**
  * A set of common assertions that can be applied to a Connect cluster during integration testing
@@ -301,7 +303,8 @@ public class EmbeddedConnectClusterAssertions {
     }
 
     /**
-     * Assert that a connector is running with at least the given number of tasks all in running state
+     * Assert that a connector is running, that it has a specific number of tasks, and that all of
+     * its tasks are in the RUNNING state.
      *
      * @param connectorName the connector name
      * @param numTasks the number of tasks
@@ -321,6 +324,33 @@ public class EmbeddedConnectClusterAssertions {
                 ).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS,
                 "The connector or exactly " + numTasks + " tasks are not running.");
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
+     * Assert that a connector is paused, that it has a specific number of tasks, and that all of
+     * its tasks are in the PAUSED state.
+     *
+     * @param connectorName the connector name
+     * @param numTasks the number of tasks
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorAndExactlyNumTasksArePaused(String connectorName, int numTasks, String detailMessage)
+            throws InterruptedException {
+        try {
+            waitForCondition(
+                    () -> checkConnectorState(
+                            connectorName,
+                            AbstractStatus.State.PAUSED,
+                            numTasks,
+                            AbstractStatus.State.PAUSED,
+                            Integer::equals
+                    ).orElse(false),
+                    CONNECTOR_SHUTDOWN_DURATION_MS,
+                    "The connector or exactly " + numTasks + " tasks are not paused.");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -415,11 +445,11 @@ public class EmbeddedConnectClusterAssertions {
      * @param detailMessage the assertion message
      * @throws InterruptedException
      */
-    public void assertConnectorAndTasksAreStopped(String connectorName, String detailMessage)
+    public void assertConnectorAndTasksAreNotRunning(String connectorName, String detailMessage)
             throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkConnectorAndTasksAreStopped(connectorName),
+                () -> checkConnectorAndTasksAreNotRunning(connectorName),
                 CONNECTOR_SETUP_DURATION_MS,
                 "At least the connector or one of its tasks is still running");
         } catch (AssertionError e) {
@@ -433,7 +463,7 @@ public class EmbeddedConnectClusterAssertions {
      * @param connectorName the connector
      * @return true if the connector and all the tasks are not in RUNNING state; false otherwise
      */
-    protected boolean checkConnectorAndTasksAreStopped(String connectorName) {
+    protected boolean checkConnectorAndTasksAreNotRunning(String connectorName) {
         ConnectorStateInfo info;
         try {
             info = connect.connectorStatus(connectorName);
@@ -448,6 +478,35 @@ public class EmbeddedConnectClusterAssertions {
         }
         return !info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
                 && info.tasks().stream().noneMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
+    }
+
+
+    /**
+     * Assert that a connector is in the stopped state and has no tasks.
+     *
+     * @param connectorName the connector name
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorIsStopped(String connectorName, String detailMessage)
+            throws InterruptedException {
+        try {
+            waitForCondition(
+                    () -> checkConnectorState(
+                            connectorName,
+                            AbstractStatus.State.STOPPED,
+                            0,
+                            null,
+                            Integer::equals
+                    ).orElse(false),
+                    CONNECTOR_SHUTDOWN_DURATION_MS,
+                    "At least the connector or one of its tasks is still running");
+            // If the connector is truly stopped, we should also see an empty set of tasks and task configs
+            assertEquals(Collections.emptyList(), connect.connectorInfo(connectorName).tasks());
+            assertEquals(Collections.emptyMap(), connect.taskConfigs(connectorName));
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
     }
 
     /**

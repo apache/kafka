@@ -37,6 +37,7 @@ object Serdes {
   implicit def JavaDouble: Serde[java.lang.Double] = JSerdes.Double()
   implicit def Integer: Serde[Int] = JSerdes.Integer().asInstanceOf[Serde[Int]]
   implicit def JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
+  implicit def UUID: Serde[util.UUID] = JSerdes.UUID()
 
   implicit def timeWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.TimeWindowedSerde[T] =
     new WindowedSerdes.TimeWindowedSerde[T](tSerde)

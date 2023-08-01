@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -148,8 +149,12 @@ public class TaskManager {
         return topologyMetadata;
     }
 
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
+    ConsumerGroupMetadata consumerGroupMetadata() {
+        return mainConsumer.groupMetadata();
+    }
+
+    void consumerCommitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        mainConsumer.commitSync(offsets);
     }
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
@@ -160,7 +165,7 @@ public class TaskManager {
         return activeTaskCreator.threadProducer();
     }
 
-    boolean isRebalanceInProgress() {
+    boolean rebalanceInProgress() {
         return rebalanceInProgress;
     }
 
@@ -218,6 +223,9 @@ public class TaskManager {
             final Collection<Task> tasksToCommit = allTasks()
                 .values()
                 .stream()
+                // TODO: once we remove state restoration from the stream thread, we can also remove
+                //  the RESTORING state here, since there will not be any restoring tasks managed
+                //  by the stream thread anymore.
                 .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
                 .filter(t -> !corruptedTasks.contains(t.id()))
                 .collect(Collectors.toSet());
@@ -289,7 +297,13 @@ public class TaskManager {
 
                 task.addPartitionsForOffsetReset(assignedToPauseAndReset);
             }
+            if (stateUpdater != null) {
+                tasks.removeTask(task);
+            }
             task.revive();
+            if (stateUpdater != null) {
+                tasks.addPendingTaskToInit(Collections.singleton(task));
+            }
         }
     }
 
@@ -309,7 +323,7 @@ public class TaskManager {
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
         topologyMetadata.addSubscribedTopicsFromAssignment(
-            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()),
             logPrefix
         );
 
@@ -456,8 +470,17 @@ public class TaskManager {
                                              final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                              final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                              final Set<Task> tasksToCloseClean) {
+        handleTasksPendingInitialization();
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         handleTasksInStateUpdater(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    private void handleTasksPendingInitialization() {
+        // All tasks pending initialization are not part of the usual bookkeeping
+        for (final Task task : tasks.drainPendingTaskToInit()) {
+            task.suspend();
+            task.closeClean();
+        }
     }
 
     private void handleRunningAndSuspendedTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
@@ -731,8 +754,12 @@ public class TaskManager {
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         addTasksToStateUpdater();
-        handleExceptionsFromStateUpdater();
-        handleRemovedTasksFromStateUpdater();
+        if (stateUpdater.hasExceptionsAndFailedTasks()) {
+            handleExceptionsFromStateUpdater();
+        }
+        if (stateUpdater.hasRemovedTasks()) {
+            handleRemovedTasksFromStateUpdater();
+        }
         if (stateUpdater.restoresActiveTasks()) {
             handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
@@ -810,10 +837,24 @@ public class TaskManager {
     }
 
     private void addTasksToStateUpdater() {
+        final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
         for (final Task task : tasks.drainPendingTaskToInit()) {
-            task.initializeIfNeeded();
-            stateUpdater.add(task);
+            try {
+                task.initializeIfNeeded();
+                stateUpdater.add(task);
+            } catch (final LockException lockException) {
+                // The state directory may still be locked by another thread, when the rebalance just happened.
+                // Retry in the next iteration.
+                log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
+                tasks.addPendingTaskToInit(Collections.singleton(task));
+            } catch (final RuntimeException e) {
+                // need to add task back to the bookkeeping to be handled by the stream thread
+                tasks.addTask(task);
+                taskExceptions.put(task.id(), e);
+            }
         }
+
+        maybeThrowTaskExceptions(taskExceptions);
     }
 
     public void handleExceptionsFromStateUpdater() {
@@ -1083,6 +1124,12 @@ public class TaskManager {
         }
     }
 
+    public void signalResume() {
+        if (stateUpdater != null) {
+            stateUpdater.signalResume();
+        }
+    }
+
     /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
      * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.
@@ -1094,25 +1141,30 @@ public class TaskManager {
         // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
         // just have an empty changelogOffsets map.
-        for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.allTaskIds())) {
-            final Task task = tasks.contains(id) ? tasks.task(id) : null;
-            // Closed and uninitialized tasks don't have any offsets so we should read directly from the checkpoint
-            if (task != null && task.state() != State.CREATED && task.state() != State.CLOSED) {
+        final Map<TaskId, Task> tasks = allTasks();
+        final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks =
+            union(HashSet::new, lockedTaskDirectories, tasks.keySet());
+        for (final Task task : tasks.values()) {
+            if (task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
                 if (changelogOffsets.isEmpty()) {
-                    log.debug("Skipping to encode apparently stateless (or non-logged) offset sum for task {}", id);
+                    log.debug("Skipping to encode apparently stateless (or non-logged) offset sum for task {}",
+                        task.id());
                 } else {
-                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, changelogOffsets));
+                    taskOffsetSums.put(task.id(), sumOfChangelogOffsets(task.id(), changelogOffsets));
                 }
-            } else {
-                final File checkpointFile = stateDirectory.checkpointFileFor(id);
-                try {
-                    if (checkpointFile.exists()) {
-                        taskOffsetSums.put(id, sumOfChangelogOffsets(id, new OffsetCheckpoint(checkpointFile).read()));
-                    }
-                } catch (final IOException e) {
-                    log.warn(String.format("Exception caught while trying to read checkpoint for task %s:", id), e);
+                lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks.remove(task.id());
+            }
+        }
+
+        for (final TaskId id : lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks) {
+            final File checkpointFile = stateDirectory.checkpointFileFor(id);
+            try {
+                if (checkpointFile.exists()) {
+                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, new OffsetCheckpoint(checkpointFile).read()));
                 }
+            } catch (final IOException e) {
+                log.warn(String.format("Exception caught while trying to read checkpoint for task %s:", id), e);
             }
         }
 
@@ -1130,6 +1182,7 @@ public class TaskManager {
         // current set of actually-locked tasks.
         lockedTaskDirectories.clear();
 
+        final Map<TaskId, Task> allTasks = allTasks();
         for (final TaskDirectory taskDir : stateDirectory.listNonEmptyTaskDirectories()) {
             final File dir = taskDir.file();
             final String namedTopology = taskDir.namedTopology();
@@ -1137,7 +1190,7 @@ public class TaskManager {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
-                    if (!tasks.contains(id)) {
+                    if (!allTasks.containsKey(id)) {
                         log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                     }
                 }
@@ -1281,6 +1334,8 @@ public class TaskManager {
         if (fatalException != null) {
             throw fatalException;
         }
+
+        log.info("Shutdown complete");
     }
 
     private void shutdownStateUpdater() {
@@ -1502,7 +1557,38 @@ public class TaskManager {
     Map<TaskId, Task> allTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
+        if (stateUpdater != null) {
+            final Map<TaskId, Task> ret = stateUpdater.getTasks().stream().collect(Collectors.toMap(Task::id, x -> x));
+            ret.putAll(tasks.allTasksPerId());
+            return ret;
+        } else {
+            return tasks.allTasksPerId();
+        }
+    }
+
+    /**
+     * Returns tasks owned by the stream thread. With state updater disabled, these are all tasks. With
+     * state updater enabled, this does not return any tasks currently owned by the state updater.
+     *
+     * TODO: after we complete switching to state updater, we could rename this function as allRunningTasks
+     *       to be differentiated from allTasks including running and restoring tasks
+     */
+    Map<TaskId, Task> allOwnedTasks() {
+        // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
+        // if any outside code modifies the map or the tasks, it would be a severe transgression.
         return tasks.allTasksPerId();
+    }
+
+    Set<Task> readOnlyAllTasks() {
+        // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
+        // if any outside code modifies the map or the tasks, it would be a severe transgression.
+        if (stateUpdater != null) {
+            final HashSet<Task> ret = new HashSet<>(stateUpdater.getTasks());
+            ret.addAll(tasks.allTasks());
+            return Collections.unmodifiableSet(ret);
+        } else {
+            return Collections.unmodifiableSet(tasks.allTasks());
+        }
     }
 
     Map<TaskId, Task> notPausedTasks() {

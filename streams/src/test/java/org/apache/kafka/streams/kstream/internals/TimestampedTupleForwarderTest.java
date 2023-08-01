@@ -66,11 +66,11 @@ public class TimestampedTupleForwarderTest {
 
         expect(store.setFlushListener(null, sendOldValues)).andReturn(false);
         if (sendOldValues) {
-            context.forward(new Record<>("key1", new Change<>("newValue1",  "oldValue1"), 0L));
-            context.forward(new Record<>("key2", new Change<>("newValue2",  "oldValue2"), 42L));
+            context.forward(new Record<>("key1", new Change<>("newValue1",  "oldValue1", true), 0L));
+            context.forward(new Record<>("key2", new Change<>("newValue2",  "oldValue2", false), 42L));
         } else {
-            context.forward(new Record<>("key1", new Change<>("newValue1", null), 0L));
-            context.forward(new Record<>("key2", new Change<>("newValue2", null), 42L));
+            context.forward(new Record<>("key1", new Change<>("newValue1", null, true), 0L));
+            context.forward(new Record<>("key2", new Change<>("newValue2", null, false), 42L));
         }
         expectLastCall();
         replay(store, context);
@@ -82,8 +82,8 @@ public class TimestampedTupleForwarderTest {
                 null,
                 sendOldValues
             );
-        forwarder.maybeForward(new Record<>("key1", new Change<>("newValue1", "oldValue1"), 0L));
-        forwarder.maybeForward(new Record<>("key2", new Change<>("newValue2", "oldValue2"), 42L));
+        forwarder.maybeForward(new Record<>("key1", new Change<>("newValue1", "oldValue1", true), 0L));
+        forwarder.maybeForward(new Record<>("key2", new Change<>("newValue2", "oldValue2", false), 42L));
 
         verify(store, context);
     }
@@ -103,8 +103,8 @@ public class TimestampedTupleForwarderTest {
                 null,
                 false
             );
-        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue"), 0L));
-        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue"), 42L));
+        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue", true), 0L));
+        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue", true), 42L));
 
         verify(store, context);
     }

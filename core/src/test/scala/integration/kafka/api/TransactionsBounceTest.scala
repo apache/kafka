@@ -20,11 +20,12 @@ package kafka.api
 import java.util.Properties
 
 import kafka.server.KafkaConfig
-import kafka.utils.{ShutdownableThread, TestUtils}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -86,7 +87,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   }
 
   private def testBrokerFailure(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
+    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"

@@ -17,9 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
-import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -107,22 +104,6 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    KTableSource<KIn, VIn> kTableSourceSupplier() {
-        return processorSupplier instanceof KTableSource ? (KTableSource<KIn, VIn>) processorSupplier : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    <KR, VR> KTableProcessorSupplier<KIn, VIn, KR, VR> kTableProcessorSupplier() {
-        // This cast always works because KTableProcessorSupplier hasn't been converted yet.
-        return (KTableProcessorSupplier<KIn, VIn, KR, VR>) processorSupplier;
-    }
-
-    @SuppressWarnings("unchecked")
-    KTableKTableJoinMerger<KIn, VIn> kTableKTableJoinMergerProcessorSupplier() {
-        return (KTableKTableJoinMerger<KIn, VIn>) processorSupplier;
-    }
-
     public String processorName() {
         return processorName;
     }
@@ -130,7 +111,8 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     @Override
     public String toString() {
         return "ProcessorParameters{" +
-            "processor class=" + processorSupplier.get().getClass() +
+            "processor supplier class=" + (processorSupplier != null ? processorSupplier.getClass() : "null") +
+            ", fixed key processor supplier class=" + (fixedKeyProcessorSupplier != null ? fixedKeyProcessorSupplier.getClass() : "null") +
             ", processor name='" + processorName + '\'' +
             '}';
     }

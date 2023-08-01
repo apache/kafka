@@ -17,13 +17,13 @@
 package kafka.admin
 
 import kafka.admin.TopicCommand.{PartitionDescription, TopicCommandOptions, TopicService}
-import kafka.common.AdminCommandFailedException
 import kafka.utils.Exit
 import org.apache.kafka.clients.admin.{Admin, AdminClientTestUtils, CreatePartitionsOptions, CreateTopicsOptions, DeleteTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, TopicDescription}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatcher
@@ -202,9 +202,9 @@ class TopicCommandTest {
       () => topicService.deleteTopic(new TopicCommandOptions(Array("--topic", topicName))))
     assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
 
-    verify(adminClient, times(1)).deleteTopics(
-      eqThat(Seq(topicName).asJavaCollection),
-      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
+    verify(adminClient).deleteTopics(
+      argThat((topics: java.util.Collection[String]) => topics.asScala.toBuffer.equals(Seq(topicName))),
+      argThat((options: DeleteTopicsOptions) => !options.shouldRetryOnQuotaViolation)
     )
   }
 

@@ -19,12 +19,11 @@ package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
-
-import kafka.log.LogConfig
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.jdk.CollectionConverters._
 
@@ -45,10 +44,10 @@ object DynamicConfig {
 
     // Documentation
     val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-      s"property ${LogConfig.LeaderReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+      s"property ${LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG} (for each topic). This property can be only set dynamically. It is suggested that the " +
       s"limit be kept above 1MB/s for accurate behaviour."
     val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-      s"property ${LogConfig.FollowerReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+      s"property ${LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG} (for each topic). This property can be only set dynamically. It is suggested that the " +
       s"limit be kept above 1MB/s for accurate behaviour."
     val ReplicaAlterLogDirsIoMaxBytesPerSecondDoc = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
       s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
@@ -72,7 +71,7 @@ object DynamicConfig {
   }
 
   object Client {
-    private val clientConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.clientConfigs()
+    private val clientConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userAndClientQuotaConfigs()
 
     def configKeys = clientConfigs.configKeys
 
@@ -82,7 +81,7 @@ object DynamicConfig {
   }
 
   object User {
-    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userConfigs()
+    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
 
     def configKeys = userConfigs.configKeys
 
@@ -117,7 +116,7 @@ object DynamicConfig {
     val names = configDef.names()
     val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
     if (!customPropsAllowed) {
-      val unknownKeys = propKeys.filter(!names.contains(_))
+      val unknownKeys = propKeys.filterNot(names.contains(_))
       require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
     }
     val propResolved = DynamicBrokerConfig.resolveVariableConfigs(props)

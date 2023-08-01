@@ -16,5 +16,5 @@ rem limitations under the License.
 
 SetLocal
 set KAFKA_HEAP_OPTS=-Xmx512M -Xms512M
-"%~dp0kafka-run-class.bat" kafka.tools.ConsumerPerformance %*
+"%~dp0kafka-run-class.bat" org.apache.kafka.tools.ConsumerPerformance %*
 EndLocal

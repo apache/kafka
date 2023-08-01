@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
-import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
@@ -27,7 +25,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -52,7 +49,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -69,6 +65,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -76,7 +73,6 @@ import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -149,33 +145,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         overwriteInternalTopicManagerWithMock();
     }
 
-    // Useful for tests that don't care about the task offset sums
-    private void createMockTaskManager(final Set<TaskId> activeTasks) {
-        createMockTaskManager(getTaskOffsetSums(activeTasks));
-    }
-
-    private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
+    private void createMockTaskManager() {
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
         when(taskManager.processId()).thenReturn(UUID_1);
         topologyMetadata.buildAndRewriteTopology();
-    }
-
-    // If you don't care about setting the end offsets for each specific topic partition, the helper method
-    // getTopicPartitionOffsetMap is useful for building this input map for all partitions
-    private void createMockAdminClient(final Map<TopicPartition, Long> changelogEndOffsets) {
-        final ListOffsetsResult result = mock(ListOffsetsResult.class);
-        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
-        allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
-            Entry::getKey,
-            t -> {
-                final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
-                when(info.offset()).thenReturn(t.getValue());
-                return info;
-            }))
-        );
-
-        when(adminClient.listOffsets(any())).thenReturn(result);
-        when(result.all()).thenReturn(allFuture);
     }
 
     private void overwriteInternalTopicManagerWithMock() {
@@ -190,7 +163,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     @Before
     public void setUp() {
-        createMockAdminClient(EMPTY_CHANGELOG_END_OFFSETS);
+        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
     }
 
 
@@ -203,7 +176,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        createMockTaskManager(allTasks);
+        createMockTaskManager();
         when(adminClient.listOffsets(any())).thenThrow(new StreamsException("Should be handled"));
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
@@ -255,8 +228,8 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        createMockTaskManager(allTasks);
-        createMockAdminClient(getTopicPartitionOffsetsMap(
+        createMockTaskManager();
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             singletonList(APPLICATION_ID + "-store1-changelog"),
             singletonList(3)));
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));

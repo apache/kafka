@@ -24,7 +24,6 @@ import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
@@ -53,14 +52,10 @@ public class GraphGraceSearchUtilTest {
             "stateful",
             new ProcessorParameters<>(
                 () -> new Processor<String, Long, String, Long>() {
-                    @Override
-                    public void init(final ProcessorContext<String, Long> context) {}
 
                     @Override
                     public void process(final Record<String, Long> record) {}
 
-                    @Override
-                    public void close() {}
                 },
                 "dummy"
             ),
@@ -139,14 +134,10 @@ public class GraphGraceSearchUtilTest {
             "stateful",
             new ProcessorParameters<>(
                 () -> new Processor<String, Long, String, Long>() {
-                    @Override
-                    public void init(final ProcessorContext<String, Long> context) {}
 
                     @Override
                     public void process(final Record<String, Long> record) {}
 
-                    @Override
-                    public void close() {}
                 },
                 "dummy"
             ),

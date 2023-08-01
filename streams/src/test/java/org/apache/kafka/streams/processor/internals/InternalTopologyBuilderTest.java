@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
@@ -637,15 +638,15 @@ public class InternalTopologyBuilderTest {
         expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
             Collections.emptyMap(),
-            Collections.singletonMap(store1, new UnwindowedChangelogTopicConfig(store1, Collections.emptyMap()))));
+            Collections.singletonMap(store1, new UnwindowedUnversionedChangelogTopicConfig(store1, Collections.emptyMap()))));
         expectedTopicGroups.put(SUBTOPOLOGY_1, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-3", "topic-4"),
             Collections.emptyMap(),
-            Collections.singletonMap(store2, new UnwindowedChangelogTopicConfig(store2, Collections.emptyMap()))));
+            Collections.singletonMap(store2, new UnwindowedUnversionedChangelogTopicConfig(store2, Collections.emptyMap()))));
         expectedTopicGroups.put(SUBTOPOLOGY_2, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-5"),
             Collections.emptyMap(),
-            Collections.singletonMap(store3, new UnwindowedChangelogTopicConfig(store3, Collections.emptyMap()))));
+            Collections.singletonMap(store3, new UnwindowedUnversionedChangelogTopicConfig(store3, Collections.emptyMap()))));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -901,7 +902,32 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddInternalTopicConfigForNonWindowStores() {
+    public void shouldAddInternalTopicConfigForVersionedStores() {
+        builder.setApplicationId("appId");
+        builder.addSource(null, "source", null, null, null, "topic");
+        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
+        builder.addStateStore(
+            Stores.versionedKeyValueStoreBuilder(
+                Stores.persistentVersionedKeyValueStore("vstore", Duration.ofMillis(60_000L)),
+                Serdes.String(),
+                Serdes.String()
+            ),
+            "processor"
+        );
+        builder.buildTopology();
+        final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
+        final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
+        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-vstore-changelog");
+        final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
+        assertEquals(3, properties.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals(Long.toString(60_000L + 24 * 60 * 60 * 1000L), properties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
+        assertEquals("appId-vstore-changelog", topicConfig.name());
+        assertTrue(topicConfig instanceof VersionedChangelogTopicConfig);
+    }
+
+    @Test
+    public void shouldAddInternalTopicConfigForNonWindowNonVersionedStores() {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
@@ -914,7 +940,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(2, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-testStore-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof UnwindowedChangelogTopicConfig);
+        assertTrue(topicConfig instanceof UnwindowedUnversionedChangelogTopicConfig);
     }
 
     @Test

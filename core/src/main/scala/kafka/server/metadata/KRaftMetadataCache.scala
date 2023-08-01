@@ -18,7 +18,7 @@
 package kafka.server.metadata
 
 import kafka.controller.StateChangeLogger
-import kafka.server.{FinalizedFeaturesAndEpoch, MetadataCache}
+import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -35,8 +35,9 @@ import java.util.concurrent.ThreadLocalRandom
 import kafka.admin.BrokerMetadata
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
+import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -213,7 +214,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   override def getAliveBrokers(): Iterable[BrokerMetadata] = getAliveBrokers(_currentImage)
 
   private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
-    image.cluster().brokers().values().asScala.filter(!_.fenced()).
+    image.cluster().brokers().values().asScala.filterNot(_.fenced()).
       map(b => BrokerMetadata(b.id, b.rack.asScala))
   }
 
@@ -223,10 +224,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   }
 
   override def getAliveBrokerNodes(listenerName: ListenerName): Seq[Node] = {
-    _currentImage.cluster().brokers().values().asScala.filter(!_.fenced()).
+    _currentImage.cluster().brokers().values().asScala.filterNot(_.fenced()).
       flatMap(_.node(listenerName.value()).asScala).toSeq
   }
 
+  // Does NOT include offline replica metadata
   override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     Option(_currentImage.topics().getTopic(topicName)).
       flatMap(topic => Option(topic.partitions().get(partitionId))).
@@ -237,7 +239,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         setLeader(partition.leader).
         setLeaderEpoch(partition.leaderEpoch).
         setIsr(Replicas.toList(partition.isr)).
-        setZkVersion(partition.partitionEpoch)))
+        setZkVersion(partition.partitionEpoch).
+        setReplicas(Replicas.toList(partition.replicas))))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
@@ -287,14 +290,19 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     result.toMap
   }
 
-  override def getControllerId: Option[Int] = getRandomAliveBroker(_currentImage)
-
   /**
    * Choose a random broker node to report as the controller. We do this because we want
    * the client to send requests destined for the controller to a random broker.
    * Clients do not have direct access to the controller in the KRaft world, as explained
    * in KIP-590.
    */
+  override def getControllerId: Option[CachedControllerId] =
+    getRandomAliveBroker(_currentImage).map(KRaftCachedControllerId)
+
+  override def getRandomAliveBrokerId: Option[Int] = {
+    getRandomAliveBroker(_currentImage)
+  }
+
   private def getRandomAliveBroker(image: MetadataImage): Option[Int] = {
     val aliveBrokers = getAliveBrokers(image).toList
     if (aliveBrokers.isEmpty) {
@@ -302,6 +310,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     } else {
       Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
     }
+  }
+
+  def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
+    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
+      map(brokerRegistration => brokerRegistration.epoch())
   }
 
   override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
@@ -374,17 +387,17 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     _currentImage.clientQuotas().describe(request)
   }
 
+  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
+    _currentImage.scram().describe(request)
+  }
+
   override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()
 
-  override def features(): FinalizedFeaturesAndEpoch = {
+  override def features(): Features = {
     val image = _currentImage
-    val features = image.features().finalizedVersions().asScala.map {
-      case (name: String, level: java.lang.Short) => name -> Short2short(level)
-    }
-    features.put(MetadataVersion.FEATURE_NAME, image.features().metadataVersion().featureLevel())
-
-    FinalizedFeaturesAndEpoch(
-      features.toMap,
-      image.highestOffsetAndEpoch().offset)
+    new Features(image.features().metadataVersion(),
+      image.features().finalizedVersions(),
+      image.highestOffsetAndEpoch().offset,
+      true)
   }
 }

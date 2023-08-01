@@ -32,4 +32,14 @@ public interface CachedStateStore<K, V> {
      * TODO: this is a hacky workaround for now, should be removed when we decouple caching with emitting
      */
     void flushCache();
+
+    /**
+     * Clear the cache; this is used if the underlying store could be updated directly
+     * and hence making the cache out of date.
+     * Please note this call does not try to flush the cache, instead if assumes the cache
+     * itself has been flushed completely
+     *
+     * TODO: this is a hacky workaround for now, should be removed when we decouple caching with emitting
+     */
+    void clearCache();
 }

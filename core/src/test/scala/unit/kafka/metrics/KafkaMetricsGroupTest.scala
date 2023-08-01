@@ -17,18 +17,23 @@
 
 package kafka.metrics
 
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
 import org.junit.jupiter.api.Test
+
+import java.util.Collections
+import scala.jdk.CollectionConverters._
 
 class KafkaMetricsGroupTest {
 
   @Test
   def testUntaggedMetricName(): Unit = {
     val metricName = KafkaMetricsGroup.explicitMetricName(
-      group = "kafka.metrics",
-      typeName = "TestMetrics",
-      name = "TaggedMetric",
-      Map.empty
+      "kafka.metrics",
+      "TestMetrics",
+      "TaggedMetric",
+      Collections.emptyMap()
     )
 
     assertEquals("kafka.metrics", metricName.getGroup)
@@ -41,11 +46,11 @@ class KafkaMetricsGroupTest {
 
   @Test
   def testTaggedMetricName(): Unit = {
-    val tags = Map("foo" -> "bar", "bar" -> "baz", "baz" -> "raz.taz")
+    val tags = Map("foo" -> "bar", "bar" -> "baz", "baz" -> "raz.taz").asJava
     val metricName = KafkaMetricsGroup.explicitMetricName(
-      group = "kafka.metrics",
-      typeName = "TestMetrics",
-      name = "TaggedMetric",
+      "kafka.metrics",
+      "TestMetrics",
+      "TaggedMetric",
       tags
     )
 
@@ -59,11 +64,11 @@ class KafkaMetricsGroupTest {
 
   @Test
   def testTaggedMetricNameWithEmptyValue(): Unit = {
-    val tags = Map("foo" -> "bar", "bar" -> "", "baz" -> "raz.taz")
+    val tags = Map("foo" -> "bar", "bar" -> "", "baz" -> "raz.taz").asJava
     val metricName = KafkaMetricsGroup.explicitMetricName(
-      group = "kafka.metrics",
-      typeName = "TestMetrics",
-      name = "TaggedMetric",
+      "kafka.metrics",
+      "TestMetrics",
+      "TaggedMetric",
       tags
     )
 

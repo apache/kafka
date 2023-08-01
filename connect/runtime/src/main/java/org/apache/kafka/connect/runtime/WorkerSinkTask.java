@@ -40,13 +40,14 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.storage.ClusterConfigState;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -61,6 +62,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -68,7 +70,7 @@ import static java.util.Collections.singleton;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
- * WorkerTask that uses a SinkTask to export data from Kafka.
+ * {@link WorkerTask} that uses a {@link SinkTask} to export data from Kafka.
  */
 class WorkerSinkTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
@@ -98,6 +100,7 @@ class WorkerSinkTask extends WorkerTask {
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+    private final Supplier<List<ErrorReporter>> errorReportersSupplier;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -116,7 +119,8 @@ class WorkerSinkTask extends WorkerTask {
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
-                          StatusBackingStore statusBackingStore) {
+                          StatusBackingStore statusBackingStore,
+                          Supplier<List<ErrorReporter>> errorReportersSupplier) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
 
@@ -145,6 +149,7 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        this.errorReportersSupplier = errorReportersSupplier;
     }
 
     @Override
@@ -299,6 +304,7 @@ class WorkerSinkTask extends WorkerTask {
     @Override
     protected void initializeAndStart() {
         SinkConnectorConfig.validate(taskConfig);
+        retryWithToleranceOperator.reporters(errorReportersSupplier.get());
 
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
@@ -366,6 +372,10 @@ class WorkerSinkTask extends WorkerTask {
      * the write commit.
      **/
     private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, int seqno) {
+        if (isCancelled()) {
+            log.debug("Skipping final offset commit as task has been cancelled");
+            return;
+        }
         if (closing) {
             doCommitSync(offsets, seqno);
         } else {
@@ -474,7 +484,7 @@ class WorkerSinkTask extends WorkerTask {
     private ConsumerRecords<byte[], byte[]> pollConsumer(long timeoutMs) {
         ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(timeoutMs));
 
-        // Exceptions raised from the task during a rebalance should be rethrown to stop the worker
+        // Exceptions raised from the task during a rebalance should be rethrown to stop the task and mark it as failed
         if (rebalanceException != null) {
             RuntimeException e = rebalanceException;
             rebalanceException = null;
@@ -670,11 +680,6 @@ class WorkerSinkTask extends WorkerTask {
     protected void recordBatch(int size) {
         super.recordBatch(size);
         sinkTaskMetricsGroup.recordSend(size);
-    }
-
-    @Override
-    protected void recordCommitFailure(long duration, Throwable error) {
-        super.recordCommitFailure(duration, error);
     }
 
     @Override

@@ -22,12 +22,12 @@ import java.nio.charset.StandardCharsets
 import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.record.TimestampType
@@ -48,11 +48,17 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val overridingProps = new Properties()
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
-    TestUtils.createBrokerConfigs(numServers, zkConnectOrNull, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(
+      numServers,
+      zkConnectOrNull,
+      enableControlledShutdown = true,
+      interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile,
+      saslProperties = serverSaslProperties
+    ).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  private var consumer: Consumer[Array[Byte], Array[Byte]] = _
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   protected var admin: Admin = _
 
@@ -254,9 +260,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       // create topic
       val topicProps = new Properties()
       if (timestampType == TimestampType.LOG_APPEND_TIME)
-        topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "LogAppendTime")
+        topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
       else
-        topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "CreateTime")
+        topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime")
       TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
 
       val recordAndFutures = for (i <- 1 to numRecords) yield {
@@ -352,6 +358,53 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         assertEquals(now, record.timestamp)
       }
 
+    } finally {
+      producer.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendToPartitionWithFollowerShutdownShouldNotTimeout(quorum: String): Unit = {
+    // This test produces to a leader that has follower that is shutting down. It shows that
+    // the produce request succeed, do not timeout and do not need to be retried.
+    val producer = createProducer()
+    val follower = 1
+    val replicas = List(0, follower)
+
+    try {
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 3, Map(0 -> replicas))
+      val partition = 0
+
+      val now = System.currentTimeMillis()
+      val futures = (1 to numRecords).map { i =>
+        producer.send(new ProducerRecord(topic, partition, now, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
+      }
+
+      // Shutdown the follower
+      killBroker(follower)
+
+      // make sure all of them end up in the same partition with increasing offset values
+      futures.zip(0 until numRecords).foreach { case (future, offset) =>
+        val recordMetadata = future.get(30, TimeUnit.SECONDS)
+        assertEquals(offset.toLong, recordMetadata.offset)
+        assertEquals(topic, recordMetadata.topic)
+        assertEquals(partition, recordMetadata.partition)
+      }
+
+      consumer.assign(List(new TopicPartition(topic, partition)).asJava)
+
+      // make sure the fetched messages also respect the partitioning and ordering
+      val records = TestUtils.consumeRecords(consumer, numRecords)
+
+      records.zipWithIndex.foreach { case (record, i) =>
+        assertEquals(topic, record.topic)
+        assertEquals(partition, record.partition)
+        assertEquals(i.toLong, record.offset)
+        assertNull(record.key)
+        assertEquals(s"value${i + 1}", new String(record.value))
+        assertEquals(now, record.timestamp)
+      }
     } finally {
       producer.close()
     }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
@@ -55,6 +56,7 @@ public class DefaultTaskManager implements TaskManager {
 
     private final Lock tasksLock = new ReentrantLock();
     private final List<TaskId> lockedTasks = new ArrayList<>();
+    private final Map<TaskId, StreamsException> uncaughtExceptions = new HashMap<>();
     private final Map<TaskId, TaskExecutor> assignedTasks = new HashMap<>();
 
     private final List<TaskExecutor> taskExecutors;
@@ -224,6 +226,40 @@ public class DefaultTaskManager implements TaskManager {
     public Set<ReadOnlyTask> getTasks() {
         return returnWithTasksLocked(() -> tasks.activeTasks().stream().map(ReadOnlyTask::new).collect(Collectors.toSet()));
     }
+
+    @Override
+    public void setUncaughtException(final StreamsException exception, final TaskId taskId) {
+        executeWithTasksLocked(() -> {
+
+            if (!assignedTasks.containsKey(taskId)) {
+                throw new IllegalArgumentException("An uncaught exception can only be set as long as the task is still assigned");
+            }
+
+            if (uncaughtExceptions.containsKey(taskId)) {
+                throw new IllegalArgumentException("The uncaught exception must be cleared before restarting processing");
+            }
+
+            uncaughtExceptions.put(taskId, exception);
+        });
+
+        log.info("Set an uncaught exception of type {} for task {}, with error message: {}",
+            exception.getClass().getName(),
+            taskId,
+            exception.getMessage());
+    }
+
+    public Map<TaskId, StreamsException> drainUncaughtExceptions() {
+        final Map<TaskId, StreamsException> returnValue = returnWithTasksLocked(() -> {
+            final Map<TaskId, StreamsException> result = new HashMap<>(uncaughtExceptions);
+            uncaughtExceptions.clear();
+            return result;
+        });
+
+        log.info("Drained {} uncaught exceptions", returnValue.size());
+
+        return returnValue;
+    }
+
 
     private void executeWithTasksLocked(final Runnable action) {
         tasksLock.lock();

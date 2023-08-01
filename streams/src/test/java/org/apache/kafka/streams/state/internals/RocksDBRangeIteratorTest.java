@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.Test;
 import org.rocksdb.RocksIterator;
 
-import java.util.Collections;
 import java.util.NoSuchElementException;
 
 import static org.easymock.EasyMock.mock;
@@ -67,7 +67,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             true,
@@ -103,7 +102,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             false,
@@ -142,7 +140,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             toBytes,
             true,
@@ -183,7 +180,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key4Bytes,
             false,
@@ -212,7 +208,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key2Bytes,
             true,
@@ -237,7 +232,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             fromBytes,
             toBytes,
             false,
@@ -265,7 +259,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             true,
@@ -299,7 +292,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key3Bytes,
             toBytes,
             false,
@@ -331,7 +323,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             true,
@@ -369,7 +360,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key3Bytes,
             toBytes,
             false,
@@ -398,14 +388,31 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key2Bytes,
             true,
             true
         );
+        rocksDBRangeIterator.onClose(() -> { });
         rocksDBRangeIterator.close();
         verify(rocksIterator);
+    }
+
+    @Test
+    public void shouldCallCloseCallbackOnClose() {
+        final RocksIterator rocksIterator = mock(RocksIterator.class);
+        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
+            storeName,
+            rocksIterator,
+            key1Bytes,
+            key2Bytes,
+            true,
+            true
+        );
+        final AtomicBoolean callbackCalled = new AtomicBoolean(false);
+        rocksDBRangeIterator.onClose(() -> callbackCalled.set(true));
+        rocksDBRangeIterator.close();
+        assertThat(callbackCalled.get(), is(true));
     }
 
     @Test
@@ -425,7 +432,6 @@ public class RocksDBRangeIteratorTest {
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key2Bytes,
             true,

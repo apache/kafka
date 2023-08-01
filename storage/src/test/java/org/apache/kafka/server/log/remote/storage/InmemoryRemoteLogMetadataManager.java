@@ -49,8 +49,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     }
 
     @Override
-    public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
-            throws RemoteStorageException {
+    public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.debug("Adding remote log segment : [{}]", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
@@ -104,8 +103,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     }
 
     @Override
-    public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
-            throws RemoteStorageException {
+    public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata) {
         log.debug("Adding delete state with: [{}]", remotePartitionDeleteMetadata);
         Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
 
@@ -156,6 +154,18 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     public void onStopPartitions(Set<TopicIdPartition> partitions) {
         // It is not applicable for this implementation. This will track the segments that are added/updated as part of
         // this instance. It does not depend upon stopped partitions.
+    }
+
+    @Override
+    public long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException {
+        long remoteLogSize = 0L;
+        RemoteLogMetadataCache remoteLogMetadataCache = getRemoteLogMetadataCache(topicIdPartition);
+        Iterator<RemoteLogSegmentMetadata> remoteLogSegmentMetadataIterator = remoteLogMetadataCache.listAllRemoteLogSegments();
+        while (remoteLogSegmentMetadataIterator.hasNext()) {
+            RemoteLogSegmentMetadata remoteLogSegmentMetadata = remoteLogSegmentMetadataIterator.next();
+            remoteLogSize += remoteLogSegmentMetadata.segmentSizeInBytes();
+        }
+        return remoteLogSize;
     }
 
     @Override

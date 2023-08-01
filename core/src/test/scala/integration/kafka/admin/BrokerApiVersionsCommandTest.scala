@@ -41,6 +41,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
       props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
       props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+      props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
       props
     }).map(KafkaConfig.fromProps)
 

@@ -487,4 +487,4 @@ public class AgentTest {
         agent.waitForShutdown();
     }
 
-};
+}

@@ -434,6 +434,21 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldThrowOnVersionedStoreSupplierForGlobalTable() {
+        final String topic = "topic";
+        assertThrows(
+            TopologyException.class,
+            () -> builder.globalTable(
+                topic,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+                    .withKeySerde(Serdes.Long())
+                    .withValueSerde(Serdes.String()
+                )
+            )
+        );
+    }
+
+    @Test
     public void shouldNotMaterializeStoresIfNotRequired() {
         final String topic = "topic";
         builder.table(topic, Materialized.with(Serdes.Long(), Serdes.String()));

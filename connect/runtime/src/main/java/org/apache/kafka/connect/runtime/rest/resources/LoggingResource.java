@@ -49,7 +49,7 @@ import java.util.TreeMap;
 public class LoggingResource implements ConnectResource {
 
     /**
-     * Log4j uses "root" (case insensitive) as name of the root logger.
+     * Log4j uses "root" (case-insensitive) as name of the root logger.
      */
     private static final String ROOT_LOGGER_NAME = "root";
 
@@ -119,7 +119,7 @@ public class LoggingResource implements ConnectResource {
 
 
     /**
-     * Adjust level of a named logger. if name corresponds to an ancestor, then the log level is applied to all child loggers.
+     * Adjust level of a named logger. If the name corresponds to an ancestor, then the log level is applied to all child loggers.
      *
      * @param namedLogger name of the logger
      * @param levelMap a map that is expected to contain one key 'level', and a value that is one of the log4j levels:
@@ -128,7 +128,7 @@ public class LoggingResource implements ConnectResource {
      */
     @PUT
     @Path("/{logger}")
-    @Operation(summary = "Set the level for the specified logger")
+    @Operation(summary = "Set the log level for the specified logger")
     public Response setLevel(final @PathParam("logger") String namedLogger,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");

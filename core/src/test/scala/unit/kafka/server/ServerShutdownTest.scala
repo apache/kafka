@@ -27,7 +27,7 @@ import kafka.controller.{ControllerChannelManager, ControllerContext, StateChang
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogManager
 import kafka.zookeeper.ZooKeeperClientTimeoutException
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
@@ -93,7 +93,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         valueSerializer = new StringSerializer
       )
 
-    def createConsumer(): KafkaConsumer[Integer, String] =
+    def createConsumer(): Consumer[Integer, String] =
       TestUtils.createConsumer(
         bootstrapServers(),
         securityProtocol = SecurityProtocol.PLAINTEXT,
@@ -280,9 +280,13 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
       controllerContext.setLiveBrokers(brokerAndEpochs)
-      controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-        metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-      controllerChannelManager.startup()
+      controllerChannelManager = new ControllerChannelManager(
+        () => controllerContext.epoch,
+        controllerConfig,
+        Time.SYSTEM,
+        metrics,
+        new StateChangeLogger(controllerId, inControllerContext = true, None))
+      controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,

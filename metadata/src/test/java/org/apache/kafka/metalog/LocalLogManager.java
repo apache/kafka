@@ -32,6 +32,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
@@ -40,19 +41,20 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
@@ -220,13 +222,26 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
         }
 
-        synchronized long tryAppend(int nodeId, int epoch, List<ApiMessageAndVersion> batch) {
+        synchronized long tryAppend(
+            int nodeId,
+            int epoch,
+            OptionalLong requiredBaseOffset,
+            List<ApiMessageAndVersion> batch
+        ) {
             // No easy access to the concept of time. Use the base offset as the append timestamp
             long appendTimestamp = (prevOffset + 1) * 10;
-            return tryAppend(nodeId, epoch, new LocalRecordBatch(epoch, appendTimestamp, batch));
+            return tryAppend(nodeId,
+                    epoch,
+                    requiredBaseOffset,
+                    new LocalRecordBatch(epoch, appendTimestamp, batch));
         }
 
-        synchronized long tryAppend(int nodeId, int epoch, LocalBatch batch) {
+        synchronized long tryAppend(
+            int nodeId,
+            int epoch,
+            OptionalLong requiredBaseOffset,
+            LocalBatch batch
+        ) {
             if (!leader.isLeader(nodeId)) {
                 log.debug("tryAppend(nodeId={}, epoch={}): the given node id does not " +
                         "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
@@ -242,15 +257,24 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
 
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);
-            long offset = append(batch);
+            long offset = append(requiredBaseOffset, batch);
             electLeaderIfNeeded();
             return offset;
         }
 
-        public synchronized long append(LocalBatch batch) {
-            prevOffset += batch.size();
-            log.debug("append(batch={}, prevOffset={})", batch, prevOffset);
-            batches.put(prevOffset, batch);
+        public synchronized long append(
+            OptionalLong requiredBaseOffset,
+            LocalBatch batch
+        ) {
+            long nextEndOffset = prevOffset + batch.size();
+            requiredBaseOffset.ifPresent(r -> {
+                if (r != prevOffset + 1) {
+                    throw new UnexpectedBaseOffsetException("Wanted base offset " + r +
+                            ", but the next offset was " + nextEndOffset);
+                }
+            });
+            log.debug("append(batch={}, nextEndOffset={})", batch, nextEndOffset);
+            batches.put(nextEndOffset, batch);
             if (batch instanceof LeaderChangeBatch) {
                 LeaderChangeBatch leaderChangeBatch = (LeaderChangeBatch) batch;
                 leader = leaderChangeBatch.newLeader;
@@ -258,7 +282,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             for (LocalLogManager logManager : logManagers.values()) {
                 logManager.scheduleLogCheck();
             }
-            return prevOffset;
+            prevOffset = nextEndOffset;
+            return nextEndOffset;
         }
 
         synchronized void electLeaderIfNeeded() {
@@ -273,7 +298,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
             LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(nextLeaderNode), leader.epoch() + 1);
             log.info("Elected new leader: {}.", newLeader);
-            append(new LeaderChangeBatch(newLeader));
+            append(OptionalLong.empty(), new LeaderChangeBatch(newLeader));
         }
 
         synchronized LeaderAndEpoch leaderAndEpoch() {
@@ -318,9 +343,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         /**
-         * Returns the snapshot whos last offset is the committed offset.
+         * Returns the snapshot whose last offset is the committed offset.
          *
-         * If such snapshot doesn't exists, it waits until it does.
+         * If such snapshot doesn't exist, it waits until it does.
          */
         synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
             while (true) {
@@ -344,6 +369,15 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
 
             return Objects.requireNonNull(snapshots.lastEntry()).getValue();
+        }
+
+        /**
+         * Returns the snapshot id of the latest snapshot if there is one.
+         *
+         * If a snapshot doesn't exists, it return an empty Optional.
+         */
+        synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+            return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());
         }
 
         synchronized long appendedBytes() {
@@ -370,6 +404,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         public long initialMaxReadOffset() {
             return initialMaxReadOffset;
+        }
+
+        /**
+         * Return all records in the log as a list.
+         */
+        public synchronized List<ApiMessageAndVersion> allRecords() {
+            List<ApiMessageAndVersion> allRecords = new ArrayList<>();
+            for (LocalBatch batch : batches.values()) {
+                if (batch instanceof LocalRecordBatch) {
+                    LocalRecordBatch recordBatch = (LocalRecordBatch) batch;
+                    allRecords.addAll(recordBatch.records);
+                }
+            }
+            return allRecords;
         }
     }
 
@@ -400,8 +448,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             offset = reader.lastOffset().getAsLong();
         }
 
-        void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            listener.handleSnapshot(reader);
+        void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            listener.handleLoadSnapshot(reader);
             offset = reader.lastContainedLogOffset();
         }
 
@@ -477,7 +525,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         this.nodeId = nodeId;
         this.shared = shared;
         this.maxReadOffset = shared.initialMaxReadOffset();
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, threadNamePrefix);
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
+                threadNamePrefix, new ShutdownEvent());
         shared.registerLogManager(this);
     }
 
@@ -494,7 +543,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             Optional<RawSnapshotReader> snapshot = shared.nextSnapshot(listenerData.offset());
                             if (snapshot.isPresent()) {
                                 log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
-                                listenerData.handleSnapshot(
+                                listenerData.handleLoadSnapshot(
                                     RecordsSnapshotReader.of(
                                         snapshot.get(),
                                         new  MetadataRecordSerde(),
@@ -577,7 +626,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     public void beginShutdown() {
-        eventQueue.beginShutdown("beginShutdown", () -> {
+        eventQueue.beginShutdown("beginShutdown");
+    }
+
+    class ShutdownEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
             try {
                 if (initialized && !shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
@@ -585,13 +639,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                     for (MetaLogListenerData listenerData : listeners.values()) {
                         listenerData.beginShutdown();
                     }
-                    shared.unregisterLogManager(this);
+                    shared.unregisterLogManager(LocalLogManager.this);
                 }
             } catch (Exception e) {
                 log.error("Unexpected exception while sending beginShutdown callbacks", e);
             }
             shutdown = true;
-        });
+        }
     }
 
     @Override
@@ -707,7 +761,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         OptionalLong firstOffset = first
             .stream()
-            .mapToLong(record -> scheduleAtomicAppend(epoch, Collections.singletonList(record)))
+            .mapToLong(record -> scheduleAtomicAppend(epoch,
+                    OptionalLong.empty(),
+                    Collections.singletonList(record)))
             .max();
 
         if (firstOffset.isPresent() && resignAfterNonAtomicCommit.getAndSet(false)) {
@@ -719,15 +775,24 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         } else {
             return second
                 .stream()
-                .mapToLong(record -> scheduleAtomicAppend(epoch, Collections.singletonList(record)))
+                .mapToLong(record -> scheduleAtomicAppend(epoch,
+                        OptionalLong.empty(),
+                        Collections.singletonList(record)))
                 .max()
                 .getAsLong();
         }
     }
 
     @Override
-    public long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
-        return shared.tryAppend(nodeId, leader.epoch(), batch);
+    public long scheduleAtomicAppend(
+        int epoch,
+        OptionalLong requiredEndOffset,
+        List<ApiMessageAndVersion> batch
+    ) {
+        if (batch.isEmpty()) {
+            throw new IllegalArgumentException("Batch cannot be empty");
+        }
+        return shared.tryAppend(nodeId, leader.epoch(), requiredEndOffset, batch);
     }
 
     @Override
@@ -754,7 +819,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         LeaderAndEpoch nextLeader = new LeaderAndEpoch(OptionalInt.empty(), currentEpoch + 1);
         try {
-            shared.tryAppend(nodeId, currentEpoch, new LeaderChangeBatch(nextLeader));
+            shared.tryAppend(nodeId,
+                    currentEpoch,
+                    OptionalLong.empty(),
+                    new LeaderChangeBatch(nextLeader));
         } catch (NotLeaderException exp) {
             // the leader epoch has already advanced. resign is a no op.
             log.debug("Ignoring call to resign from epoch {}. Either we are not the leader or the provided epoch is " +
@@ -765,11 +833,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
-        long committedOffset,
-        int committedEpoch,
+        OffsetAndEpoch snapshotId,
         long lastContainedLogTimestamp
     ) {
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
         return RecordsSnapshotWriter.createWithHeader(
             () -> createNewSnapshot(snapshotId),
             1024,
@@ -787,6 +853,16 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
             })
         );
+    }
+
+    @Override
+    public synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+        return shared.latestSnapshotId();
+    }
+
+    @Override
+    public synchronized long logEndOffset() {
+        return shared.prevOffset + 1;
     }
 
     @Override

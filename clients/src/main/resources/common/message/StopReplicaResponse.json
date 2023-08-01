@@ -22,7 +22,7 @@
   // Version 2 is the first flexible version.
   //
   // Version 3 returns FENCED_LEADER_EPOCH if the epoch of the leader is stale (KIP-570).
-  "validVersions": "0-3",
+  "validVersions": "0-4",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",

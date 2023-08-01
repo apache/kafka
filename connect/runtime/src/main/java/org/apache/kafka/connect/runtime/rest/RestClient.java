@@ -19,7 +19,8 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
@@ -30,6 +31,7 @@ import org.eclipse.jetty.client.util.StringContentProvider;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpStatus;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,9 +45,24 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * Client for outbound REST requests to other members of a Connect cluster
+ * This class is thread-safe.
+ */
 public class RestClient {
     private static final Logger log = LoggerFactory.getLogger(RestClient.class);
     private static final ObjectMapper JSON_SERDE = new ObjectMapper();
+
+    private final AbstractConfig config;
+
+    public RestClient(AbstractConfig config) {
+        this.config = config;
+    }
+
+    // VisibleForTesting
+    HttpClient httpClient(SslContextFactory sslContextFactory) {
+        return sslContextFactory != null ? new HttpClient(sslContextFactory) : new HttpClient();
+    }
 
     /**
      * Sends HTTP request to remote REST server
@@ -58,9 +75,9 @@ public class RestClient {
      * @param <T>             The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat, WorkerConfig config) {
-        return httpRequest(url, method, headers, requestBodyData, responseFormat, config, null, null);
+    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                                  TypeReference<T> responseFormat) {
+        return httpRequest(url, method, headers, requestBodyData, responseFormat, null, null);
     }
 
     /**
@@ -78,17 +95,14 @@ public class RestClient {
      *                                  may be null if the request doesn't need to be signed
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat, WorkerConfig config,
+    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                                  TypeReference<T> responseFormat,
                                                   SecretKey sessionKey, String requestSignatureAlgorithm) {
-        HttpClient client;
-
-        if (url.startsWith("https://")) {
-            client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
-        } else {
-            client = new HttpClient();
-        }
-
+        // Only try to load SSL configs if we have to (see KAFKA-14816)
+        SslContextFactory sslContextFactory = url.startsWith("https://")
+                ? SSLUtils.createClientSideSslContextFactory(config)
+                : null;
+        HttpClient client = httpClient(sslContextFactory);
         client.setFollowRedirects(false);
 
         try {
@@ -109,7 +123,7 @@ public class RestClient {
         }
     }
 
-    static <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
+    private <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
                                            HttpHeaders headers, Object requestBodyData,
                                            TypeReference<T> responseFormat, SecretKey sessionKey,
                                            String requestSignatureAlgorithm) {
@@ -129,6 +143,7 @@ public class RestClient {
 
             if (sessionKey != null && requestSignatureAlgorithm != null) {
                 InternalRequestSignature.addToRequest(
+                    Crypto.SYSTEM,
                     sessionKey,
                     serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
                     requestSignatureAlgorithm,
@@ -183,9 +198,9 @@ public class RestClient {
     }
 
     /**
-     * Convert response parameters from Jetty format (HttpFields)
-     * @param httpFields
-     * @return
+     * Convert response headers from Jetty format ({@link HttpFields}) to a simple {@link Map}
+     * @param httpFields the response headers
+     * @return a {@link Map} containing the response headers
      */
     private static Map<String, String> convertHttpFieldsToMap(HttpFields httpFields) {
         Map<String, String> headers = new HashMap<>();

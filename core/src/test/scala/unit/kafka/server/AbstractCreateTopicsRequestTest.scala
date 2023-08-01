@@ -163,9 +163,9 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       if (actual == null) {
         throw new RuntimeException(s"No response data found for topic $topicName")
       }
-      assertEquals(expected.error.code(), actual.errorCode(), "The response error should match")
+      assertEquals(expected.error.code(), actual.errorCode(), "The response error code should match")
       if (checkErrorMessage) {
-        assertEquals(expected.message, actual.errorMessage())
+        assertEquals(expected.message, actual.errorMessage(), "The response error message should match")
       }
       // If no error validate topic exists
       if (expectedError.isSuccess && !request.data.validateOnly) {

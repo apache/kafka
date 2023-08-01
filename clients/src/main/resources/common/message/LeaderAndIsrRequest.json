@@ -29,11 +29,15 @@
   // Version 5 adds Topic ID and Type to the TopicStates, as described in KIP-516.
   //
   // Version 6 adds LeaderRecoveryState as described in KIP-704.
-  "validVersions": "0-6",
+  //
+  // Version 7 adds KRaft Controller ID field as part of KIP-866
+  "validVersions": "0-7",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The current controller ID." },
+    { "name": "isKRaftController", "type": "bool", "versions": "7+", "default": "false",
+      "about": "If KRaft controller id is used during migration. See KIP-866" },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The current controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "ignorable": true, "default": "-1",

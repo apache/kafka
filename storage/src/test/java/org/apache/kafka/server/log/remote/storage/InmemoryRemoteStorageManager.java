@@ -153,7 +153,7 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+    public void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.info("Deleting log segment for: [{}]", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         String segmentKey = generateKeyForSegment(remoteLogSegmentMetadata);

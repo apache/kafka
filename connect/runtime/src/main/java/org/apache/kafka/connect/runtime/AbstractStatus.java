@@ -25,8 +25,9 @@ public abstract class AbstractStatus<T> {
         RUNNING,
         PAUSED,
         FAILED,
-        DESTROYED,
+        DESTROYED, // Never visible to users; destroyed Connector and Task instances are not shown
         RESTARTING,
+        STOPPED, // Only ever visible to users for Connector instances; never for Task instances
     }
 
     private final T id;

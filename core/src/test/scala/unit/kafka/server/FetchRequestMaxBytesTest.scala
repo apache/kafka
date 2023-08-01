@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
@@ -77,7 +77,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
 
   private def createTopics(): Unit = {
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 1.toString)
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     createTopic(testTopic,
                 numPartitions = 1, 
                 replicationFactor = 1,

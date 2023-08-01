@@ -16,15 +16,15 @@
   */
 package kafka.server
 
-import kafka.log.LogConfig
-import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -49,9 +49,9 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val maxResponseBytes = 800
     val maxPartitionBytes = 190
 
-    def createFetchRequest(topicPartitions: Seq[TopicPartition], offsetMap: Map[TopicPartition, Long] = Map.empty,
+    def createConsumerFetchRequest(topicPartitions: Seq[TopicPartition], offsetMap: Map[TopicPartition, Long] = Map.empty,
                            version: Short = ApiKeys.FETCH.latestVersion()): FetchRequest =
-      this.createFetchRequest(maxResponseBytes, maxPartitionBytes, topicPartitions, offsetMap, version)
+      this.createConsumerFetchRequest(maxResponseBytes, maxPartitionBytes, topicPartitions, offsetMap, version)
 
     val topicPartitionToLeader = createTopics(numTopics = 5, numPartitions = 6)
     val random = new Random(0)
@@ -77,28 +77,28 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
     // 1. Partitions with large messages at the end
     val shuffledTopicPartitions1 = random.shuffle(partitionsWithoutLargeMessages) ++ partitionsWithLargeMessages
-    val fetchRequest1 = createFetchRequest(shuffledTopicPartitions1)
+    val fetchRequest1 = createConsumerFetchRequest(shuffledTopicPartitions1)
     val fetchResponse1 = sendFetchRequest(leaderId, fetchRequest1)
     checkFetchResponse(shuffledTopicPartitions1, fetchResponse1, maxPartitionBytes, maxResponseBytes, messagesPerPartition)
-    val fetchRequest1V12 = createFetchRequest(shuffledTopicPartitions1, version = 12)
+    val fetchRequest1V12 = createConsumerFetchRequest(shuffledTopicPartitions1, version = 12)
     val fetchResponse1V12 = sendFetchRequest(leaderId, fetchRequest1V12)
     checkFetchResponse(shuffledTopicPartitions1, fetchResponse1V12, maxPartitionBytes, maxResponseBytes, messagesPerPartition, 12)
 
     // 2. Same as 1, but shuffled again
     val shuffledTopicPartitions2 = random.shuffle(partitionsWithoutLargeMessages) ++ partitionsWithLargeMessages
-    val fetchRequest2 = createFetchRequest(shuffledTopicPartitions2)
+    val fetchRequest2 = createConsumerFetchRequest(shuffledTopicPartitions2)
     val fetchResponse2 = sendFetchRequest(leaderId, fetchRequest2)
     checkFetchResponse(shuffledTopicPartitions2, fetchResponse2, maxPartitionBytes, maxResponseBytes, messagesPerPartition)
-    val fetchRequest2V12 = createFetchRequest(shuffledTopicPartitions2, version = 12)
+    val fetchRequest2V12 = createConsumerFetchRequest(shuffledTopicPartitions2, version = 12)
     val fetchResponse2V12 = sendFetchRequest(leaderId, fetchRequest2V12)
     checkFetchResponse(shuffledTopicPartitions2, fetchResponse2V12, maxPartitionBytes, maxResponseBytes, messagesPerPartition, 12)
 
     // 3. Partition with message larger than the partition limit at the start of the list
     val shuffledTopicPartitions3 = Seq(partitionWithLargeMessage1, partitionWithLargeMessage2) ++
       random.shuffle(partitionsWithoutLargeMessages)
-    val fetchRequest3 = createFetchRequest(shuffledTopicPartitions3, Map(partitionWithLargeMessage1 -> messagesPerPartition))
+    val fetchRequest3 = createConsumerFetchRequest(shuffledTopicPartitions3, Map(partitionWithLargeMessage1 -> messagesPerPartition))
     val fetchResponse3 = sendFetchRequest(leaderId, fetchRequest3)
-    val fetchRequest3V12 = createFetchRequest(shuffledTopicPartitions3, Map(partitionWithLargeMessage1 -> messagesPerPartition), 12)
+    val fetchRequest3V12 = createConsumerFetchRequest(shuffledTopicPartitions3, Map(partitionWithLargeMessage1 -> messagesPerPartition), 12)
     val fetchResponse3V12 = sendFetchRequest(leaderId, fetchRequest3V12)
     def evaluateResponse3(response: FetchResponse, version: Short = ApiKeys.FETCH.latestVersion()) = {
       val responseData = response.responseData(topicNames, version)
@@ -121,9 +121,9 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // 4. Partition with message larger than the response limit at the start of the list
     val shuffledTopicPartitions4 = Seq(partitionWithLargeMessage2, partitionWithLargeMessage1) ++
       random.shuffle(partitionsWithoutLargeMessages)
-    val fetchRequest4 = createFetchRequest(shuffledTopicPartitions4, Map(partitionWithLargeMessage2 -> messagesPerPartition))
+    val fetchRequest4 = createConsumerFetchRequest(shuffledTopicPartitions4, Map(partitionWithLargeMessage2 -> messagesPerPartition))
     val fetchResponse4 = sendFetchRequest(leaderId, fetchRequest4)
-    val fetchRequest4V12 = createFetchRequest(shuffledTopicPartitions4, Map(partitionWithLargeMessage2 -> messagesPerPartition), 12)
+    val fetchRequest4V12 = createConsumerFetchRequest(shuffledTopicPartitions4, Map(partitionWithLargeMessage2 -> messagesPerPartition), 12)
     val fetchResponse4V12 = sendFetchRequest(leaderId, fetchRequest4V12)
     def evaluateResponse4(response: FetchResponse, version: Short = ApiKeys.FETCH.latestVersion()) = {
       val responseData = response.responseData(topicNames, version)
@@ -507,7 +507,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
    */
   @Test
   def testCreateIncrementalFetchWithPartitionsInErrorV12(): Unit = {
-    def createFetchRequest(topicPartitions: Seq[TopicPartition],
+    def createConsumerFetchRequest(topicPartitions: Seq[TopicPartition],
                            metadata: JFetchMetadata,
                            toForget: Seq[TopicIdPartition]): FetchRequest =
       FetchRequest.Builder.forConsumer(12, Int.MaxValue, 0,
@@ -521,7 +521,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val topicNames = Map[Uuid, String]().asJava
     createTopicWithAssignment("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
     val bar0 = new TopicPartition("bar", 0)
-    val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil)
+    val req1 = createConsumerFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil)
     val resp1 = sendFetchRequest(0, req1)
     assertEquals(Errors.NONE, resp1.error())
     assertTrue(resp1.sessionId() > 0, "Expected the broker to create a new incremental fetch session")
@@ -533,7 +533,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, responseData1.get(foo0).errorCode)
     assertEquals(Errors.NONE.code, responseData1.get(foo1).errorCode)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, responseData1.get(bar0).errorCode)
-    val req2 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil)
+    val req2 = createConsumerFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil)
     val resp2 = sendFetchRequest(0, req2)
     assertEquals(Errors.NONE, resp2.error())
     assertEquals(resp1.sessionId(),
@@ -544,7 +544,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertTrue(responseData2.containsKey(bar0))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, responseData2.get(bar0).errorCode)
     createTopicWithAssignment("bar", Map(0 -> List(0, 1)))
-    val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
+    val req3 = createConsumerFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
     val resp3 = sendFetchRequest(0, req3)
     assertEquals(Errors.NONE, resp3.error())
     val responseData3 = resp3.responseData(topicNames, 12)
@@ -552,7 +552,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertFalse(responseData3.containsKey(foo1))
     assertTrue(responseData3.containsKey(bar0))
     assertEquals(Errors.NONE.code, responseData3.get(bar0).errorCode)
-    val req4 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 3), Nil)
+    val req4 = createConsumerFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 3), Nil)
     val resp4 = sendFetchRequest(0, req4)
     assertEquals(Errors.NONE, resp4.error())
     val responseData4 = resp4.responseData(topicNames, 12)
@@ -566,7 +566,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
    */
   @Test
   def testFetchWithPartitionsWithIdError(): Unit = {
-    def createFetchRequest(fetchData: util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData],
+    def createConsumerFetchRequest(fetchData: util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData],
                            metadata: JFetchMetadata,
                            toForget: Seq[TopicIdPartition]): FetchRequest = {
       FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), Int.MaxValue, 0, fetchData)
@@ -593,7 +593,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
       partitionMap
     }
 
-    val req1 = createFetchRequest( createPartitionMap(Integer.MAX_VALUE, List(foo0, foo1, bar0), Map.empty), JFetchMetadata.INITIAL, Nil)
+    val req1 = createConsumerFetchRequest( createPartitionMap(Integer.MAX_VALUE, List(foo0, foo1, bar0), Map.empty), JFetchMetadata.INITIAL, Nil)
     val resp1 = sendFetchRequest(0, req1)
     assertEquals(Errors.NONE, resp1.error())
     val topicNames1 = topicIdsWithUnknown.map(_.swap).asJava
@@ -609,7 +609,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   @Test
   def testZStdCompressedTopic(): Unit = {
     // ZSTD compressed topic
-    val topicConfig = Map(LogConfig.CompressionTypeProp -> ZStdCompressionCodec.name)
+    val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.ZSTD.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
     val topicIds = getTopicIds().asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava
@@ -627,7 +627,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     producer.close()
 
     // fetch request with version below v10: UNSUPPORTED_COMPRESSION_TYPE error occurs
-    val req0 = new FetchRequest.Builder(0, 9, -1, Int.MaxValue, 0,
+    val req0 = new FetchRequest.Builder(0, 9, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
 
@@ -636,7 +636,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data0.errorCode)
 
     // fetch request with version 10: works fine!
-    val req1= new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+    val req1= new FetchRequest.Builder(0, 10, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res1 = sendFetchRequest(leaderId, req1)
@@ -644,7 +644,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data1.errorCode)
     assertEquals(3, records(data1).size)
 
-    val req2 = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion(), ApiKeys.FETCH.latestVersion(), -1, Int.MaxValue, 0,
+    val req2 = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion(), ApiKeys.FETCH.latestVersion(), -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res2 = sendFetchRequest(leaderId, req2)
@@ -656,14 +656,14 @@ class FetchRequestTest extends BaseFetchRequestTest {
   @Test
   def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
-    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name)
+    val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.PRODUCER.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
     val topicIds = getTopicIds().asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava
 
     // Produce GZIP compressed messages (v2)
     val producer1 = TestUtils.createProducer(bootstrapServers(),
-      compressionType = GZIPCompressionCodec.name,
+      compressionType = CompressionType.GZIP.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
     producer1.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
@@ -671,7 +671,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     producer1.close()
     // Produce ZSTD compressed messages (v2)
     val producer2 = TestUtils.createProducer(bootstrapServers(),
-      compressionType = ZStdCompressionCodec.name,
+      compressionType = CompressionType.ZSTD.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
     producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
@@ -683,7 +683,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // fetch request with fetch version v1 (magic 0):
     // gzip compressed record is returned with down-conversion.
     // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
-    val req0 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+    val req0 = new FetchRequest.Builder(0, 1, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800)
       .build()
@@ -693,7 +693,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data0.errorCode)
     assertEquals(1, records(data0).size)
 
-    val req1 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+    val req1 = new FetchRequest.Builder(0, 1, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
       .setMaxBytes(800).build()
 
@@ -704,7 +704,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // fetch request with fetch version v3 (magic 1):
     // gzip compressed record is returned with down-conversion.
     // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
-    val req2 = new FetchRequest.Builder(2, 3, -1, Int.MaxValue, 0,
+    val req2 = new FetchRequest.Builder(2, 3, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
 
@@ -713,7 +713,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data2.errorCode)
     assertEquals(1, records(data2).size)
 
-    val req3 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+    val req3 = new FetchRequest.Builder(0, 1, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
       .setMaxBytes(800).build()
 
@@ -722,7 +722,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data3.errorCode)
 
     // fetch request with version 10: works fine!
-    val req4 = new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+    val req4 = new FetchRequest.Builder(0, 10, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res4 = sendFetchRequest(leaderId, req4)
@@ -730,7 +730,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data4.errorCode)
     assertEquals(3, records(data4).size)
 
-    val req5 = new FetchRequest.Builder(0, ApiKeys.FETCH.latestVersion(), -1, Int.MaxValue, 0,
+    val req5 = new FetchRequest.Builder(0, ApiKeys.FETCH.latestVersion(), -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res5 = sendFetchRequest(leaderId, req5)
