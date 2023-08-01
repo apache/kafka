@@ -68,7 +68,6 @@ public class ConnectPluginPath {
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
     private static final int LIST_TABLE_COLUMN_COUNT = 8;
-    private static final int LIST_SUMMARY_COLUMN_COUNT = 6;
 
     public static void main(String[] args) {
         Exit.exit(mainNoExit(args, System.out, System.err));
@@ -213,22 +212,24 @@ public class ConnectPluginPath {
             PluginSource classpathSource = PluginUtils.classpathPluginSource(parent);
             Map<String, Set<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
             PluginScanResult classpathPlugins = discoverPlugins(classpathSource, reflectionScanner, serviceLoaderScanner);
+            Map<Path, Set<Row>> rowsByLocation = new LinkedHashMap<>();
+            Set<Row> classpathRows = enumerateRows(classpathSource, classpathManifests, classpathPlugins);
+            rowsByLocation.put(classpathSource.location(), classpathRows);
 
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
                 beginCommand(config);
-                Map<Path, Set<Row>> isolatedRows = new LinkedHashMap<>();
                 for (Path pluginLocation : config.locations) {
                     PluginSource source = PluginUtils.isolatedPluginSource(pluginLocation, delegatingClassLoader, factory);
                     Map<String, Set<ManifestEntry>> manifests = findManifests(source, classpathManifests);
                     PluginScanResult plugins = discoverPlugins(source, reflectionScanner, serviceLoaderScanner);
                     Set<Row> rows = enumerateRows(source, manifests, plugins);
-                    isolatedRows.put(pluginLocation, rows);
+                    rowsByLocation.put(pluginLocation, rows);
                     for (Row row : rows) {
                         handlePlugin(config, row);
                     }
                 }
-                endCommand(config, isolatedRows);
+                endCommand(config, rowsByLocation);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -261,10 +262,6 @@ public class ConnectPluginPath {
 
         private boolean loadable() {
             return loadable;
-        }
-
-        private boolean hasManifest() {
-            return hasManifest;
         }
 
         private boolean compatible() {
@@ -314,7 +311,7 @@ public class ConnectPluginPath {
 
     private static void beginCommand(Config config) {
         if (config.command == Command.LIST) {
-            listTablePrint(config, LIST_TABLE_COLUMN_COUNT,
+            listTablePrint(config,
                     "pluginName",
                     "firstAlias",
                     "secondAlias",
@@ -331,7 +328,7 @@ public class ConnectPluginPath {
         if (config.command == Command.LIST) {
             String firstAlias = row.aliases.size() > 0 ? row.aliases.get(0) : "null";
             String secondAlias = row.aliases.size() > 1 ? row.aliases.get(1) : "null";
-            listTablePrint(config, LIST_TABLE_COLUMN_COUNT,
+            listTablePrint(config,
                     row.className,
                     firstAlias,
                     secondAlias,
@@ -351,35 +348,37 @@ public class ConnectPluginPath {
         if (config.command == Command.LIST) {
             // end the table with an empty line
             config.out.println();
-            listTablePrint(config, LIST_SUMMARY_COLUMN_COUNT,
-                    "totalPlugins",
-                    "loadablePlugins",
-                    "compatiblePlugins",
-                    "totalLocations",
-                    "compatibleLocations",
-                    "allLocationsCompatible"
-            );
             Set<Row> allRows = rowsByLocation.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
-            long totalPlugins = allRows.size();
-            long loadablePlugins = allRows.stream().filter(Row::loadable).count();
-            long compatiblePlugins = allRows.stream().filter(Row::compatible).count();
+            Map<String, Set<String>> aliasCollisions = aliasCollisions(allRows);
+            for (Map.Entry<String, Set<String>> entry : aliasCollisions.entrySet()) {
+                String alias = entry.getKey();
+                Set<String> classNames = entry.getValue();
+                if (classNames.size() != 1) {
+                    config.out.printf("Ignoring ambiguous alias '%s' since it refers to multiple distinct plugins %s%n",
+                            alias, classNames);
+                }
+            }
+            rowsByLocation.remove(PluginSource.CLASSPATH);
+            Set<Row> isolatedRows = rowsByLocation.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
+            long totalPlugins = isolatedRows.size();
+            long loadablePlugins = isolatedRows.stream().filter(Row::loadable).count();
+            long compatiblePlugins = isolatedRows.stream().filter(Row::compatible).count();
             long totalLocations = rowsByLocation.size();
             long compatibleLocations = rowsByLocation.values().stream().filter(location -> location.stream().allMatch(Row::compatible)).count();
-            boolean allLocationsCompatible = allRows.stream().allMatch(Row::compatible);
-            listTablePrint(config, LIST_SUMMARY_COLUMN_COUNT,
-                    totalPlugins,
-                    loadablePlugins,
-                    compatiblePlugins,
-                    totalLocations,
-                    compatibleLocations,
-                    allLocationsCompatible
-            );
+            boolean allLocationsCompatible = isolatedRows.stream().allMatch(Row::compatible);
+            config.out.printf("Total plugins:           \t%d%n", totalPlugins);
+            config.out.printf("Loadable plugins:        \t%d%n", loadablePlugins);
+            config.out.printf("Compatible plugins:      \t%d%n", compatiblePlugins);
+            config.out.printf("Total locations:         \t%d%n", totalLocations);
+            config.out.printf("Compatible locations:    \t%d%n", compatibleLocations);
+            config.out.printf("All locations compatible?\t%b%n", allLocationsCompatible);
+
         }
     }
 
-    private static void listTablePrint(Config config, int length, Object... args) {
-        if (length != args.length) {
-            throw new IllegalArgumentException("Table must have exactly " + length + " columns");
+    private static void listTablePrint(Config config, Object... args) {
+        if (ConnectPluginPath.LIST_TABLE_COLUMN_COUNT != args.length) {
+            throw new IllegalArgumentException("Table must have exactly " + ConnectPluginPath.LIST_TABLE_COLUMN_COUNT + " columns");
         }
         config.out.println(Stream.of(args)
                 .map(Objects::toString)
@@ -486,4 +485,14 @@ public class ConnectPluginPath {
         }
         return lc + 1;
     }
+
+    private static Map<String, Set<String>> aliasCollisions(Set<Row> rows) {
+        Map<String, Set<String>> aliasCollisions = new HashMap<>();
+        rows.forEach(row -> {
+            aliasCollisions.computeIfAbsent(PluginUtils.simpleName(row.className), ignored -> new HashSet<>()).add(row.className);
+            aliasCollisions.computeIfAbsent(PluginUtils.prunedName(row.className, row.type), ignored -> new HashSet<>()).add(row.className);
+        });
+        return aliasCollisions;
+    }
+
 }
