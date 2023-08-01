@@ -42,7 +42,13 @@ public final class DelegationTokenDelta {
     }
 
     public void finishSnapshot() {
-        // Not sure there is anything to do here
+        for (String tokenId : image.tokens().keySet()) {
+            if (!changes.containsKey(tokenId)) {
+                // If the tokenId from the image did not appear in the snapshot, mark it as removed
+                changes.put(tokenId, Optional.empty());
+
+            }
+        }
     }
 
     public DelegationTokenImage image() {
@@ -67,11 +73,18 @@ public final class DelegationTokenDelta {
 
     public DelegationTokenImage apply() {
         Map<String, DelegationTokenData> newTokens = new HashMap<>();
-        for (Entry<String, Optional<DelegationTokenData>> tokenChange : changes.entrySet()) {
-            if (tokenChange.getValue().isPresent()) {
-                newTokens.put(tokenChange.getKey(), tokenChange.getValue().get());
-            } else {
-                newTokens.remove(tokenChange.getKey());
+        for (Entry<String, DelegationTokenData> entry : image.tokens().entrySet()) {
+            Optional<DelegationTokenData> change = changes.get(entry.getKey());
+            if (change == null) {
+                newTokens.put(entry.getKey(), entry.getValue());
+            } else if (change.isPresent()) {
+                newTokens.put(entry.getKey(), change.get());
+            }
+        }
+
+        for (Entry<String, Optional<DelegationTokenData>> entry : changes.entrySet()) {
+            if (!newTokens.containsKey(entry.getKey())) {
+                newTokens.put(entry.getKey(), entry.getValue().get());
             }
         }
         return new DelegationTokenImage(newTokens);

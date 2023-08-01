@@ -33,6 +33,8 @@ class DelegationTokenPublisher(
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
+  var _firstPublish = true
+
   override def name(): String = s"DelegationTokenPublisher ${nodeType} id=${conf.nodeId}"
 
   override def onMetadataUpdate(
@@ -47,8 +49,21 @@ class DelegationTokenPublisher(
     delta: MetadataDelta,
     newImage: MetadataImage,
   ): Unit = {
-    val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
+    val deltaName = if (_firstPublish) {
+      s"initial MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
+    } else {
+      s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
+    }
     try {
+      if (_firstPublish) {
+        // Initialize the tokenCache with the Image
+        Option(newImage.delegationTokens()).foreach { delegationTokenImage =>
+          delegationTokenImage.tokens().forEach { (tokenId, delegationTokenData) =>
+            tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()))
+          }
+        }
+        _firstPublish = false
+      }
       // Apply changes to DelegationTokens.
       Option(delta.delegationTokenDelta()).foreach { delegationTokenDelta =>
         delegationTokenDelta.changes().forEach { 

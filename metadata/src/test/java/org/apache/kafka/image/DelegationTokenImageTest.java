@@ -63,7 +63,8 @@ public class DelegationTokenImageTest {
 
     static {
         Map<String, DelegationTokenData> image1 = new HashMap<>();
-        image1.put("somerandomuuid", randomDelegationTokenData("somerandomuuid", 100));
+        image1.put("somerandomuuid1", randomDelegationTokenData("somerandomuuid1", 100));
+        image1.put("somerandomuuid2", randomDelegationTokenData("somerandomuuid2", 100));
         IMAGE1 = new DelegationTokenImage(image1);
 
         DELTA1_RECORDS = new ArrayList<>();
@@ -73,13 +74,14 @@ public class DelegationTokenImageTest {
             setIssueTimestamp(0).
             setMaxTimestamp(1000).
             setExpirationTimestamp(200).
-            setTokenId("somerandomuuid"), (short) 0));
+            setTokenId("somerandomuuid1"), (short) 0));
 
         DELTA1 = new DelegationTokenDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<String, DelegationTokenData> image2 = new HashMap<>();
-        image2.put("somerandomuuid", randomDelegationTokenData("somerandomuuid", 200));
+        image2.put("somerandomuuid1", randomDelegationTokenData("somerandomuuid1", 200));
+        image2.put("somerandomuuid2", randomDelegationTokenData("somerandomuuid2", 100));
         IMAGE2 = new DelegationTokenImage(image2);
     }
 
