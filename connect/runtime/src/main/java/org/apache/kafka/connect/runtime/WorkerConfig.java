@@ -132,13 +132,13 @@ public class WorkerConfig extends AbstractConfig {
     public static final String PLUGIN_DISCOVERY_CONFIG = "plugin.discovery";
     protected static final String PLUGIN_DISCOVERY_DOC = "Method to use to discover plugins present in the classpath "
             + "and plugin.path configuration. This can be one of multiple values with the following meanings:\n"
-            + "* " + ONLY_SCAN.name() + ": Discover plugins only by reflection. "
+            + "* " + ONLY_SCAN + ": Discover plugins only by reflection. "
             + "Plugins which are not discoverable by ServiceLoader will not impact worker startup.\n"
-            + "* " + HYBRID_WARN.name() + ": Discover plugins reflectively and by ServiceLoader. "
+            + "* " + HYBRID_WARN + ": Discover plugins reflectively and by ServiceLoader. "
             + "Plugins which are not discoverable by ServiceLoader will print warnings during worker startup.\n"
-            + "* " + HYBRID_FAIL.name() + ": Discover plugins reflectively and by ServiceLoader. "
+            + "* " + HYBRID_FAIL + ": Discover plugins reflectively and by ServiceLoader. "
             + "Plugins which are not discoverable by ServiceLoader will cause worker startup to fail.\n"
-            + "* " + SERVICE_LOAD.name() + ": Discover plugins only by ServiceLoader. Faster startup than other modes. "
+            + "* " + SERVICE_LOAD + ": Discover plugins only by ServiceLoader. Faster startup than other modes. "
             + "Plugins which are not discoverable by ServiceLoader may not be usable.";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";

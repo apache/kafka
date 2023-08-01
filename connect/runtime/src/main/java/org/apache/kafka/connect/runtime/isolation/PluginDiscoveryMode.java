@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.util.Locale;
+
 /**
  * Strategy to use to discover plugins usable on a Connect worker.
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-898%3A+Modernize+Connect+plugin+discovery">KIP-898</a>
@@ -44,7 +46,7 @@ public enum PluginDiscoveryMode {
     HYBRID_FAIL,
     /**
      * Discover plugins via {@link java.util.ServiceLoader} only.
-     * Plugins will not be present in the REST API if they are not available via {@link java.util.ServiceLoader}
+     * Plugins may not be usable if they are not available via {@link java.util.ServiceLoader}
      */
     SERVICE_LOAD;
 
@@ -54,5 +56,10 @@ public enum PluginDiscoveryMode {
 
     public boolean serviceLoad() {
         return this != ONLY_SCAN;
+    }
+
+    @Override
+    public String toString() {
+        return name().toLowerCase(Locale.ROOT);
     }
 }
