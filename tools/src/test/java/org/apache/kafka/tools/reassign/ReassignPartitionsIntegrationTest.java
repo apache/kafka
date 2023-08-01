@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -209,8 +209,8 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         TestUtils.waitUntilTrue(() ->
             cluster.servers.get(3).replicaManager().onlinePartition(part).
-                map(Partition::leaderLogIfLocal).isDefined()
-            , () -> "broker 3 should be the new leader", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 10L);
+                map(Partition::leaderLogIfLocal).isDefined(),
+            () -> "broker 3 should be the new leader", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 10L);
         assertEquals(123L, cluster.servers.get(3).replicaManager().localLogOrException(part).highWatermark(),
             "Expected broker 3 to have the correct high water mark for the partition.");
     }
@@ -223,9 +223,9 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         cluster.produceMessages("foo", 0, 50);
         cluster.produceMessages("baz", 2, 60);
         String assignment = "{\"version\":1,\"partitions\":" +
-          "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,3,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
-          "{\"topic\":\"baz\",\"partition\":2,\"replicas\":[3,2,1],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-          "]}";
+            "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,3,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
+            "{\"topic\":\"baz\",\"partition\":2,\"replicas\":[3,2,1],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+            "]}";
 
         // Execute the assignment with a low throttle
         long initialThrottle = 1L;
@@ -346,7 +346,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         } finally {
             consumer.close();
         }
-        TestUtils.removeReplicationThrottleForPartitions(cluster.adminClient, toSeq(Arrays.asList(0,1,2,3)), toSet(Collections.singleton(part)));
+        TestUtils.removeReplicationThrottleForPartitions(cluster.adminClient, toSeq(Arrays.asList(0, 1, 2, 3)), toSet(Collections.singleton(part)));
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = Collections.singletonMap(part,
             new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 1), true));
         waitForVerifyAssignment(cluster.adminClient, assignment, false,
@@ -639,16 +639,16 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         }).collect(Collectors.toList());
 
         String reassignmentJson =
-         " { \"version\": 1," +
-         "  \"partitions\": [" +
-         "    {" +
-         "     \"topic\": \"" + topicPartition.topic() + "\"," +
-         "     \"partition\": " + topicPartition.partition() + "," +
-         "     \"replicas\": [" + replicas.stream().map(Object::toString).collect(Collectors.joining(",")) + "]," +
-         "     \"log_dirs\": [" + String.join(",", logDirs) + "]" +
-         "    }" +
-         "   ]" +
-         "  }";
+            " { \"version\": 1," +
+                "  \"partitions\": [" +
+                "    {" +
+                "     \"topic\": \"" + topicPartition.topic() + "\"," +
+                "     \"partition\": " + topicPartition.partition() + "," +
+                "     \"replicas\": [" + replicas.stream().map(Object::toString).collect(Collectors.joining(",")) + "]," +
+                "     \"log_dirs\": [" + String.join(",", logDirs) + "]" +
+                "    }" +
+                "   ]" +
+                "  }";
 
         return new LogDirReassignment(reassignmentJson, currentDir, newDir);
     }
@@ -773,7 +773,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                     3,
                     false,
                     1,
-                    (short)1,
+                    (short) 1,
                     false);
                 // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
                 config.setProperty(KafkaConfig.ReplicaFetchBackoffMsProp(), "100");
@@ -816,7 +816,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                 return new NewTopic(e.getKey(), partMap);
             }).collect(Collectors.toList())).all().get();
             topics.forEach((topicName, parts) -> {
-                    TestUtils.waitForAllPartitionsMetadata(toSeq(servers), topicName, parts.size());
+                TestUtils.waitForAllPartitionsMetadata(toSeq(servers), topicName, parts.size());
             });
 
             if (isKRaftTest()) {
