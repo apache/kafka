@@ -161,7 +161,7 @@ public class RemoteLogManagerTest {
         Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         remoteLogManagerConfig = createRLMConfig(props);
-        brokerTopicStats = new BrokerTopicStats(Option.apply(KafkaConfig.fromProps(props)));
+        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
 
         kafka.utils.TestUtils.clearYammerMetrics();
 

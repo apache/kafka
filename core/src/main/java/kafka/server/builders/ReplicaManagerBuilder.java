@@ -37,7 +37,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.server.util.Scheduler;
-import scala.Option;
 import scala.compat.java8.OptionConverters;
 
 import java.util.Collections;
@@ -180,7 +179,7 @@ public class ReplicaManagerBuilder {
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");
         if (alterPartitionManager == null) throw new RuntimeException("You must set alterIsrManager");
-        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(Option.apply(config));
+        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(Optional.of(config));
         return new ReplicaManager(config,
                              metrics,
                              time,

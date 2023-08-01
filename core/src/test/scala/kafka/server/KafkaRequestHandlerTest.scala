@@ -88,7 +88,7 @@ class KafkaRequestHandlerTest {
     val topic = "topic"
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(Some(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
     brokerTopicStats.topicStats(topic)
     if (systemRemoteStorageEnabled) {
       assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(BrokerTopicStats.RemoteBytesInPerSec))

@@ -17,24 +17,34 @@
 package kafka.log.remote;
 
 import com.yammer.metrics.core.MetricName;
+import kafka.server.BrokerTopicStats;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.storage.internals.log.RemoteStorageThreadPool.AVG_IDLE_PERCENT;
+import static org.apache.kafka.storage.internals.log.RemoteStorageThreadPool.TASK_QUEUE_SIZE;
+
 public class RemoteStorageMetrics {
     final static MetricName REMOTE_BYTES_OUT_PER_SEC = getMetricName(
-            "BrokerTopicMetrics", "RemoteBytesOutPerSec");
+        "kafka.server", "BrokerTopicMetrics", BrokerTopicStats.RemoteBytesOutPerSec());
     final static MetricName REMOTE_BYTES_IN_PER_SEC = getMetricName(
-            "BrokerTopicMetrics", "RemoteBytesInPerSec");
+        "kafka.server", "BrokerTopicMetrics", BrokerTopicStats.RemoteBytesInPerSec());
     final static MetricName REMOTE_READ_REQUESTS_PER_SEC = getMetricName(
-            "BrokerTopicMetrics", "RemoteReadRequestsPerSec");
+        "kafka.server", "BrokerTopicMetrics", BrokerTopicStats.RemoteReadRequestsPerSec());
     final static MetricName REMOTE_WRITE_REQUESTS_PER_SEC = getMetricName(
-            "BrokerTopicMetrics", "RemoteWriteRequestsPerSec");
+        "kafka.server", "BrokerTopicMetrics", BrokerTopicStats.RemoteWriteRequestsPerSec());
     final static MetricName FAILED_REMOTE_READ_REQUESTS_PER_SEC = getMetricName(
-            "BrokerTopicMetrics", "RemoteReadErrorsPerSec");
+        "kafka.server", "BrokerTopicMetrics", BrokerTopicStats.FailedRemoteReadRequestsPerSec());
     final static MetricName FAILED_REMOTE_WRITE_REQUESTS_PER_SEC = getMetricName(
-            "BrokerTopicMetrics", "RemoteWriteErrorsPerSec");
+        "kafka.server", "BrokerTopicMetrics", BrokerTopicStats.FailedRemoteWriteRequestsPerSec());
+    final static MetricName REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = getMetricName(
+        "kafka.log.remote", "RemoteLogManager", RemoteLogManager.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+    final static MetricName REMOTE_LOG_READER_TASK_QUEUE_SIZE = getMetricName(
+        "org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool", RemoteLogManager.REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE);
+    final static MetricName REMOTE_LOG_READER_AVG_IDLE_PERCENT = getMetricName(
+        "org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool", RemoteLogManager.REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT);
 
     public static Set<MetricName> allMetrics() {
         Set<MetricName> metrics = new HashSet<>();
@@ -44,10 +54,13 @@ public class RemoteStorageMetrics {
         metrics.add(REMOTE_WRITE_REQUESTS_PER_SEC);
         metrics.add(FAILED_REMOTE_READ_REQUESTS_PER_SEC);
         metrics.add(FAILED_REMOTE_WRITE_REQUESTS_PER_SEC);
+        metrics.add(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+        metrics.add(REMOTE_LOG_READER_AVG_IDLE_PERCENT);
+        metrics.add(REMOTE_LOG_READER_TASK_QUEUE_SIZE);
 
         return metrics;
     }
-    private static MetricName getMetricName(String type, String name) {
-        return KafkaYammerMetrics.getMetricName("kafka.server", type, name);
+    private static MetricName getMetricName(String group, String type, String name) {
+        return KafkaYammerMetrics.getMetricName(group, type, name);
     }
 }

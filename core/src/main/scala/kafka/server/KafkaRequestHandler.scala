@@ -227,7 +227,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 }
 
-class BrokerTopicMetrics(name: Option[String], configOpt: Option[KafkaConfig]) {
+class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[KafkaConfig]) {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val tags: java.util.Map[String, String] = name match {
@@ -283,7 +283,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: Option[KafkaConfig]) {
     BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests")
   ).asJava)
 
-  configOpt.foreach(config =>
+  configOpt.ifPresent(config =>
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       metricTypeMap.putAll(Map(
         BrokerTopicStats.RemoteBytesOutPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesOutPerSec, "bytes"),
@@ -399,7 +399,7 @@ object BrokerTopicStats {
   val InvalidOffsetOrSequenceRecordsPerSec = "InvalidOffsetOrSequenceRecordsPerSec"
 }
 
-class BrokerTopicStats(configOpt: Option[KafkaConfig] = None) extends Logging {
+class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Optional.empty()) extends Logging {
 
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k), configOpt)
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
