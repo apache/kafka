@@ -26,6 +26,12 @@ import java.util.Set;
 import static org.apache.kafka.storage.internals.log.RemoteStorageThreadPool.AVG_IDLE_PERCENT;
 import static org.apache.kafka.storage.internals.log.RemoteStorageThreadPool.TASK_QUEUE_SIZE;
 
+/**
+ * This class contains the metrics related to tiered storage feature, which is to have a centralized
+ * place to store them, so that we can verify all of them easily.
+ *
+ * @see kafka.api.MetricsTest
+ */
 public class RemoteStorageMetrics {
     final static MetricName REMOTE_BYTES_OUT_PER_SEC = getMetricName(
         "kafka.server", "BrokerTopicMetrics", BrokerTopicStats.RemoteBytesOutPerSec());
