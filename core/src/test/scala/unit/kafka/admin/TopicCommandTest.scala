@@ -17,13 +17,13 @@
 package kafka.admin
 
 import kafka.admin.TopicCommand.{PartitionDescription, TopicCommandOptions, TopicService}
-import kafka.common.AdminCommandFailedException
 import kafka.utils.Exit
 import org.apache.kafka.clients.admin.{Admin, AdminClientTestUtils, CreatePartitionsOptions, CreateTopicsOptions, DeleteTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, TopicDescription}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatcher

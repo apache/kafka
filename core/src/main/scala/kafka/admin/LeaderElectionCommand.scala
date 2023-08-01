@@ -19,7 +19,6 @@ package kafka.admin
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import joptsimple.util.EnumConverter
-import kafka.common.AdminCommandFailedException
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import kafka.utils.Json
@@ -31,6 +30,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.errors.ElectionNotNeededException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._

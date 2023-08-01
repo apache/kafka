@@ -97,7 +97,7 @@ public class ConnectPluginPathTest {
      */
     private static PluginLocation setupLocation(Path path, PluginLocationType type, TestPlugins.TestPlugin plugin) {
         try {
-            Path jarPath = TestPlugins.pluginPath(plugin).get(0);
+            Path jarPath = TestPlugins.pluginPath(plugin).stream().findFirst().get();
             switch (type) {
                 case CLASS_HIERARCHY: {
                     try (JarFile jarFile = new JarFile(jarPath.toFile())) {
@@ -227,7 +227,7 @@ public class ConnectPluginPathTest {
                             .toArray(new String[]{}),
                     new PrintStream(out, true, "utf-8"),
                     new PrintStream(err, true, "utf-8"));
-            List<Path> pluginLocations = getPluginLocations(args);
+            Set<Path> pluginLocations = getPluginLocations(args);
             ClassLoader parent = ConnectPluginPath.class.getClassLoader();
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
@@ -251,7 +251,7 @@ public class ConnectPluginPathTest {
         }
     }
 
-    private static List<Path> getPluginLocations(Object[] args) {
+    private static Set<Path> getPluginLocations(Object[] args) {
         return Arrays.stream(args)
                 .flatMap(obj -> {
                     if (obj instanceof WorkerConfig) {
@@ -276,7 +276,7 @@ public class ConnectPluginPathTest {
                 })
 
                 .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
     }
 
     @Test

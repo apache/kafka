@@ -218,7 +218,7 @@ public class ConnectPluginPath {
 
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                Set<PluginSource> isolatedSources = PluginUtils.isolatedPluginSources(new ArrayList<>(config.locations), delegatingClassLoader, factory);
+                Set<PluginSource> isolatedSources = PluginUtils.isolatedPluginSources(config.locations, delegatingClassLoader, factory);
                 Map<PluginSource, Map<String, Set<ManifestEntry>>> isolatedManifests = isolatedSources.stream()
                         .collect(Collectors.toMap(Function.identity(),
                                 // Exclude manifest entries which are visible from the classpath
@@ -429,11 +429,8 @@ public class ConnectPluginPath {
     private static Map<String, Set<ManifestEntry>> findManifests(PluginSource source, Map<String, Set<ManifestEntry>> exclude) {
         Map<String, Set<ManifestEntry>> manifests = new HashMap<>();
         for (PluginType type : PluginType.values()) {
-            if (type == PluginType.UNKNOWN) {
-                continue;
-            }
             try {
-                Enumeration<URL> resources = source.loader().getResources(MANIFEST_PREFIX + type.typeName());
+                Enumeration<URL> resources = source.loader().getResources(MANIFEST_PREFIX + type.superClass().getName());
                 while (resources.hasMoreElements())  {
                     URL url = resources.nextElement();
                     for (String className : parse(url)) {
