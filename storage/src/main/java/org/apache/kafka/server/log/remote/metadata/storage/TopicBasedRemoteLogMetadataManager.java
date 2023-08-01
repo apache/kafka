@@ -58,7 +58,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * This is the {@link RemoteLogMetadataManager} implementation with storage as an internal topic with name {@link TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_TOPIC_NAME}.
  * This is used to publish and fetch {@link RemoteLogMetadata} for the registered user topic partitions with
- * {@link #onPartitionLeadershipChanges(Set, Set)}. Each broker will have an instance of this class and it subscribes
+ * {@link #onPartitionLeadershipChanges(Set, Set)}. Each broker will have an instance of this class, and it subscribes
  * to metadata updates for the registered user topic partitions.
  */
 public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataManager {
@@ -469,7 +469,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
     /**
      * @param topic topic to be created.
-     * @return Returns true if the topic already exists or it is created successfully.
+     * @return Returns true if the topic already exists, or it is created successfully.
      */
     private boolean createTopic(AdminClient adminClient, NewTopic topic) {
         boolean topicCreated = false;
