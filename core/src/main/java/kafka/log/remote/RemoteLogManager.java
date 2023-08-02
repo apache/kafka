@@ -481,12 +481,14 @@ public class RemoteLogManager implements Closeable {
     class RLMTask extends CancellableRunnable {
 
         private final TopicIdPartition topicIdPartition;
+        private final int customMetadataSizeLimit;
         private final Logger logger;
 
         private volatile int leaderEpoch = -1;
 
-        public RLMTask(TopicIdPartition topicIdPartition) {
+        public RLMTask(TopicIdPartition topicIdPartition, int customMetadataSizeLimit) {
             this.topicIdPartition = topicIdPartition;
+            this.customMetadataSizeLimit = customMetadataSizeLimit;
             LogContext logContext = new LogContext("[RemoteLogManager=" + brokerId + " partition=" + topicIdPartition + "] ");
             logger = logContext.logger(RLMTask.class);
         }
@@ -635,15 +637,14 @@ public class RemoteLogManager implements Closeable {
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
                     customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
 
-            int customMetadataSizeLimit = RemoteLogManager.this.rlmConfig.remoteLogMetadataCustomMetadataMaxSize();
             if (customMetadata.isPresent()) {
                 long customMetadataSize = customMetadata.get().value().length;
-                if (customMetadataSize > customMetadataSizeLimit) {
+                if (customMetadataSize > this.customMetadataSizeLimit) {
                     CustomMetadataSizeLimitExceededException e = new CustomMetadataSizeLimitExceededException();
                     logger.error("Custom metadata size {} exceeds configured limit {}." +
                                     " Copying will be stopped and copied segment will be attempted to clean." +
                                     " Original metadata: {}",
-                            customMetadataSize, customMetadataSizeLimit, copySegmentStartedRlsm, e);
+                            customMetadataSize, this.customMetadataSizeLimit, copySegmentStartedRlsm, e);
                     try {
                         // For deletion, we provide back the custom metadata by creating a new metadata object from the update.
                         // However, the update itself will not be stored in this case.
@@ -910,7 +911,7 @@ public class RemoteLogManager implements Closeable {
                                             Consumer<RLMTask> convertToLeaderOrFollower) {
         RLMTaskWithFuture rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
                 topicIdPartition -> {
-                    RLMTask task = new RLMTask(topicIdPartition);
+                    RLMTask task = new RLMTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxSize());
                     // set this upfront when it is getting initialized instead of doing it after scheduling.
                     convertToLeaderOrFollower.accept(task);
                     LOGGER.info("Created a new task: {} and getting scheduled", task);

@@ -354,7 +354,7 @@ public class RemoteLogManagerTest {
         assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyBytesRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
 
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
 
@@ -452,8 +452,8 @@ public class RemoteLogManagerTest {
         when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
-        // Assuming the default metadata size limit is 128.
-        CustomMetadata customMetadata = new CustomMetadata(new byte[256]);
+        int customMetadataSizeLimit = 128;
+        CustomMetadata customMetadata = new CustomMetadata(new byte[customMetadataSizeLimit * 2]);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
         dummyFuture.complete(null);
@@ -461,7 +461,7 @@ public class RemoteLogManagerTest {
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
                 .thenReturn(Optional.of(customMetadata));
 
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, customMetadataSizeLimit);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
 
@@ -627,7 +627,7 @@ public class RemoteLogManagerTest {
         // Verify aggregate metrics
         assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
 
@@ -667,7 +667,7 @@ public class RemoteLogManagerTest {
         when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         task.convertToFollower();
         task.copyLogSegmentsToRemote(mockLog);
 
@@ -809,7 +809,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testRLMTaskShouldSetLeaderEpochCorrectly() {
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         assertFalse(task.isLeader());
         task.convertToLeader(1);
         assertTrue(task.isLeader());
@@ -957,7 +957,7 @@ public class RemoteLogManagerTest {
         when(log.logSegments(5L, Long.MAX_VALUE))
                 .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, activeSegment)));
 
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         List<RemoteLogManager.EnrichedLogSegment> expected =
                 Arrays.asList(
                         new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
@@ -983,7 +983,7 @@ public class RemoteLogManagerTest {
         when(log.logSegments(5L, Long.MAX_VALUE))
                 .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, segment3, activeSegment)));
 
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         List<RemoteLogManager.EnrichedLogSegment> expected =
                 Arrays.asList(
                         new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
