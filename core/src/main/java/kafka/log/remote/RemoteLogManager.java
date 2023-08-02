@@ -649,6 +649,7 @@ public class RemoteLogManager implements Closeable {
                         // For deletion, we provide back the custom metadata by creating a new metadata object from the update.
                         // However, the update itself will not be stored in this case.
                         remoteLogStorageManager.deleteLogSegmentData(copySegmentStartedRlsm.createWithUpdates(copySegmentFinishedRlsm));
+                        logger.info("Successfully cleaned segment after custom metadata size exceeded");
                     } catch (RemoteStorageException e1) {
                         logger.error("Error while cleaning segment after custom metadata size exceeded", e1);
                     }
