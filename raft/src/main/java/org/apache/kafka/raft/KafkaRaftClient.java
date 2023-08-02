@@ -973,7 +973,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
 
-        // TODO: Write a test for this!
         if (partitionResponse.errorCode() != Errors.NONE.code()
             || FetchResponse.recordsSize(partitionResponse) > 0
             || request.maxWaitMs() == 0
@@ -998,9 +997,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Errors error = Errors.forException(cause);
                 if (error == Errors.REQUEST_TIMED_OUT) {
                     // If the fetch timed out in purgatory, it means no new data is available,
-                    // and it needs to be complete the fetch successfully with no data.
+                    // and it needs to complete the fetch RPC successfully with no data.
 
-                    // Note that for this case the calling thread is the service thread.
+                    // Note that for this case the calling thread is the expiration service thread and not the
+                    // polling thread
                     EpochState epochState = quorum.epochState();
                     Optional<LogOffsetMetadata> highWatermark = Optional.empty();
                     if (epochState instanceof LeaderState) {
@@ -1064,7 +1064,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private boolean isPartitionTruncated(FetchResponseData.PartitionData partitionResponseData) {
+    private static boolean isPartitionTruncated(FetchResponseData.PartitionData partitionResponseData) {
         FetchResponseData.EpochEndOffset divergingEpoch = partitionResponseData.divergingEpoch();
         FetchResponseData.SnapshotId snapshotId = partitionResponseData.snapshotId();
 
