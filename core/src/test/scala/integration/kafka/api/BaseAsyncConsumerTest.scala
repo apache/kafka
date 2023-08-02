@@ -40,10 +40,11 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
       cb.successCount == 1
     }, "wait until commit is completed successfully", defaultBlockingAPITimeoutMs)
     val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
-
-    assertTrue(consumer.assignment.contains(tp))
     assertNotNull(committedOffset)
+    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
+    // tp. The committed offset should be null. This is intentional.
     assertNull(committedOffset.get(tp))
+    assertTrue(consumer.assignment.contains(tp))
   }
 
   @Test
@@ -57,6 +58,8 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     consumer.commitSync()
     val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
     assertNotNull(committedOffset)
+    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
+    // tp. The committed offset should be null. This is intentional.
     assertNull(committedOffset.get(tp))
     assertTrue(consumer.assignment.contains(tp))
   }
