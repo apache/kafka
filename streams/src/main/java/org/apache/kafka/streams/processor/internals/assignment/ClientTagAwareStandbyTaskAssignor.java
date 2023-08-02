@@ -150,10 +150,6 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         final Map<String, String> sourceClientTags = clientTagFunction.apply(source.processId(), source);
         final Map<String, String> destinationClientTags = clientTagFunction.apply(destination.processId(), destination);
 
-        if (sourceClientTags.size() != destinationClientTags.size()) {
-            return false;
-        }
-
         for (final Entry<String, String> sourceClientTagEntry : sourceClientTags.entrySet()) {
             if (!sourceClientTagEntry.getValue().equals(destinationClientTags.get(sourceClientTagEntry.getKey()))) {
                 return false;
@@ -163,6 +159,16 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         return true;
     }
 
+    /**
+     * Whether one task can be moved from source to destination. If the number of distinct tags including active
+     * and standby after the movement isn't decreased, then we can move the task. Otherwise, we can not move
+     * the task.
+     * @param source Source client
+     * @param destination Destination client
+     * @param sourceTask Task to move
+     * @param clientStateMap All client metadata
+     * @return If the task can be moved
+     */
     @Override
     public boolean isAllowedTaskMovement(final ClientState source,
                                          final ClientState destination,

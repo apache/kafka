@@ -375,10 +375,18 @@ public class RackAwareTaskAssignor {
             for (int j = i + 1; j < clientList.size(); j++) {
                 final ClientState clientState2 = clientStates.get(clientList.get(j));
 
+                final String rack1 = racksForProcess.get(clientState1.processId());
+                final String rack2 = racksForProcess.get(clientState2.processId());
+                // Cross rack traffic can not be reduced if racks are the same
+                if (rack1.equals(rack2)) {
+                    continue;
+                }
+
                 final List<TaskId> movable1 = getMovableTasks.apply(clientState1, clientState2);
                 final List<TaskId> movable2 = getMovableTasks.apply(clientState2, clientState1);
 
-                // There's no needed to optimize if one is empty
+                // There's no needed to optimize if one is empty because the optimization
+                // can only swap tasks to keep the client's load balanced
                 if (movable1.isEmpty() || movable2.isEmpty()) {
                     continue;
                 }
