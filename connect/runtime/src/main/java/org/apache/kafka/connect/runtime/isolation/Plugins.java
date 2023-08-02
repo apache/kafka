@@ -112,7 +112,7 @@ public class Plugins {
                             WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
                     PluginDiscoveryMode.SERVICE_LOAD,
                     missingPlugins.stream()
-                            .map(pluginDesc -> pluginDesc.location() + "\t" + pluginDesc.className() + "\t" + pluginDesc.version())
+                            .map(pluginDesc -> pluginDesc.location() + "\t" + pluginDesc.className() + "\t" + pluginDesc.type() + "\t" + pluginDesc.version())
                             .collect(Collectors.joining("\n", "[\n", "\n]")),
                     "https://kafka.apache.org/documentation.html#connect_plugindiscovery",
                     PluginDiscoveryMode.SERVICE_LOAD
