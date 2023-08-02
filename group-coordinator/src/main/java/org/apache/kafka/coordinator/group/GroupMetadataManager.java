@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -131,11 +130,10 @@ public class GroupMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private CoordinatorTimer<Void, Record> timer = null;
-        private List<PartitionAssignor> assignors = null;
+        private List<PartitionAssignor> consumerGroupAssignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
-        private TopicPartition topicPartition = null;
         private MetadataImage metadataImage = null;
         private int consumerGroupSessionTimeoutMs = 45000;
         private int genericGroupMaxSize = Integer.MAX_VALUE;
@@ -164,8 +162,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withAssignors(List<PartitionAssignor> assignors) {
-            this.assignors = assignors;
+        Builder withConsumerGroupAssignors(List<PartitionAssignor> consumerGroupAssignors) {
+            this.consumerGroupAssignors = consumerGroupAssignors;
             return this;
         }
 
@@ -191,11 +189,6 @@ public class GroupMetadataManager {
 
         Builder withMetadataImage(MetadataImage metadataImage) {
             this.metadataImage = metadataImage;
-            return this;
-        }
-
-        Builder withTopicPartition(TopicPartition tp) {
-            this.topicPartition = tp;
             return this;
         }
 
@@ -232,20 +225,15 @@ public class GroupMetadataManager {
 
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
-            if (assignors == null || assignors.isEmpty())
+            if (consumerGroupAssignors == null || consumerGroupAssignors.isEmpty())
                 throw new IllegalArgumentException("Assignors must be set before building.");
 
-            if (topicPartition == null) {
-                throw new IllegalStateException("TopicPartition must be set before building.");
-            }
-
             return new GroupMetadataManager(
-                topicPartition,
                 snapshotRegistry,
                 logContext,
                 time,
                 timer,
-                assignors,
+                consumerGroupAssignors,
                 metadataImage,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
@@ -259,11 +247,6 @@ public class GroupMetadataManager {
             );
         }
     }
-
-    /**
-     * The topic partition associated with the metadata manager.
-     */
-    private final TopicPartition topicPartition;
 
     /**
      * The log context.
@@ -370,7 +353,6 @@ public class GroupMetadataManager {
     private final int genericGroupMaxSessionTimeoutMs;
 
     private GroupMetadataManager(
-        TopicPartition topicPartition,
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
@@ -394,7 +376,6 @@ public class GroupMetadataManager {
         this.timer = timer;
         this.metadataImage = metadataImage;
         this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
-        this.topicPartition = topicPartition;
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -792,7 +773,8 @@ public class GroupMetadataManager {
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
-                metadataImage.topics()
+                metadataImage.topics(),
+                metadataImage.cluster()
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -942,7 +924,8 @@ public class GroupMetadataManager {
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
             member,
             null,
-            metadataImage.topics()
+            metadataImage.topics(),
+            metadataImage.cluster()
         );
 
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -1973,8 +1956,7 @@ public class GroupMetadataManager {
         } else {
             group.initNextGeneration();
             if (group.isInState(EMPTY)) {
-                log.info("Group {} with generation {} is now empty ({}-{})",
-                    groupId, group.generationId(), topicPartition.topic(), topicPartition.partition());
+                log.info("Group {} with generation {} is now empty.", groupId, group.generationId());
 
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
                 appendFuture.whenComplete((__, t) -> {
@@ -1992,8 +1974,8 @@ public class GroupMetadataManager {
                 return new CoordinatorResult<>(records, appendFuture);
 
             } else {
-                log.info("Stabilized group {} generation {} ({}) with {} members",
-                    groupId, group.generationId(), topicPartition, group.size());
+                log.info("Stabilized group {} generation {} with {} members.",
+                    groupId, group.generationId(), group.size());
 
                 // Complete the awaiting join group response future for all the members after rebalancing
                 group.allMembers().forEach(member -> {
@@ -2272,9 +2254,8 @@ public class GroupMetadataManager {
 
         group.transitionTo(PREPARING_REBALANCE);
 
-        log.info("Preparing to rebalance group {} in state {} with old generation {} ({}-{}) (reason: {})",
-            group.groupId(), group.currentState(), group.generationId(),
-            topicPartition.topic(), topicPartition.partition(), reason);
+        log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
+            group.groupId(), group.currentState(), group.generationId(), reason);
 
         return isInitialRebalance ? EMPTY_RESULT : maybeCompleteJoinElseSchedule(group);
     }

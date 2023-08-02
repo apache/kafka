@@ -56,25 +56,25 @@ public class ServiceLoaderScanner extends PluginScanner {
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         return new PluginScanResult(
-                getServiceLoaderPluginDesc(SinkConnector.class, source),
-                getServiceLoaderPluginDesc(SourceConnector.class, source),
-                getServiceLoaderPluginDesc(Converter.class, source),
-                getServiceLoaderPluginDesc(HeaderConverter.class, source),
+                getServiceLoaderPluginDesc(PluginType.SINK, source),
+                getServiceLoaderPluginDesc(PluginType.SOURCE, source),
+                getServiceLoaderPluginDesc(PluginType.CONVERTER, source),
+                getServiceLoaderPluginDesc(PluginType.HEADER_CONVERTER, source),
                 getTransformationPluginDesc(source),
                 getPredicatePluginDesc(source),
-                getServiceLoaderPluginDesc(ConfigProvider.class, source),
-                getServiceLoaderPluginDesc(ConnectRestExtension.class, source),
-                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, source)
+                getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),
+                getServiceLoaderPluginDesc(PluginType.REST_EXTENSION, source),
+                getServiceLoaderPluginDesc(PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY, source)
         );
     }
 
     @SuppressWarnings({"unchecked"})
     private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(PluginSource source) {
-        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Predicate.class, source);
+        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(PluginType.PREDICATE, source);
     }
 
     @SuppressWarnings({"unchecked"})
     private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source) {
-        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Transformation.class, source);
+        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(PluginType.TRANSFORMATION, source);
     }
 }

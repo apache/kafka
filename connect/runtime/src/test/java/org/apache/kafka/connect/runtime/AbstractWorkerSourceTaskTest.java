@@ -146,7 +146,7 @@ public class AbstractWorkerSourceTaskTest {
     private Plugins plugins;
     private WorkerConfig config;
     private SourceConnectorConfig sourceConfig;
-    private MockConnectMetrics metrics = new MockConnectMetrics();
+    private MockConnectMetrics metrics;
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
 
     private AbstractWorkerSourceTask workerTask;

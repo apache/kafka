@@ -72,7 +72,7 @@ import java.util.function.Consumer;
  * @param <S> The type of the state machine.
  * @param <U> The type of the record.
  */
-public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoCloseable {
+public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements AutoCloseable {
 
     /**
      * Builder to create a CoordinatorRuntime.
@@ -80,13 +80,13 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      * @param <S> The type of the state machine.
      * @param <U> The type of the record.
      */
-    public static class Builder<S extends Coordinator<U>, U> {
+    public static class Builder<S extends CoordinatorShard<U>, U> {
         private String logPrefix;
         private LogContext logContext;
         private CoordinatorEventProcessor eventProcessor;
         private PartitionWriter<U> partitionWriter;
         private CoordinatorLoader<U> loader;
-        private CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
+        private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
         private Time time = Time.SYSTEM;
         private Timer timer;
 
@@ -115,8 +115,8 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             return this;
         }
 
-        public Builder<S, U> withCoordinatorBuilderSupplier(CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier) {
-            this.coordinatorBuilderSupplier = coordinatorBuilderSupplier;
+        public Builder<S, U> withCoordinatorShardBuilderSupplier(CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier) {
+            this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
             return this;
         }
 
@@ -141,7 +141,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                 throw new IllegalArgumentException("Partition write must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
-            if (coordinatorBuilderSupplier == null)
+            if (coordinatorShardBuilderSupplier == null)
                 throw new IllegalArgumentException("State machine supplier must be set.");
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
@@ -154,7 +154,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                 eventProcessor,
                 partitionWriter,
                 loader,
-                coordinatorBuilderSupplier,
+                coordinatorShardBuilderSupplier,
                 time,
                 timer
             );
@@ -508,13 +508,12 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                     snapshotRegistry = new SnapshotRegistry(logContext);
                     lastWrittenOffset = 0L;
                     lastCommittedOffset = 0L;
-                    coordinator = coordinatorBuilderSupplier
+                    coordinator = coordinatorShardBuilderSupplier
                         .get()
                         .withLogContext(logContext)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withTime(time)
                         .withTimer(timer)
-                        .withTopicPartition(tp)
                         .build();
                     break;
 
@@ -994,7 +993,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      * The coordinator state machine builder used by the runtime
      * to instantiate a coordinator.
      */
-    private final CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
+    private final CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
 
     /**
      * Atomic boolean indicating whether the runtime is running.
@@ -1009,14 +1008,14 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
     /**
      * Constructor.
      *
-     * @param logPrefix                     The log prefix.
-     * @param logContext                    The log context.
-     * @param processor                     The event processor.
-     * @param partitionWriter               The partition writer.
-     * @param loader                        The coordinator loader.
-     * @param coordinatorBuilderSupplier    The coordinator builder.
-     * @param time                          The system time.
-     * @param timer                         The system timer.
+     * @param logPrefix                         The log prefix.
+     * @param logContext                        The log context.
+     * @param processor                         The event processor.
+     * @param partitionWriter                   The partition writer.
+     * @param loader                            The coordinator loader.
+     * @param coordinatorShardBuilderSupplier   The coordinator builder.
+     * @param time                              The system time.
+     * @param timer                             The system timer.
      */
     private CoordinatorRuntime(
         String logPrefix,
@@ -1024,7 +1023,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         CoordinatorEventProcessor processor,
         PartitionWriter<U> partitionWriter,
         CoordinatorLoader<U> loader,
-        CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier,
+        CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
         Timer timer
     ) {
@@ -1038,7 +1037,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         this.partitionWriter = partitionWriter;
         this.highWatermarklistener = new HighWatermarkListener();
         this.loader = loader;
-        this.coordinatorBuilderSupplier = coordinatorBuilderSupplier;
+        this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
     }
 
     /**

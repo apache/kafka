@@ -333,7 +333,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
         eventHandler.add(event);
         try {
-            return event.complete(Duration.ofMillis(100));
+            return event.complete(timeout);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         } catch (TimeoutException e) {
