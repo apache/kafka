@@ -981,8 +981,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  private def maybeIncrementLocalLogStartOffset(newLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
-    maybeIncrementLogStartOffset(newLogStartOffset, reason, onlyLocalLogStartOffsetUpdate = true)
+  private def maybeIncrementLocalLogStartOffset(newLocalLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
+    if(newLocalLogStartOffset > localLogStartOffset()) {
+      _localLogStartOffset = math.max(newLocalLogStartOffset, localLogStartOffset());
+      info(s"Incremented local log start offset to ${localLogStartOffset()} due to reason $reason")
+    }
   }
 
   /**
@@ -996,8 +999,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return true if the log start offset was updated; otherwise false
    */
   def maybeIncrementLogStartOffset(newLogStartOffset: Long,
-                                   reason: LogStartOffsetIncrementReason,
-                                   onlyLocalLogStartOffsetUpdate: Boolean = false): Boolean = {
+                                           reason: LogStartOffsetIncrementReason): Boolean = {
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
@@ -1010,19 +1012,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
         localLog.checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
-          _localLogStartOffset = math.max(newLogStartOffset, localLogStartOffset())
-
-          // it should always get updated  if tiered-storage is not enabled.
-          if (!onlyLocalLogStartOffsetUpdate || !remoteLogEnabled()) {
-            updatedLogStartOffset = true
-            updateLogStartOffset(newLogStartOffset)
-            info(s"Incremented log start offset to $newLogStartOffset due to $reason")
-            leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
-            producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
-            maybeIncrementFirstUnstableOffset()
-          } else {
-            info(s"Incrementing local log start offset to ${localLogStartOffset()}")
-          }
+          updatedLogStartOffset = true
+          updateLogStartOffset(newLogStartOffset)
+          info(s"Incremented log start offset to $newLogStartOffset due to $reason")
+          leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
+          producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
+          maybeIncrementFirstUnstableOffset()
         }
       }
     }

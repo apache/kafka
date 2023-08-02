@@ -230,7 +230,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 partition.truncateFullyAndStartAt(nextOffset, false);
 
                 // Build leader epoch cache.
-                unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented, false);
+                unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
                 List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
                 if (unifiedLog.leaderEpochCache().isDefined()) {
                     unifiedLog.leaderEpochCache().get().assign(epochs);
