@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import scala.jdk.CollectionConverters._
 
-
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
   val defaultBlockingAPITimeoutMs = 1000
 

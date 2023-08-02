@@ -34,7 +34,7 @@ public class OffsetFetchApplicationEvent extends ApplicationEvent {
     }
 
     public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future() {
-        return this.future;
+        return future;
     }
 
     public Set<TopicPartition> partitions() {
