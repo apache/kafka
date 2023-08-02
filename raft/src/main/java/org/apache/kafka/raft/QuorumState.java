@@ -570,8 +570,4 @@ public class QuorumState {
     public boolean isCandidate() {
         return state instanceof CandidateState;
     }
-
-    public EpochState epochState() {
-        return state;
-    }
 }
