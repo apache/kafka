@@ -1091,7 +1091,10 @@ public class RackAwareTaskAssignorTest {
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = new TreeMap<>();
         final String topicName = changelog ? CHANGELOG_TOPIC_PREFIX : TOPIC_PREFIX;
         for (int i = 0; i < tpSize; i++) {
-            taskTopicPartitionMap.put(new TaskId(i, 0), mkSet(new TopicPartition(topicName + i, 0)));
+            taskTopicPartitionMap.put(new TaskId(i, 0), mkSet(
+                new TopicPartition(topicName + i, 0),
+                new TopicPartition(topicName + (i + 1) % tpSize, 0)
+            ));
         }
         return taskTopicPartitionMap;
     }
