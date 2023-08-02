@@ -180,8 +180,7 @@ public class TestPlugins {
         NON_MIGRATED_PREDICATE("non-migrated", "test.plugins.NonMigratedPredicate", false),
         NON_MIGRATED_SINK_CONNECTOR("non-migrated", "test.plugins.NonMigratedSinkConnector", false),
         NON_MIGRATED_SOURCE_CONNECTOR("non-migrated", "test.plugins.NonMigratedSourceConnector", false),
-        NON_MIGRATED_TRANSFORMATION("non-migrated", "test.plugins.NonMigratedTransformation", false)
-        ;
+        NON_MIGRATED_TRANSFORMATION("non-migrated", "test.plugins.NonMigratedTransformation", false);
 
         private final String resourceDir;
         private final String className;
