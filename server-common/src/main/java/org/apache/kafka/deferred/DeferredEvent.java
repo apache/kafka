@@ -28,4 +28,8 @@ public interface DeferredEvent {
      *                          error otherwise.
      */
     void complete(Throwable exception);
+
+    default boolean allowUnstableCompletion() {
+        return false;
+    }
 }

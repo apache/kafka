@@ -988,7 +988,7 @@ public final class QuorumController implements Controller {
                                 batch.appendTimestamp());
 
                         // Complete any events in the purgatory that were waiting for this offset.
-                        deferredEventQueue.completeUpTo(tracker.lastStableOffset());
+                        deferredEventQueue.completeUpTo(tracker.lastStableOffset(), tracker.lastCommittedOffset());
                     }
                 } finally {
                     reader.close();

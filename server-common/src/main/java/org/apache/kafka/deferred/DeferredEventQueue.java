@@ -45,28 +45,56 @@ public class DeferredEventQueue {
     }
 
     /**
-     * Complete some purgatory entries.
+     * Complete purgatory entries up to the given offset.
      *
-     * @param offset        The offset which the high water mark has advanced to.
+     * @param offset    A committed offset, typically the high watermark.
      */
     public void completeUpTo(long offset) {
+        completeUpTo(offset, offset);
+    }
+
+    /**
+     * Complete stable purgatory entries up to the stable offset and complete unstable purgatory entries
+     * up to the unstable offset. In the context of metadata transactions, the stable offset is the highest
+     * offset that is not part of an in-flight transaction and the unstable offset is the committed offset.
+     *
+     * @param stableOffset       An offset to complete stable and unstable entries up to.
+     * @param unstableOffset     An offset to complete unstable entries up to. Must be less or equal to the stableOffset.
+     */
+    public void completeUpTo(long stableOffset, long unstableOffset) {
+        if (stableOffset > unstableOffset) {
+            throw new IllegalArgumentException("Stable offset cannot be greater than the committed offset");
+        }
         Iterator<Entry<Long, List<DeferredEvent>>> iter = pending.entrySet().iterator();
         int numCompleted = 0;
         while (iter.hasNext()) {
             Entry<Long, List<DeferredEvent>> entry = iter.next();
-            if (entry.getKey() > offset) {
+            long entryOffset = entry.getKey();
+            if (entryOffset > unstableOffset) {
                 break;
             }
-            for (DeferredEvent event : entry.getValue()) {
-                log.debug("completeUpTo({}): successfully completing {}", offset, event);
-                event.complete(null);
-                numCompleted++;
+            Iterator<DeferredEvent> entryIter = entry.getValue().iterator();
+            while (entryIter.hasNext()) {
+                DeferredEvent event = entryIter.next();
+                // Allow events to complete only if they are at or below the stable offset,
+                // or if the event explicitly allows for unstable completion.
+                if (event.allowUnstableCompletion() || entryOffset <= stableOffset) {
+                    log.debug("completeUpTo({}, {}): successfully completing {}", stableOffset, unstableOffset, event);
+                    event.complete(null);
+                    numCompleted++;
+                    entryIter.remove();
+                }
             }
-            iter.remove();
+            if (entry.getValue().isEmpty()) {
+                iter.remove();
+            } else {
+                log.debug("completeUpTo({}, {}): {} events remaining at offset {}",
+                    stableOffset, unstableOffset, entry.getValue().size(), entry.getKey());
+            }
         }
         if (log.isTraceEnabled()) {
-            log.trace("completeUpTo({}): successfully completed {} deferred entries",
-                    offset, numCompleted);
+            log.trace("completeUpTo({}, {}): successfully completed {} deferred entries",
+                stableOffset, unstableOffset, numCompleted);
         }
     }
 
