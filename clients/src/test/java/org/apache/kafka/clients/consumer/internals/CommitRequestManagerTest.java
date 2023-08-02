@@ -321,7 +321,7 @@ public class CommitRequestManagerTest {
         NetworkClientDelegate.PollResult res = manager.poll(time.milliseconds());
         assertEquals(numRes, res.unsentRequests.size());
 
-        return res.unsentRequests.stream().map(r -> r.future()).collect(Collectors.toList());
+        return res.unsentRequests.stream().map(NetworkClientDelegate.UnsentRequest::future).collect(Collectors.toList());
     }
 
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {

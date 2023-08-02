@@ -532,6 +532,7 @@ class BrokerServer(
         config.consumerGroupMaxSize,
         config.consumerGroupAssignors,
         config.offsetsTopicSegmentBytes,
+        config.offsetMetadataMaxSize,
         config.groupMaxSize,
         config.groupInitialRebalanceDelay,
         GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,

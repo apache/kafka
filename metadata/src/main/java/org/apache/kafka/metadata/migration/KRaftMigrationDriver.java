@@ -112,7 +112,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private volatile MetadataImage image;
     private volatile boolean firstPublish;
 
-    public KRaftMigrationDriver(
+    KRaftMigrationDriver(
         int nodeId,
         ZkRecordConsumer zkRecordConsumer,
         MigrationClient zkMigrationClient,
@@ -145,20 +145,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.recordRedactor = new RecordRedactor(configSchema);
     }
 
-    public KRaftMigrationDriver(
-        int nodeId,
-        ZkRecordConsumer zkRecordConsumer,
-        MigrationClient zkMigrationClient,
-        LegacyPropagator propagator,
-        Consumer<MetadataPublisher> initialZkLoadHandler,
-        FaultHandler faultHandler,
-        QuorumFeatures quorumFeatures,
-        KafkaConfigSchema configSchema,
-        QuorumControllerMetrics controllerMetrics
-    ) {
-        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, configSchema, controllerMetrics, Time.SYSTEM);
+    public static Builder newBuilder() {
+        return new Builder();
     }
-
 
     public void start() {
         eventQueue.prepend(new PollEvent());
@@ -305,6 +294,16 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             default:
                 log.error("Migration driver trying to transition from an unknown state {}", migrationState);
                 return false;
+        }
+    }
+
+    private boolean checkDriverState(MigrationDriverState expectedState) {
+        if (migrationState.equals(expectedState)) {
+            return true;
+        } else {
+            log.info("Expected driver state {} but found {}. Not running this event {}.",
+                expectedState, migrationState, this.getClass().getSimpleName());
+            return false;
         }
     }
 
@@ -471,11 +470,21 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
+            if (migrationState.equals(MigrationDriverState.INACTIVE)) {
+                // No need to log anything if this node is not the active controller
+                completionHandler.accept(null);
+                return;
+            }
+
             if (!migrationState.allowDualWrite()) {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                         "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 completionHandler.accept(null);
-                wakeup();
+                // If the driver is active and dual-write is not yet enabled, then the migration has not yet begun.
+                // Only wake up the thread if the broker registrations have changed
+                if (delta.clusterDelta() != null) {
+                    wakeup();
+                }
                 return;
             }
 
@@ -486,12 +495,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             Map<String, Integer> dualWriteCounts = new TreeMap<>();
+            long startTime = time.nanoseconds();
             if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
             } else {
-                zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                if (zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
+                      dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation))) {
+                    // Only record delta write time if we changed something. Otherwise, no-op records will skew timings.
+                    controllerMetrics.updateZkWriteDeltaTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
+                }
             }
             if (dualWriteCounts.isEmpty()) {
                 log.trace("Did not make any ZK writes when handling KRaft {}", isSnapshot ? "snapshot" : "delta");
@@ -531,7 +545,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
-            if (migrationState.equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM)) {
+            if (checkDriverState(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM)) {
                 if (!firstPublish) {
                     log.trace("Waiting until we have received metadata before proceeding with migration");
                     return;
@@ -567,6 +581,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         log.error("KRaft controller indicates a completed migration, but the migration driver is somehow active.");
                         transitionTo(MigrationDriverState.INACTIVE);
                         break;
+                    default:
+                        throw new IllegalStateException("Unsupported ZkMigrationState " + zkMigrationState);
                 }
             }
         }
@@ -575,16 +591,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class WaitForZkBrokersEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            switch (migrationState) {
-                case WAIT_FOR_BROKERS:
-                    if (areZkBrokersReadyForMigration()) {
-                        log.info("Zk brokers are registered and ready for migration");
-                        transitionTo(MigrationDriverState.BECOME_CONTROLLER);
-                    }
-                    break;
-                default:
-                    // Ignore the event as we're not in the appropriate state anymore.
-                    break;
+            if (checkDriverState(MigrationDriverState.WAIT_FOR_BROKERS)) {
+                if (areZkBrokersReadyForMigration()) {
+                    log.info("Zk brokers are registered and ready for migration");
+                    transitionTo(MigrationDriverState.BECOME_CONTROLLER);
+                }
             }
         }
     }
@@ -592,7 +603,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class BecomeZkControllerEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
+            if (checkDriverState(MigrationDriverState.BECOME_CONTROLLER)) {
                 applyMigrationOperation("Claiming ZK controller leadership", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                     log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
@@ -610,6 +621,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class MigrateMetadataEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
+            if (!checkDriverState(MigrationDriverState.ZK_MIGRATION)) {
+                return;
+            }
             Set<Integer> brokersInMetadata = new HashSet<>();
             log.info("Starting ZK migration");
             MigrationManifest.Builder manifestBuilder = MigrationManifest.newBuilder(time);
@@ -666,11 +680,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class SyncKRaftMetadataEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (migrationState == MigrationDriverState.SYNC_KRAFT_TO_ZK) {
+            if (checkDriverState(MigrationDriverState.SYNC_KRAFT_TO_ZK)) {
                 log.info("Performing a full metadata sync from KRaft to ZK.");
                 Map<String, Integer> dualWriteCounts = new TreeMap<>();
+                long startTime = time.nanoseconds();
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
-                        dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
+                long endTime = time.nanoseconds();
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(startTime - endTime));
                 log.info("Made the following ZK writes when reconciling with KRaft state: {}", dualWriteCounts);
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             }
@@ -682,7 +699,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
-            if (migrationState == MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
+            if (checkDriverState(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM)) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
                     log.trace("Sending RPCs to broker before moving to dual-write mode using " +
                             "at offset and epoch {}", image.highestOffsetAndEpoch());
@@ -755,5 +772,110 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             });
             operationConsumer.accept(logMsg, operation);
         };
+    }
+
+    public static class Builder {
+        private Integer nodeId;
+        private ZkRecordConsumer zkRecordConsumer;
+        private MigrationClient zkMigrationClient;
+        private LegacyPropagator propagator;
+        private Consumer<MetadataPublisher> initialZkLoadHandler;
+        private FaultHandler faultHandler;
+        private QuorumFeatures quorumFeatures;
+        private KafkaConfigSchema configSchema;
+        private QuorumControllerMetrics controllerMetrics;
+        private Time time;
+
+        public Builder setNodeId(int nodeId) {
+            this.nodeId = nodeId;
+            return this;
+        }
+
+        public Builder setZkRecordConsumer(ZkRecordConsumer zkRecordConsumer) {
+            this.zkRecordConsumer = zkRecordConsumer;
+            return this;
+        }
+
+        public Builder setZkMigrationClient(MigrationClient zkMigrationClient) {
+            this.zkMigrationClient = zkMigrationClient;
+            return this;
+        }
+
+        public Builder setPropagator(LegacyPropagator propagator) {
+            this.propagator = propagator;
+            return this;
+        }
+
+        public Builder setInitialZkLoadHandler(Consumer<MetadataPublisher> initialZkLoadHandler) {
+            this.initialZkLoadHandler = initialZkLoadHandler;
+            return this;
+        }
+
+        public Builder setFaultHandler(FaultHandler faultHandler) {
+            this.faultHandler = faultHandler;
+            return this;
+        }
+
+        public Builder setQuorumFeatures(QuorumFeatures quorumFeatures) {
+            this.quorumFeatures = quorumFeatures;
+            return this;
+        }
+
+        public Builder setConfigSchema(KafkaConfigSchema configSchema) {
+            this.configSchema = configSchema;
+            return this;
+        }
+
+        public Builder setControllerMetrics(QuorumControllerMetrics controllerMetrics) {
+            this.controllerMetrics = controllerMetrics;
+            return this;
+        }
+
+        public Builder setTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public KRaftMigrationDriver build() {
+            if (nodeId == null) {
+                throw new IllegalStateException("You must specify the node ID of this controller.");
+            }
+            if (zkRecordConsumer == null) {
+                throw new IllegalStateException("You must specify the ZkRecordConsumer.");
+            }
+            if (zkMigrationClient == null) {
+                throw new IllegalStateException("You must specify the MigrationClient.");
+            }
+            if (propagator == null) {
+                throw new IllegalStateException("You must specify the MetadataPropagator.");
+            }
+            if (initialZkLoadHandler == null) {
+                throw new IllegalStateException("You must specify the initial ZK load callback.");
+            }
+            if (faultHandler == null) {
+                throw new IllegalStateException("You must specify the FaultHandler.");
+            }
+            if (configSchema == null) {
+                throw new IllegalStateException("You must specify the KafkaConfigSchema.");
+            }
+            if (controllerMetrics == null) {
+                throw new IllegalStateException("You must specify the QuorumControllerMetrics.");
+            }
+            if (time == null) {
+                throw new IllegalStateException("You must specify the Time.");
+            }
+            return new KRaftMigrationDriver(
+                nodeId,
+                zkRecordConsumer,
+                zkMigrationClient,
+                propagator,
+                initialZkLoadHandler,
+                faultHandler,
+                quorumFeatures,
+                configSchema,
+                controllerMetrics,
+                time
+            );
+        }
     }
 }
