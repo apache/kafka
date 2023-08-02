@@ -590,8 +590,8 @@ public class RemoteLogManager implements Closeable {
                 throw ex;
             } catch (Exception ex) {
                 if (!isCancelled()) {
-                    brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteWriteRequestRate().mark();
-                    brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().mark();
+                    brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
+                    brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                     logger.error("Error occurred while copying log segments of partition: {}", topicIdPartition, ex);
                 }
             }
@@ -621,8 +621,8 @@ public class RemoteLogManager implements Closeable {
             LogSegmentData segmentData = new LogSegmentData(logFile.toPath(), toPathIfExists(segment.lazyOffsetIndex().get().file()),
                     toPathIfExists(segment.lazyTimeIndex().get().file()), Optional.ofNullable(toPathIfExists(segment.txnIndex().file())),
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
-            brokerTopicStats.topicStats(log.topicPartition().topic()).remoteWriteRequestRate().mark();
-            brokerTopicStats.allTopicsStats().remoteWriteRequestRate().mark();
+            brokerTopicStats.topicStats(log.topicPartition().topic()).remoteCopyRequestRate().mark();
+            brokerTopicStats.allTopicsStats().remoteCopyRequestRate().mark();
             remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
@@ -630,8 +630,8 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
-                .remoteBytesOutRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
-            brokerTopicStats.allTopicsStats().remoteBytesOutRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
+                .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
+            brokerTopicStats.allTopicsStats().remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             copiedOffsetOption = OptionalLong.of(endOffset);
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
