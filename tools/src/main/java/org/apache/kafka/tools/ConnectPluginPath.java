@@ -185,10 +185,21 @@ public class ConnectPluginPath {
             }
             pluginLocations.add(pluginLocation);
         }
-        // Inject a current directory reference in the path to make these plugin paths distinct from the classpath.
-        return pluginLocations.stream()
-                .map(path -> path.getParent().resolve(".").resolve(path.getFileName()))
-                .collect(Collectors.toSet());
+        return pluginLocations;
+    }
+
+    private static Path makeDistinct(Path path) {
+        // When the same jar is present on the classpath and inside a pluginLocation, we still need to be able
+        // to distinguish between them. In order to make them more likely to be distinct, change the path to
+        // include an arbitrary change that makes them still resolve the same file, but fail direct equality checks.
+        Path parent = path.getParent();
+        if (parent == null) {
+            // At the root of the filesystem, add the current directory marker to the end.
+            return path.resolve(".");
+        } else {
+            // If we have a parent directory, add the current directory marker there.
+            return parent.resolve(".").resolve(path.getFileName());
+        }
     }
 
     enum Command {
@@ -225,17 +236,17 @@ public class ConnectPluginPath {
             Map<String, Set<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
             PluginScanResult classpathPlugins = discoverPlugins(classpathSource, reflectionScanner, serviceLoaderScanner);
             Map<Path, Set<Row>> rowsByLocation = new LinkedHashMap<>();
-            Set<Row> classpathRows = enumerateRows(classpathSource, classpathManifests, classpathPlugins);
+            Set<Row> classpathRows = enumerateRows(classpathSource.location(), classpathManifests, classpathPlugins);
             rowsByLocation.put(classpathSource.location(), classpathRows);
 
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
                 beginCommand(config);
                 for (Path pluginLocation : config.locations) {
-                    PluginSource source = PluginUtils.isolatedPluginSource(pluginLocation, delegatingClassLoader, factory);
+                    PluginSource source = PluginUtils.isolatedPluginSource(makeDistinct(pluginLocation), delegatingClassLoader, factory);
                     Map<String, Set<ManifestEntry>> manifests = findManifests(source, classpathManifests);
                     PluginScanResult plugins = discoverPlugins(source, reflectionScanner, serviceLoaderScanner);
-                    Set<Row> rows = enumerateRows(source, manifests, plugins);
+                    Set<Row> rows = enumerateRows(pluginLocation, manifests, plugins);
                     rowsByLocation.put(pluginLocation, rows);
                     for (Row row : rows) {
                         handlePlugin(config, row);
@@ -294,31 +305,31 @@ public class ConnectPluginPath {
         }
     }
 
-    private static Set<Row> enumerateRows(PluginSource source, Map<String, Set<ManifestEntry>> manifests, PluginScanResult scanResult) {
+    private static Set<Row> enumerateRows(Path pluginLocation, Map<String, Set<ManifestEntry>> manifests, PluginScanResult scanResult) {
         Set<Row> rows = new HashSet<>();
         // Perform a deep copy of the manifests because we're going to be mutating our copy.
         Map<String, Set<ManifestEntry>> unloadablePlugins = manifests.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())));
         scanResult.forEach(pluginDesc -> {
             // Emit a loadable row for this scan result, since it was found during plugin discovery
-            rows.add(newRow(source, pluginDesc.className(), pluginDesc.type(), pluginDesc.version(), true, manifests));
+            rows.add(newRow(pluginLocation, pluginDesc.className(), pluginDesc.type(), pluginDesc.version(), true, manifests));
             // Remove the ManifestEntry if it has the same className and type as one of the loadable plugins.
             unloadablePlugins.getOrDefault(pluginDesc.className(), Collections.emptySet()).removeIf(entry -> entry.type == pluginDesc.type());
         });
         unloadablePlugins.values().forEach(entries -> entries.forEach(entry -> {
             // Emit a non-loadable row, since all the loadable rows showed up in the previous iteration.
             // Two ManifestEntries may produce the same row if they have different URIs
-            rows.add(newRow(source, entry.className, entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests));
+            rows.add(newRow(pluginLocation, entry.className, entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests));
         }));
         return rows;
     }
 
-    private static Row newRow(PluginSource source, String className, PluginType type, String version, boolean loadable, Map<String, Set<ManifestEntry>> manifests) {
+    private static Row newRow(Path pluginLocation, String className, PluginType type, String version, boolean loadable, Map<String, Set<ManifestEntry>> manifests) {
         Set<String> rowAliases = new LinkedHashSet<>();
         rowAliases.add(PluginUtils.simpleName(className));
         rowAliases.add(PluginUtils.prunedName(className, type));
         boolean hasManifest = manifests.containsKey(className);
-        return new Row(source.location(), className, type, version, new ArrayList<>(rowAliases), loadable, hasManifest);
+        return new Row(pluginLocation, className, type, version, new ArrayList<>(rowAliases), loadable, hasManifest);
     }
 
     private static void beginCommand(Config config) {
