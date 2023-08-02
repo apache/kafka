@@ -996,19 +996,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
                 Errors error = Errors.forException(cause);
                 if (error == Errors.REQUEST_TIMED_OUT) {
-                    // If the fetch timed out in purgatory, it means no new data is available,
-                    // and it needs to complete the fetch RPC successfully with no data.
-
                     // Note that for this case the calling thread is the expiration service thread and not the
-                    // polling thread
-                    EpochState epochState = quorum.epochState();
-                    Optional<LogOffsetMetadata> highWatermark = Optional.empty();
-                    if (epochState instanceof LeaderState) {
-                        // Only send the high watermark if this replica is still the leader
-                        highWatermark = epochState.highWatermark();
-                    }
-
-                    return buildEmptyFetchResponse(Errors.NONE, epochState, highWatermark);
+                    // polling thread.
+                    //
+                    // If the fetch request timed out in purgatory, it means no new data is available,
+                    // just return the original fetch response.
+                    return response;
                 } else {
                     // If there was any error other than REQUEST_TIMED_OUT, return it.
                     logger.info("Failed to handle fetch from {} at {} due to {}",
