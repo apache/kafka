@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.Collections
@@ -286,12 +287,12 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   configOpt.ifPresent(config =>
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       metricTypeMap.putAll(Map(
-        BrokerTopicStats.RemoteBytesOutPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesOutPerSec, "bytes"),
-        BrokerTopicStats.RemoteBytesInPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesInPerSec, "bytes"),
-        BrokerTopicStats.RemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteReadRequestsPerSec, "requests"),
-        BrokerTopicStats.RemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteWriteRequestsPerSec, "requests"),
-        BrokerTopicStats.FailedRemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteReadRequestsPerSec, "requests"),
-        BrokerTopicStats.FailedRemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteWriteRequestsPerSec, "requests")
+        RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC, "bytes"),
+        RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC, "bytes"),
+        RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC, "requests"),
+        RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC, "requests"),
+        RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC, "requests"),
+        RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC, "requests")
       ).asJava)
     })
 
@@ -349,17 +350,17 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
-  def remoteBytesOutRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteBytesOutPerSec).meter()
+  def remoteBytesOutRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC).meter()
 
-  def remoteBytesInRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteBytesInPerSec).meter()
+  def remoteBytesInRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC).meter()
 
-  def remoteReadRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteReadRequestsPerSec).meter()
+  def remoteReadRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC).meter()
 
-  def remoteWriteRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteWriteRequestsPerSec).meter()
+  def remoteWriteRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC).meter()
 
-  def failedRemoteReadRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedRemoteReadRequestsPerSec).meter()
+  def failedRemoteReadRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC).meter()
 
-  def failedRemoteWriteRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedRemoteWriteRequestsPerSec).meter()
+  def failedRemoteWriteRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC).meter()
 
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)
@@ -385,12 +386,6 @@ object BrokerTopicStats {
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"
   val ReassignmentBytesInPerSec = "ReassignmentBytesInPerSec"
   val ReassignmentBytesOutPerSec = "ReassignmentBytesOutPerSec"
-  val RemoteBytesOutPerSec = "RemoteBytesOutPerSec"
-  val RemoteBytesInPerSec = "RemoteBytesInPerSec"
-  val RemoteReadRequestsPerSec = "RemoteReadRequestsPerSec"
-  val RemoteWriteRequestsPerSec = "RemoteWriteRequestsPerSec"
-  val FailedRemoteReadRequestsPerSec = "RemoteReadErrorsPerSec"
-  val FailedRemoteWriteRequestsPerSec = "RemoteWriteErrorsPerSec"
 
   // These following topics are for LogValidator for better debugging on failed records
   val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
@@ -444,12 +439,12 @@ class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Op
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesOutPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesInPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteReadRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteWriteRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteReadRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteWriteRequestsPerSec)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC)
     }
   }
 

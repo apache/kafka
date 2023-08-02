@@ -1634,6 +1634,8 @@ project(':storage:api') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':server-common')
+    implementation libs.metrics
     implementation libs.slf4jApi
 
     testImplementation project(':clients')

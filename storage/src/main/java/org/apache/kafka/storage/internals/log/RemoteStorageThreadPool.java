@@ -33,9 +33,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.AVG_IDLE_PERCENT;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.TASK_QUEUE_SIZE;
+
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
-    public static final String TASK_QUEUE_SIZE = "TaskQueueSize";
-    public static final String AVG_IDLE_PERCENT = "AvgIdlePercent";
     public static final Set<String> METRIC_SUFFIXES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(TASK_QUEUE_SIZE, AVG_IDLE_PERCENT)));
     private final Logger logger;
     private final String metricsNamePrefix;
