@@ -71,11 +71,11 @@ public final class AssignmentTestUtils {
     public static final UUID UUID_8 = uuidForInt(8);
     public static final UUID UUID_9 = uuidForInt(9);
 
-    public static final String RACK_0 = "rock0";
-    public static final String RACK_1 = "rock1";
-    public static final String RACK_2 = "rock2";
-    public static final String RACK_3 = "rock3";
-    public static final String RACK_4 = "rock4";
+    public static final String RACK_0 = "rack0";
+    public static final String RACK_1 = "rack1";
+    public static final String RACK_2 = "rack2";
+    public static final String RACK_3 = "rack3";
+    public static final String RACK_4 = "rack4";
 
     public static final Node NODE_0 = new Node(0, "node0", 1, RACK_0);
     public static final Node NODE_1 = new Node(1, "node1", 1, RACK_1);
