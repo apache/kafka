@@ -206,11 +206,9 @@ public class PluginUtils {
         Set<Path> pluginLocations = new LinkedHashSet<>();
         for (String path : pluginPathElements) {
             try {
-                Path specifiedPath = Paths.get(path);
-                Path pluginPathElement = specifiedPath.toAbsolutePath();
-                if (!specifiedPath.isAbsolute()) {
-                    log.warn("Plugin path element '{}' is relative, evaluating to {}.",
-                            specifiedPath, pluginPathElement);
+                Path pluginPathElement = Paths.get(path).toAbsolutePath();
+                if (!pluginPath.isEmpty()) {
+                    log.warn("Plugin path element is empty, evaluating to {}.", pluginPathElement);
                 }
                 if (!Files.exists(pluginPathElement)) {
                     throw new FileNotFoundException(pluginPathElement.toString());

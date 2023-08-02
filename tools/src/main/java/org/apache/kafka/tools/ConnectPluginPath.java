@@ -67,7 +67,16 @@ import java.util.stream.Stream;
 public class ConnectPluginPath {
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
-    private static final int LIST_TABLE_COLUMN_COUNT = 8;
+    private static final Object[] LIST_TABLE_COLUMNS = {
+        "pluginName",
+        "firstAlias",
+        "secondAlias",
+        "pluginVersion",
+        "pluginType",
+        "isLoadable",
+        "hasManifest",
+        "pluginLocation" // last because it is least important and most repetitive
+    };
 
     public static void main(String[] args) {
         Exit.exit(mainNoExit(args, System.out, System.err));
@@ -311,23 +320,17 @@ public class ConnectPluginPath {
 
     private static void beginCommand(Config config) {
         if (config.command == Command.LIST) {
-            listTablePrint(config,
-                    "pluginName",
-                    "firstAlias",
-                    "secondAlias",
-                    "pluginVersion",
-                    "pluginType",
-                    "isLoadable",
-                    "hasManifest",
-                    "pluginLocation" // last because it is least important and most repetitive
-            );
+            // The list command prints a TSV-formatted table with details of the found plugins
+            // This is officially human-readable output with no guarantees for backwards-compatibility
+            // It should be reasonably easy to parse for ad-hoc scripting use-cases.
+            listTablePrint(config, LIST_TABLE_COLUMNS);
         }
     }
 
     private static void handlePlugin(Config config, Row row) {
         if (config.command == Command.LIST) {
-            String firstAlias = row.aliases.size() > 0 ? row.aliases.get(0) : "null";
-            String secondAlias = row.aliases.size() > 1 ? row.aliases.get(1) : "null";
+            String firstAlias = row.aliases.size() > 0 ? row.aliases.get(0) : "N/A";
+            String secondAlias = row.aliases.size() > 1 ? row.aliases.get(1) : "N/A";
             listTablePrint(config,
                     row.className,
                     firstAlias,
@@ -346,7 +349,7 @@ public class ConnectPluginPath {
             Map<Path, Set<Row>> rowsByLocation
     ) {
         if (config.command == Command.LIST) {
-            // end the table with an empty line
+            // end the table with an empty line to enable users to separate the table from the summary.
             config.out.println();
             Set<Row> allRows = rowsByLocation.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
             Map<String, Set<String>> aliasCollisions = aliasCollisions(allRows);
@@ -354,8 +357,10 @@ public class ConnectPluginPath {
                 String alias = entry.getKey();
                 Set<String> classNames = entry.getValue();
                 if (classNames.size() != 1) {
-                    config.out.printf("Ignoring ambiguous alias '%s' since it refers to multiple distinct plugins %s%n",
-                            alias, classNames);
+                    config.out.printf("%s is an ambiguous alias and will not be usable. One of the fully qualified classes must be used instead:%n", alias);
+                    for (String className : classNames) {
+                        config.out.printf("\t%s%n", className);
+                    }
                 }
             }
             rowsByLocation.remove(PluginSource.CLASSPATH);
@@ -377,8 +382,8 @@ public class ConnectPluginPath {
     }
 
     private static void listTablePrint(Config config, Object... args) {
-        if (ConnectPluginPath.LIST_TABLE_COLUMN_COUNT != args.length) {
-            throw new IllegalArgumentException("Table must have exactly " + ConnectPluginPath.LIST_TABLE_COLUMN_COUNT + " columns");
+        if (ConnectPluginPath.LIST_TABLE_COLUMNS.length != args.length) {
+            throw new IllegalArgumentException("Table must have exactly " + ConnectPluginPath.LIST_TABLE_COLUMNS.length + " columns");
         }
         config.out.println(Stream.of(args)
                 .map(Objects::toString)
@@ -439,9 +444,9 @@ public class ConnectPluginPath {
         return manifests;
     }
 
-    // Based on implementation from ServiceLoader.LazyClassPathLookupIterator
+    // Based on implementation from ServiceLoader.LazyClassPathLookupIterator from OpenJDK11
     // visible for testing
-    static Set<String> parse(URL u) {
+    private static Set<String> parse(URL u) {
         Set<String> names = new LinkedHashSet<>(); // preserve insertion order
         try {
             URLConnection uc = u.openConnection();
@@ -450,17 +455,18 @@ public class ConnectPluginPath {
                  BufferedReader r
                          = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
                 int lc = 1;
-                while ((lc = parseLine(r, lc, names)) >= 0) {
+                while ((lc = parseLine(u, r, lc, names)) >= 0) {
                     // pass
                 }
             }
         } catch (IOException x) {
-            throw new RuntimeException("Error accessing ServiceLoader manifest file " + u, x);
+            throw new RuntimeException("Error accessing configuration file", x);
         }
         return names;
     }
 
-    private static int parseLine(BufferedReader r, int lc, Set<String> names) throws IOException {
+    // Based on implementation from ServiceLoader.LazyClassPathLookupIterator from OpenJDK11
+    private static int parseLine(URL u, BufferedReader r, int lc, Set<String> names) throws IOException {
         String ln = r.readLine();
         if (ln == null) {
             return -1;
@@ -471,15 +477,15 @@ public class ConnectPluginPath {
         int n = ln.length();
         if (n != 0) {
             if ((ln.indexOf(' ') >= 0) || (ln.indexOf('\t') >= 0))
-                throw new IOException("Illegal configuration-file syntax");
+                throw new IOException("Illegal configuration-file syntax in " + u);
             int cp = ln.codePointAt(0);
             if (!Character.isJavaIdentifierStart(cp))
-                throw new IOException("Illegal provider-class name: " + ln);
+                throw new IOException("Illegal provider-class name: " + ln + " in " + u);
             int start = Character.charCount(cp);
             for (int i = start; i < n; i += Character.charCount(cp)) {
                 cp = ln.codePointAt(i);
                 if (!Character.isJavaIdentifierPart(cp) && (cp != '.'))
-                    throw new IOException("Illegal provider-class name: " + ln);
+                    throw new IOException("Illegal provider-class name: " + ln + " in " + u);
             }
             names.add(ln);
         }
