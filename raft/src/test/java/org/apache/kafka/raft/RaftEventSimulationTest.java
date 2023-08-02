@@ -40,7 +40,6 @@ import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -230,19 +229,11 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, nonPartitionedNodes));
     }
 
-    /*
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canMakeProgressIfMajorityIsReachable(
         @ForAll int seed,
         @ForAll @IntRange(min = 0, max = 3) int numObservers
     ) {
-    */
-    @Test
-    void canMakeProgressIfMajorityIsReachable() {
-        // TODO: remove these two lines
-        int seed = -1;
-        int numObservers = 0;
-
         int numVoters = 5;
         Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);

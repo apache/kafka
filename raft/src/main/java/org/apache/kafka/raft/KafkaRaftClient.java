@@ -973,9 +973,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
 
+        // TODO: Write a test for this!
         if (partitionResponse.errorCode() != Errors.NONE.code()
             || FetchResponse.recordsSize(partitionResponse) > 0
-            || request.maxWaitMs() == 0) {
+            || request.maxWaitMs() == 0
+            || isPartitionTruncated(partitionResponse)) {
+            // Reply immediately if any of the following is true
+            // 1. The response contains an errror
+            // 2. There are records in the response
+            // 3. The fetching replica doesn't want to wait for data partition to contain new data
+            // 4. The fetching replica needs to truncate because it either diverged or needs to fetch a snapshot
             return completedFuture(response);
         }
 
@@ -1000,6 +1007,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                         // Only send the high watermark if this replica is still the leader
                         highWatermark = epochState.highWatermark();
                     }
+
                     return buildEmptyFetchResponse(Errors.NONE, epochState, highWatermark);
                 } else {
                     // If there was any error other than REQUEST_TIMED_OUT, return it.
@@ -1054,6 +1062,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             logger.error("Caught unexpected error in fetch completion of request {}", request, e);
             return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, quorum.epochState(), Optional.empty());
         }
+    }
+
+    private boolean isPartitionTruncated(FetchResponseData.PartitionData partitionResponseData) {
+        FetchResponseData.EpochEndOffset divergingEpoch = partitionResponseData.divergingEpoch();
+        FetchResponseData.SnapshotId snapshotId = partitionResponseData.snapshotId();
+
+        return divergingEpoch.epoch() != -1 || divergingEpoch.endOffset() != -1 ||
+            snapshotId.epoch() != -1 || snapshotId.endOffset() != -1;
     }
 
     private static OptionalInt optionalLeaderId(int leaderIdOrNil) {
