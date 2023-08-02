@@ -158,7 +158,7 @@ public class ConnectPluginPath {
         if (rawLocations.isEmpty() && rawPluginPaths.isEmpty() && rawWorkerConfigs.isEmpty()) {
             throw new ArgumentParserException("Must specify at least one --plugin-location, --plugin-path, or --worker-config", parser);
         }
-        Set<Path> pluginLocations = new HashSet<>();
+        Set<Path> pluginLocations = new LinkedHashSet<>();
         for (String rawWorkerConfig : rawWorkerConfigs) {
             Properties properties;
             try {
@@ -185,7 +185,10 @@ public class ConnectPluginPath {
             }
             pluginLocations.add(pluginLocation);
         }
-        return pluginLocations;
+        // Inject a current directory reference in the path to make these plugin paths distinct from the classpath.
+        return pluginLocations.stream()
+                .map(path -> path.getParent().resolve(".").resolve(path.getFileName()))
+                .collect(Collectors.toSet());
     }
 
     enum Command {
