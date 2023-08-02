@@ -102,7 +102,6 @@ public class RackAwareTaskAssignor {
             return false;
         }
          */
-        // TODO: add changelog topic, standby task validation
         if (canEnable != null) {
             return canEnable;
         }
