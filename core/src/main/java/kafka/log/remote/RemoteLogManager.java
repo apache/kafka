@@ -589,6 +589,8 @@ public class RemoteLogManager implements Closeable {
                 }
             } catch (CustomMetadataSizeLimitExceededException e) {
                 // Only stop this task. Logging is done where the exception is thrown.
+                brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
+                brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                 this.cancel();
             } catch (InterruptedException ex) {
                 throw ex;
