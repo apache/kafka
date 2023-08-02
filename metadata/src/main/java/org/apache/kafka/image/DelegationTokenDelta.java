@@ -84,7 +84,9 @@ public final class DelegationTokenDelta {
 
         for (Entry<String, Optional<DelegationTokenData>> entry : changes.entrySet()) {
             if (!newTokens.containsKey(entry.getKey())) {
-                newTokens.put(entry.getKey(), entry.getValue().get());
+                if (entry.getValue().isPresent()) {
+                    newTokens.put(entry.getKey(), entry.getValue().get());
+                }
             }
         }
         return new DelegationTokenImage(newTokens);
