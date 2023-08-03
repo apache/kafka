@@ -116,6 +116,14 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void numberWithLeadingZerosToConnect() {
+        assertEquals(new SchemaAndValue(Schema.INT8_SCHEMA, (byte) 12), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int8\" }, \"payload\": 0012 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT16_SCHEMA, (short) 123), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int16\" }, \"payload\": 000123 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 12345), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int32\" }, \"payload\": 000012345 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 123456789L), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int64\" }, \"payload\": 00000123456789 }".getBytes()));
+    }
+
+    @Test
     public void floatToConnect() {
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 12.34f), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"float\" }, \"payload\": 12.34 }".getBytes()));
     }
@@ -921,6 +929,45 @@ public class JsonConverterTest {
         assertNull(sav.value());
     }
 
+    @Test
+    public void serializeFieldNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, structSchema, new Struct(structSchema)));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":\"default\"}}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void serializeFieldNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, structSchema, new Struct(structSchema)));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void deserializeFieldNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        String value = "{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        assertEquals(new Struct(structSchema).put("field1", "default"), sav.value());
+    }
+
+    @Test
+    public void deserializeFieldNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        String value = "{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        assertEquals(new Struct(structSchema), sav.value());
+    }
 
     private JsonNode parse(byte[] json) {
         try {

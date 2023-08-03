@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -39,12 +38,14 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineObject;
 import org.slf4j.Logger;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class FeatureControlManager {
@@ -147,7 +148,8 @@ public class FeatureControlManager {
         boolean validateOnly
     ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), brokerFeatures, records));
@@ -324,24 +326,32 @@ public class FeatureControlManager {
                 "supports versions " + range);
         }
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            log.info("Setting metadata.version to {}", record.featureLevel());
-            metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
+            MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            metadataVersion.set(mv);
+            log.info("Replayed a FeatureLevelRecord setting metadata version to {}", mv);
         } else {
             if (record.featureLevel() == 0) {
-                log.info("Removing feature {}", record.name());
                 finalizedVersions.remove(record.name());
+                log.info("Replayed a FeatureLevelRecord removing feature {}", record.name());
             } else {
-                log.info("Setting feature {} to {}", record.name(), record.featureLevel());
                 finalizedVersions.put(record.name(), record.featureLevel());
+                log.info("Replayed a FeatureLevelRecord setting feature {} to {}",
+                        record.name(), record.featureLevel());
             }
         }
     }
 
     public void replay(ZkMigrationStateRecord record) {
-        ZkMigrationState recordState = ZkMigrationState.of(record.zkMigrationState());
-        ZkMigrationState currentState = migrationControlState.get();
-        log.info("Transitioning ZK migration state from {} to {}", currentState, recordState);
-        migrationControlState.set(recordState);
+        ZkMigrationState newState = ZkMigrationState.of(record.zkMigrationState());
+        ZkMigrationState previousState = migrationControlState.get();
+        if (previousState.equals(newState)) {
+            log.debug("Replayed a ZkMigrationStateRecord which did not alter the state from {}.",
+                    previousState);
+        } else {
+            migrationControlState.set(newState);
+            log.info("Replayed a ZkMigrationStateRecord changing the migration state from {} to {}.",
+                    previousState, newState);
+        }
     }
 
     boolean isControllerId(int nodeId) {

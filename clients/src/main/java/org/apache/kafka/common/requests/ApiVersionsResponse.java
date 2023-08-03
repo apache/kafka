@@ -34,7 +34,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordVersion;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -106,55 +105,6 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
     }
 
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        ApiMessageType.ListenerType listenerType
-    ) {
-        return defaultApiVersionsResponse(0, listenerType);
-    }
-
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        int throttleTimeMs,
-        ApiMessageType.ListenerType listenerType
-    ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            filterApis(RecordVersion.current(), listenerType, true),
-            Features.emptySupportedFeatures()
-        );
-    }
-
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        int throttleTimeMs,
-        ApiMessageType.ListenerType listenerType,
-        boolean enableUnstableLastVersion
-    ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion),
-            Features.emptySupportedFeatures()
-        );
-    }
-
-    public static ApiVersionsResponse createApiVersionsResponse(
-        int throttleTimeMs,
-        ApiVersionCollection apiVersions
-    ) {
-        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures());
-    }
-
-    public static ApiVersionsResponse createApiVersionsResponse(
-        int throttleTimeMs,
-        ApiVersionCollection apiVersions,
-        Features<SupportedVersionRange> latestSupportedFeatures
-    ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            apiVersions,
-            latestSupportedFeatures,
-            Collections.emptyMap(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH);
-    }
-
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
         RecordVersion minRecordVersion,
@@ -163,7 +113,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         long finalizedFeaturesEpoch,
         NodeApiVersions controllerApiVersions,
         ListenerType listenerType,
-        boolean enableUnstableLastVersion
+        boolean enableUnstableLastVersion,
+        boolean zkMigrationEnabled
     ) {
         ApiVersionCollection apiKeys;
         if (controllerApiVersions != null) {
@@ -186,7 +137,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             apiKeys,
             latestSupportedFeatures,
             finalizedFeatures,
-            finalizedFeaturesEpoch
+            finalizedFeaturesEpoch,
+            zkMigrationEnabled
         );
     }
 
@@ -195,7 +147,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         ApiVersionCollection apiVersions,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Map<String, Short> finalizedFeatures,
-        long finalizedFeaturesEpoch
+        long finalizedFeaturesEpoch,
+        boolean zkMigrationEnabled
     ) {
         return new ApiVersionsResponse(
             createApiVersionsResponseData(
@@ -204,7 +157,8 @@ public class ApiVersionsResponse extends AbstractResponse {
                 apiVersions,
                 latestSupportedFeatures,
                 finalizedFeatures,
-                finalizedFeaturesEpoch
+                finalizedFeaturesEpoch,
+                zkMigrationEnabled
             )
         );
     }
@@ -294,7 +248,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         final ApiVersionCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Map<String, Short> finalizedFeatures,
-        final long finalizedFeaturesEpoch
+        final long finalizedFeaturesEpoch,
+        final boolean zkMigrationEnabled
     ) {
         final ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
@@ -303,6 +258,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
         data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
         data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
+        data.setZkMigrationReady(zkMigrationEnabled);
 
         return data;
     }

@@ -198,10 +198,6 @@ public class MockLog implements ReplicatedLog {
         return lastOffsetAndEpochFiltered(epochStartOffset -> epochStartOffset.epoch <= epoch);
     }
 
-    private OffsetAndEpoch epochForEndOffset(long endOffset) {
-        return lastOffsetAndEpochFiltered(epochStartOffset -> epochStartOffset.startOffset < endOffset);
-    }
-
     private OffsetAndEpoch lastOffsetAndEpochFiltered(Predicate<EpochStartOffset> predicate) {
         int epochLowerBound = earliestSnapshotId().map(OffsetAndEpoch::epoch).orElse(0);
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
@@ -525,7 +521,7 @@ public class MockLog implements ReplicatedLog {
         if (startOffset() > snapshotId.offset()) {
             throw new OffsetOutOfRangeException(
                 String.format(
-                    "New log start (%s) is less than the curent log start offset (%s)",
+                    "New log start (%s) is less than the current log start offset (%s)",
                     snapshotId,
                     startOffset()
                 )

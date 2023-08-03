@@ -221,14 +221,24 @@
 
   <subpackage name="coordinator">
     <subpackage name="group">
+      <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.common.annotation" />
+      <allow pkg="org.apache.kafka.common.config" />
+      <allow pkg="org.apache.kafka.common.internals" />
       <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.metadata" />
+      <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.coordinator.group" />
+      <allow pkg="org.apache.kafka.deferred" />
       <allow pkg="org.apache.kafka.image"/>
       <allow pkg="org.apache.kafka.server.common"/>
+      <allow pkg="org.apache.kafka.server.record"/>
       <allow pkg="org.apache.kafka.server.util"/>
+      <allow pkg="org.apache.kafka.test" />
+      <allow pkg="org.apache.kafka.timeline" />
     </subpackage>
   </subpackage>
 
@@ -257,9 +267,11 @@
   </subpackage>
 
   <subpackage name="storage.internals">
+    <allow pkg="com.yammer.metrics.core" />
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage.internals"/>
     <allow pkg="org.apache.kafka.common" />
+    <allow pkg="com.github.benmanes.caffeine.cache" />
   </subpackage>
 
   <subpackage name="shell">
@@ -274,7 +286,10 @@
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.shell"/>
+    <allow pkg="org.apache.kafka.image"/>
+    <allow pkg="org.apache.kafka.image.loader"/>
     <allow pkg="org.apache.kafka.snapshot"/>
     <allow pkg="org.jline"/>
     <allow pkg="scala.compat"/>
@@ -329,6 +344,7 @@
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+    <allow pkg="org.apache.kafka.server.util"/>
 
     <allow pkg="org.apache.kafka.streams"/>
 
@@ -361,10 +377,6 @@
 
     <subpackage name="test">
       <allow pkg="kafka.admin" />
-    </subpackage>
-
-    <subpackage name="tools">
-      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="state">
@@ -437,6 +449,7 @@
     <subpackage name="sink">
       <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.connect.connector" />
+      <allow pkg="org.apache.kafka.connect.transforms" />
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
@@ -543,13 +556,13 @@
         <allow class="javax.ws.rs.core.Response" />
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
+        <allow pkg="org.eclipse.jetty.client"/>
       </subpackage>
     </subpackage>
 
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.apache.kafka.tools" />
       <allow pkg="javax.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
@@ -572,7 +585,6 @@
 
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.apache.kafka.tools" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 

@@ -163,7 +163,7 @@ class DelayedFetch(
       tp -> status.fetchInfo
     }
 
-    val logReadResults = replicaManager.readFromLocalLog(
+    val logReadResults = replicaManager.readFromLog(
       params,
       fetchInfos,
       quota,

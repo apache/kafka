@@ -105,6 +105,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final boolean autoCommitEnabled;
     private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
+    // track number of async commits for which callback must be called
+    // package private for testing
+    final AtomicInteger inFlightAsyncCommits;
+    // track the number of pending async commits waiting on the coordinator lookup to complete
     private final AtomicInteger pendingAsyncCommits;
 
     // this collection must be thread-safe because it is modified from the response handler
@@ -186,6 +190,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
+        this.inFlightAsyncCommits = new AtomicInteger();
         this.pendingAsyncCommits = new AtomicInteger();
         this.asyncCommitFenced = new AtomicBoolean(false);
         this.groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId,
@@ -284,7 +289,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // into the subscriptions as long as they still match the subscribed pattern
 
             Set<String> addedTopics = new HashSet<>();
-            // this is a copy because its handed to listener below
+            // this is a copy because it's handed to listener below
             for (TopicPartition tp : assignedPartitions) {
                 if (!joinedSubscription.contains(tp.topic()))
                     addedTopics.add(tp.topic());
@@ -759,7 +764,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         if (joinPrepareTimer == null) {
-            // We should complete onJoinPrepare before rebalanceTimeout,
+            // We should complete onJoinPrepare before rebalanceTimeoutMs,
             // and continue to join group to avoid member got kicked out from group
             joinPrepareTimer = time.timer(rebalanceConfig.rebalanceTimeoutMs);
         } else {
@@ -782,10 +787,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             // Keep retrying/waiting the offset commit when:
             // 1. offset commit haven't done (and joinPrepareTimer not expired)
-            // 2. failed with retryable exception (and joinPrepareTimer not expired)
+            // 2. failed with retriable exception (and joinPrepareTimer not expired)
             // Otherwise, continue to revoke partitions, ex:
-            // 1. if joinPrepareTime has expired
-            // 2. if offset commit failed with no-retryable exception
+            // 1. if joinPrepareTimer has expired
+            // 2. if offset commit failed with non-retriable exception
             // 3. if offset commit success
             boolean onJoinPrepareAsyncCommitCompleted = true;
             if (joinPrepareTimer.isExpired()) {
@@ -841,7 +846,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     break;
 
                 case COOPERATIVE:
-                    // only revoke those partitions that are not in the subscription any more.
+                    // only revoke those partitions that are not in the subscription anymore.
                     Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
                     revokedPartitions.addAll(ownedPartitions.stream()
                         .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
@@ -1125,10 +1130,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private RequestFuture<Void> doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
+        inFlightAsyncCommits.incrementAndGet();
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
+                inFlightAsyncCommits.decrementAndGet();
+
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
@@ -1136,6 +1144,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             @Override
             public void onFailure(RuntimeException e) {
+                inFlightAsyncCommits.decrementAndGet();
+
                 Exception commitException = e;
 
                 if (e instanceof RetriableException) {
@@ -1164,8 +1174,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public boolean commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, Timer timer) {
         invokeCompletedOffsetCommitCallbacks();
 
-        if (offsets.isEmpty())
-            return true;
+        if (offsets.isEmpty()) {
+            // We guarantee that the callbacks for all commitAsync() will be invoked when
+            // commitSync() completes, even if the user tries to commit empty offsets.
+            return invokePendingAsyncCommits(timer);
+        }
 
         do {
             if (coordinatorUnknownAndUnreadySync(timer)) {
@@ -1223,6 +1236,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    private boolean invokePendingAsyncCommits(Timer timer) {
+        if (inFlightAsyncCommits.get() == 0) {
+            return true;
+        }
+
+        do {
+            ensureCoordinatorReady(timer);
+            client.poll(timer);
+            invokeCompletedOffsetCommitCallbacks();
+
+            if (inFlightAsyncCommits.get() == 0) {
+                return true;
+            }
+
+            timer.sleep(rebalanceConfig.retryBackoffMs);
+        } while (timer.notExpired());
+
+        return false;
+    }
+
     private RequestFuture<Void> autoCommitOffsetsAsync() {
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
         log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
@@ -1245,7 +1278,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
         if (autoCommitEnabled)
             return autoCommitOffsetsAsync();
-        return null;    
+        return null;
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
@@ -1328,7 +1361,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)
-                        .setGenerationId(generation.generationId)
+                        .setGenerationIdOrMemberEpoch(generation.generationId)
                         .setMemberId(generation.memberId)
                         .setGroupInstanceId(groupInstanceId)
                         .setTopics(new ArrayList<>(requestTopicDataMap.values()))

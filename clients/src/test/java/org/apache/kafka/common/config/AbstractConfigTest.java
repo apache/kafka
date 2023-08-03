@@ -48,8 +48,10 @@ public class AbstractConfigTest {
 
     @Test
     public void testConfiguredInstances() {
+        testValidInputs("    ");
         testValidInputs("");
         testValidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter");
+        testValidInputs(" org.apache.kafka.common.metrics.FakeMetricsReporter ");
         testValidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter, org.apache.kafka.common.metrics.FakeMetricsReporter");
         testInvalidInputs(",");
         testInvalidInputs("org.apache.kafka.clients.producer.unknown-metrics-reporter");

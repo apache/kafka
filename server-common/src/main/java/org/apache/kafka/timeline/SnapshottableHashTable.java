@@ -122,6 +122,9 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                         // When merging in a later hash tier, we want to keep only the elements
                         // that were present at our epoch.
                         if (element.startEpoch() <= epoch) {
+                            if (deltaTable == null) {
+                                deltaTable = new BaseHashTable<>(1);
+                            }
                             deltaTable.baseAddOrReplace(element);
                         }
                     }

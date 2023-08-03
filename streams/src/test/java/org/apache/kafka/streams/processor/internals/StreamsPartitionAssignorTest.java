@@ -75,6 +75,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -207,6 +208,8 @@ public class StreamsPartitionAssignorTest {
     private TopologyMetadata topologyMetadata;
     @Mock
     private StreamsMetadataState streamsMetadataState;
+    @Captor
+    private ArgumentCaptor<Map<TopicPartition, PartitionInfo>> topicPartitionInfoCaptor;
     private final Map<String, Subscription> subscriptions = new HashMap<>();
     private final Class<? extends TaskAssignor> taskAssignor;
     private Map<String, String> clientTags;
@@ -1182,7 +1185,6 @@ public class StreamsPartitionAssignorTest {
         standbyTasks.put(TASK_0_2, mkSet(t3p2));
 
         streamsMetadataState = mock(StreamsMetadataState.class);
-        final ArgumentCaptor<Cluster> capturedCluster = ArgumentCaptor.forClass(Cluster.class);
 
         configureDefaultPartitionAssignor();
 
@@ -1192,11 +1194,12 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.onAssignment(assignment, null);
 
-        verify(streamsMetadataState).onChange(eq(hostState), any(), capturedCluster.capture());
+        verify(streamsMetadataState).onChange(eq(hostState), any(), topicPartitionInfoCaptor.capture());
         verify(taskManager).handleAssignment(activeTasks, standbyTasks);
 
-        assertEquals(singleton(t3p0.topic()), capturedCluster.getValue().topics());
-        assertEquals(2, capturedCluster.getValue().partitionsForTopic(t3p0.topic()).size());
+        assertTrue(topicPartitionInfoCaptor.getValue().containsKey(t3p0));
+        assertTrue(topicPartitionInfoCaptor.getValue().containsKey(t3p3));
+        assertEquals(2, topicPartitionInfoCaptor.getValue().size());
     }
 
     @Test

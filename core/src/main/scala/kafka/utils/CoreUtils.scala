@@ -19,7 +19,6 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
@@ -52,12 +51,6 @@ object CoreUtils {
   private val logger = Logger(getClass)
 
   private val inetAddressValidator = InetAddressValidator.getInstance()
-
-  /**
-   * Return the smallest element in `iterable` if it is not empty. Otherwise return `ifEmpty`.
-   */
-  def min[A, B >: A](iterable: Iterable[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
-    if (iterable.isEmpty) ifEmpty else iterable.min(cmp)
 
   /**
     * Do the given action and log any exceptions thrown without rethrowing them.
@@ -138,30 +131,6 @@ object CoreUtils {
   }
 
   /**
-   * Unregister the mbean with the given name, if there is one registered
-   * @param name The mbean name to unregister
-   */
-  def unregisterMBean(name: String): Unit = {
-    val mbs = ManagementFactory.getPlatformMBeanServer()
-    mbs synchronized {
-      val objName = new ObjectName(name)
-      if (mbs.isRegistered(objName))
-        mbs.unregisterMBean(objName)
-    }
-  }
-
-  /**
-   * Read some bytes into the provided buffer, and return the number of bytes read. If the
-   * channel has been closed or we get -1 on the read for any reason, throw an EOFException
-   */
-  def read(channel: ReadableByteChannel, buffer: ByteBuffer): Int = {
-    channel.read(buffer) match {
-      case -1 => throw new EOFException("Received -1 when reading from channel, socket has likely been closed.")
-      case n => n
-    }
-  }
-
-  /**
    * This method gets comma separated values which contains key,value pairs and returns a map of
    * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
    * Also supports strings with multiple ":" such as IpV6 addresses, taking the last occurrence
@@ -197,14 +166,6 @@ object CoreUtils {
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
-
-  /**
-   * Create a circular (looping) iterator over a collection.
-   * @param coll An iterable over the underlying collection.
-   * @return A circular iterator over the collection.
-   */
-  def circularIterator[T](coll: Iterable[T]) =
-    for (_ <- Iterator.continually(1); t <- coll) yield t
 
   /**
    * Execute the given function inside the lock

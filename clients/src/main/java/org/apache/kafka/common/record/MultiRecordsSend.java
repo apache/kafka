@@ -87,7 +87,7 @@ public class MultiRecordsSend implements Send {
         if (completed())
             throw new KafkaException("This operation cannot be invoked on a complete request.");
 
-        int totalWrittenPerCall = 0;
+        long totalWrittenPerCall = 0;
         boolean sendComplete;
         do {
             long written = current.writeTo(channel);

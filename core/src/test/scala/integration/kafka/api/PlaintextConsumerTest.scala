@@ -266,7 +266,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.subscribe(List(topic).asJava)
     awaitAssignment(consumer, Set(tp, tp2))
 
-    // should auto-commit seeked positions before closing
+    // should auto-commit sought positions before closing
     consumer.seek(tp, 300)
     consumer.seek(tp2, 500)
     consumer.close()
@@ -289,7 +289,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.subscribe(List(topic).asJava)
     awaitAssignment(consumer, Set(tp, tp2))
 
-    // should auto-commit seeked positions before closing
+    // should auto-commit sought positions before closing
     consumer.seek(tp, 300)
     consumer.seek(tp2, 500)
 

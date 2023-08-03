@@ -154,7 +154,7 @@ public class Microbenchmarks {
             values.put(Integer.toString(i), i);
         System.out.println("HashMap:");
         benchMap(2, 1000000, values);
-        System.out.println("ConcurentHashMap:");
+        System.out.println("ConcurrentHashMap:");
         benchMap(2, 1000000, new ConcurrentHashMap<>(values));
         System.out.println("CopyOnWriteMap:");
         benchMap(2, 1000000, new CopyOnWriteMap<>(values));

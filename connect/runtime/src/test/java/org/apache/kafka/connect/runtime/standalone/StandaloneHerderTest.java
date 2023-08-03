@@ -41,6 +41,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerConnector;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -86,8 +87,10 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.isNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
@@ -980,6 +983,117 @@ public class StandaloneHerderTest {
         herder.stop();
         assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
 
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testModifyConnectorOffsetsUnknownConnector() {
+        PowerMock.replayAll();
+
+        FutureCallback<Message> alterOffsetsCallback = new FutureCallback<>();
+        herder.alterConnectorOffsets("unknown-connector",
+                Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                alterOffsetsCallback);
+        ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(1000L, TimeUnit.MILLISECONDS));
+        assertTrue(e.getCause() instanceof NotFoundException);
+
+        FutureCallback<Message> resetOffsetsCallback = new FutureCallback<>();
+        herder.resetConnectorOffsets("unknown-connector", resetOffsetsCallback);
+        e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(1000L, TimeUnit.MILLISECONDS));
+        assertTrue(e.getCause() instanceof NotFoundException);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testModifyConnectorOffsetsConnectorNotInStoppedState() {
+        PowerMock.replayAll();
+
+        herder.configState = new ClusterConfigState(
+                10,
+                null,
+                Collections.singletonMap(CONNECTOR_NAME, 3),
+                Collections.singletonMap(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE)),
+                Collections.singletonMap(CONNECTOR_NAME, TargetState.PAUSED),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet()
+        );
+
+        FutureCallback<Message> alterOffsetsCallback = new FutureCallback<>();
+        herder.alterConnectorOffsets(CONNECTOR_NAME,
+                Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                alterOffsetsCallback);
+        ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(1000L, TimeUnit.MILLISECONDS));
+        assertTrue(e.getCause() instanceof BadRequestException);
+
+        FutureCallback<Message> resetOffsetsCallback = new FutureCallback<>();
+        herder.resetConnectorOffsets(CONNECTOR_NAME, resetOffsetsCallback);
+        e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(1000L, TimeUnit.MILLISECONDS));
+        assertTrue(e.getCause() instanceof BadRequestException);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testAlterConnectorOffsets() throws Exception {
+        Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
+        Message msg = new Message("The offsets for this connector have been altered successfully");
+        worker.modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(connectorConfig(SourceSink.SOURCE)), anyObject(Map.class), capture(workerCallbackCapture));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            workerCallbackCapture.getValue().onCompletion(null, msg);
+            return null;
+        });
+        PowerMock.replayAll();
+
+        herder.configState = new ClusterConfigState(
+                10,
+                null,
+                Collections.singletonMap(CONNECTOR_NAME, 0),
+                Collections.singletonMap(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE)),
+                Collections.singletonMap(CONNECTOR_NAME, TargetState.STOPPED),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet()
+        );
+        FutureCallback<Message> alterOffsetsCallback = new FutureCallback<>();
+        herder.alterConnectorOffsets(CONNECTOR_NAME,
+                Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                alterOffsetsCallback);
+        assertEquals(msg, alterOffsetsCallback.get(1000, TimeUnit.MILLISECONDS));
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testResetConnectorOffsets() throws Exception {
+        Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
+        Message msg = new Message("The offsets for this connector have been reset successfully");
+        worker.modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(connectorConfig(SourceSink.SOURCE)), isNull(), capture(workerCallbackCapture));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            workerCallbackCapture.getValue().onCompletion(null, msg);
+            return null;
+        });
+        PowerMock.replayAll();
+
+        herder.configState = new ClusterConfigState(
+                10,
+                null,
+                Collections.singletonMap(CONNECTOR_NAME, 0),
+                Collections.singletonMap(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE)),
+                Collections.singletonMap(CONNECTOR_NAME, TargetState.STOPPED),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet()
+        );
+        FutureCallback<Message> resetOffsetsCallback = new FutureCallback<>();
+        herder.resetConnectorOffsets(CONNECTOR_NAME, resetOffsetsCallback);
+        assertEquals(msg, resetOffsetsCallback.get(1000, TimeUnit.MILLISECONDS));
         PowerMock.verifyAll();
     }
 

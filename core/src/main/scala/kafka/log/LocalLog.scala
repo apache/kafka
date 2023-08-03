@@ -593,7 +593,7 @@ class LocalLog(@volatile private var _dir: File,
 object LocalLog extends Logging {
 
   /** a file that is scheduled to be deleted */
-  private[log] val DeletedFileSuffix = ".deleted"
+  private[log] val DeletedFileSuffix = LogFileUtils.DELETED_FILE_SUFFIX
 
   /** A temporary file that is being used for log cleaning */
   private[log] val CleanedFileSuffix = ".cleaned"

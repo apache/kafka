@@ -1220,7 +1220,7 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<String> reader) {
+        public void handleLoadSnapshot(SnapshotReader<String> reader) {
             snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
             commits.clear();
             savedBatches.clear();

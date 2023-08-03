@@ -1498,7 +1498,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetchDiscardedAfterPausedPartitionResumedAndSeekedToNewOffset() {
+    public void testFetchDiscardedAfterPausedPartitionResumedAndSoughtToNewOffset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
@@ -1513,7 +1513,7 @@ public class FetcherTest {
 
         assertTrue(fetcher.hasCompletedFetches(), "Should have 1 entry in completed fetches");
         Fetch<byte[], byte[]> fetch = collectFetch();
-        assertEquals(emptyMap(), fetch.records(), "Should not return any records because we seeked to a new offset");
+        assertEquals(emptyMap(), fetch.records(), "Should not return any records because we sought to a new offset");
         assertFalse(fetch.positionAdvanced());
         assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
     }
@@ -1909,7 +1909,7 @@ public class FetcherTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext());
 
-        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
+        ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 

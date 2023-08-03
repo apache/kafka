@@ -110,11 +110,37 @@ public class SnapshottableHashTableTest {
         set.add("bar");
         registry.getOrCreateSnapshot(200);
         set.add("baz");
+
+        // The deltatable of epoch 200 is null, it should not throw exception while reverting (deltatable merge)
         registry.revertToSnapshot(100);
         assertTrue(set.isEmpty());
         set.add("foo");
         registry.getOrCreateSnapshot(300);
+        // After reverting to epoch 100, "bar" is not existed anymore
         set.remove("bar");
+        // No deltatable merging is needed because nothing change in snapshot epoch 300
+        registry.revertToSnapshot(100);
+        assertTrue(set.isEmpty());
+
+        set.add("qux");
+        registry.getOrCreateSnapshot(400);
+        assertEquals(1, set.size());
+        set.add("fred");
+        set.add("thud");
+        registry.getOrCreateSnapshot(500);
+        assertEquals(3, set.size());
+
+        // remove the value in epoch 101(after epoch 100), it'll create an entry in deltatable in the snapshot of epoch 500 for the deleted value in epoch 101
+        set.remove("qux");
+        assertEquals(2, set.size());
+        // When reverting to snapshot of epoch 400, we'll merge the deltatable in epoch 500 with the one in epoch 400.
+        // The deltatable in epoch 500 has an entry created above, but the deltatable in epoch 400 is null.
+        // It should not throw exception while reverting (deltatable merge)
+        registry.revertToSnapshot(400);
+        // After reverting, the deltatable in epoch 500 should merge to the current epoch
+        assertEquals(1, set.size());
+
+        // When reverting to epoch 100, the deltatable in epoch 400 won't be merged because the entry change is epoch 101(after epoch 100)
         registry.revertToSnapshot(100);
         assertTrue(set.isEmpty());
     }

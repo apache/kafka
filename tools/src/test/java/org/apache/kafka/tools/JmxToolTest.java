@@ -40,20 +40,33 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxToolTest {
     private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-
     private static JMXConnectorServer jmxAgent;
     private static String jmxUrl;
 
     @BeforeAll
     public static void beforeAll() throws Exception {
         int port = findRandomOpenPortOnAllLocalInterfaces();
-        jmxAgent = startJmxAgent(port);
-        jmxUrl = String.format("service:jmx:rmi:///jndi/rmi://:%d/jmxrmi", port);
+        jmxUrl = format("service:jmx:rmi:///jndi/rmi://:%d/jmxrmi", port);
+        // explicitly set the hostname returned to the the clients in the remote stub object
+        // when connecting to a multi-homed machine using RMI, the wrong address may be returned
+        // by the RMI registry to the client, causing the connection to the RMI server to timeout
+        System.setProperty("java.rmi.server.hostname", "localhost");
+        LocateRegistry.createRegistry(port);
+        Map<String, Object> env = new HashMap<>();
+        env.put("com.sun.management.jmxremote.authenticate", "false");
+        env.put("com.sun.management.jmxremote.ssl", "false");
+        JMXServiceURL url = new JMXServiceURL(jmxUrl);
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        server.registerMBean(new Metrics(),
+            new ObjectName("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"));
+        jmxAgent = JMXConnectorServerFactory.newJMXConnectorServer(url, env, server);
+        jmxAgent.start();
     }
 
     @AfterAll
@@ -175,6 +188,140 @@ public class JmxToolTest {
     }
 
     @Test
+    public void testDomainNamePattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.serve?:*",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testDomainNamePatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.serve?:*",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyListPattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,*",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyListPatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,*",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyValuePattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,name=*InPerSec",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyValuePatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,name=*InPerSec",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    // Combination of property-list and property-value patterns
+    public void testPropertyPattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=*,*",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    // Combination of property-list and property-value patterns
+    public void testPropertyPatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=*,*",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
     public void dateFormat() {
         String dateFormat = "yyyyMMdd-hh:mm:ss";
         String[] args = new String[]{
@@ -190,18 +337,17 @@ public class JmxToolTest {
         assertTrue(validDateFormat(dateFormat, csv.get("time")));
     }
 
-    private static JMXConnectorServer startJmxAgent(int port) throws Exception {
-        LocateRegistry.createRegistry(port);
-        Map<String, Object> env = new HashMap<>();
-        env.put("com.sun.management.jmxremote.authenticate", "false");
-        env.put("com.sun.management.jmxremote.ssl", "false");
-        JMXServiceURL url = new JMXServiceURL(String.format("service:jmx:rmi:///jndi/rmi://:%d/jmxrmi", port));
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        server.registerMBean(new Metrics(),
-            new ObjectName("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"));
-        JMXConnectorServer agent = JMXConnectorServerFactory.newJMXConnectorServer(url, env, server);
-        agent.start();
-        return agent;
+    @Test
+    public void unknownObjectName() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=DummyMetrics,name=MessagesInPerSec",
+            "--wait"
+        };
+
+        String err = executeAndGetErr(args);
+        assertCommandFailure();
+        assertTrue(err.contains("Could not find all requested object names after 10000 ms"));
     }
 
     private static int findRandomOpenPortOnAllLocalInterfaces() throws Exception {

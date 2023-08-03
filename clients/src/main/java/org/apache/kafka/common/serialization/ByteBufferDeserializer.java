@@ -16,13 +16,22 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
 import java.nio.ByteBuffer;
 
 public class ByteBufferDeserializer implements Deserializer<ByteBuffer> {
+
+    @Override
     public ByteBuffer deserialize(String topic, byte[] data) {
         if (data == null)
             return null;
 
         return ByteBuffer.wrap(data);
+    }
+
+    @Override
+    public ByteBuffer deserialize(String topic, Headers headers, ByteBuffer data) {
+        return data;
     }
 }

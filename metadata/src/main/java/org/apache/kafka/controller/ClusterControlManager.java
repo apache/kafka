@@ -74,7 +74,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * brokers being fenced or unfenced, and broker feature versions.
  */
 public class ClusterControlManager {
-    final static long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(18, TimeUnit.SECONDS);
+    final static long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(9, TimeUnit.SECONDS);
 
     static class Builder {
         private LogContext logContext = null;
@@ -236,6 +236,9 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
+    /**
+     * True if migration from ZK is enabled.
+     */
     private final boolean zkMigrationEnabled;
 
     private ClusterControlManager(
@@ -437,11 +440,13 @@ public class ClusterControlManager {
             heartbeatManager.register(brokerId, record.fenced());
         }
         if (prevRegistration == null) {
-            log.info("Registered new broker: {}", record);
+            log.info("Replayed initial RegisterBrokerRecord for broker {}: {}", record.brokerId(), record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
-            log.info("Re-registered broker incarnation: {}", record);
+            log.info("Replayed RegisterBrokerRecord modifying the registration for broker {}: {}",
+                record.brokerId(), record);
         } else {
-            log.info("Re-registered broker id {}: {}", brokerId, record);
+            log.info("Replayed RegisterBrokerRecord establishing a new incarnation of broker {}: {}",
+                record.brokerId(), record);
         }
     }
 
@@ -458,7 +463,7 @@ public class ClusterControlManager {
         } else {
             if (heartbeatManager != null) heartbeatManager.remove(brokerId);
             brokerRegistrations.remove(brokerId);
-            log.info("Unregistered broker: {}", record);
+            log.info("Replayed {}", record);
         }
     }
 
@@ -520,6 +525,8 @@ public class ClusterControlManager {
                 inControlledShutdownChange
             );
             if (!curRegistration.equals(nextRegistration)) {
+                log.info("Replayed {} modifying the registration for broker {}: {}",
+                        record.getClass().getSimpleName(), brokerId, record);
                 brokerRegistrations.put(brokerId, nextRegistration);
             } else {
                 log.info("Ignoring no-op registration change for {}", curRegistration);

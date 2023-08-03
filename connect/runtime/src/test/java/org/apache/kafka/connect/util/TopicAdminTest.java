@@ -53,6 +53,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -255,6 +256,40 @@ public class TopicAdminTest {
             Set<String> newTopicNames = admin.createTopics(newTopic1, newTopic2);
             assertEquals(1, newTopicNames.size());
             assertEquals(newTopic2.name(), newTopicNames.iterator().next());
+        }
+    }
+
+    @Test
+    public void shouldRetryCreateTopicWhenAvailableBrokersAreNotEnoughForReplicationFactor() {
+        Cluster cluster = createCluster(1);
+        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).replicationFactor((short) 2).compacted().build();
+
+        try (TopicAdmin admin = Mockito.spy(new TopicAdmin(null, new MockAdminClient(cluster.nodes(), cluster.nodeById(0))))) {
+            try {
+                admin.createTopicsWithRetry(newTopic, 2, 1, new MockTime());
+            } catch (Exception e) {
+                // not relevant
+                e.printStackTrace();
+            }
+            Mockito.verify(admin, Mockito.times(2)).createTopics(newTopic);
+        }
+    }
+
+    @Test
+    public void shouldRetryWhenTopicCreateThrowsWrappedTimeoutException() {
+        Cluster cluster = createCluster(1);
+        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).replicationFactor((short) 1).compacted().build();
+
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0));
+             TopicAdmin admin = Mockito.spy(new TopicAdmin(null, mockAdminClient))) {
+            mockAdminClient.timeoutNextRequest(1);
+            try {
+                admin.createTopicsWithRetry(newTopic, 2, 1, new MockTime());
+            } catch (Exception e) {
+                // not relevant
+                e.printStackTrace();
+            }
+            Mockito.verify(admin, Mockito.times(2)).createTopics(newTopic);
         }
     }
 

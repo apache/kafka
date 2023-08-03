@@ -33,8 +33,10 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
@@ -80,8 +82,8 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
     private static final String PURPOSE = "field replacement";
 
-    private List<String> exclude;
-    private List<String> include;
+    private Set<String> exclude;
+    private Set<String> include;
     private Map<String, String> renames;
     private Map<String, String> reverseRenames;
 
@@ -94,8 +96,8 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             {ConfigName.EXCLUDE, "blacklist"},
         }));
 
-        exclude = config.getList(ConfigName.EXCLUDE);
-        include = config.getList(ConfigName.INCLUDE);
+        exclude = new HashSet<>(config.getList(ConfigName.EXCLUDE));
+        include = new HashSet<>(config.getList(ConfigName.INCLUDE));
         renames = parseRenameMappings(config.getList(ConfigName.RENAME));
         reverseRenames = invert(renames);
 

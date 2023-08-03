@@ -19,7 +19,6 @@ package kafka.tools
 
 import kafka.common.MessageReader
 
-import java.nio.file.Files
 import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
@@ -150,11 +149,7 @@ class ConsoleProducerTest {
 
   @Test
   def testParseReaderConfigFile(): Unit = {
-    val propsFile = TestUtils.tempFile()
-    val propsStream = Files.newOutputStream(propsFile.toPath)
-    propsStream.write("parse.key=true\n".getBytes())
-    propsStream.write("key.separator=|".getBytes())
-    propsStream.close()
+    val propsFile = TestUtils.tempPropertiesFile(Map("parse.key" -> "true", "key.separator" -> "|"))
 
     val args = Array(
       "--bootstrap-server", "localhost:9092",
