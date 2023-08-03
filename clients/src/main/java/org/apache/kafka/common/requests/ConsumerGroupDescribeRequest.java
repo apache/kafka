@@ -57,7 +57,7 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
     public ConsumerGroupDescribeResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData()
             .setThrottleTimeMs(throttleTimeMs);
-        // Set error based on e for each group present in the request
+        // Set error for each group based on e
         this.data.groupIds().forEach(
             groupId -> data.groups().add(
                 new ConsumerGroupDescribeResponseData.DescribedGroup()

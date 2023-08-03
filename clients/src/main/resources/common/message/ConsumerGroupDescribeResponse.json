@@ -85,8 +85,8 @@
         "about": "The partitions." }
     ]},
     { "name": "Assignment", "versions": "0+", "fields": [
-      { "name": "Partitions", "type": "[]TopicPartitions", "versions": "0+",
-        "about":  "The assigned topic-partitions to the member."},
+      { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+",
+        "about":  "The assigned topic-partitions to the member." },
       { "name": "Error", "type": "int8", "versions": "0+",
         "about": "The assigned error." },
       { "name": "MetadataVersion", "type": "int32", "versions": "0+",
