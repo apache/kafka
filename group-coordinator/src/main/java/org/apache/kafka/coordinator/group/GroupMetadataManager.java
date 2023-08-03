@@ -37,6 +37,10 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -2902,6 +2906,135 @@ public class GroupMetadataManager {
                 throw ILLEGAL_GENERATION.exception();
             }
         }
+    }
+
+    /**
+     * Handle a generic group LeaveGroup request.
+     *
+     * @param context        The request context.
+     * @param request        The actual LeaveGroup request.
+     *
+     * @return The LeaveGroup response and the GroupMetadata record to append if the group
+     *         no longer has any member.
+     */
+    public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(
+        RequestContext context,
+        LeaveGroupRequestData request
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        GenericGroup group = getOrMaybeCreateGenericGroup(request.groupId(), false);
+        if (group.isInState(DEAD)) {
+            return new CoordinatorResult<>(Collections.emptyList(),
+                new LeaveGroupResponseData()
+                    .setErrorCode(COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
+        List<MemberResponse> memberResponses = new ArrayList<>();
+
+            for (MemberIdentity member : request.members()) {
+                // The LeaveGroup API allows administrative removal of members by GroupInstanceId
+                // in which case we expect the MemberId to be undefined.
+                if (member.memberId().equals(UNKNOWN_MEMBER_ID)) {
+                    if (member.groupInstanceId() != null && group.staticMemberId(member.groupInstanceId()) != null) {
+                        coordinatorResult = removeCurrentMemberFromGenericGroup(
+                            group,
+                            group.staticMemberId(member.groupInstanceId()),
+                            member.reason()
+                        );
+                        memberResponses.add(
+                            new MemberResponse()
+                                .setMemberId(member.memberId())
+                                .setGroupInstanceId(member.groupInstanceId())
+                        );
+                    } else {
+                        memberResponses.add(
+                            new MemberResponse()
+                                .setMemberId(member.memberId())
+                                .setGroupInstanceId(member.groupInstanceId())
+                                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                        );
+                    }
+                } else if (group.isPendingMember(member.memberId())) {
+                    coordinatorResult = removePendingMemberAndUpdateGenericGroup(group, member.memberId());
+                    timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
+                    log.info("Pending member {} has left group {} through explicit `LeaveGroup` request.",
+                        member.memberId(), group.groupId());
+
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                    );
+                } else {
+                    try {
+                        group.validateMember(member.memberId(), member.groupInstanceId(), "leave-group");
+                        coordinatorResult = removeCurrentMemberFromGenericGroup(
+                            group,
+                            member.memberId(),
+                            member.reason()
+                        );
+                        memberResponses.add(
+                            new MemberResponse()
+                                .setMemberId(member.memberId())
+                                .setGroupInstanceId(member.groupInstanceId())
+                        );
+                    } catch (KafkaException e) {
+                        memberResponses.add(
+                            new MemberResponse()
+                                .setMemberId(member.memberId())
+                                .setGroupInstanceId(member.groupInstanceId())
+                                .setErrorCode(Errors.forException(e).code())
+                        );
+                    }
+                }
+            }
+            return new CoordinatorResult<>(
+                coordinatorResult.records(),
+                new LeaveGroupResponseData()
+                    .setMembers(memberResponses),
+                coordinatorResult.appendFuture()
+            );
+    }
+
+    /**
+     * Remove a member from the group. Cancel member's heartbeat, and prepare rebalance
+     * or complete the join phase if necessary.
+     * 
+     * @param group     The generic group.
+     * @param memberId  The member id.
+     * @param reason    The reason for the LeaveGroup request.
+     *
+     * @return The GroupMetadata record and the append future to be completed once the record is
+     *         appended to the log (and replicated).
+     */
+    private CoordinatorResult<Void, Record> removeCurrentMemberFromGenericGroup(
+        GenericGroup group,
+        String memberId,
+        String reason
+    ) {
+        GenericGroupMember member = group.member(memberId);
+        reason = reason != null ? reason : "not provided";
+        timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
+        log.info("[Group {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
+            group.groupId(), memberId, reason);
+
+        group.completeJoinFuture(member,
+            new JoinGroupResponseData()
+                .setMemberId(UNKNOWN_MEMBER_ID)
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+        );
+        group.remove(member.memberId());
+
+        switch (group.currentState()) {
+            case STABLE:
+            case COMPLETING_REBALANCE:
+                return maybePrepareRebalanceOrCompleteJoin(group, reason);
+            case PREPARING_REBALANCE:
+                timer.cancel(genericGroupJoinKey(group.groupId()));
+        }
+
+        return EMPTY_RESULT;
     }
 
     /**
