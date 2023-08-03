@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,7 +29,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -43,26 +50,39 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RackAwareTaskAssignor {
+
+    @FunctionalInterface
+    public interface MoveStandbyTaskPredicate {
+        boolean canMove(final ClientState source,
+                        final ClientState destination,
+                        final TaskId taskId,
+                        final Map<UUID, ClientState> clientStateMap);
+    }
+
     private static final Logger log = LoggerFactory.getLogger(RackAwareTaskAssignor.class);
 
     private static final int SOURCE_ID = -1;
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
+    private final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask;
     private final AssignmentConfigs assignmentConfigs;
     private final Map<TopicPartition, Set<String>> racksForPartition;
     private final Map<UUID, String> racksForProcess;
     private final InternalTopicManager internalTopicManager;
     private final boolean validClientRack;
+    private Boolean canEnable = null;
 
     public RackAwareTaskAssignor(final Cluster fullMetadata,
                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                 final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
                                  final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
                                  final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
                                  final InternalTopicManager internalTopicManager,
                                  final AssignmentConfigs assignmentConfigs) {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
+        this.changelogPartitionsForTask = changelogPartitionsForTask;
         this.internalTopicManager = internalTopicManager;
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
@@ -78,16 +98,30 @@ public class RackAwareTaskAssignor {
         /*
         TODO: enable this after we add the config
         if (StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
-            canEnableForActive = false;
+            canEnable = false;
             return false;
         }
          */
-        return validClientRack && validateTopicPartitionRack();
-        // TODO: add changelog topic, standby task validation
+        if (canEnable != null) {
+            return canEnable;
+        }
+        canEnable = validClientRack && validateTopicPartitionRack(false);
+        if (assignmentConfigs.numStandbyReplicas == 0 || !canEnable) {
+            return canEnable;
+        }
+
+        canEnable = validateTopicPartitionRack(true);
+        return canEnable;
     }
 
     // Visible for testing. This method also checks if all TopicPartitions exist in cluster
-    public boolean populateTopicsToDescribe(final Set<String> topicsToDescribe) {
+    public boolean populateTopicsToDescribe(final Set<String> topicsToDescribe, final boolean changelog) {
+        if (changelog) {
+            // Changelog topics are not in metadata, we need to describe them
+            changelogPartitionsForTask.values().stream().flatMap(Collection::stream).forEach(tp -> topicsToDescribe.add(tp.topic()));
+            return true;
+        }
+
         // Make sure rackId exist for all TopicPartitions needed
         for (final Set<TopicPartition> topicPartitions : partitionsForTask.values()) {
             for (final TopicPartition topicPartition : topicPartitions) {
@@ -114,10 +148,10 @@ public class RackAwareTaskAssignor {
         return true;
     }
 
-    private boolean validateTopicPartitionRack() {
+    private boolean validateTopicPartitionRack(final boolean changelogTopics) {
         // Make sure rackId exist for all TopicPartitions needed
         final Set<String> topicsToDescribe = new HashSet<>();
-        if (!populateTopicsToDescribe(topicsToDescribe)) {
+        if (!populateTopicsToDescribe(topicsToDescribe, changelogTopics)) {
             return false;
         }
 
@@ -201,13 +235,17 @@ public class RackAwareTaskAssignor {
         return Collections.unmodifiableMap(racksForProcess);
     }
 
-    private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost) {
+    public Map<TopicPartition, Set<String>> racksForPartition() {
+        return Collections.unmodifiableMap(racksForPartition);
+    }
+
+    private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost, final boolean isStandby) {
         final String clientRack = racksForProcess.get(processId);
         if (clientRack == null) {
             throw new IllegalStateException("Client " + processId + " doesn't have rack configured. Maybe forgot to call canEnableRackAwareAssignor first");
         }
 
-        final Set<TopicPartition> topicPartitions = partitionsForTask.get(taskId);
+        final Set<TopicPartition> topicPartitions = isStandby ? changelogPartitionsForTask.get(taskId) : partitionsForTask.get(taskId);
         if (topicPartitions == null || topicPartitions.isEmpty()) {
             throw new IllegalStateException("Task " + taskId + " has no TopicPartitions");
         }
@@ -230,8 +268,16 @@ public class RackAwareTaskAssignor {
         return cost;
     }
 
-    private static int getSinkID(final List<UUID> clientList, final List<TaskId> taskIdList) {
+    private static int getSinkNodeID(final List<UUID> clientList, final List<TaskId> taskIdList) {
         return clientList.size() + taskIdList.size();
+    }
+
+    private static int getClientNodeId(final List<TaskId> taskIdList, final int clientIndex) {
+        return clientIndex + taskIdList.size();
+    }
+
+    private static int getClientIndex(final List<TaskId> taskIdList, final int clientNodeId) {
+        return clientNodeId - taskIdList.size();
     }
 
     /**
@@ -241,14 +287,33 @@ public class RackAwareTaskAssignor {
                          final SortedMap<UUID, ClientState> clientStates,
                          final int trafficCost,
                          final int nonOverlapCost) {
-        if (activeTasks.isEmpty()) {
+        return tasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasActiveTask, false, false);
+    }
+
+    /**
+     * Compute the cost for the provided {@code standbyTasks}. The passed in standby tasks must be contained in {@code clientState}.
+     */
+    long standByTasksCost(final SortedSet<TaskId> standbyTasks,
+                          final SortedMap<UUID, ClientState> clientStates,
+                          final int trafficCost,
+                          final int nonOverlapCost) {
+        return tasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasStandbyTask, true, true);
+    }
+
+    private long tasksCost(final SortedSet<TaskId> tasks,
+                           final SortedMap<UUID, ClientState> clientStates,
+                           final int trafficCost,
+                           final int nonOverlapCost,
+                           final BiPredicate<ClientState, TaskId> hasAssignedTask,
+                           final boolean hasReplica,
+                           final boolean isStandby) {
+        if (tasks.isEmpty()) {
             return 0;
         }
-
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
-        final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
-        final Graph<Integer> graph = constructActiveTaskGraph(clientList, taskIdList,
-            clientStates, new HashMap<>(), new HashMap<>(), trafficCost, nonOverlapCost);
+        final List<TaskId> taskIdList = new ArrayList<>(tasks);
+        final Graph<Integer> graph = constructTaskGraph(clientList, taskIdList,
+            clientStates, new HashMap<>(), new HashMap<>(), hasAssignedTask, trafficCost, nonOverlapCost, hasReplica, isStandby);
         return graph.totalCost();
     }
 
@@ -279,30 +344,87 @@ public class RackAwareTaskAssignor {
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
-        final Graph<Integer> graph = constructActiveTaskGraph(clientList, taskIdList,
-            clientStates, taskClientMap, originalAssignedTaskNumber, trafficCost, nonOverlapCost);
+        final Graph<Integer> graph = constructTaskGraph(clientList, taskIdList,
+            clientStates, taskClientMap, originalAssignedTaskNumber, ClientState::hasActiveTask, trafficCost, nonOverlapCost, false, false);
 
         graph.solveMinCostFlow();
         final long cost = graph.totalCost();
 
-        assignActiveTaskFromMinCostFlow(graph, clientList, taskIdList,
-            clientStates, originalAssignedTaskNumber, taskClientMap);
+        assignTaskFromMinCostFlow(graph, clientList, taskIdList, clientStates, originalAssignedTaskNumber,
+            taskClientMap, ClientState::assignActive, ClientState::unassignActive, ClientState::hasActiveTask);
 
         return cost;
     }
 
-    private Graph<Integer> constructActiveTaskGraph(final List<UUID> clientList,
-                                                    final List<TaskId> taskIdList,
-                                                    final Map<UUID, ClientState> clientStates,
-                                                    final Map<TaskId, UUID> taskClientMap,
-                                                    final Map<UUID, Integer> originalAssignedTaskNumber,
-                                                    final int trafficCost,
-                                                    final int nonOverlapCost) {
+    public long optimizeStandbyTasks(final SortedMap<UUID, ClientState> clientStates,
+                                     final int trafficCost,
+                                     final int nonOverlapCost,
+                                     final MoveStandbyTaskPredicate moveStandbyTask) {
+        final BiFunction<ClientState, ClientState, List<TaskId>> getMovableTasks = (source, destination) -> source.standbyTasks().stream()
+            .filter(task -> !destination.hasAssignedTask(task))
+            .filter(task -> moveStandbyTask.canMove(source, destination, task, clientStates))
+            .sorted()
+            .collect(Collectors.toList());
+
+        final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
+        final SortedSet<TaskId> standbyTasks = new TreeSet<>();
+        for (int i = 0; i < clientList.size(); i++) {
+            final ClientState clientState1 = clientStates.get(clientList.get(i));
+            standbyTasks.addAll(clientState1.standbyTasks());
+            for (int j = i + 1; j < clientList.size(); j++) {
+                final ClientState clientState2 = clientStates.get(clientList.get(j));
+
+                final String rack1 = racksForProcess.get(clientState1.processId());
+                final String rack2 = racksForProcess.get(clientState2.processId());
+                // Cross rack traffic can not be reduced if racks are the same
+                if (rack1.equals(rack2)) {
+                    continue;
+                }
+
+                final List<TaskId> movable1 = getMovableTasks.apply(clientState1, clientState2);
+                final List<TaskId> movable2 = getMovableTasks.apply(clientState2, clientState1);
+
+                // There's no needed to optimize if one is empty because the optimization
+                // can only swap tasks to keep the client's load balanced
+                if (movable1.isEmpty() || movable2.isEmpty()) {
+                    continue;
+                }
+
+                final List<TaskId> taskIdList = Stream.concat(movable1.stream(), movable2.stream())
+                    .sorted()
+                    .collect(Collectors.toList());
+
+                final Map<TaskId, UUID> taskClientMap = new HashMap<>();
+                final List<UUID> clients = Stream.of(clientList.get(i), clientList.get(j)).sorted().collect(
+                    Collectors.toList());
+                final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
+
+                final Graph<Integer> graph = constructTaskGraph(clients, taskIdList, clientStates, taskClientMap, originalAssignedTaskNumber,
+                    ClientState::hasStandbyTask, trafficCost, nonOverlapCost, true, true);
+                graph.solveMinCostFlow();
+
+                assignTaskFromMinCostFlow(graph, clients, taskIdList, clientStates, originalAssignedTaskNumber,
+                    taskClientMap, ClientState::assignStandby, ClientState::unassignStandby, ClientState::hasStandbyTask);
+            }
+        }
+        return standByTasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost);
+    }
+
+    private Graph<Integer> constructTaskGraph(final List<UUID> clientList,
+                                              final List<TaskId> taskIdList,
+                                              final Map<UUID, ClientState> clientStates,
+                                              final Map<TaskId, UUID> taskClientMap,
+                                              final Map<UUID, Integer> originalAssignedTaskNumber,
+                                              final BiPredicate<ClientState, TaskId> hasAssignedTask,
+                                              final int trafficCost,
+                                              final int nonOverlapCost,
+                                              final boolean hasReplica,
+                                              final boolean isStandby) {
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
-                if (clientState.getValue().hasAssignedTask(taskId)) {
+                if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
             }
@@ -312,13 +434,13 @@ public class RackAwareTaskAssignor {
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
             final TaskId taskId = taskIdList.get(taskNodeId);
             for (int j = 0; j < clientList.size(); j++) {
-                final int clientNodeId = taskIdList.size() + j;
+                final int clientNodeId = getClientNodeId(taskIdList, j);
                 final UUID processId = clientList.get(j);
 
-                final int flow = clientStates.get(processId).hasAssignedTask(taskId) ? 1 : 0;
-                final int cost = getCost(taskId, processId, flow == 1, trafficCost, nonOverlapCost);
+                final int flow = hasAssignedTask.test(clientStates.get(processId), taskId) ? 1 : 0;
+                final int cost = getCost(taskId, processId, flow == 1, trafficCost, nonOverlapCost, isStandby);
                 if (flow == 1) {
-                    if (taskClientMap.containsKey(taskId)) {
+                    if (!hasReplica && taskClientMap.containsKey(taskId)) {
                         throw new IllegalArgumentException("Task " + taskId + " assigned to multiple clients "
                             + processId + ", " + taskClientMap.get(taskId));
                     }
@@ -335,11 +457,11 @@ public class RackAwareTaskAssignor {
             graph.addEdge(SOURCE_ID, taskNodeId, 1, 0, 1);
         }
 
-        final int sinkId = getSinkID(clientList, taskIdList);
+        final int sinkId = getSinkNodeID(clientList, taskIdList);
         // It's possible that some clients have 0 task assign. These clients will have 0 tasks assigned
         // even though it may have higher traffic cost. This is to maintain the original assigned task count
         for (int i = 0; i < clientList.size(); i++) {
-            final int clientNodeId = taskIdList.size() + i;
+            final int clientNodeId = getClientNodeId(taskIdList, i);
             final int capacity = originalAssignedTaskNumber.getOrDefault(clientList.get(i), 0);
             // Flow equals to capacity for edges to sink
             graph.addEdge(clientNodeId, sinkId, capacity, 0, capacity);
@@ -351,12 +473,15 @@ public class RackAwareTaskAssignor {
         return graph;
     }
 
-    private void assignActiveTaskFromMinCostFlow(final Graph<Integer> graph,
+    private void assignTaskFromMinCostFlow(final Graph<Integer> graph,
                                                  final List<UUID> clientList,
                                                  final List<TaskId> taskIdList,
                                                  final Map<UUID, ClientState> clientStates,
                                                  final Map<UUID, Integer> originalAssignedTaskNumber,
-                                                 final Map<TaskId, UUID> taskClientMap) {
+                                                 final Map<TaskId, UUID> taskClientMap,
+                                                 final BiConsumer<ClientState, TaskId> assignTask,
+                                                 final BiConsumer<ClientState, TaskId> unassignTask,
+                                                 final BiPredicate<ClientState, TaskId> hasAssignedTask) {
         int tasksAssigned = 0;
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
             final TaskId taskId = taskIdList.get(taskNodeId);
@@ -364,7 +489,7 @@ public class RackAwareTaskAssignor {
             for (final Graph<Integer>.Edge edge : edges.values()) {
                 if (edge.flow > 0) {
                     tasksAssigned++;
-                    final int clientIndex = edge.destination - taskIdList.size();
+                    final int clientIndex = getClientIndex(taskIdList, edge.destination);
                     final UUID processId = clientList.get(clientIndex);
                     final UUID originalProcessId = taskClientMap.get(taskId);
 
@@ -373,8 +498,8 @@ public class RackAwareTaskAssignor {
                         break;
                     }
 
-                    clientStates.get(originalProcessId).unassignActive(taskId);
-                    clientStates.get(processId).assignActive(taskId);
+                    unassignTask.accept(clientStates.get(originalProcessId), taskId);
+                    assignTask.accept(clientStates.get(processId), taskId);
                 }
             }
         }
@@ -389,7 +514,7 @@ public class RackAwareTaskAssignor {
         final Map<UUID, Integer> assignedTaskNumber = new HashMap<>();
         for (final TaskId taskId : taskIdList) {
             for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
-                if (clientState.getValue().hasAssignedTask(taskId)) {
+                if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     assignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
             }

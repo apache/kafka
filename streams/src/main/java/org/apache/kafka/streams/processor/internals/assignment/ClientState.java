@@ -93,12 +93,23 @@ public class ClientState {
                        final Map<TaskId, Long> taskLagTotals,
                        final Map<String, String> clientTags,
                        final int capacity) {
+        this(previousActiveTasks, previousStandbyTasks, taskLagTotals, clientTags, capacity, null);
+    }
+
+    // For testing only
+    public ClientState(final Set<TaskId> previousActiveTasks,
+                       final Set<TaskId> previousStandbyTasks,
+                       final Map<TaskId, Long> taskLagTotals,
+                       final Map<String, String> clientTags,
+                       final int capacity,
+                       final UUID processId) {
         this.previousStandbyTasks.taskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
         this.previousActiveTasks.taskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
         this.clientTags = unmodifiableMap(clientTags);
+        this.processId = processId;
     }
 
     int capacity() {
@@ -131,6 +142,10 @@ public class ClientState {
 
     public void assignActiveTasks(final Collection<TaskId> tasks) {
         assignedActiveTasks.taskIds().addAll(tasks);
+    }
+
+    public void assignStandbyTasks(final Collection<TaskId> tasks) {
+        assignedStandbyTasks.taskIds().addAll(tasks);
     }
 
     public void assignActiveToConsumer(final TaskId task, final String consumer) {
@@ -204,6 +219,10 @@ public class ClientState {
 
     boolean hasStandbyTask(final TaskId taskId) {
         return assignedStandbyTasks.taskIds().contains(taskId);
+    }
+
+    boolean hasActiveTask(final TaskId taskId) {
+        return assignedActiveTasks.taskIds().contains(taskId);
     }
 
     int standbyTaskCount() {

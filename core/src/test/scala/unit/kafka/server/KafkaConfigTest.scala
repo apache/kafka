@@ -1020,6 +1020,8 @@ class KafkaConfigTest {
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", -1, 0.51)
         case RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", -3)
+        case RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", -3)
 
         /** New group coordinator configs */
         case KafkaConfig.NewGroupCoordinatorEnableProp => // ignore
@@ -1034,9 +1036,6 @@ class KafkaConfigTest {
         case KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupAssignorsProp => // ignore string
-
-        case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
-        case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
 
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
@@ -1053,6 +1052,7 @@ class KafkaConfigTest {
     }
 
     val props = baseProperties
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
     val config = KafkaConfig.fromProps(props)
 
     def assertDynamic(property: String, value: Any, accessor: () => Any): Unit = {
@@ -1114,6 +1114,10 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, 10014L, () => config.logRollTimeJitterMillis)
         case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG =>
           assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
+        case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG =>
+          assertDynamic(kafkaConfigProp, 10015L, () => config.logLocalRetentionMs)
+        case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG =>
+          assertDynamic(kafkaConfigProp, 10016L, () => config.logLocalRetentionBytes)
         case TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG =>
         // not dynamically updatable
         case LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
@@ -1783,5 +1787,23 @@ class KafkaConfigTest {
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testMultipleLogDirectoriesNotSupportedWithRemoteLogStorage(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
+    props.put(KafkaConfig.LogDirsProp, "/tmp/a,/tmp/b")
+
+    val caught = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Multiple log directories `/tmp/a,/tmp/b` are not supported when remote log storage is enabled"))
+  }
+
+  @Test
+  def testSingleLogDirectoryWithRemoteLogStorage(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
+    props.put(KafkaConfig.LogDirsProp, "/tmp/a")
+    assertDoesNotThrow(() => KafkaConfig.fromProps(props))
   }
 }
