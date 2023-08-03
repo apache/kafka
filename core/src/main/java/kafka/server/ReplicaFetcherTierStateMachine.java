@@ -180,7 +180,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
 
         long nextOffset;
 
-        if (unifiedLog.remoteStorageSystemEnable() && unifiedLog.config().remoteLogConfig.remoteStorageEnable) {
+        if (unifiedLog.remoteStorageSystemEnable() && unifiedLog.config().remoteStorageEnable()) {
             if (replicaMgr.remoteLogManager().isEmpty()) throw new IllegalStateException("RemoteLogManager is not yet instantiated");
 
             RemoteLogManager rlm = replicaMgr.remoteLogManager().get();
