@@ -386,6 +386,18 @@ public enum MetadataVersion {
         }
     }
 
+    public short offsetCommitValueVersion(boolean expireTimestampMs) {
+        if (isLessThan(MetadataVersion.IBP_2_1_IV0) || expireTimestampMs) {
+            return 1;
+        } else if (isLessThan(MetadataVersion.IBP_2_1_IV1)) {
+            return 2;
+        } else {
+            // Serialize with the highest supported non-flexible version
+            // until a tagged field is introduced or the version is bumped.
+            return  3;
+        }
+    }
+
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
     static {
         {

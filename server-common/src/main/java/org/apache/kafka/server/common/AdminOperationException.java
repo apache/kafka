@@ -15,32 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.image.loader;
+package org.apache.kafka.server.common;
 
-import org.apache.kafka.image.MetadataProvenance;
+public class AdminOperationException extends RuntimeException {
+    public AdminOperationException(String message) {
+        super(message);
+    }
 
-
-/**
- * An interface for the metadata loader metrics.
- */
-public interface MetadataLoaderMetrics extends AutoCloseable {
-    /**
-     * Update the batch processing time histogram.
-     */
-    void updateBatchProcessingTime(long elapsedNs);
-
-    /**
-     * Update the batch size histogram.
-     */
-    void updateBatchSize(int size);
-
-    /**
-     * Set the provenance of the last image which has been processed by all publishers.
-     */
-    void updateLastAppliedImageProvenance(MetadataProvenance provenance);
-
-    /**
-     * Retrieve the last offset which has been processed by all publishers.
-     */
-    long lastAppliedOffset();
+    public AdminOperationException(Throwable cause) {
+        super(cause.getMessage(), cause);
+    }
 }

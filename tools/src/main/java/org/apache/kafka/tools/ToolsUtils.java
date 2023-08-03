@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.util;
+package org.apache.kafka.tools;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -26,7 +26,6 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class ToolsUtils {
-
     /**
      * print out the metrics in alphabetical order
      * @param metrics   the metrics to be printed out
