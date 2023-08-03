@@ -82,8 +82,8 @@ public class RemoteLogManagerConfigTest {
                   remoteLogManagerConfig.remoteLogReaderThreads());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
                   remoteLogManagerConfig.remoteLogReaderMaxPendingTasks());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_PROP,
-                  remoteLogManagerConfig.remoteLogMetadataCustomMetadataMaxSize());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP,
+                  remoteLogManagerConfig.remoteLogMetadataCustomMetadataMaxBytes());
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
                   remoteLogManagerConfig.remoteStorageManagerPrefix());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,

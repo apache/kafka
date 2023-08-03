@@ -81,12 +81,12 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_DOC = "Listener name of the local broker to which it should get connected if " +
             "needed by RemoteLogMetadataManager implementation.";
 
-    public static final String REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_PROP = "remote.log.metadata.custom.metadata.max.size";
-    public static final String REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_DOC = "The maximum size of custom metadata in bytes that the broker " +
+    public static final String REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP = "remote.log.metadata.custom.metadata.max.bytes";
+    public static final String REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_DOC = "The maximum size of custom metadata in bytes that the broker " +
             "should accept from a remote storage plugin. If custom  metadata exceeds this limit, the updated segment metadata " +
             "will not be stored, the copied data will be attempted to delete, " +
             "and the remote copying task for this topic-partition will stop with an error.";
-    public static final int DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE = 128;
+    public static final int DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES = 128;
 
     public static final String REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP = "remote.log.index.file.cache.total.size.bytes";
     public static final String REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_DOC = "The total size of the space allocated to store index files fetched " +
@@ -176,12 +176,12 @@ public final class RemoteLogManagerConfig {
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_DOC)
-                  .defineInternal(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_PROP,
+                  .defineInternal(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP,
                                   INT,
-                                  DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE,
+                                  DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES,
                                   atLeast(0),
                                   LOW,
-                                  REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_DOC)
+                                  REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_DOC)
                   .defineInternal(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES,
@@ -249,7 +249,7 @@ public final class RemoteLogManagerConfig {
     private final String remoteLogMetadataManagerPrefix;
     private final HashMap<String, Object> remoteLogMetadataManagerProps;
     private final String remoteLogMetadataManagerListenerName;
-    private final int remoteLogMetadataCustomMetadataMaxSize;
+    private final int remoteLogMetadataCustomMetadataMaxBytes;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
         this(config.getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP),
@@ -266,7 +266,7 @@ public final class RemoteLogManagerConfig {
              config.getDouble(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP),
              config.getInt(REMOTE_LOG_READER_THREADS_PROP),
              config.getInt(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP),
-             config.getInt(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_SIZE_PROP),
+             config.getInt(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP),
              config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP),
              config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP) != null
                  ? config.originalsWithPrefix(config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP))
@@ -292,7 +292,7 @@ public final class RemoteLogManagerConfig {
                                   double remoteLogManagerTaskRetryJitter,
                                   int remoteLogReaderThreads,
                                   int remoteLogReaderMaxPendingTasks,
-                                  int remoteLogMetadataCustomMetadataMaxSize,
+                                  int remoteLogMetadataCustomMetadataMaxBytes,
                                   String remoteStorageManagerPrefix,
                                   Map<String, Object> remoteStorageManagerProps, /* properties having keys stripped out with remoteStorageManagerPrefix */
                                   String remoteLogMetadataManagerPrefix,
@@ -316,7 +316,7 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerPrefix = remoteLogMetadataManagerPrefix;
         this.remoteLogMetadataManagerProps = new HashMap<>(remoteLogMetadataManagerProps);
         this.remoteLogMetadataManagerListenerName = remoteLogMetadataManagerListenerName;
-        this.remoteLogMetadataCustomMetadataMaxSize = remoteLogMetadataCustomMetadataMaxSize;
+        this.remoteLogMetadataCustomMetadataMaxBytes = remoteLogMetadataCustomMetadataMaxBytes;
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -375,8 +375,8 @@ public final class RemoteLogManagerConfig {
         return remoteLogMetadataManagerListenerName;
     }
 
-    public int remoteLogMetadataCustomMetadataMaxSize() {
-        return remoteLogMetadataCustomMetadataMaxSize;
+    public int remoteLogMetadataCustomMetadataMaxBytes() {
+        return remoteLogMetadataCustomMetadataMaxBytes;
     }
 
     public String remoteStorageManagerPrefix() {
@@ -409,7 +409,7 @@ public final class RemoteLogManagerConfig {
                 && remoteLogManagerTaskRetryJitter == that.remoteLogManagerTaskRetryJitter
                 && remoteLogReaderThreads == that.remoteLogReaderThreads
                 && remoteLogReaderMaxPendingTasks == that.remoteLogReaderMaxPendingTasks
-                && remoteLogMetadataCustomMetadataMaxSize == that.remoteLogMetadataCustomMetadataMaxSize
+                && remoteLogMetadataCustomMetadataMaxBytes == that.remoteLogMetadataCustomMetadataMaxBytes
                 && Objects.equals(remoteStorageManagerClassName, that.remoteStorageManagerClassName)
                 && Objects.equals(remoteStorageManagerClassPath, that.remoteStorageManagerClassPath)
                 && Objects.equals(remoteLogMetadataManagerClassName, that.remoteLogMetadataManagerClassName)
@@ -425,7 +425,7 @@ public final class RemoteLogManagerConfig {
     public int hashCode() {
         return Objects.hash(enableRemoteStorageSystem, remoteStorageManagerClassName, remoteStorageManagerClassPath,
                             remoteLogMetadataManagerClassName, remoteLogMetadataManagerClassPath, remoteLogMetadataManagerListenerName,
-                            remoteLogMetadataCustomMetadataMaxSize, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
+                            remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
                             remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix);

@@ -912,7 +912,7 @@ public class RemoteLogManager implements Closeable {
                                             Consumer<RLMTask> convertToLeaderOrFollower) {
         RLMTaskWithFuture rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
                 topicIdPartition -> {
-                    RLMTask task = new RLMTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxSize());
+                    RLMTask task = new RLMTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
                     // set this upfront when it is getting initialized instead of doing it after scheduling.
                     convertToLeaderOrFollower.accept(task);
                     LOGGER.info("Created a new task: {} and getting scheduled", task);
