@@ -104,19 +104,19 @@ public class TestSslUtils {
     public static final String DEFAULT_TLS_PROTOCOL_FOR_TESTS = SslConfigs.DEFAULT_SSL_PROTOCOL;
 
     /**
-     * Create a self-signed X.509 Certificate. From
-     * http://bfo.com/blog/2011/03/08/odds_and_ends_creating_a_new_x_509_certificate.html.
+     * Create a self-signed X.509 Certificate.
+     * From http://bfo.com/blog/2011/03/08/odds_and_ends_creating_a_new_x_509_certificate.html.
      *
      * @param dn the X.509 Distinguished Name, eg "CN=Test, L=London, C=GB"
      * @param pair the KeyPair
-     * @param days how many days from now the Certificate is valid for, or - for negative values -
-     *        how many days before now
+     * @param days how many days from now the Certificate is valid for, or - for negative values - how many days before now
      * @param algorithm the signing algorithm, eg "SHA1withRSA"
      * @return the self-signed certificate
      * @throws CertificateException thrown if a security error or an IO error occurred.
      */
-    public static X509Certificate generateCertificate(String dn, KeyPair pair, int days,
-            String algorithm) throws CertificateException {
+    public static X509Certificate generateCertificate(String dn, KeyPair pair,
+                                                      int days, String algorithm)
+        throws  CertificateException {
         return new CertificateBuilder(days, algorithm).generate(dn, pair);
     }
 
@@ -154,8 +154,8 @@ public class TestSslUtils {
         return ks;
     }
 
-    private static void saveKeyStore(KeyStore ks, String filename, Password password)
-            throws GeneralSecurityException, IOException {
+    private static void saveKeyStore(KeyStore ks, String filename,
+                                     Password password) throws GeneralSecurityException, IOException {
         try (OutputStream out = Files.newOutputStream(Paths.get(filename))) {
             ks.store(out, password.value().toCharArray());
         }
@@ -173,17 +173,17 @@ public class TestSslUtils {
      * @throws GeneralSecurityException for any error with the security APIs
      * @throws IOException if there is an I/O error saving the file
      */
-    public static void createKeyStore(String filename, Password password, Password keyPassword,
-            String alias, Key privateKey, Certificate cert)
-            throws GeneralSecurityException, IOException {
+    public static void createKeyStore(String filename,
+                                      Password password, Password keyPassword, String alias,
+                                      Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
         ks.setKeyEntry(alias, privateKey, keyPassword.value().toCharArray(),
-                new Certificate[] {cert});
+                new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
 
-    public static <T extends Certificate> void createTrustStore(String filename, Password password,
-            Map<String, T> certs) throws GeneralSecurityException, IOException {
+    public static <T extends Certificate> void createTrustStore(
+            String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
         try (InputStream in = Files.newInputStream(Paths.get(filename))) {
             ks.load(in, password.value().toCharArray());
@@ -196,41 +196,39 @@ public class TestSslUtils {
         saveKeyStore(ks, filename, password);
     }
 
-    public static Map<String, Object> createSslConfig(String keyManagerAlgorithm,
-            String trustManagerAlgorithm, String tlsProtocol) {
+    public static Map<String, Object> createSslConfig(String keyManagerAlgorithm, String trustManagerAlgorithm, String tlsProtocol) {
         Map<String, Object> sslConfigs = new HashMap<>();
-        sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create
-                                                                     // SSLContext
+        sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create SSLContext
 
         sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
 
-        List<String> enabledProtocols = new ArrayList<>();
+        List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
         return sslConfigs;
     }
 
-    public static Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
-            Mode mode, File trustStoreFile, String certAlias)
+    public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore, Mode mode, File trustStoreFile, String certAlias)
             throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias,
-                "localhost");
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, "localhost");
     }
 
-    public static Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
+    public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
             Mode mode, File trustStoreFile, String certAlias, String cn)
             throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn,
-                new CertificateBuilder());
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
-    public static Map<String, Object> createSslConfig(boolean useClientCert,
-            boolean createTrustStore, Mode mode, File trustStoreFile, String certAlias, String cn,
-            CertificateBuilder certBuilder) throws IOException, GeneralSecurityException {
-        SslConfigsBuilder builder = new SslConfigsBuilder(mode).useClientCert(useClientCert)
-                .certAlias(certAlias).cn(cn).certBuilder(certBuilder);
+    public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean createTrustStore,
+            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder)
+            throws IOException, GeneralSecurityException {
+        SslConfigsBuilder builder = new SslConfigsBuilder(mode)
+                .useClientCert(useClientCert)
+                .certAlias(certAlias)
+                .cn(cn)
+                .certBuilder(certBuilder);
         if (createTrustStore)
             builder = builder.createNewTrustStore(trustStoreFile);
         else
@@ -238,13 +236,11 @@ public class TestSslUtils {
         return builder.build();
     }
 
-    public static void convertToPem(Map<String, Object> sslProps, boolean writeToFile,
-            boolean encryptPrivateKey) throws Exception {
+    public static void convertToPem(Map<String, Object> sslProps, boolean writeToFile, boolean encryptPrivateKey) throws Exception {
         String tsPath = (String) sslProps.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
         String tsType = (String) sslProps.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
         Password tsPassword = (Password) sslProps.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
-        Password trustCerts =
-                (Password) sslProps.remove(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
+        Password trustCerts = (Password) sslProps.remove(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
         if (trustCerts == null && tsPath != null) {
             trustCerts = exportCertificates(tsPath, tsPassword, tsType);
         }
@@ -263,13 +259,11 @@ public class TestSslUtils {
         }
 
         String ksPath = (String) sslProps.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
-        Password certChain =
-                (Password) sslProps.remove(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
+        Password certChain = (Password) sslProps.remove(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
         Password key = (Password) sslProps.remove(SslConfigs.SSL_KEYSTORE_KEY_CONFIG);
         if (certChain == null && ksPath != null) {
             String ksType = (String) sslProps.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
-            Password ksPassword =
-                    (Password) sslProps.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+            Password ksPassword = (Password) sslProps.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
             Password keyPassword = (Password) sslProps.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
             certChain = exportCertificates(ksPath, ksPassword, ksType);
             Password pemKeyPassword = encryptPrivateKey ? keyPassword : null;
@@ -296,7 +290,7 @@ public class TestSslUtils {
 
     private static void writeToFile(String path, Password... entries) throws IOException {
         try (FileOutputStream out = new FileOutputStream(path)) {
-            for (Password entry : entries) {
+            for (Password entry: entries) {
                 out.write(entry.value().getBytes(StandardCharsets.UTF_8));
             }
         }
@@ -328,8 +322,7 @@ public class TestSslUtils {
         }
     }
 
-    public static Password exportCertificates(String storePath, Password storePassword,
-            String storeType) throws Exception {
+    public static Password exportCertificates(String storePath, Password storePassword, String storeType) throws Exception {
         StringBuilder builder = new StringBuilder();
         try (FileInputStream in = new FileInputStream(storePath)) {
             KeyStore ks = KeyStore.getInstance(storeType);
@@ -352,22 +345,22 @@ public class TestSslUtils {
         return new Password(builder.toString());
     }
 
-    public static Password exportPrivateKey(String storePath, Password storePassword,
-            Password keyPassword, String storeType, Password pemKeyPassword) throws Exception {
+    public static Password exportPrivateKey(String storePath,
+                                            Password storePassword,
+                                            Password keyPassword,
+                                            String storeType,
+                                            Password pemKeyPassword) throws Exception {
         try (FileInputStream in = new FileInputStream(storePath)) {
             KeyStore ks = KeyStore.getInstance(storeType);
             ks.load(in, storePassword.value().toCharArray());
             String alias = ks.aliases().nextElement();
-            return new Password(
-                    pem((PrivateKey) ks.getKey(alias, keyPassword.value().toCharArray()),
-                            pemKeyPassword));
+            return new Password(pem((PrivateKey) ks.getKey(alias, keyPassword.value().toCharArray()), pemKeyPassword));
         }
     }
 
     static String pem(Certificate cert) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter =
-                new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             pemWriter.writeObject(new JcaMiscPEMGenerator(cert));
         }
         return new String(out.toByteArray(), StandardCharsets.UTF_8);
@@ -375,17 +368,14 @@ public class TestSslUtils {
 
     static String pem(PrivateKey privateKey, Password password) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter =
-                new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             if (password == null) {
                 pemWriter.writeObject(new JcaPKCS8Generator(privateKey, null));
             } else {
-                JceOpenSSLPKCS8EncryptorBuilder encryptorBuilder =
-                        new JceOpenSSLPKCS8EncryptorBuilder(PKCS8Generator.PBE_SHA1_3DES);
+                JceOpenSSLPKCS8EncryptorBuilder encryptorBuilder = new JceOpenSSLPKCS8EncryptorBuilder(PKCS8Generator.PBE_SHA1_3DES);
                 encryptorBuilder.setPassword(password.value().toCharArray());
                 try {
-                    pemWriter.writeObject(
-                            new JcaPKCS8Generator(privateKey, encryptorBuilder.build()));
+                    pemWriter.writeObject(new JcaPKCS8Generator(privateKey, encryptorBuilder.build()));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -417,8 +407,7 @@ public class TestSslUtils {
         }
 
         public CertificateBuilder sanIpAddress(InetAddress hostAddress) throws IOException {
-            subjectAltName = new GeneralNames(new GeneralName(GeneralName.iPAddress,
-                    new DEROctetString(hostAddress.getAddress()))).getEncoded();
+            subjectAltName = new GeneralNames(new GeneralName(GeneralName.iPAddress, new DEROctetString(hostAddress.getAddress()))).getEncoded();
             return this;
         }
 
@@ -426,27 +415,20 @@ public class TestSslUtils {
             return generate(new X500Name(dn), keyPair);
         }
 
-        public X509Certificate generate(String commonName, String org, boolean utf8,
-                KeyPair keyPair) throws CertificateException {
+        public X509Certificate generate(String commonName, String org, boolean utf8, KeyPair keyPair) throws CertificateException {
             RDN[] rdns = new RDN[2];
-            rdns[0] = new RDN(new AttributeTypeAndValue(BCStyle.CN,
-                    utf8 ? new DERUTF8String(commonName) : new DERT61String(commonName)));
-            rdns[1] = new RDN(new AttributeTypeAndValue(BCStyle.O,
-                    utf8 ? new DERUTF8String(org) : new DERT61String(org)));
+            rdns[0] = new RDN(new AttributeTypeAndValue(BCStyle.CN, utf8 ? new DERUTF8String(commonName) : new DERT61String(commonName)));
+            rdns[1] = new RDN(new AttributeTypeAndValue(BCStyle.O, utf8 ? new DERUTF8String(org) : new DERT61String(org)));
             return generate(new X500Name(rdns), keyPair);
         }
 
         public X509Certificate generate(X500Name dn, KeyPair keyPair) throws CertificateException {
             try {
                 Security.addProvider(new BouncyCastleProvider());
-                AlgorithmIdentifier sigAlgId =
-                        new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
-                AlgorithmIdentifier digAlgId =
-                        new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
-                AsymmetricKeyParameter privateKeyAsymKeyParam =
-                        PrivateKeyFactory.createKey(keyPair.getPrivate().getEncoded());
-                SubjectPublicKeyInfo subPubKeyInfo =
-                        SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
+                AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
+                AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
+                AsymmetricKeyParameter privateKeyAsymKeyParam = PrivateKeyFactory.createKey(keyPair.getPrivate().getEncoded());
+                SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
                 BcContentSignerBuilder signerBuilder;
                 String keyAlgorithm = keyPair.getPublic().getAlgorithm();
                 if (keyAlgorithm.equals("RSA"))
@@ -463,21 +445,19 @@ public class TestSslUtils {
                 Date from = (days >= 0) ? now : new Date(now.getTime() + days * 86400000L);
                 Date to = (days >= 0) ? new Date(now.getTime() + days * 86400000L) : now;
                 BigInteger sn = new BigInteger(64, new SecureRandom());
-                X509v3CertificateBuilder v3CertGen =
-                        new X509v3CertificateBuilder(dn, sn, from, to, dn, subPubKeyInfo);
+                X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(dn, sn, from, to, dn, subPubKeyInfo);
 
                 if (subjectAltName != null)
                     v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);
                 X509CertificateHolder certificateHolder = v3CertGen.build(sigGen);
-                return new JcaX509CertificateConverter().setProvider("BC")
-                        .getCertificate(certificateHolder);
+                return new JcaX509CertificateConverter().setProvider("BC").getCertificate(certificateHolder);
             } catch (CertificateException ce) {
                 throw ce;
             } catch (Exception e) {
                 throw new CertificateException(e);
             }
         }
-
+        
         /**
          * @param dn The distinguished name to use
          * @param keyPair A key pair to use
@@ -572,6 +552,7 @@ public class TestSslUtils {
             }
         }
     }
+
     public static class SslConfigsBuilder {
         final Mode mode;
         String tlsProtocol;
@@ -591,8 +572,7 @@ public class TestSslUtils {
             this.mode = mode;
             this.tlsProtocol = DEFAULT_TLS_PROTOCOL_FOR_TESTS;
             trustStorePassword = new Password(TRUST_STORE_PASSWORD);
-            keyStorePassword = mode == Mode.SERVER ? new Password("ServerPassword")
-                    : new Password("ClientPassword");
+            keyStorePassword = mode == Mode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
             keyPassword = keyStorePassword;
             this.certBuilder = new CertificateBuilder();
             this.cn = "localhost";
@@ -648,7 +628,7 @@ public class TestSslUtils {
             return this;
         }
 
-        public Map<String, Object> build() throws IOException, GeneralSecurityException {
+        public  Map<String, Object> build() throws IOException, GeneralSecurityException {
             if (usePem) {
                 return buildPem();
             } else
@@ -663,15 +643,13 @@ public class TestSslUtils {
                 keyStoreFile = TestUtils.tempFile("clientKS", ".jks");
                 KeyPair cKP = generateKeyPair(algorithm);
                 X509Certificate cCert = certBuilder.generate("CN=" + cn + ", O=A client", cKP);
-                createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "client",
-                        cKP.getPrivate(), cCert);
+                createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "client", cKP.getPrivate(), cCert);
                 certs.put(certAlias, cCert);
             } else if (mode == Mode.SERVER) {
                 keyStoreFile = TestUtils.tempFile("serverKS", ".jks");
                 KeyPair sKP = generateKeyPair(algorithm);
                 X509Certificate sCert = certBuilder.generate("CN=" + cn + ", O=A server", sKP);
-                createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "server",
-                        sKP.getPrivate(), sCert);
+                createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "server", sKP.getPrivate(), sCert);
                 certs.put(certAlias, sCert);
                 keyStoreFile.deleteOnExit();
             }
@@ -683,14 +661,12 @@ public class TestSslUtils {
 
             Map<String, Object> sslConfigs = new HashMap<>();
 
-            sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create
-                                                                         // SSLContext
+            sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create SSLContext
 
             if (mode == Mode.SERVER || (mode == Mode.CLIENT && keyStoreFile != null)) {
                 sslConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
                 sslConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
-                sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
-                        TrustManagerFactory.getDefaultAlgorithm());
+                sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
                 sslConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, keyStorePassword);
                 sslConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
             }
@@ -698,10 +674,9 @@ public class TestSslUtils {
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
-            sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
-                    TrustManagerFactory.getDefaultAlgorithm());
+            sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
 
-            List<String> enabledProtocols = new ArrayList<>();
+            List<String> enabledProtocols  = new ArrayList<>();
             enabledProtocols.add(tlsProtocol);
             sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
@@ -710,19 +685,16 @@ public class TestSslUtils {
 
         private Map<String, Object> buildPem() throws IOException, GeneralSecurityException {
             if (!createTrustStore) {
-                throw new IllegalArgumentException(
-                        "PEM configs cannot be created with existing trust stores");
+                throw new IllegalArgumentException("PEM configs cannot be created with existing trust stores");
             }
 
             Map<String, Object> sslConfigs = new HashMap<>();
             sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
-            sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
-                    Collections.singletonList(tlsProtocol));
+            sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
 
             if (mode != Mode.CLIENT || useClientCert) {
                 KeyPair keyPair = generateKeyPair(algorithm);
-                X509Certificate cert = certBuilder.generate(
-                        "CN=" + cn + ", O=A " + mode.name().toLowerCase(Locale.ROOT), keyPair);
+                X509Certificate cert = certBuilder.generate("CN=" + cn + ", O=A " + mode.name().toLowerCase(Locale.ROOT), keyPair);
 
                 Password privateKeyPem = new Password(pem(keyPair.getPrivate(), keyPassword));
                 Password certPem = new Password(pem(cert));
@@ -744,10 +716,8 @@ public class TestSslUtils {
         DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
 
         @Override
-        public SSLEngine createClientSslEngine(String peerHost, int peerPort,
-                String endpointIdentification) {
-            return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort,
-                    endpointIdentification);
+        public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
+            return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
         }
 
         @Override
