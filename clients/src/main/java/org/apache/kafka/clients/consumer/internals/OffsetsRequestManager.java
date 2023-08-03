@@ -189,6 +189,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     public void validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
                 offsetFetcherUtils.getPartitionsToValidate();
+        if (!partitionsToValidate.isEmpty()) {
+            log.debug("Validate positions for partitions: {}", partitionsToValidate);
+        }
         List<NetworkClientDelegate.UnsentRequest> unsentRequests =
                 sendListOffsetsRequestsAndValidatePositions(partitionsToValidate);
         requestsToSend.addAll(unsentRequests);
@@ -244,6 +247,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             final Map<TopicPartition, Long> partitionResetTimestamps,
             final boolean requireTimestamps,
             final ListOffsetsRequestState listOffsetsRequestState) {
+        log.debug("Building ListOffsets request for partitions {}", partitionResetTimestamps);
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> partitionResetTimestampsByNode =
                 groupListOffsetRequests(partitionResetTimestamps, listOffsetsRequestState);
         if (partitionResetTimestampsByNode.isEmpty()) {
@@ -269,7 +273,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     requestsToRetry.add(listOffsetsRequestState);
                 }
             } else {
-                log.debug("List offsets request failed with error", error);
+                log.debug("ListOffsets request failed with error", error);
                 listOffsetsRequestState.globalResult.completeExceptionally(error);
             }
         });
@@ -423,6 +427,11 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
                 offsetFetcherUtils.regroupFetchPositionsByLeader(partitionsToValidate);
+
+        if (!partitionsToValidate.isEmpty()) {
+            log.debug("Building OffsetsForLeaderEpochRequest to validate positions for {}, grouped by" +
+                    " node result {}", partitionsToValidate, regrouped);
+        }
 
         long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();

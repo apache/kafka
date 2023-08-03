@@ -269,6 +269,12 @@ public class PrototypeAsyncConsumerTest {
                 ArgumentMatchers.isA(Timer.class));
     }
 
+    @Test
+    public void testPositionsOfUnassignedFails() {
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        assertThrows(IllegalStateException.class, () -> consumer.position(tp));
+    }
+
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);

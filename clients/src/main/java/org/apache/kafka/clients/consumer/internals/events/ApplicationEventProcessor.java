@@ -179,8 +179,10 @@ public class ApplicationEventProcessor<K, V> {
      */
     private boolean process(final ResetPositionsApplicationEvent event) {
         requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+        event.future().complete(null);
         // TODO: chain future to process failures at a higher level once the caching logic for
-        //  exceptions is reviewed/removed
+        //  exceptions is reviewed/removed. For now the event future indicates only that the
+        //  event has been processed.
         return true;
     }
 
@@ -193,8 +195,10 @@ public class ApplicationEventProcessor<K, V> {
      */
     private boolean process(final ValidatePositionsApplicationEvent event) {
         requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+        event.future().complete(null);
         // TODO: chain future to process failures at a higher level once the caching logic for
-        //  exceptions is reviewed/removed
+        //  exceptions is reviewed/removed. For now the event future indicates only that the
+        //  event has been processed.
         return true;
     }
 
