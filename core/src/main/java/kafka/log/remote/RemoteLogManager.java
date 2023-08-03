@@ -130,6 +130,7 @@ public class RemoteLogManager implements Closeable {
     private final String logDir;
     private final Time time;
     private final Function<TopicPartition, Optional<UnifiedLog>> fetchLog;
+
     private final BrokerTopicStats brokerTopicStats;
 
     private final RemoteStorageManager remoteLogStorageManager;
@@ -146,6 +147,7 @@ public class RemoteLogManager implements Closeable {
 
     // topic ids that are received on leadership changes & on stop partitions are stored in this cache
     private final MetadataCache metaDataCache;
+
     private final String clusterId;
 
     // The endpoint for remote log metadata manager to connect to
