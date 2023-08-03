@@ -18,6 +18,8 @@ package org.apache.kafka.connect.converters;
 
 import org.apache.kafka.common.serialization.ShortDeserializer;
 import org.apache.kafka.common.serialization.ShortSerializer;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -29,9 +31,15 @@ import org.apache.kafka.connect.storage.HeaderConverter;
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
  */
-public class ShortConverter extends NumberConverter<Short> {
+public class ShortConverter extends NumberConverter<Short> implements Versioned {
 
     public ShortConverter() {
         super("short", Schema.OPTIONAL_INT16_SCHEMA, new ShortSerializer(), new ShortDeserializer());
+    }
+
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 }

@@ -22,7 +22,9 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
@@ -52,7 +54,7 @@ import java.util.Set;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class Cast<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class Cast<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
     private static final Logger log = LoggerFactory.getLogger(Cast.class);
 
     // TODO: Currently we only support top-level field casting. Ideally we could use a dotted notation in the spec to
@@ -109,6 +111,11 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     private Map<String, Schema.Type> casts;
     private Schema.Type wholeValueCastType;
     private Cache<Schema, Schema> schemaUpdateCache;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void configure(Map<String, ?> props) {
@@ -440,7 +447,13 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         return type;
     }
 
-    public static final class Key<R extends ConnectRecord<R>> extends Cast<R> {
+    public static final class Key<R extends ConnectRecord<R>> extends Cast<R> implements Versioned {
+
+        @Override
+        public String version() {
+            return AppInfoParser.getVersion();
+        }
+
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -457,7 +470,13 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         }
     }
 
-    public static final class Value<R extends ConnectRecord<R>> extends Cast<R> {
+    public static final class Value<R extends ConnectRecord<R>> extends Cast<R> implements Versioned {
+
+        @Override
+        public String version() {
+            return AppInfoParser.getVersion();
+        }
+
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

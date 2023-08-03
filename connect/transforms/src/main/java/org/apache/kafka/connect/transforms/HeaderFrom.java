@@ -21,6 +21,8 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -40,7 +42,7 @@ import java.util.Map;
 import static java.lang.String.format;
 import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
-public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String FIELDS_FIELD = "fields";
     public static final String HEADERS_FIELD = "headers";
@@ -116,6 +118,11 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         }
     }
 
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
+
     private R applyWithSchema(R record, Object operatingValue, Schema operatingSchema) {
         Headers updatedHeaders = record.headers().duplicate();
         Struct value = Requirements.requireStruct(operatingValue, "header " + operation);
@@ -176,7 +183,12 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     protected abstract Schema operatingSchema(R record);
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue, Iterable<Header> updatedHeaders);
 
-    public static class Key<R extends ConnectRecord<R>> extends HeaderFrom<R> {
+    public static class Key<R extends ConnectRecord<R>> extends HeaderFrom<R> implements Versioned {
+
+        @Override
+        public String version() {
+            return AppInfoParser.getVersion();
+        }
 
         @Override
         public Object operatingValue(R record) {
@@ -195,7 +207,12 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         }
     }
 
-    public static class Value<R extends ConnectRecord<R>> extends HeaderFrom<R> {
+    public static class Value<R extends ConnectRecord<R>> extends HeaderFrom<R> implements Versioned {
+
+        @Override
+        public String version() {
+            return AppInfoParser.getVersion();
+        }
 
         @Override
         public Object operatingValue(R record) {

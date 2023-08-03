@@ -20,6 +20,8 @@ package org.apache.kafka.connect.connector.policy;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,12 +34,18 @@ import java.util.stream.Stream;
  * Allows all {@code sasl} configurations to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to
  * {@code Principal}. This allows to set a principal per connector.
  */
-public class PrincipalConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
+public class PrincipalConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy implements
+    Versioned {
     private static final Logger log = LoggerFactory.getLogger(PrincipalConnectorClientConfigOverridePolicy.class);
 
     private static final Set<String> ALLOWED_CONFIG =
         Stream.of(SaslConfigs.SASL_JAAS_CONFIG, SaslConfigs.SASL_MECHANISM, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG).
             collect(Collectors.toSet());
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     protected String policyName() {

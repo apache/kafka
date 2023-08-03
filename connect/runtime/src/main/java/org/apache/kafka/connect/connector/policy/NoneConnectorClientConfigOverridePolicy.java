@@ -18,6 +18,8 @@
 package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,8 +29,13 @@ import java.util.Map;
  * Disallow any client configuration to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to {@code None}.
  * This is the default behavior.
  */
-public class NoneConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
+public class NoneConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy implements Versioned {
     private static final Logger log = LoggerFactory.getLogger(NoneConnectorClientConfigOverridePolicy.class);
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     protected String policyName() {

@@ -21,6 +21,8 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -38,7 +40,7 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireSinkRecord;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class InsertField<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class InsertField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC =
             "Insert field(s) using attributes from the record metadata or a configured static value."
@@ -103,6 +105,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     private String staticValue;
 
     private Cache<Schema, Schema> schemaUpdateCache;
+
+    @Override
+    public String version() { return AppInfoParser.getVersion(); }
 
     @Override
     public void configure(Map<String, ?> props) {
@@ -236,7 +241,12 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
-    public static class Key<R extends ConnectRecord<R>> extends InsertField<R> {
+    public static class Key<R extends ConnectRecord<R>> extends InsertField<R> implements Versioned {
+
+        @Override
+        public String version() {
+            return AppInfoParser.getVersion();
+        }
 
         @Override
         protected Schema operatingSchema(R record) {
@@ -255,7 +265,10 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
     }
 
-    public static class Value<R extends ConnectRecord<R>> extends InsertField<R> {
+    public static class Value<R extends ConnectRecord<R>> extends InsertField<R> implements Versioned {
+
+        @Override
+        public String version() { return AppInfoParser.getVersion(); }
 
         @Override
         protected Schema operatingSchema(R record) {

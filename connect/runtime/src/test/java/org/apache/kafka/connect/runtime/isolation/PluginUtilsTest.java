@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -609,7 +611,7 @@ public class PluginUtilsTest {
         assertEquals(expectedAliases, actualAliases);
     }
 
-    public static class CollidingConverter implements Converter {
+    public static class CollidingConverter implements Converter, Versioned {
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
         }
@@ -622,6 +624,11 @@ public class PluginUtilsTest {
         @Override
         public SchemaAndValue toConnectData(String topic, byte[] value) {
             return null;
+        }
+
+        @Override
+        public String version() {
+            return AppInfoParser.getVersion();
         }
     }
 
@@ -651,7 +658,12 @@ public class PluginUtilsTest {
         }
     }
 
-    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R> {
+    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+
+        @Override
+        public String version() {
+            return AppInfoParser.getVersion();
+        }
 
         @Override
         public void configure(Map<String, ?> configs) {
