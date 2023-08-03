@@ -103,6 +103,9 @@ public class Protocol {
         b.append("<th>Description</th>\n");
         b.append("</tr>");
         for (BoundField field : fields) {
+            if (field.def.type instanceof TaggedFields) {
+                continue; // TaggedFields is a terminal symbol. Exclude from table.
+            }
             b.append("<tr>\n");
             b.append("<td>");
             b.append(field.def.name);
