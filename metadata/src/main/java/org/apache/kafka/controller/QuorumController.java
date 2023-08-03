@@ -1270,6 +1270,7 @@ public final class QuorumController implements Controller {
             // periodic tasks here. At this point, all the records we generated in
             // generateRecordsAndResult have been applied, so we have the correct value for
             // metadata.version and other in-memory state.
+            maybeScheduleNextDelegationTokenExpiration();
             maybeScheduleNextBalancePartitionLeaders();
             maybeScheduleNextWriteNoOpRecord();
         }
@@ -1438,6 +1439,30 @@ public final class QuorumController implements Controller {
     private void cancelNextWriteNoOpRecord() {
         noOpRecordScheduled = false;
         queue.cancelDeferred(WRITE_NO_OP_RECORD);
+    }
+
+    private static final String WRITE_REMOVE_DELEGATIONTOKEN_RECORD = "writeRemoveDelegationTokenRecord";
+
+    private void maybeScheduleNextDelegationTokenExpiration() {
+        if (featureControl.metadataVersion().isDelegationTokenSupported() &&
+            delegationTokenControlManager.isEnabled()) {
+
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
+                WRITE_REMOVE_DELEGATIONTOKEN_RECORD,
+                () -> {
+                    maybeScheduleNextDelegationTokenExpiration();
+
+                    return ControllerResult.of(
+                        delegationTokenControlManager.expireDelegationTokens(), null);
+                },
+                EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME)
+            );
+
+            long delayNs = time.nanoseconds() + 
+                NANOSECONDS.convert(delegationTokenExpiryCheckIntervalMs, TimeUnit.MILLISECONDS);
+            queue.scheduleDeferred(WRITE_REMOVE_DELEGATIONTOKEN_RECORD,
+                new EarliestDeadlineFunction(delayNs), event);
+        }
     }
 
     private void handleFeatureControlChange() {
@@ -1657,6 +1682,7 @@ public final class QuorumController implements Controller {
     /**
      * Manages DelegationTokens, if there are any.
      */
+    private final long delegationTokenExpiryCheckIntervalMs;
     private final DelegationTokenControlManager delegationTokenControlManager;
 
     /**
@@ -1844,6 +1870,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
+        this.delegationTokenExpiryCheckIntervalMs = delegationTokenExpiryCheckIntervalMs;
         this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).

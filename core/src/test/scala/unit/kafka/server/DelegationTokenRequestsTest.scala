@@ -45,7 +45,9 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
   this.controllerConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
-  // May want to set enableControlledShutdown = false
+  // Remove expired tokens every minute.
+  this.serverConfig.setProperty(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp, "60000")
+  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp, "60000")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -145,8 +147,22 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val renewResultPostDeleteError = assertThrows(classOf[ExecutionException], () => renewResultPostDelete.expiryTimestamp().get())
     assertTrue(renewResultPostDeleteError.getCause.isInstanceOf[DelegationTokenNotFoundException])
 
+    // Create a DelegationToken with a short lifetime to validate the expire code
+    val createResult5 = adminClient.createDelegationToken(new CreateDelegationTokenOptions()
+      .renewers(renewer1)
+      .maxlifeTimeMs(60 * 1000))
+    val token5 = createResult5.delegationToken().get()
+
+    TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),
+          "Timed out waiting for token to propagate to all servers")
+    
+    Thread.sleep(2 * 60 *1000)
+
+    tokens = adminClient.describeDelegationToken().delegationTokens().get()
+    assertTrue(tokens.size == 0)
+
     // Try to expire a deleted token
-    val expireResultPostDelete = adminClient.expireDelegationToken(token1.hmac())
+    val expireResultPostDelete = adminClient.expireDelegationToken(token5.hmac())
     val expireResultPostDeleteError = assertThrows(classOf[ExecutionException], () => expireResultPostDelete.expiryTimestamp().get())
     assertTrue(expireResultPostDeleteError.getCause.isInstanceOf[DelegationTokenNotFoundException])
 

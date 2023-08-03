@@ -128,8 +128,6 @@ public class DelegationTokenControlManager {
     private final long tokenRemoverScanInterval;
     long tokenRemoverScanLastTime;
 
-    // private final TimelineHashMap<ScramCredentialKey, ScramCredentialValue> credentials;
-
     private DelegationTokenControlManager(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -173,6 +171,13 @@ public class DelegationTokenControlManager {
             if (validRenewer.equals(renewer)) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    public boolean isEnabled() {
+        if (secretKeyString != null) {
+            return true;
         }
         return false;
     }
@@ -347,6 +352,22 @@ public class DelegationTokenControlManager {
         }
 
         return ControllerResult.atomicOf(records, responseData);
+    }
+
+    // Periodic call to remove expired DelegationTokens
+    public List<ApiMessageAndVersion> expireDelegationTokens() {
+        long now = time.milliseconds();
+        List<ApiMessageAndVersion> records = new ArrayList<ApiMessageAndVersion>();
+
+        for (TokenInformation oldTokenInformation: tokenCache.tokens()) {
+            if ((oldTokenInformation.maxTimestamp() < now) ||
+                (oldTokenInformation.expiryTimestamp() < now)) {
+                System.out.println("Token: " + oldTokenInformation.tokenId() + " is expired");
+                records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
+                    setTokenId(oldTokenInformation.tokenId()), (short) 0));
+            }
+        }
+        return records;
     }
 
     public void replay(DelegationTokenRecord record) {
