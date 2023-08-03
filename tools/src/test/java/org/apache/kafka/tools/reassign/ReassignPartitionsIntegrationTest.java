@@ -64,6 +64,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -431,7 +432,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             -1L
         );
         TestUtils.waitUntilTrue(
-            () -> JavaConverters.asJava(TestUtils.currentIsr(cluster.adminClient, foo0)).equals(new HashSet<>(Arrays.asList(0, 1, 2, 3))),
+            () -> Objects.equals(TestUtils.currentIsr(cluster.adminClient, foo0), toSet(Arrays.asList(0, 1, 2, 3))),
             () -> "Timed out while waiting for replica 3 to join the ISR",
             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
         );
