@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -248,7 +249,7 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<Path> pluginPath() {
+    public static Set<Path> pluginPath() {
         return pluginPath(defaultPlugins());
     }
 
@@ -262,14 +263,14 @@ public class TestPlugins {
      * @return A list of plugin jar filenames containing the specified test plugins
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<Path> pluginPath(TestPlugin... plugins) {
+    public static Set<Path> pluginPath(TestPlugin... plugins) {
         assertAvailable();
         return Arrays.stream(plugins)
                 .filter(Objects::nonNull)
                 .map(TestPlugin::resourceDir)
                 .distinct()
                 .map(PLUGIN_JARS::get)
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
     }
 
     public static String pluginPathJoined(TestPlugin... plugins) {
