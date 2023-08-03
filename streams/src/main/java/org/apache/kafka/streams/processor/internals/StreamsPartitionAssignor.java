@@ -128,7 +128,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         private final ClientState state;
         private final SortedSet<String> consumers;
 
-        ClientMetadata(final String endPoint, final Map<String, String> clientTags) {
+        ClientMetadata(final UUID processId, final String endPoint, final Map<String, String> clientTags) {
 
             // get the host info, or null if no endpoint is configured (ie endPoint == null)
             hostInfo = HostInfo.buildFromEndpoint(endPoint);
@@ -137,7 +137,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             consumers = new TreeSet<>();
 
             // initialize the client state with client tags
-            state = new ClientState(clientTags);
+            state = new ClientState(processId, clientTags);
         }
 
         void addConsumer(final String consumerMemberId, final List<TopicPartition> ownedPartitions) {
@@ -340,7 +340,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
                 if (!clientMetadataMap.containsKey(FUTURE_ID)) {
-                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(null, Collections.emptyMap()));
+                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Collections.emptyMap()));
                 }
             } else {
                 processId = info.processId();
@@ -350,7 +350,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // create the new client metadata if necessary
             if (clientMetadata == null) {
-                clientMetadata = new ClientMetadata(info.userEndPoint(), info.clientTags());
+                clientMetadata = new ClientMetadata(info.processId(), info.userEndPoint(), info.clientTags());
                 clientMetadataMap.put(info.processId(), clientMetadata);
             }
 

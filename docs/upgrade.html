@@ -25,6 +25,18 @@
     <ul>
         <li>Apache Kafka now supports having both an IPv4 and an IPv6 listener on the same port. This change only applies to
             non advertised listeners (advertised listeners already have this feature)</li>
+        <li>The Apache Zookeeper dependency has been upgraded to 3.8.1 due to 3.6 reaching end-of-life. To bring both your
+            Kafka and Zookeeper clusters to the latest versions:
+            <ul>
+                <li><b>>=2.4</b> Kafka clusters can be updated directly.
+                    Zookeeper clusters which are running binaries bundled with Kafka versions 2.4 or above can be updated directly.</li>
+                <li><b><2.4</b> Kafka clusters first need to be updated to a version greater than 2.4 and smaller than 3.6.
+                Zookeeper clusters which are running binaries bundled with Kafka versions below 2.4 need to be updated to any
+                binaries bundled with Kafka versions greater than 2.4 and smaller than 3.6. You can then follow the first bullet-point.</li>
+            </ul>
+            For more detailed information please refer to the Compatibility, Deprecation, and Migration Plan section in
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-902%3A+Upgrade+Zookeeper+to+3.8.1">KIP-902</a>.
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>

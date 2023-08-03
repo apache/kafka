@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 
 import scala.annotation.nowarn
@@ -57,18 +58,24 @@ class LogConfigTest {
   @Test
   def testKafkaConfigToProps(): Unit = {
     val millisInHour = 60L * 60L * 1000L
+    val millisInDay = 24L * millisInHour
+    val bytesInGB: Long = 1024 * 1024 * 1024
     val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
-    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "960") // 40 days
     kafkaProps.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
+    kafkaProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2592000000") // 30 days
+    kafkaProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967296") // 4 GB
 
     val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
     assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_MS_CONFIG))
     assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_JITTER_MS_CONFIG))
-    assertEquals(2 * millisInHour, logProps.get(TopicConfig.RETENTION_MS_CONFIG))
+    assertEquals(40 * millisInDay, logProps.get(TopicConfig.RETENTION_MS_CONFIG))
     // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
     assertEquals(IBP_3_0_IV1.version, logProps.get(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG))
+    assertEquals(30 * millisInDay, logProps.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG))
+    assertEquals(4 * bytesInGB, logProps.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
   }
 
   @nowarn("cat=deprecation")
@@ -218,8 +225,8 @@ class LogConfigTest {
     props.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(retentionMs, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(retentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(retentionMs, logConfig.localRetentionMs)
+    assertEquals(retentionBytes, logConfig.localRetentionBytes)
   }
 
   @Test
@@ -227,8 +234,8 @@ class LogConfigTest {
     val logConfig = new LogConfig(new Properties())
 
     // Local retention defaults are derived from retention properties which can be default or custom.
-    assertEquals(LogConfig.DEFAULT_RETENTION_MS, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(LogConfig.DEFAULT_RETENTION_MS, logConfig.localRetentionMs)
+    assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.localRetentionBytes)
   }
 
   @Test
@@ -243,8 +250,8 @@ class LogConfigTest {
     props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(localRetentionMs, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(localRetentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(localRetentionMs, logConfig.localRetentionMs)
+    assertEquals(localRetentionBytes, logConfig.localRetentionBytes)
   }
 
   @Test
@@ -275,6 +282,20 @@ class LogConfigTest {
 
     props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs.toString)
     props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes.toString)
-    assertThrows(classOf[ConfigException], () => new LogConfig(props));
+    assertThrows(classOf[ConfigException], () => LogConfig.validate(props))
+  }
+
+  @Test
+  def testEnableRemoteLogStorageOnCompactedTopic(): Unit = {
+    val props = new Properties()
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    LogConfig.validate(props)
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    assertThrows(classOf[ConfigException], () => LogConfig.validate(props))
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete, compact")
+    assertThrows(classOf[ConfigException], () => LogConfig.validate(props))
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact, delete")
+    assertThrows(classOf[ConfigException], () => LogConfig.validate(props))
   }
 }

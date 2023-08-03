@@ -134,7 +134,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(configs);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(configs, null);
 
         standbyTaskAssignor.assign(clientStates, allTaskIds, statefulTasks, configs);
 

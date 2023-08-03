@@ -269,15 +269,37 @@ public class RemoteLogManagerTest {
     void testCopyLogSegmentsToRemoteShouldCopyExpectedLogSegment() throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
-        long oldSegmentEndOffset = nextSegmentStartOffset - 1;
+        long lso = 250L;
+        long leo = 300L;
+        assertCopyExpectedLogSegmentsToRemote(oldSegmentStartOffset, nextSegmentStartOffset, lso, leo);
+    }
 
+    /**
+     * The following values will be equal when the active segment gets rotated to passive and there are no new messages:
+     * last-stable-offset = high-water-mark = log-end-offset = base-offset-of-active-segment.
+     * This test asserts that the active log segment that was rotated after log.roll.ms are copied to remote storage.
+     */
+    @Test
+    void testCopyLogSegmentToRemoteForStaleTopic() throws Exception {
+        long oldSegmentStartOffset = 0L;
+        long nextSegmentStartOffset = 150L;
+        long lso = 150L;
+        long leo = 150L;
+        assertCopyExpectedLogSegmentsToRemote(oldSegmentStartOffset, nextSegmentStartOffset, lso, leo);
+    }
+
+    private void assertCopyExpectedLogSegmentsToRemote(long oldSegmentStartOffset,
+                                                       long nextSegmentStartOffset,
+                                                       long lastStableOffset,
+                                                       long logEndOffset) throws Exception {
+        long oldSegmentEndOffset = nextSegmentStartOffset - 1;
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
-        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(-1L));
 
         File tempFile = TestUtils.tempFile();
         File mockProducerSnapshotIndex = TestUtils.tempFile();
@@ -288,6 +310,8 @@ public class RemoteLogManagerTest {
 
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+        verify(oldSegment, times(0)).readNextOffset();
+        verify(activeSegment, times(0)).readNextOffset();
 
         FileRecords fileRecords = mock(FileRecords.class);
         when(oldSegment.log()).thenReturn(fileRecords);
@@ -302,7 +326,8 @@ public class RemoteLogManagerTest {
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
-        when(mockLog.lastStableOffset()).thenReturn(250L);
+        when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
+        when(mockLog.logEndOffset()).thenReturn(logEndOffset);
 
         LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
         LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
@@ -320,13 +345,13 @@ public class RemoteLogManagerTest {
         doNothing().when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
         // Verify the metrics for remote writes and for failures is zero before attempt to copy log segment
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteCopyRequestRate().count());
         // Verify aggregate metrics
-        assertEquals(0, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
-        assertEquals(0, brokerTopicStats.allTopicsStats().remoteBytesOutRate().count());
-        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyBytesRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
@@ -362,14 +387,14 @@ public class RemoteLogManagerTest {
         assertEquals(oldSegmentEndOffset, argument.getValue());
 
         // Verify the metric for remote writes is updated correctly
-        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
-        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteBytesOutRate().count());
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
+        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
         // Verify we did not report any failure for remote writes
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteCopyRequestRate().count());
         // Verify aggregate metrics
-        assertEquals(1, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
-        assertEquals(10, brokerTopicStats.allTopicsStats().remoteBytesOutRate().count());
-        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
+        assertEquals(10, brokerTopicStats.allTopicsStats().remoteCopyBytesRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
     }
 
     @Test
@@ -502,11 +527,11 @@ public class RemoteLogManagerTest {
         doThrow(new RuntimeException()).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
         // Verify the metrics for remote write requests/failures is zero before attempt to copy log segment
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteCopyRequestRate().count());
         // Verify aggregate metrics
-        assertEquals(0, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
-        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
         task.copyLogSegmentsToRemote(mockLog);
@@ -517,11 +542,11 @@ public class RemoteLogManagerTest {
         // Verify we should not have updated the highest offset because of write failure
         verify(mockLog, times(0)).updateHighestOffsetInRemoteStorage(anyLong());
         // Verify the metric for remote write requests/failures was updated.
-        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteWriteRequestRate().count());
-        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteWriteRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteCopyRequestRate().count());
         // Verify aggregate metrics
-        assertEquals(1, brokerTopicStats.allTopicsStats().remoteWriteRequestRate().count());
-        assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteWriteRequestRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
     }
 
     @Test
@@ -821,6 +846,56 @@ public class RemoteLogManagerTest {
         } finally {
             mockMetricsGroupCtor.close();
         }
+    }
+
+    @Test
+    public void testCandidateLogSegmentsSkipsActiveSegment() {
+        UnifiedLog log = mock(UnifiedLog.class);
+        LogSegment segment1 = mock(LogSegment.class);
+        LogSegment segment2 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(segment1.baseOffset()).thenReturn(5L);
+        when(segment2.baseOffset()).thenReturn(10L);
+        when(activeSegment.baseOffset()).thenReturn(15L);
+
+        when(log.logSegments(5L, Long.MAX_VALUE))
+                .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, activeSegment)));
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        List<RemoteLogManager.EnrichedLogSegment> expected =
+                Arrays.asList(
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
+                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
+                );
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() {
+        UnifiedLog log = mock(UnifiedLog.class);
+        LogSegment segment1 = mock(LogSegment.class);
+        LogSegment segment2 = mock(LogSegment.class);
+        LogSegment segment3 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(segment1.baseOffset()).thenReturn(5L);
+        when(segment2.baseOffset()).thenReturn(10L);
+        when(segment3.baseOffset()).thenReturn(15L);
+        when(activeSegment.baseOffset()).thenReturn(20L);
+
+        when(log.logSegments(5L, Long.MAX_VALUE))
+                .thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(segment1, segment2, segment3, activeSegment)));
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        List<RemoteLogManager.EnrichedLogSegment> expected =
+                Arrays.asList(
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
+                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
+                );
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
+        assertEquals(expected, actual);
     }
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {

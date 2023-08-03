@@ -102,49 +102,14 @@ public class LogConfig extends AbstractConfig {
 
     public static class RemoteLogConfig {
 
-        public final boolean remoteStorageEnable;
+        private final boolean remoteStorageEnable;
+        private final long localRetentionMs;
+        private final long localRetentionBytes;
 
-        public final long localRetentionMs;
-        public final long localRetentionBytes;
-
-        private RemoteLogConfig(LogConfig config, long retentionMs, long retentionSize) {
+        private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
-
-            long localLogRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
-
-            // -2 indicates to derive value from retentionMs property.
-            if (localLogRetentionMs == -2)
-                this.localRetentionMs = retentionMs;
-            else {
-                // Added validation here to check the effective value should not be more than RetentionMs.
-                if (localLogRetentionMs == -1 && retentionMs != -1)
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localLogRetentionMs,
-                        "Value must not be -1 as " + TopicConfig.RETENTION_MS_CONFIG + " value is set as " + retentionMs);
-
-                if (localLogRetentionMs > retentionMs)
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localLogRetentionMs,
-                        "Value must not be more than property: " + TopicConfig.RETENTION_MS_CONFIG + " value.");
-
-                this.localRetentionMs = localLogRetentionMs;
-            }
-
-            long localLogRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-
-            // -2 indicates to derive value from retentionSize property.
-            if (localLogRetentionBytes == -2)
-                this.localRetentionBytes = retentionSize;
-            else {
-                // Added validation here to check the effective value should not be more than RetentionBytes.
-                if (localLogRetentionBytes == -1 && retentionSize != -1)
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localLogRetentionBytes,
-                        "Value must not be -1 as " + TopicConfig.RETENTION_BYTES_CONFIG + " value is set as " + retentionSize);
-
-                if (localLogRetentionBytes > retentionSize)
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localLogRetentionBytes,
-                        "Value must not be more than property: " + TopicConfig.RETENTION_BYTES_CONFIG + " value.");
-
-                this.localRetentionBytes = localLogRetentionBytes;
-            }
+            this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
+            this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         }
     }
 
@@ -205,8 +170,8 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE = true;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
-    public static final int DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
-    public static final int DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
+    public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
+    public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
     public static final List<String> DEFAULT_LEADER_REPLICATION_THROTTLED_REPLICAS = Collections.emptyList();
     public static final List<String> DEFAULT_FOLLOWER_REPLICATION_THROTTLED_REPLICAS = Collections.emptyList();
 
@@ -224,8 +189,6 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Collections.unmodifiableSet(Utils.mkSet(
         TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
-        TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG,
-        TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG,
         LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
         FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
@@ -297,11 +260,11 @@ public class LogConfig extends AbstractConfig {
                 ThrottledReplicaListValidator.INSTANCE, MEDIUM, FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
             .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW,
                 TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC)
-            .defineInternal(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
+            .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
                 MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
-            .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
+            .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
-            .defineInternal(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
+            .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
     }
 
@@ -390,7 +353,7 @@ public class LogConfig extends AbstractConfig {
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
-        remoteLogConfig = new RemoteLogConfig(this, retentionMs, retentionSize);
+        remoteLogConfig = new RemoteLogConfig(this);
     }
 
     @SuppressWarnings("deprecation")
@@ -422,6 +385,18 @@ public class LogConfig extends AbstractConfig {
             return segmentSize;
         else
             return 0;
+    }
+
+    public boolean remoteStorageEnable() {
+        return remoteLogConfig.remoteStorageEnable;
+    }
+
+    public long localRetentionMs() {
+        return remoteLogConfig.localRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : remoteLogConfig.localRetentionMs;
+    }
+
+    public long localRetentionBytes() {
+        return remoteLogConfig.localRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionSize : remoteLogConfig.localRetentionBytes;
     }
 
     public String overriddenConfigsAsLoggableString() {
@@ -486,6 +461,48 @@ public class LogConfig extends AbstractConfig {
             throw new InvalidConfigurationException("conflict topic config setting "
                 + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + " (" + minCompactionLag + ") > "
                 + TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG + " (" + maxCompactionLag + ")");
+        }
+
+        if (props.containsKey(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)) {
+            boolean isRemoteStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+            String cleanupPolicy = props.get(TopicConfig.CLEANUP_POLICY_CONFIG).toString().toLowerCase(Locale.getDefault());
+            if (isRemoteStorageEnabled && cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
+                throw new ConfigException("Remote log storage is unsupported for the compacted topics");
+            }
+        }
+
+        if (props.containsKey(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)) {
+            Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
+            Long localLogRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
+            if (retentionBytes > -1 && localLogRetentionBytes != -2) {
+                if (localLogRetentionBytes == -1) {
+                    String message = String.format("Value must not be -1 as %s value is set as %d.",
+                            TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
+                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localLogRetentionBytes, message);
+                }
+                if (localLogRetentionBytes > retentionBytes) {
+                    String message = String.format("Value must not be more than %s property value: %d",
+                            TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
+                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localLogRetentionBytes, message);
+                }
+            }
+        }
+
+        if (props.containsKey(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG)) {
+            Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
+            Long localLogRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
+            if (retentionMs != -1 && localLogRetentionMs != -2) {
+                if (localLogRetentionMs == -1) {
+                    String message = String.format("Value must not be -1 as %s value is set as %d.",
+                            TopicConfig.RETENTION_MS_CONFIG, retentionMs);
+                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localLogRetentionMs, message);
+                }
+                if (localLogRetentionMs > retentionMs) {
+                    String message = String.format("Value must not be more than %s property value: %d",
+                            TopicConfig.RETENTION_MS_CONFIG, retentionMs);
+                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localLogRetentionMs, message);
+                }
+            }
         }
     }
 
