@@ -52,7 +52,7 @@ public class Protocol {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
             } else if (type instanceof TaggedFields) {
-                b.append("TAG_BUFFER ");
+                b.append("TAGGED_FIELDS ");
             } else {
                 b.append(field.def.name);
                 b.append(" ");
