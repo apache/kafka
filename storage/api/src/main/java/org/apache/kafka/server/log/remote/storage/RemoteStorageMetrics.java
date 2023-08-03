@@ -19,6 +19,8 @@ package org.apache.kafka.server.log.remote.storage;
 import com.yammer.metrics.core.MetricName;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -29,18 +31,20 @@ import java.util.Set;
  * @see kafka.api.MetricsTest
  */
 public class RemoteStorageMetrics {
-    public static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
-    public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
-    public static final String TASK_QUEUE_SIZE = "TaskQueueSize";
-    public static final String AVG_IDLE_PERCENT = "AvgIdlePercent";
-    public static final String REMOTE_COPY_BYTES_PER_SEC = "RemoteCopyBytesPerSec";
-    public static final String REMOTE_FETCH_BYTES_PER_SEC = "RemoteFetchBytesPerSec";
-    public static final String REMOTE_FETCH_REQUESTS_PER_SEC = "RemoteFetchRequestsPerSec";
-    public static final String REMOTE_COPY_REQUESTS_PER_SEC = "RemoteCopyRequestsPerSec";
-    public static final String FAILED_REMOTE_FETCH_PER_SEC = "RemoteFetchErrorsPerSec";
-    public static final String FAILED_REMOTE_COPY_PER_SEC = "RemoteCopyErrorsPerSec";
-    public static final String REMOTE_LOG_READER_TASK_QUEUE_SIZE = REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE;
-    public static final String REMOTE_LOG_READER_AVG_IDLE_PERCENT = REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT;
+    private static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
+    private static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
+    private static final String TASK_QUEUE_SIZE = "TaskQueueSize";
+    private static final String AVG_IDLE_PERCENT = "AvgIdlePercent";
+    private static final String REMOTE_COPY_BYTES_PER_SEC = "RemoteCopyBytesPerSec";
+    private static final String REMOTE_FETCH_BYTES_PER_SEC = "RemoteFetchBytesPerSec";
+    private static final String REMOTE_FETCH_REQUESTS_PER_SEC = "RemoteFetchRequestsPerSec";
+    private static final String REMOTE_COPY_REQUESTS_PER_SEC = "RemoteCopyRequestsPerSec";
+    private static final String FAILED_REMOTE_FETCH_PER_SEC = "RemoteFetchErrorsPerSec";
+    private static final String FAILED_REMOTE_COPY_PER_SEC = "RemoteCopyErrorsPerSec";
+    private static final String REMOTE_LOG_READER_TASK_QUEUE_SIZE = REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE;
+    private static final String REMOTE_LOG_READER_AVG_IDLE_PERCENT = REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT;
+    public static final Set<String> REMOTE_STORAGE_THREAD_POOL_METRICS = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList(REMOTE_LOG_READER_TASK_QUEUE_SIZE, REMOTE_LOG_READER_AVG_IDLE_PERCENT)));
 
     public final static MetricName REMOTE_COPY_BYTES_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_BYTES_PER_SEC);
