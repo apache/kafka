@@ -231,6 +231,58 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     }
 
     @Test
+    public void shouldPermitSingleTaskMoveWhenClientTagMatch() {
+        final ClientState source = createClientStateWithCapacity(UUID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(UUID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState clientState = createClientStateWithCapacity(UUID_3, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)));
+        final Map<UUID, ClientState> clientStateMap = mkMap(
+            mkEntry(UUID_1, source),
+            mkEntry(UUID_2, destination),
+            mkEntry(UUID_3, clientState)
+        );
+        final TaskId taskId = new TaskId(0, 0);
+        clientState.assignActive(taskId);
+        source.assignStandby(taskId);
+
+        assertTrue(standbyTaskAssignor.isAllowedTaskMovement(source, destination, taskId, clientStateMap));
+    }
+
+    @Test
+    public void shouldPermitSingleTaskMoveWhenDifferentClientTagCountNotChange() {
+        final ClientState source = createClientStateWithCapacity(UUID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(UUID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState clientState = createClientStateWithCapacity(UUID_3, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)));
+        final Map<UUID, ClientState> clientStateMap = mkMap(
+            mkEntry(UUID_1, source),
+            mkEntry(UUID_2, destination),
+            mkEntry(UUID_3, clientState)
+        );
+        final TaskId taskId = new TaskId(0, 0);
+        clientState.assignActive(taskId);
+        source.assignStandby(taskId);
+
+        assertTrue(standbyTaskAssignor.isAllowedTaskMovement(source, destination, taskId, clientStateMap));
+    }
+
+    @Test
+    public void shouldDeclineSingleTaskMoveWhenReduceClientTagCount() {
+        final ClientState source = createClientStateWithCapacity(UUID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(UUID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState clientState = createClientStateWithCapacity(UUID_3, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)));
+        final Map<UUID, ClientState> clientStateMap = mkMap(
+            mkEntry(UUID_1, source),
+            mkEntry(UUID_2, destination),
+            mkEntry(UUID_3, clientState)
+        );
+        final TaskId taskId = new TaskId(0, 0);
+        clientState.assignActive(taskId);
+        source.assignStandby(taskId);
+
+        // Because destination has ZONE_3 which is the same as active's zone
+        assertFalse(standbyTaskAssignor.isAllowedTaskMovement(source, destination, taskId, clientStateMap));
+    }
+
+    @Test
     public void shouldDistributeStandbyTasksWhenActiveTasksAreLocatedOnSameZone() {
         final Map<UUID, ClientState> clientStates = mkMap(
             mkEntry(UUID_1, createClientStateWithCapacity(UUID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
