@@ -328,7 +328,7 @@ public class ConnectPluginPath {
         Set<String> rowAliases = new LinkedHashSet<>();
         rowAliases.add(PluginUtils.simpleName(className));
         rowAliases.add(PluginUtils.prunedName(className, type));
-        boolean hasManifest = manifests.containsKey(className);
+        boolean hasManifest = manifests.containsKey(className) && manifests.get(className).stream().anyMatch(e -> e.type == type);
         return new Row(pluginLocation, className, type, version, new ArrayList<>(rowAliases), loadable, hasManifest);
     }
 
