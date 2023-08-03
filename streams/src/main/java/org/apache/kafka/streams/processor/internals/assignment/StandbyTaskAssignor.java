@@ -16,8 +16,27 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Map;
+import java.util.UUID;
+import org.apache.kafka.streams.processor.TaskId;
+
 interface StandbyTaskAssignor extends TaskAssignor {
     default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
+        return true;
+    }
+
+    /**
+     * If a specific task can be moved from source to destination
+     * @param source Source client
+     * @param destination Destination client
+     * @param sourceTask Task to move
+     * @param clientStateMap All client metadata
+     * @return True if task can be moved, false otherwise
+     */
+    default boolean isAllowedTaskMovement(final ClientState source,
+                                          final ClientState destination,
+                                          final TaskId sourceTask,
+                                          final Map<UUID, ClientState> clientStateMap) {
         return true;
     }
 }
