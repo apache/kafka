@@ -24,12 +24,10 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.net.URL;
-import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BrokenBarrierException;
@@ -79,15 +77,7 @@ public class SynchronizationTest {
             + "." + testName.getMethodName() + "-";
         dclBreakpoint = new Breakpoint<>();
         pclBreakpoint = new Breakpoint<>();
-        plugins = new Plugins(pluginProps) {
-            @Override
-            protected DelegatingClassLoader newDelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
-                return AccessController.doPrivileged(
-                    (PrivilegedAction<DelegatingClassLoader>) () ->
-                        new SynchronizedDelegatingClassLoader(pluginLocations, parent)
-                );
-            }
-        };
+        plugins = new Plugins(pluginProps, Plugins.class.getClassLoader(), new SynchronizedClassLoaderFactory());
         exec = new ThreadPoolExecutor(
             2,
             2,
@@ -167,25 +157,35 @@ public class SynchronizationTest {
         }
     }
 
+    private class SynchronizedClassLoaderFactory extends ClassLoaderFactory {
+        @Override
+        public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
+            return AccessController.doPrivileged(
+                    (PrivilegedAction<DelegatingClassLoader>) () ->
+                            new SynchronizedDelegatingClassLoader(parent)
+            );
+        }
+
+        @Override
+        public PluginClassLoader newPluginClassLoader(
+                URL pluginLocation,
+                URL[] urls,
+                ClassLoader parent
+        ) {
+            return AccessController.doPrivileged(
+                    (PrivilegedAction<PluginClassLoader>) () ->
+                            new SynchronizedPluginClassLoader(pluginLocation, urls, parent)
+            );
+        }
+    }
+
     private class SynchronizedDelegatingClassLoader extends DelegatingClassLoader {
         {
             ClassLoader.registerAsParallelCapable();
         }
 
-        public SynchronizedDelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
-            super(pluginLocations, parent);
-        }
-
-        @Override
-        protected PluginClassLoader newPluginClassLoader(
-            URL pluginLocation,
-            URL[] urls,
-            ClassLoader parent
-        ) {
-            return AccessController.doPrivileged(
-                (PrivilegedAction<PluginClassLoader>) () ->
-                    new SynchronizedPluginClassLoader(pluginLocation, urls, parent)
-            );
+        public SynchronizedDelegatingClassLoader(ClassLoader parent) {
+            super(parent);
         }
 
         @Override

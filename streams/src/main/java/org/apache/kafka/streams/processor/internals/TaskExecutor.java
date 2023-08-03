@@ -88,7 +88,7 @@ public class TaskExecutor {
         return totalProcessed;
     }
 
-    private long processTask(final Task task, final int maxNumRecords, final long begin, final Time time) {
+    private int processTask(final Task task, final int maxNumRecords, final long begin, final Time time) {
         int processed = 0;
         long now = begin;
 

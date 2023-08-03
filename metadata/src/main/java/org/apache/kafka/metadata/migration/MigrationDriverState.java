@@ -55,7 +55,7 @@ public enum MigrationDriverState {
         this.allowDualWrite = allowDualWrite;
     }
 
-    boolean allowDualWrite() {
+    public boolean allowDualWrite() {
         return allowDualWrite;
     }
 }

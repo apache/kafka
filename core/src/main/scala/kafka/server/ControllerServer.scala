@@ -214,7 +214,7 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time)
+        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
 
         new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
           setTime(time).
@@ -256,19 +256,22 @@ class ControllerServer(
         }
         val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
-        val migrationDriver = new KRaftMigrationDriver(
-          config.nodeId,
-          controller.asInstanceOf[QuorumController].zkRecordConsumer(),
-          migrationClient,
-          propagator,
-          publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher)),
-          sharedServer.faultHandlerFactory.build(
+        val migrationDriver = KRaftMigrationDriver.newBuilder()
+          .setNodeId(config.nodeId)
+          .setZkRecordConsumer(controller.asInstanceOf[QuorumController].zkRecordConsumer())
+          .setZkMigrationClient(migrationClient)
+          .setPropagator(propagator)
+          .setInitialZkLoadHandler(publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher)))
+          .setFaultHandler(sharedServer.faultHandlerFactory.build(
             "zk migration",
             fatal = false,
             () => {}
-          ),
-          quorumFeatures
-        )
+          ))
+          .setQuorumFeatures(quorumFeatures)
+          .setConfigSchema(configSchema)
+          .setControllerMetrics(quorumControllerMetrics)
+          .setTime(time)
+          .build()
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
       }

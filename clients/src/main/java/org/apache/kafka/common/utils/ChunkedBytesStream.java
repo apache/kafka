@@ -290,7 +290,7 @@ public class ChunkedBytesStream extends FilterInputStream {
 
         // Skip bytes stored in intermediate buffer first
         int avail = count - pos;
-        long bytesSkipped = (avail < remaining) ? avail : remaining;
+        int bytesSkipped = (int) Math.min(avail, remaining);
         pos += bytesSkipped;
         remaining -= bytesSkipped;
 
@@ -298,17 +298,19 @@ public class ChunkedBytesStream extends FilterInputStream {
             if (delegateSkipToSourceStream) {
                 // Use sourceStream's skip() to skip the rest.
                 // conversion to int is acceptable because toSkip and remaining are int.
-                bytesSkipped = getInIfOpen().skip(remaining);
-                if (bytesSkipped == 0) {
+                long delegateBytesSkipped = getInIfOpen().skip(remaining);
+                if (delegateBytesSkipped == 0) {
                     // read one byte to check for EOS
                     if (read() == -1) {
                         break;
                     }
                     // one byte read so decrement number to skip
                     remaining--;
-                } else if (bytesSkipped > remaining || bytesSkipped < 0) { // skipped negative or too many bytes
+                } else if (delegateBytesSkipped > remaining || delegateBytesSkipped < 0) { // skipped negative or too many bytes
                     throw new IOException("Unable to skip exactly");
+
                 }
+                remaining -= delegateBytesSkipped;
             } else {
                 // skip from intermediate buffer, filling it first (if required)
                 if (pos >= count) {
@@ -318,10 +320,10 @@ public class ChunkedBytesStream extends FilterInputStream {
                         break;
                 }
                 avail = count - pos;
-                bytesSkipped = (avail < remaining) ? avail : remaining;
+                bytesSkipped = (int) Math.min(avail, remaining);
                 pos += bytesSkipped;
+                remaining -= bytesSkipped;
             }
-            remaining -= bytesSkipped;
         }
         return toSkip - remaining;
     }

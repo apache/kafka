@@ -461,9 +461,9 @@ class KafkaServer(
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
           ProducerIdManager.rpc(
             config.brokerId,
+            time,
             brokerEpochSupplier = brokerEpochSupplier,
-            clientToControllerChannelManager,
-            config.requestTimeoutMs
+            clientToControllerChannelManager
           )
         } else {
           ProducerIdManager.zk(config.brokerId, zkClient)
@@ -614,7 +614,7 @@ class KafkaServer(
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava));
+        (tp: TopicPartition) => logManager.getLog(tp).asJava, brokerTopicStats));
     } else {
       None
     }

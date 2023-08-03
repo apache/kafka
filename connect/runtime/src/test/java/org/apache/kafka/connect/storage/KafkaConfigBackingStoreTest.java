@@ -164,11 +164,11 @@ public class KafkaConfigBackingStoreTest {
             = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 0);
 
     private static final Struct ONLY_FAILED_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(INCLUDE_TASKS_FIELD_NAME, false);
-    private static final Struct INLUDE_TASKS_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true);
+    private static final Struct INCLUDE_TASKS_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true);
     private static final List<Struct> RESTART_REQUEST_STRUCTS = Arrays.asList(
                 new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true).put(INCLUDE_TASKS_FIELD_NAME, false),
                 ONLY_FAILED_MISSING_STRUCT,
-                INLUDE_TASKS_MISSING_STRUCT);
+                INCLUDE_TASKS_MISSING_STRUCT);
 
     // The exact format doesn't matter here since both conversions are mocked
     private static final List<byte[]> CONFIGS_SERIALIZED = Arrays.asList(
@@ -1414,7 +1414,7 @@ public class KafkaConfigBackingStoreTest {
     public void testRecordToRestartRequestIncludeTasksInconsistent() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
-        Struct struct = INLUDE_TASKS_MISSING_STRUCT;
+        Struct struct = INCLUDE_TASKS_MISSING_STRUCT;
         SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
         RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
         assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());

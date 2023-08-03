@@ -206,6 +206,7 @@ This project bundles some components that are also licensed under the Apache
 License Version 2.0:
 
 audience-annotations-0.13.0
+caffeine-2.9.3
 commons-beanutils-1.9.4
 commons-cli-1.4
 commons-collections-3.2.2
@@ -237,30 +238,31 @@ jetty-util-9.4.51.v20230217
 jetty-util-ajax-9.4.51.v20230217
 jose4j-0.9.3
 lz4-java-1.8.0
-maven-artifact-3.8.4
+maven-artifact-3.8.8
 metrics-core-4.1.12.1
 metrics-core-2.2.0
-netty-buffer-4.1.92.Final
-netty-codec-4.1.92.Final
-netty-common-4.1.92.Final
-netty-handler-4.1.92.Final
-netty-resolver-4.1.92.Final
-netty-transport-4.1.92.Final
-netty-transport-classes-epoll-4.1.92.Final
-netty-transport-native-epoll-4.1.92.Final
-netty-transport-native-unix-common-4.1.92.Final
+netty-buffer-4.1.94.Final
+netty-codec-4.1.94.Final
+netty-common-4.1.94.Final
+netty-handler-4.1.94.Final
+netty-resolver-4.1.94.Final
+netty-transport-4.1.94.Final
+netty-transport-classes-epoll-4.1.94.Final
+netty-transport-native-epoll-4.1.94.Final
+netty-transport-native-unix-common-4.1.94.Final
 plexus-utils-3.3.0
+reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.1.2
 scala-collection-compat_2.13-2.10.0
-scala-library-2.13.10
+scala-library-2.13.11
 scala-logging_2.13-3.9.4
-scala-reflect-2.13.10
+scala-reflect-2.13.11
 scala-java8-compat_2.13-1.0.2
-snappy-java-1.1.10.1
+snappy-java-1.1.10.3
 swagger-annotations-2.2.8
-zookeeper-3.6.4
-zookeeper-jute-3.6.4
+zookeeper-3.8.2
+zookeeper-jute-3.8.2
 
 ===============================================================================
 This product bundles various third-party components under other open source
@@ -328,4 +330,4 @@ paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 Do What The F*ck You Want To Public License
 see: licenses/DWTFYWTPL
 
-reflections-0.9.12
+reflections-0.10.2

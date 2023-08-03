@@ -41,7 +41,7 @@ jobs:
       - uses: actions/stale@v8
         with:
           debug-only: ${{ inputs.dryRun || false }}
-          operations-per-run: ${{ inputs.operationsPerRun || 30 }}
+          operations-per-run: ${{ inputs.operationsPerRun || 100 }}
           days-before-stale: 90
           days-before-close: -1
           stale-pr-label: 'stale'

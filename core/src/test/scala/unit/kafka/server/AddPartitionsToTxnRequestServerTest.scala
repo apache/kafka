@@ -174,8 +174,13 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val findCoordinatorResponse = connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
     val coordinatorId = findCoordinatorResponse.data().coordinators().get(0).nodeId()
 
-    val initPidRequest = new InitProducerIdRequest.Builder(new InitProducerIdRequestData().setTransactionalId(transactionalId).setTransactionTimeoutMs(10000)).build()
-    val initPidResponse = connectAndReceive[InitProducerIdResponse](initPidRequest, brokerSocketServer(coordinatorId))
+    var initPidResponse: InitProducerIdResponse = null
+
+    TestUtils.waitUntilTrue(() => {
+      val initPidRequest = new InitProducerIdRequest.Builder(new InitProducerIdRequestData().setTransactionalId(transactionalId).setTransactionTimeoutMs(10000)).build()
+      initPidResponse = connectAndReceive[InitProducerIdResponse](initPidRequest, brokerSocketServer(coordinatorId))
+      initPidResponse.error() != Errors.COORDINATOR_LOAD_IN_PROGRESS
+    }, "Failed to get a valid InitProducerIdResponse.")
 
     val producerId1 = initPidResponse.data().producerId()
     val producerEpoch1 = initPidResponse.data().producerEpoch()

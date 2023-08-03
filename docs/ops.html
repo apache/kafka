@@ -805,26 +805,8 @@ us-west->us-east.emit.heartbeats = false
 </code></pre>
 
   <p>
-    Additional configuration settings are supported, some of which are listed below. In most cases, you can leave these settings at their default values. See <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a> and <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a> for further details.
+    Additional configuration settings are supported which can be left with their default values in most cases. See <a href="/documentation/#mirrormakerconfigs">MirrorMaker Configs</a>.
   </p>
-
-  <ul>
-    <li><code>refresh.topics.enabled</code>: whether to check for new topics in the source cluster periodically (default: true)
-    <li><code>refresh.topics.interval.seconds</code>: frequency of checking for new topics in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
-    <li><code>refresh.groups.enabled</code>: whether to check for new consumer groups in the source cluster periodically (default: true)
-    <li><code>refresh.groups.interval.seconds</code>: frequency of checking for new consumer groups in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
-    <li><code>sync.topic.configs.enabled</code>: whether to replicate topic configurations from the source cluster (default: true)
-    <li><code>sync.topic.acls.enabled</code>: whether to sync ACLs from the source cluster (default: true)
-    <li><code>emit.heartbeats.enabled</code>: whether to emit heartbeats periodically (default: true)
-    <li><code>emit.heartbeats.interval.seconds</code>: frequency at which heartbeats are emitted (default: 1, every one seconds)
-    <li><code>heartbeats.topic.replication.factor</code>: replication factor of MirrorMaker's internal heartbeat topics (default: 3)
-    <li><code>emit.checkpoints.enabled</code>: whether to emit MirrorMaker's consumer offsets periodically (default: true)
-    <li><code>emit.checkpoints.interval.seconds</code>: frequency at which checkpoints are emitted (default: 60, every minute)
-    <li><code>checkpoints.topic.replication.factor</code>: replication factor of MirrorMaker's internal checkpoints topics (default: 3)
-    <li><code>sync.group.offsets.enabled</code>: whether to periodically write the translated offsets of replicated consumer groups (in the source cluster) to <code>__consumer_offsets</code> topic in target cluster, as long as no active consumers in that group are connected to the target cluster (default: false)
-    <li><code>sync.group.offsets.interval.seconds</code>: frequency at which consumer group offsets are synced (default: 60, every minute)
-    <li><code>offset-syncs.topic.replication.factor</code>: replication factor of MirrorMaker's internal offset-sync topics (default: 3)
-  </ul>
 
   <h5 class="anchor-heading"><a id="georeplication-flow-secure" class="anchor-link"></a><a href="#georeplication-flow-secure">Securing Replication Flows</a></h5>
 
@@ -892,7 +874,7 @@ A->B.topics = bar
   </p>
 
   <p>
-    It is therefore important to keep the MirrorMaker configration consistent across replication flows to the same target cluster. This can be achieved, for example, through automation tooling or by using a single, shared MirrorMaker configuration file for your entire organization.
+    It is therefore important to keep the MirrorMaker configuration consistent across replication flows to the same target cluster. This can be achieved, for example, through automation tooling or by using a single, shared MirrorMaker configuration file for your entire organization.
   </p>
 
   <h5 class="anchor-heading"><a id="georeplication-best-practice" class="anchor-link"></a><a href="#georeplication-best-practice">Best Practice: Consume from Remote, Produce to Local</a></h5>
@@ -1415,7 +1397,7 @@ $ bin/kafka-acls.sh \
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
   <p>When Kafka is configured to use KRaft, the controllers store the cluster metadata in the directory specified in <code>metadata.log.dir</code> -- or the first log directory, if <code>metadata.log.dir</code> is not configured. See the documentation for <code>metadata.log.dir</code> for details.</p>
 
-  <p>If the data in the cluster metdata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
+  <p>If the data in the cluster metadata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-metadata-quorum.sh --bootstrap-server broker_host:port describe --replication
  NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   Status
@@ -1427,7 +1409,7 @@ $ bin/kafka-acls.sh \
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
 
-  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happend when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
+  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
 
   <p>Start the KRaft controller after formatting the log directories.</p>
 
@@ -1779,7 +1761,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>ZooKeeper client request latency</td>
         <td>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</td>
-        <td>Latency in millseconds for ZooKeeper requests from broker.</td>
+        <td>Latency in milliseconds for ZooKeeper requests from broker.</td>
       </tr>
       <tr>
         <td>ZooKeeper connection status</td>
@@ -2447,7 +2429,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>commited-time-ns-total</td>
+        <td>committed-time-ns-total</td>
         <td>The total time the Consumer spent in committed in nanoseconds.</td>
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
@@ -3461,7 +3443,7 @@ for built-in state stores, currently we have:
       </tr>
       <tr>
         <td>hit-ratio-min</td>
-        <td>The mininum cache hit ratio.</td>
+        <td>The minimum cache hit ratio.</td>
         <td>kafka.streams:type=stream-record-cache-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),record-cache-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3482,8 +3464,23 @@ for built-in state stores, currently we have:
 
   <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
   The current stable branch is 3.5. Kafka is regularly updated to include the latest release in the 3.5 series.
+  
+  <h4 class="anchor-heading"><a id="zk_depr" class="anchor-link"></a><a href="#zk_depr">ZooKeeper Deprecation</a></h4>
+  <p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0),
+     which is scheduled to happen no sooner than April 2024. During the deprecation phase, ZooKeeper is still supported for metadata management of Kafka clusters,
+     but it is not recommended for new deployments. There is a small subset of features that remain to be implemented in KRaft
+     see <a href="#kraft_missing">current missing features</a> for more information.</p>
 
-  <h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
+    <h5 class="anchor-heading"><a id="zk_depr_migration" class="anchor-link"></a><a href="#zk_drep_migration">Migration</a></h5>
+    <p>Migration of an existing ZooKeeper based Kafka cluster to KRaft is currently Preview and we expect it to be ready for production usage in version 3.6. Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
+	
+    <h5 class="anchor-heading"><a id="zk_depr_3xsupport" class="anchor-link"></a><a href="#zk_depr_3xsupport">3.x and ZooKeeper Support</a></h5>
+    <p>The final 3.x minor release, that supports ZooKeeper mode, will receive critical bug fixes and security fixes for 12 months after its release.</p>
+	
+    <h5 class="anchor-heading"><a id="zk_depr_timeline" class="anchor-link"></a><a href="#zk_depr_timeline">ZooKeeper and KRaft timeline</a></h5>
+    <p>For details and updates on tentative timelines for ZooKeeper removal and planned KRaft feature releases, refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready">KIP-833</a>.</p>
+
+<h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
   Operationally, we do the following for a healthy ZooKeeper installation:
   <ul>
     <li>Redundancy in the physical/hardware/network layout: try not to put them all in the same rack, decent (but don't go nuts) hardware, try to keep redundant power and network paths, etc. A typical ZooKeeper ensemble has 5 or 7 servers, which tolerates 2 and 3 servers down, respectively. If you have a small deployment, then using 3 servers is acceptable, but keep in mind that you'll only be able to tolerate 1 server down in this case. </li>
@@ -3562,7 +3559,7 @@ CurrentObservers:       [0,1,2]</code></pre>
 
   <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log</code></pre>
 
-  <p>This command decodes and prints the recrods in the a cluster metadata snapshot:</p>
+  <p>This command decodes and prints the records in the a cluster metadata snapshot:</p>
 
   <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000100-0000000001.checkpoint</code></pre>
 

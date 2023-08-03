@@ -204,7 +204,7 @@ public final class ConnectUtils {
         String result = Optional.ofNullable(config.groupId())
                 .orElse("connect");
         String userSpecifiedClientId = config.getString(CLIENT_ID_CONFIG);
-        if (userSpecifiedClientId != null) {
+        if (userSpecifiedClientId != null && !userSpecifiedClientId.trim().isEmpty()) {
             result += "-" + userSpecifiedClientId;
         }
         return result + "-";

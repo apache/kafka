@@ -275,7 +275,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Gets topic partition states for the given partitions.
-   * @param partitions the partitions for which we want ot get states.
+   * @param partitions the partitions for which we want to get states.
    * @return sequence of GetDataResponses whose contexts are the partitions they are associated with.
    */
   def getTopicPartitionStatesRaw(partitions: Seq[TopicPartition]): Seq[GetDataResponse] = {
@@ -599,7 +599,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Adds a topic ID to existing topic and replica assignments
    * @param topicIdReplicaAssignments the TopicIDReplicaAssignments to add a topic ID to
-   * @return the updated TopicIdReplicaAssigments including the newly created topic IDs
+   * @return the updated TopicIdReplicaAssignments including the newly created topic IDs
    */
   def setTopicIds(topicIdReplicaAssignments: collection.Set[TopicIdReplicaAssignment],
                   expectedControllerEpochZkVersion: Int): Set[TopicIdReplicaAssignment] = {

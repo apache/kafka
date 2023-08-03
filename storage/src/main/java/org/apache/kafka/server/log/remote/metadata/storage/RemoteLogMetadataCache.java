@@ -206,7 +206,7 @@ public class RemoteLogMetadataCache {
                                                       (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) ->
                                                               remoteLogLeaderEpochState.handleSegmentWithDeleteSegmentFinishedState(segmentId));
 
-        // Remove the segment's id to metadata mapping because this segment is considered as deleted and it cleared all
+        // Remove the segment's id to metadata mapping because this segment is considered as deleted, and it cleared all
         // the state of this segment in the cache.
         idToSegmentMetadata.remove(remoteLogSegmentMetadata.remoteLogSegmentId());
     }

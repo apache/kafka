@@ -66,7 +66,7 @@ public class KRaftMigrationZkWriter {
     private static final String CREATE_TOPIC = "CreateTopic";
     private static final String UPDATE_TOPIC = "UpdateTopic";
     private static final String DELETE_TOPIC = "DeleteTopic";
-    private static final String UPDATE_PARTITON = "UpdatePartition";
+    private static final String UPDATE_PARTITION = "UpdatePartition";
     private static final String DELETE_PARTITION = "DeletePartition";
     private static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
     private static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
@@ -93,27 +93,34 @@ public class KRaftMigrationZkWriter {
         handleAclsSnapshot(image.acls(), operationConsumer);
     }
 
-    public void handleDelta(
+    public boolean handleDelta(
         MetadataImage previousImage,
         MetadataImage image,
         MetadataDelta delta,
         KRaftMigrationOperationConsumer operationConsumer
     ) {
+        boolean updated = false;
         if (delta.topicsDelta() != null) {
             handleTopicsDelta(previousImage.topics().topicIdToNameView()::get, image.topics(), delta.topicsDelta(), operationConsumer);
+            updated = true;
         }
         if (delta.configsDelta() != null) {
             handleConfigsDelta(image.configs(), delta.configsDelta(), operationConsumer);
+            updated = true;
         }
         if ((delta.clientQuotasDelta() != null) || (delta.scramDelta() != null)) {
             handleClientQuotasDelta(image, delta, operationConsumer);
+            updated = true;
         }
         if (delta.producerIdsDelta() != null) {
             handleProducerIdDelta(delta.producerIdsDelta(), operationConsumer);
+            updated = true;
         }
         if (delta.aclsDelta() != null) {
             handleAclsDelta(image.acls(), delta.aclsDelta(), operationConsumer);
+            updated = true;
         }
+        return updated;
     }
 
     /**
@@ -232,7 +239,7 @@ public class KRaftMigrationZkWriter {
         newPartitions.forEach((topicId, partitionMap) -> {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
-                UPDATE_PARTITON,
+                UPDATE_PARTITION,
                 "Creating additional partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
@@ -242,7 +249,7 @@ public class KRaftMigrationZkWriter {
         changedPartitions.forEach((topicId, partitionMap) -> {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
-                UPDATE_PARTITON,
+                UPDATE_PARTITION,
                 "Updating Partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
@@ -291,11 +298,11 @@ public class KRaftMigrationZkWriter {
                             topicId,
                             topicsImage.getTopic(topicId).partitions(),
                             migrationState));
-                Map<Integer, PartitionRegistration> newPartitions = topicDelta.newPartitions();
-                Map<Integer, PartitionRegistration> changedPartitions = topicDelta.partitionChanges();
+                Map<Integer, PartitionRegistration> newPartitions = new HashMap<>(topicDelta.newPartitions());
+                Map<Integer, PartitionRegistration> changedPartitions = new HashMap<>(topicDelta.partitionChanges());
                 if (!newPartitions.isEmpty()) {
                     operationConsumer.accept(
-                        UPDATE_PARTITON,
+                        UPDATE_PARTITION,
                         "Create new partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().createTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), newPartitions),
@@ -306,7 +313,7 @@ public class KRaftMigrationZkWriter {
                     // Need a final for the lambda
                     final Map<Integer, PartitionRegistration> finalChangedPartitions = changedPartitions;
                     operationConsumer.accept(
-                        UPDATE_PARTITON,
+                        UPDATE_PARTITION,
                         "Updating Partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().updateTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), finalChangedPartitions),

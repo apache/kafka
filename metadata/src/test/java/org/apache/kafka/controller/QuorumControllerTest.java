@@ -36,7 +36,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -88,7 +87,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
-import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -124,6 +122,10 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
+import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.brokerFeatures;
+import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
+import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
+import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -139,39 +141,6 @@ public class QuorumControllerTest {
 
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
             fromVersion(MetadataVersion.IBP_3_3_IV3, "test-provided bootstrap");
-
-    static class MockControllerMetrics extends QuorumControllerMetrics {
-        final AtomicBoolean closed = new AtomicBoolean(false);
-
-        MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM);
-        }
-
-        @Override
-        public void close() {
-            super.close();
-            closed.set(true);
-        }
-    }
-
-    /**
-     * Test creating a new QuorumController and closing it.
-     */
-    @Test
-    public void testCreateAndClose() throws Throwable {
-        MockControllerMetrics metrics = new MockControllerMetrics();
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setMetrics(metrics);
-                }).
-                build()
-        ) {
-        }
-        assertTrue(metrics.closed.get(), "metrics were not closed");
-    }
 
     /**
      * Test setting some configuration values and reading them back.
@@ -610,22 +579,6 @@ public class QuorumControllerTest {
         }
     }
 
-    private BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
-        return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latest());
-    }
-
-    private BrokerRegistrationRequestData.FeatureCollection brokerFeatures(
-        MetadataVersion minVersion,
-        MetadataVersion maxVersion
-    ) {
-        BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
-        features.add(new BrokerRegistrationRequestData.Feature()
-            .setName(MetadataVersion.FEATURE_NAME)
-            .setMinSupportedVersion(minVersion.featureLevel())
-            .setMaxSupportedVersion(maxVersion.featureLevel()));
-        return features;
-    }
-
     private RegisterBrokerRecord.BrokerFeatureCollection registrationFeatures(
         MetadataVersion minVersion,
         MetadataVersion maxVersion
@@ -782,7 +735,7 @@ public class QuorumControllerTest {
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
-            CountDownLatch countDownLatch = controller.pause();
+            CountDownLatch countDownLatch = pause(controller);
             long now = controller.time().nanoseconds();
             ControllerRequestContext context0 = new ControllerRequestContext(
                 new RequestHeaderData(), KafkaPrincipal.ANONYMOUS, OptionalLong.of(now));
@@ -846,7 +799,7 @@ public class QuorumControllerTest {
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
-            CountDownLatch countDownLatch = controller.pause();
+            CountDownLatch countDownLatch = pause(controller);
             CompletableFuture<CreateTopicsResponseData> createFuture =
                 controller.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().
                     setTimeoutMs(120000), Collections.emptySet());
@@ -891,7 +844,7 @@ public class QuorumControllerTest {
         ) {
             QuorumController controller = controlEnv.activeController();
 
-            Map<Integer, Long> brokerEpochs = registerBrokers(controller, numBrokers);
+            Map<Integer, Long> brokerEpochs = registerBrokersAndUnfence(controller, numBrokers);
 
             // Create a lot of partitions
             List<CreatableReplicaAssignment> partitions = IntStream
@@ -980,62 +933,6 @@ public class QuorumControllerTest {
         }
     }
 
-    private Map<Integer, Long> registerBrokers(QuorumController controller, int numBrokers) throws Exception {
-        Map<Integer, Long> brokerEpochs = new HashMap<>();
-        for (int brokerId = 0; brokerId < numBrokers; brokerId++) {
-            BrokerRegistrationReply reply = controller.registerBroker(ANONYMOUS_CONTEXT,
-                new BrokerRegistrationRequestData()
-                    .setBrokerId(brokerId)
-                    .setRack(null)
-                    .setClusterId(controller.clusterId())
-                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV0))
-                    .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
-                    .setListeners(
-                        new ListenerCollection(
-                            Arrays.asList(
-                                new Listener()
-                                .setName("PLAINTEXT")
-                                .setHost("localhost")
-                                .setPort(9092 + brokerId)
-                                ).iterator()
-                            )
-                        )
-                    ).get();
-            brokerEpochs.put(brokerId, reply.epoch());
-
-            // Send heartbeat to unfence
-            controller.processBrokerHeartbeat(ANONYMOUS_CONTEXT,
-                new BrokerHeartbeatRequestData()
-                    .setWantFence(false)
-                    .setBrokerEpoch(brokerEpochs.get(brokerId))
-                    .setBrokerId(brokerId)
-                    .setCurrentMetadataOffset(100000L)
-            ).get();
-        }
-
-        return brokerEpochs;
-    }
-
-    private void sendBrokerHeartbeat(
-        QuorumController controller,
-        List<Integer> brokers,
-        Map<Integer, Long> brokerEpochs
-    ) throws Exception {
-        if (brokers.isEmpty()) {
-            return;
-        }
-        for (Integer brokerId : brokers) {
-            BrokerHeartbeatReply reply = controller.processBrokerHeartbeat(ANONYMOUS_CONTEXT,
-                new BrokerHeartbeatRequestData()
-                    .setWantFence(false)
-                    .setBrokerEpoch(brokerEpochs.get(brokerId))
-                    .setBrokerId(brokerId)
-                    .setCurrentMetadataOffset(100000)
-            ).get();
-            assertEquals(new BrokerHeartbeatReply(true, false, false, false), reply);
-        }
-    }
-
     @Test
     public void testConfigResourceExistenceChecker() throws Throwable {
         try (
@@ -1048,7 +945,7 @@ public class QuorumControllerTest {
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
-            registerBrokers(active, 5);
+            registerBrokersAndUnfence(active, 5);
             active.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().
                 setTopics(new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").
@@ -1508,7 +1405,8 @@ public class QuorumControllerTest {
 
         featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());    }
+        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
+    }
 
     @Test
     public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {

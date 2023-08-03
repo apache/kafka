@@ -367,6 +367,18 @@ public class ConnectorsResource implements ConnectResource {
         return Response.ok().entity(msg).build();
     }
 
+    @DELETE
+    @Path("/{connector}/offsets")
+    @Operation(summary = "Reset the offsets for the specified connector")
+    public Response resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                          final @Context HttpHeaders headers, final @PathParam("connector") String connector) throws Throwable {
+        FutureCallback<Message> cb = new FutureCallback<>();
+        herder.resetConnectorOffsets(connector, cb);
+        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
+                new TypeReference<Message>() { }, new IdentityTranslator<>(), forward);
+        return Response.ok().entity(msg).build();
+    }
+
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig
     // object. Throw BadRequestException on mismatch, otherwise put connectorName in config
     private void checkAndPutConnectorConfigName(String connectorName, Map<String, String> connectorConfig) {

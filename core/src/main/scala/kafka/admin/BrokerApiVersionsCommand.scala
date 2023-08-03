@@ -228,7 +228,7 @@ object BrokerApiVersionsCommand {
           CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
           ConfigDef.Type.STRING,
           CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-          in(Utils.enumOptions(classOf[SecurityProtocol]):_*),
+          ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(classOf[SecurityProtocol]):_*),
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .define(

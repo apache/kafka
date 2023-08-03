@@ -576,8 +576,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def hasOngoingTransaction(producerId: Long): Boolean = {
-    leaderLogIfLocal.exists(leaderLog => leaderLog.hasOngoingTransaction(producerId))
+  // Returns a verification guard object if we need to verify. This starts or continues the verification process. Otherwise return null.
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = {
+    leaderLogIfLocal match {
+      case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
+      case None => throw new NotLeaderOrFollowerException();
+    }
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition
@@ -994,7 +998,14 @@ class Partition(val topicPartition: TopicPartition,
       // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
       //    request broker epoch is -1 which bypasses the epoch verification.
       case kRaftMetadataCache: KRaftMetadataCache =>
-        val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch
+        val mayBeReplica = getReplica(followerReplicaId)
+        // The topic is already deleted and we don't have any replica information. In this case, we can return false
+        // so as to avoid NPE
+        if (mayBeReplica.isEmpty) {
+          warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
+          return false
+        }
+        val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
         val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
@@ -1170,10 +1181,14 @@ class Partition(val topicPartition: TopicPartition,
           partitionState match {
             case currentState: CommittedPartitionState if outOfSyncReplicaIds.nonEmpty =>
               val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
-                val logEndOffsetMessage = getReplica(replicaId)
-                  .map(_.stateSnapshot.logEndOffset.toString)
+                val replicaStateSnapshot = getReplica(replicaId).map(_.stateSnapshot)
+                val logEndOffsetMessage = replicaStateSnapshot
+                  .map(_.logEndOffset.toString)
                   .getOrElse("unknown")
-                s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
+                val lastCaughtUpTimeMessage = replicaStateSnapshot
+                  .map(_.lastCaughtUpTimeMs.toString)
+                  .getOrElse("unknown")
+                s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage, lastCaughtUpTimeMs: $lastCaughtUpTimeMessage)"
               }.mkString(" ")
               val newIsrLog = (partitionState.isr -- outOfSyncReplicaIds).mkString(",")
               info(s"Shrinking ISR from ${partitionState.isr.mkString(",")} to $newIsrLog. " +
@@ -1275,7 +1290,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal): LogAppendInfo = {
+                            requestLocal: RequestLocal, verificationGuard: Object = null): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1289,7 +1304,7 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion, requestLocal)
+            interBrokerProtocolVersion, requestLocal, verificationGuard)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
