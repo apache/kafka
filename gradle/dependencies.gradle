@@ -148,7 +148,7 @@ versions += [
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",
   zinc: "1.9.2",
-  zookeeper: "3.6.4",
+  zookeeper: "3.8.2",
   zstd: "1.5.5-1"
 ]
 

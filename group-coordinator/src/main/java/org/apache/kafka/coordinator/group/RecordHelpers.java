@@ -131,13 +131,24 @@ public class RecordHelpers {
         Map<String, TopicMetadata> newSubscriptionMetadata
     ) {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
+        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
+            List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
+            // If the partition rack information map is empty, store an empty list in the record.
+            if (!topicMetadata.partitionRacks().isEmpty()) {
+                topicMetadata.partitionRacks().forEach((partition, racks) ->
+                    partitionMetadata.add(new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
+                        .setPartition(partition)
+                        .setRacks(new ArrayList<>(racks))
+                    )
+                );
+            }
             value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-            )
-        );
+                .setPartitionMetadata(partitionMetadata)
+            );
+        });
 
         return new Record(
             new ApiMessageAndVersion(

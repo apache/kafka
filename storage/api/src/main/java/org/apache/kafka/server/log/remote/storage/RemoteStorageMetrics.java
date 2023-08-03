@@ -33,6 +33,12 @@ public class RemoteStorageMetrics {
     public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
     public static final String TASK_QUEUE_SIZE = "TaskQueueSize";
     public static final String AVG_IDLE_PERCENT = "AvgIdlePercent";
+    val RemoteCopyBytesPerSec = "RemoteCopyBytesPerSec"
+    val RemoteFetchBytesPerSec = "RemoteFetchBytesPerSec"
+    val RemoteFetchRequestsPerSec = "RemoteFetchRequestsPerSec"
+    val RemoteCopyRequestsPerSec = "RemoteCopyRequestsPerSec"
+    val FailedRemoteFetchRequestsPerSec = "RemoteFetchErrorsPerSec"
+    val FailedRemoteCopyRequestsPerSec = "RemoteCopyErrorsPerSec"
     public static final String REMOTE_BYTES_OUT_PER_SEC = "RemoteBytesOutPerSec";
     public static final String REMOTE_BYTES_IN_PER_SEC = "RemoteBytesInPerSec";
     public static final String REMOTE_READ_REQUESTS_PER_SEC = "RemoteReadRequestsPerSec";

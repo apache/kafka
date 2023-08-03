@@ -55,13 +55,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class ReplicatedGroupCoordinatorTest {
+public class GroupCoordinatorShardTest {
 
     @Test
     public void testConsumerGroupHeartbeat() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -85,7 +85,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testCommitOffset() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -109,7 +109,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayOffsetCommit() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -134,7 +134,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayOffsetCommitWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -158,7 +158,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -178,7 +178,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -197,7 +197,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupPartitionMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -217,7 +217,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupPartitionMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -236,7 +236,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupMemberMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -256,7 +256,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupMemberMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -275,7 +275,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupTargetAssignmentMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -295,7 +295,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupTargetAssignmentMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -314,7 +314,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupTargetAssignmentMember() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -334,7 +334,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupTargetAssignmentMemberKeyWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -353,7 +353,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupCurrentMemberAssignment() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -373,7 +373,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayConsumerGroupCurrentMemberAssignmentWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -392,7 +392,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayKeyCannotBeNull() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -404,7 +404,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayWithUnsupportedVersion() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -423,7 +423,7 @@ public class ReplicatedGroupCoordinatorTest {
         MetadataImage image = MetadataImage.EMPTY;
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -442,7 +442,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayGroupMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -462,7 +462,7 @@ public class ReplicatedGroupCoordinatorTest {
     public void testReplayGroupMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        ReplicatedGroupCoordinator coordinator = new ReplicatedGroupCoordinator(
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             groupMetadataManager,
             offsetMetadataManager
         );

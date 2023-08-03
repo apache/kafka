@@ -17,12 +17,13 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -30,6 +31,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -90,6 +93,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
+import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -126,11 +130,10 @@ public class GroupMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private CoordinatorTimer<Void, Record> timer = null;
-        private List<PartitionAssignor> assignors = null;
+        private List<PartitionAssignor> consumerGroupAssignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
-        private TopicPartition topicPartition = null;
         private MetadataImage metadataImage = null;
         private int consumerGroupSessionTimeoutMs = 45000;
         private int genericGroupMaxSize = Integer.MAX_VALUE;
@@ -159,8 +162,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withAssignors(List<PartitionAssignor> assignors) {
-            this.assignors = assignors;
+        Builder withConsumerGroupAssignors(List<PartitionAssignor> consumerGroupAssignors) {
+            this.consumerGroupAssignors = consumerGroupAssignors;
             return this;
         }
 
@@ -186,11 +189,6 @@ public class GroupMetadataManager {
 
         Builder withMetadataImage(MetadataImage metadataImage) {
             this.metadataImage = metadataImage;
-            return this;
-        }
-
-        Builder withTopicPartition(TopicPartition tp) {
-            this.topicPartition = tp;
             return this;
         }
 
@@ -227,20 +225,15 @@ public class GroupMetadataManager {
 
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
-            if (assignors == null || assignors.isEmpty())
+            if (consumerGroupAssignors == null || consumerGroupAssignors.isEmpty())
                 throw new IllegalArgumentException("Assignors must be set before building.");
 
-            if (topicPartition == null) {
-                throw new IllegalStateException("TopicPartition must be set before building.");
-            }
-
             return new GroupMetadataManager(
-                topicPartition,
                 snapshotRegistry,
                 logContext,
                 time,
                 timer,
-                assignors,
+                consumerGroupAssignors,
                 metadataImage,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
@@ -254,11 +247,6 @@ public class GroupMetadataManager {
             );
         }
     }
-
-    /**
-     * The topic partition associated with the metadata manager.
-     */
-    private final TopicPartition topicPartition;
 
     /**
      * The log context.
@@ -365,7 +353,6 @@ public class GroupMetadataManager {
     private final int genericGroupMaxSessionTimeoutMs;
 
     private GroupMetadataManager(
-        TopicPartition topicPartition,
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
@@ -389,7 +376,6 @@ public class GroupMetadataManager {
         this.timer = timer;
         this.metadataImage = metadataImage;
         this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
-        this.topicPartition = topicPartition;
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -787,7 +773,8 @@ public class GroupMetadataManager {
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 member,
                 updatedMember,
-                metadataImage.topics()
+                metadataImage.topics(),
+                metadataImage.cluster()
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -937,7 +924,8 @@ public class GroupMetadataManager {
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
             member,
             null,
-            metadataImage.topics()
+            metadataImage.topics(),
+            metadataImage.cluster()
         );
 
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -1968,8 +1956,7 @@ public class GroupMetadataManager {
         } else {
             group.initNextGeneration();
             if (group.isInState(EMPTY)) {
-                log.info("Group {} with generation {} is now empty ({}-{})",
-                    groupId, group.generationId(), topicPartition.topic(), topicPartition.partition());
+                log.info("Group {} with generation {} is now empty.", groupId, group.generationId());
 
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
                 appendFuture.whenComplete((__, t) -> {
@@ -1987,8 +1974,8 @@ public class GroupMetadataManager {
                 return new CoordinatorResult<>(records, appendFuture);
 
             } else {
-                log.info("Stabilized group {} generation {} ({}) with {} members",
-                    groupId, group.generationId(), topicPartition, group.size());
+                log.info("Stabilized group {} generation {} with {} members.",
+                    groupId, group.generationId(), group.size());
 
                 // Complete the awaiting join group response future for all the members after rebalancing
                 group.allMembers().forEach(member -> {
@@ -2267,9 +2254,8 @@ public class GroupMetadataManager {
 
         group.transitionTo(PREPARING_REBALANCE);
 
-        log.info("Preparing to rebalance group {} in state {} with old generation {} ({}-{}) (reason: {})",
-            group.groupId(), group.currentState(), group.generationId(),
-            topicPartition.topic(), topicPartition.partition(), reason);
+        log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
+            group.groupId(), group.currentState(), group.generationId(), reason);
 
         return isInitialRebalance ? EMPTY_RESULT : maybeCompleteJoinElseSchedule(group);
     }
@@ -2832,6 +2818,77 @@ public class GroupMetadataManager {
                 break;
             default:
                 throw new IllegalStateException("Unknown group state: " + group.stateAsString());
+        }
+    }
+
+    /**
+     * Handle a generic group HeartbeatRequest.
+     *
+     * @param context        The request context.
+     * @param request        The actual Heartbeat request.
+     *
+     * @return The Heartbeat response.
+     */
+    public HeartbeatResponseData genericGroupHeartbeat(
+        RequestContext context,
+        HeartbeatRequestData request
+    ) {
+        GenericGroup group = getOrMaybeCreateGenericGroup(request.groupId(), false);
+
+        validateGenericGroupHeartbeat(group, request.memberId(), request.groupInstanceId(), request.generationId());
+
+        switch (group.currentState()) {
+            case EMPTY:
+                return new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+
+            case PREPARING_REBALANCE:
+                rescheduleGenericGroupMemberHeartbeat(group, group.member(request.memberId()));
+                return new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
+
+            case COMPLETING_REBALANCE:
+            case STABLE:
+                // Consumers may start sending heartbeats after join-group response, while the group
+                // is in CompletingRebalance state. In this case, we should treat them as
+                // normal heartbeat requests and reset the timer
+                rescheduleGenericGroupMemberHeartbeat(group, group.member(request.memberId()));
+                return new HeartbeatResponseData();
+
+            default:
+                throw new IllegalStateException("Reached unexpected state " +
+                    group.currentState() + " for group " + group.groupId());
+        }
+    }
+
+    /**
+     * Validates a generic group heartbeat request.
+     *
+     * @param group              The group.
+     * @param memberId           The member id.
+     * @param groupInstanceId    The group instance id.
+     * @param generationId       The generation id.
+     *
+     * @throws CoordinatorNotAvailableException If group is Dead.
+     * @throws IllegalGenerationException       If the generation id in the request and the generation id of the
+     *                                          group does not match.
+     */
+    private void validateGenericGroupHeartbeat(
+        GenericGroup group,
+        String memberId,
+        String groupInstanceId,
+        int generationId
+    ) throws CoordinatorNotAvailableException, IllegalGenerationException {
+        if (group.isInState(DEAD)) {
+            throw COORDINATOR_NOT_AVAILABLE.exception();
+        } else {
+            group.validateMember(
+                memberId,
+                groupInstanceId,
+                "heartbeat"
+            );
+
+            if (generationId != group.generationId()) {
+                throw ILLEGAL_GENERATION.exception();
+            }
         }
     }
 

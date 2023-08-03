@@ -18,17 +18,21 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -79,8 +83,8 @@ import static org.mockito.Mockito.when;
 public class GroupCoordinatorServiceTest {
 
     @SuppressWarnings("unchecked")
-    private CoordinatorRuntime<ReplicatedGroupCoordinator, Record> mockRuntime() {
-        return (CoordinatorRuntime<ReplicatedGroupCoordinator, Record>) mock(CoordinatorRuntime.class);
+    private CoordinatorRuntime<GroupCoordinatorShard, Record> mockRuntime() {
+        return (CoordinatorRuntime<GroupCoordinatorShard, Record>) mock(CoordinatorRuntime.class);
     }
 
     private GroupCoordinatorConfig createConfig() {
@@ -102,7 +106,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testStartupShutdown() throws Exception {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -117,7 +121,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testConsumerGroupHeartbeatWhenNotStarted() {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -138,7 +142,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testConsumerGroupHeartbeat() throws ExecutionException, InterruptedException, TimeoutException {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -186,7 +190,7 @@ public class GroupCoordinatorServiceTest {
         short expectedErrorCode,
         String expectedErrorMessage
     ) throws ExecutionException, InterruptedException, TimeoutException {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -219,7 +223,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testPartitionFor() {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -236,7 +240,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testGroupMetadataTopicConfigs() {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -253,7 +257,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testOnElection() {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -274,7 +278,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testOnResignation() {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -295,7 +299,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testJoinGroup() {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -326,7 +330,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testJoinGroupWithException() throws Exception {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -359,7 +363,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testJoinGroupInvalidGroupId() throws Exception {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -404,7 +408,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testSyncGroup() {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -435,7 +439,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testSyncGroupWithException() throws Exception {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -469,7 +473,7 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testSyncGroupInvalidGroupId() throws Exception {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -494,5 +498,101 @@ public class GroupCoordinatorServiceTest {
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
 
         assertEquals(expectedResponse, response.get());
+    }
+
+    @Test
+    public void testHeartbeat() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new HeartbeatResponseData()
+        ));
+
+        CompletableFuture<HeartbeatResponseData> future = service.heartbeat(
+            requestContext(ApiKeys.HEARTBEAT),
+            request
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(new HeartbeatResponseData(), future.get());
+    }
+
+    @Test
+    public void testHeartbeatCoordinatorNotAvailableException() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new CoordinatorLoadInProgressException(null)
+        ));
+
+        CompletableFuture<HeartbeatResponseData> future = service.heartbeat(
+            requestContext(ApiKeys.HEARTBEAT),
+            request
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(new HeartbeatResponseData(), future.get());
+    }
+
+    @Test
+    public void testHeartbeatCoordinatorException() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new RebalanceInProgressException()
+        ));
+
+        CompletableFuture<HeartbeatResponseData> future = service.heartbeat(
+            requestContext(ApiKeys.HEARTBEAT),
+            request
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(
+            new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()),
+            future.get()
+        );
     }
 }

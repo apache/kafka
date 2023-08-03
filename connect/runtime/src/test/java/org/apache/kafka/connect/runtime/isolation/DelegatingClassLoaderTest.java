@@ -61,7 +61,8 @@ public class DelegatingClassLoaderTest {
         SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
         // Lie to the DCL that this arbitrary class is a connector, since all real connector classes we have access to
         // are forced to be non-isolated by PluginUtils.shouldLoadInIsolation.
-        pluginDesc = new PluginDesc<>((Class<? extends SinkConnector>) ARBITRARY_CLASS, null, pluginLoader);
+        when(pluginLoader.location()).thenReturn("some-location");
+        pluginDesc = new PluginDesc<>((Class<? extends SinkConnector>) ARBITRARY_CLASS, null, PluginType.SINK, pluginLoader);
         assertTrue(PluginUtils.shouldLoadInIsolation(pluginDesc.className()));
         sinkConnectors.add(pluginDesc);
         scanResult = new PluginScanResult(
