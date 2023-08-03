@@ -287,12 +287,12 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   configOpt.ifPresent(config =>
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       metricTypeMap.putAll(Map(
-        RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC, "bytes"),
-        RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC, "bytes"),
-        RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC, "requests"),
-        RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC, "requests"),
-        RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC, "requests"),
-        RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC, "requests")
+        RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC, "bytes"),
+        RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC, "bytes"),
+        RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC, "requests"),
+        RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC -> MeterWrapper(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC, "requests"),
+        RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC, "requests"),
+        RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC, "requests")
       ).asJava)
     })
 
@@ -350,17 +350,17 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
-  def remoteBytesOutRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC).meter()
+  def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC).meter()
 
-  def remoteBytesInRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC).meter()
+  def remoteFetchBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC).meter()
 
-  def remoteReadRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC).meter()
+  def remoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC).meter()
 
-  def remoteWriteRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC).meter()
+  def remoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC).meter()
 
-  def failedRemoteReadRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC).meter()
+  def failedRemoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC).meter()
 
-  def failedRemoteWriteRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC).meter()
+  def failedRemoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC).meter()
 
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)
@@ -438,12 +438,12 @@ class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Op
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
-      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_BYTES_OUT_PER_SEC)
-      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_BYTES_IN_PER_SEC)
-      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_READ_REQUESTS_PER_SEC)
-      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_WRITE_REQUESTS_PER_SEC)
-      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_READ_REQUESTS_PER_SEC)
-      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_WRITE_REQUESTS_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC)
     }
   }
 

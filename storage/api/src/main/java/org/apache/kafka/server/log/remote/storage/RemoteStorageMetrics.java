@@ -33,33 +33,27 @@ public class RemoteStorageMetrics {
     public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
     public static final String TASK_QUEUE_SIZE = "TaskQueueSize";
     public static final String AVG_IDLE_PERCENT = "AvgIdlePercent";
-    val RemoteCopyBytesPerSec = "RemoteCopyBytesPerSec"
-    val RemoteFetchBytesPerSec = "RemoteFetchBytesPerSec"
-    val RemoteFetchRequestsPerSec = "RemoteFetchRequestsPerSec"
-    val RemoteCopyRequestsPerSec = "RemoteCopyRequestsPerSec"
-    val FailedRemoteFetchRequestsPerSec = "RemoteFetchErrorsPerSec"
-    val FailedRemoteCopyRequestsPerSec = "RemoteCopyErrorsPerSec"
-    public static final String REMOTE_BYTES_OUT_PER_SEC = "RemoteBytesOutPerSec";
-    public static final String REMOTE_BYTES_IN_PER_SEC = "RemoteBytesInPerSec";
-    public static final String REMOTE_READ_REQUESTS_PER_SEC = "RemoteReadRequestsPerSec";
-    public static final String REMOTE_WRITE_REQUESTS_PER_SEC = "RemoteWriteRequestsPerSec";
-    public static final String FAILED_REMOTE_READ_REQUESTS_PER_SEC = "RemoteReadErrorsPerSec";
-    public static final String FAILED_REMOTE_WRITE_REQUESTS_PER_SEC = "RemoteWriteErrorsPerSec";
+    public static final String REMOTE_COPY_BYTES_PER_SEC = "RemoteCopyBytesPerSec";
+    public static final String REMOTE_FETCH_BYTES_PER_SEC = "RemoteFetchBytesPerSec";
+    public static final String REMOTE_FETCH_REQUESTS_PER_SEC = "RemoteFetchRequestsPerSec";
+    public static final String REMOTE_COPY_REQUESTS_PER_SEC = "RemoteCopyRequestsPerSec";
+    public static final String FAILED_REMOTE_FETCH_PER_SEC = "RemoteFetchErrorsPerSec";
+    public static final String FAILED_REMOTE_COPY_PER_SEC = "RemoteCopyErrorsPerSec";
     public static final String REMOTE_LOG_READER_TASK_QUEUE_SIZE = REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE;
     public static final String REMOTE_LOG_READER_AVG_IDLE_PERCENT = REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT;
 
-    public final static MetricName REMOTE_BYTES_OUT_PER_SEC_METRIC = getMetricName(
-            "kafka.server", "BrokerTopicMetrics", REMOTE_BYTES_OUT_PER_SEC);
-    public final static MetricName REMOTE_BYTES_IN_PER_SEC_METRIC = getMetricName(
-            "kafka.server", "BrokerTopicMetrics", REMOTE_BYTES_IN_PER_SEC);
-    public final static MetricName REMOTE_READ_REQUESTS_PER_SEC_METRIC = getMetricName(
-            "kafka.server", "BrokerTopicMetrics", REMOTE_READ_REQUESTS_PER_SEC);
-    public final static MetricName REMOTE_WRITE_REQUESTS_PER_SEC_METRIC = getMetricName(
-            "kafka.server", "BrokerTopicMetrics", REMOTE_WRITE_REQUESTS_PER_SEC);
-    public final static MetricName FAILED_REMOTE_READ_REQUESTS_PER_SEC_METRIC = getMetricName(
-            "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_READ_REQUESTS_PER_SEC);
-    public final static MetricName FAILED_REMOTE_WRITE_REQUESTS_PER_SEC_METRIC = getMetricName(
-            "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_WRITE_REQUESTS_PER_SEC);
+    public final static MetricName REMOTE_COPY_BYTES_PER_SEC_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_BYTES_PER_SEC);
+    public final static MetricName REMOTE_FETCH_BYTES_PER_SEC_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", REMOTE_FETCH_BYTES_PER_SEC);
+    public final static MetricName REMOTE_FETCH_REQUESTS_PER_SEC_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", REMOTE_FETCH_REQUESTS_PER_SEC);
+    public final static MetricName REMOTE_COPY_REQUESTS_PER_SEC_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_REQUESTS_PER_SEC);
+    public final static MetricName FAILED_REMOTE_FETCH_PER_SEC_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_FETCH_PER_SEC);
+    public final static MetricName FAILED_REMOTE_COPY_PER_SEC_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_COPY_PER_SEC);
     public final static MetricName REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC = getMetricName(
             "kafka.log.remote", "RemoteLogManager", REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
     public final static MetricName REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC = getMetricName(
@@ -69,12 +63,12 @@ public class RemoteStorageMetrics {
 
     public static Set<MetricName> allMetrics() {
         Set<MetricName> metrics = new HashSet<>();
-        metrics.add(REMOTE_BYTES_OUT_PER_SEC_METRIC);
-        metrics.add(REMOTE_BYTES_IN_PER_SEC_METRIC);
-        metrics.add(REMOTE_READ_REQUESTS_PER_SEC_METRIC);
-        metrics.add(REMOTE_WRITE_REQUESTS_PER_SEC_METRIC);
-        metrics.add(FAILED_REMOTE_READ_REQUESTS_PER_SEC_METRIC);
-        metrics.add(FAILED_REMOTE_WRITE_REQUESTS_PER_SEC_METRIC);
+        metrics.add(REMOTE_COPY_BYTES_PER_SEC_METRIC);
+        metrics.add(REMOTE_FETCH_BYTES_PER_SEC_METRIC);
+        metrics.add(REMOTE_FETCH_REQUESTS_PER_SEC_METRIC);
+        metrics.add(REMOTE_COPY_REQUESTS_PER_SEC_METRIC);
+        metrics.add(FAILED_REMOTE_FETCH_PER_SEC_METRIC);
+        metrics.add(FAILED_REMOTE_COPY_PER_SEC_METRIC);
         metrics.add(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
         metrics.add(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC);
         metrics.add(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC);
@@ -84,12 +78,12 @@ public class RemoteStorageMetrics {
 
     public static Set<MetricName> brokerTopicStatsMetrics() {
         Set<MetricName> metrics = new HashSet<>();
-        metrics.add(REMOTE_BYTES_OUT_PER_SEC_METRIC);
-        metrics.add(REMOTE_BYTES_IN_PER_SEC_METRIC);
-        metrics.add(REMOTE_READ_REQUESTS_PER_SEC_METRIC);
-        metrics.add(REMOTE_WRITE_REQUESTS_PER_SEC_METRIC);
-        metrics.add(FAILED_REMOTE_READ_REQUESTS_PER_SEC_METRIC);
-        metrics.add(FAILED_REMOTE_WRITE_REQUESTS_PER_SEC_METRIC);
+        metrics.add(REMOTE_COPY_BYTES_PER_SEC_METRIC);
+        metrics.add(REMOTE_FETCH_BYTES_PER_SEC_METRIC);
+        metrics.add(REMOTE_FETCH_REQUESTS_PER_SEC_METRIC);
+        metrics.add(REMOTE_COPY_REQUESTS_PER_SEC_METRIC);
+        metrics.add(FAILED_REMOTE_FETCH_PER_SEC_METRIC);
+        metrics.add(FAILED_REMOTE_COPY_PER_SEC_METRIC);
 
         return metrics;
     }
