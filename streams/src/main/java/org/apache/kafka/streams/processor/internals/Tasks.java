@@ -115,7 +115,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public boolean pendingTasksToRecycleExist() {
+    public boolean hasPendingTasksToRecycle() {
         return pendingUpdateActions.values().stream().anyMatch(action -> action.getAction() == Action.RECYCLE);
     }
 

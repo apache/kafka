@@ -885,7 +885,7 @@ public class TaskManagerTest {
         when(tasks.removePendingActiveTaskToSuspend(statefulTask.id())).thenReturn(true);
         when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(statefulTask));
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         replay(consumer);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
@@ -961,7 +961,7 @@ public class TaskManagerTest {
     public void shouldReturnFalseFromCheckStateUpdaterIfActiveTasksAreNotRestoringButPendingTasksToRecycle() {
         when(stateUpdater.restoresActiveTasks()).thenReturn(false);
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.pendingTasksToRecycleExist()).thenReturn(true);
+        when(tasks.hasPendingTasksToRecycle()).thenReturn(true);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         assertFalse(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
@@ -971,7 +971,7 @@ public class TaskManagerTest {
     public void shouldReturnTrueFromCheckStateUpdaterIfActiveTasksAreNotRestoringAndNoPendingTasksToRecycle() {
         when(stateUpdater.restoresActiveTasks()).thenReturn(false);
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.pendingTasksToRecycleExist()).thenReturn(false);
+        when(tasks.hasPendingTasksToRecycle()).thenReturn(false);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));

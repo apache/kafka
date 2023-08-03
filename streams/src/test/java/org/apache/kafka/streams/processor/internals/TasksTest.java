@@ -127,24 +127,24 @@ public class TasksTest {
 
     @Test
     public void shouldVerifyIfPendingTaskToRecycleExist() {
-        assertFalse(tasks.pendingTasksToRecycleExist());
+        assertFalse(tasks.hasPendingTasksToRecycle());
         tasks.addPendingTaskToRecycle(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
-        assertTrue(tasks.pendingTasksToRecycleExist());
+        assertTrue(tasks.hasPendingTasksToRecycle());
 
         tasks.addPendingTaskToRecycle(TASK_1_0, mkSet(TOPIC_PARTITION_A_1));
-        assertTrue(tasks.pendingTasksToRecycleExist());
+        assertTrue(tasks.hasPendingTasksToRecycle());
 
         tasks.addPendingTaskToCloseClean(TASK_0_1);
         tasks.addPendingTaskToCloseDirty(TASK_0_2);
         tasks.addPendingTaskToUpdateInputPartitions(TASK_1_1, mkSet(TOPIC_PARTITION_B_0));
         tasks.addPendingActiveTaskToSuspend(TASK_1_2);
-        assertTrue(tasks.pendingTasksToRecycleExist());
+        assertTrue(tasks.hasPendingTasksToRecycle());
 
         tasks.removePendingTaskToRecycle(TASK_0_0);
-        assertTrue(tasks.pendingTasksToRecycleExist());
+        assertTrue(tasks.hasPendingTasksToRecycle());
 
         tasks.removePendingTaskToRecycle(TASK_1_0);
-        assertFalse(tasks.pendingTasksToRecycleExist());
+        assertFalse(tasks.hasPendingTasksToRecycle());
     }
 
     @Test
