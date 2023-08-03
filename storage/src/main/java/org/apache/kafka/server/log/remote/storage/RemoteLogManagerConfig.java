@@ -97,7 +97,7 @@ public final class RemoteLogManagerConfig {
     public static final long DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS = 30 * 1000L;
 
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP = "remote.log.manager.task.retry.backoff.ms";
-    public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC = "The initial amount of wait in milli seconds before the request is retried again.";
+    public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC = "The initial amount of wait in milliseconds before the request is retried again.";
     public static final long DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS = 500L;
 
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP = "remote.log.manager.task.retry.backoff.max.ms";
@@ -121,6 +121,18 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC = "Maximum remote log reader thread pool task queue size. If the task queue " +
             "is full, fetch requests are served with an error.";
     public static final int DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS = 100;
+
+    public static final String LOG_LOCAL_RETENTION_MS_PROP = "log.local.retention.ms";
+    public static final String LOG_LOCAL_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segments before it gets eligible for deletion. " +
+            "Default value is -2, it represents `log.retention.ms` value is to be used. The effective value should always be less than or equal " +
+            "to `log.retention.ms` value.";
+    public static final Long DEFAULT_LOG_LOCAL_RETENTION_MS = -2L;
+
+    public static final String LOG_LOCAL_RETENTION_BYTES_PROP = "log.local.retention.bytes";
+    public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it gets eligible for deletion. " +
+            "Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
+            "less than or equal to `log.retention.bytes` value.";
+    public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
@@ -215,7 +227,19 @@ public final class RemoteLogManagerConfig {
                                   DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS,
                                   atLeast(1),
                                   MEDIUM,
-                                  REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC);
+                                  REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC)
+                  .defineInternal(LOG_LOCAL_RETENTION_MS_PROP,
+                                  LONG,
+                                  DEFAULT_LOG_LOCAL_RETENTION_MS,
+                                  atLeast(DEFAULT_LOG_LOCAL_RETENTION_MS),
+                                  MEDIUM,
+                                  LOG_LOCAL_RETENTION_MS_DOC)
+                  .defineInternal(LOG_LOCAL_RETENTION_BYTES_PROP,
+                                  LONG,
+                                  DEFAULT_LOG_LOCAL_RETENTION_BYTES,
+                                  atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
+                                  MEDIUM,
+                                  LOG_LOCAL_RETENTION_BYTES_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
