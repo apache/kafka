@@ -98,13 +98,7 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
-    public static class Key<R extends ConnectRecord<R>> extends HoistField<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Key<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -121,13 +115,7 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
         }
     }
 
-    public static class Value<R extends ConnectRecord<R>> extends HoistField<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Value<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

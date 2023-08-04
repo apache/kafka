@@ -57,5 +57,4 @@ public class SampleHeaderConverter implements HeaderConverter, Versioned {
     public void configure(Map<String, ?> configs) {
 
     }
-
 }

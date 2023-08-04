@@ -332,13 +332,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public void close() {
     }
 
-    public static class Key<R extends ConnectRecord<R>> extends TimestampConverter<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Key<R extends ConnectRecord<R>> extends TimestampConverter<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -355,13 +349,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         }
     }
 
-    public static class Value<R extends ConnectRecord<R>> extends TimestampConverter<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Value<R extends ConnectRecord<R>> extends TimestampConverter<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

@@ -179,13 +179,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     protected abstract R newRecord(R base, Object value);
 
-    public static final class Key<R extends ConnectRecord<R>> extends MaskField<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static final class Key<R extends ConnectRecord<R>> extends MaskField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -202,13 +196,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         }
     }
 
-    public static final class Value<R extends ConnectRecord<R>> extends MaskField<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static final class Value<R extends ConnectRecord<R>> extends MaskField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

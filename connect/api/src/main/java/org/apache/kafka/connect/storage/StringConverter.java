@@ -108,5 +108,4 @@ public class StringConverter implements Converter, HeaderConverter {
         Utils.closeQuietly(this.serializer, "string converter serializer");
         Utils.closeQuietly(this.deserializer, "string converter deserializer");
     }
-
 }

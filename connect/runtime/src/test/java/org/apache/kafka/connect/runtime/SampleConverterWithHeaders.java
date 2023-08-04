@@ -84,5 +84,4 @@ public class SampleConverterWithHeaders implements Converter, Versioned {
     public byte[] fromConnectData(String topic, Schema schema, Object value) {
         throw new DataException("Headers are required for this converter!");
     }
-
 }

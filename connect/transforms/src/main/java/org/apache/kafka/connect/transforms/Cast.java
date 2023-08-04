@@ -447,12 +447,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         return type;
     }
 
-    public static final class Key<R extends ConnectRecord<R>> extends Cast<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
+    public static final class Key<R extends ConnectRecord<R>> extends Cast<R> {
 
         @Override
         protected Schema operatingSchema(R record) {
@@ -470,12 +465,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         }
     }
 
-    public static final class Value<R extends ConnectRecord<R>> extends Cast<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
+    public static final class Value<R extends ConnectRecord<R>> extends Cast<R> {
 
         @Override
         protected Schema operatingSchema(R record) {

@@ -113,13 +113,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     /**
      * Set the schema name, version or both on the record's key schema.
      */
-    public static class Key<R extends ConnectRecord<R>> extends SetSchemaMetadata<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Key<R extends ConnectRecord<R>> extends SetSchemaMetadata<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -140,13 +134,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     /**
      * Set the schema name, version or both on the record's value schema.
      */
-    public static class Value<R extends ConnectRecord<R>> extends SetSchemaMetadata<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Value<R extends ConnectRecord<R>> extends SetSchemaMetadata<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

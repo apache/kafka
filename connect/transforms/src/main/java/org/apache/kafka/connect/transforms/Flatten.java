@@ -263,13 +263,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
         return prefix.isEmpty() ? fieldName : (prefix + delimiter + fieldName);
     }
 
-    public static class Key<R extends ConnectRecord<R>> extends Flatten<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Key<R extends ConnectRecord<R>> extends Flatten<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -286,13 +280,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
         }
     }
 
-    public static class Value<R extends ConnectRecord<R>> extends Flatten<R> implements Versioned {
-
-        @Override
-        public String version() {
-            return AppInfoParser.getVersion();
-        }
-
+    public static class Value<R extends ConnectRecord<R>> extends Flatten<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

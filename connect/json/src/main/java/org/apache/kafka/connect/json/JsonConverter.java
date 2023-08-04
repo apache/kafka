@@ -739,7 +739,6 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         return typeConverter.convert(schema, jsonValue, config);
     }
 
-
     private interface JsonToConnectTypeConverter {
         Object convert(Schema schema, JsonNode value, JsonConverterConfig config);
     }

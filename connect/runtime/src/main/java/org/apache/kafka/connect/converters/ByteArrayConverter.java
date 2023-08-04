@@ -84,5 +84,4 @@ public class ByteArrayConverter implements Converter, HeaderConverter, Versioned
     public void close() {
         // do nothing
     }
-
 }
