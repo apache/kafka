@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException, UnknownTopicIdException}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -31,6 +30,7 @@ import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
+import unit.kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
@@ -52,16 +52,6 @@ class AbstractFetcherThreadTest {
   }
 
   private def allMetricsNames: Set[String] = KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
-
-  private def mkBatch(baseOffset: Long, leaderEpoch: Int, records: SimpleRecord*): RecordBatch = {
-    MemoryRecords.withRecords(baseOffset, CompressionType.NONE, leaderEpoch, records: _*)
-      .batches.asScala.head
-  }
-
-  private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int): InitialFetchState = {
-    InitialFetchState(topicId = topicId, leader = new BrokerEndPoint(0, "localhost", 9092),
-      initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch)
-  }
 
   @Test
   def testMetricsRemovedOnShutdown(): Unit = {

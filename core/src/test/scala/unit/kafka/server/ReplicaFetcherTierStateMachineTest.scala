@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.errors.FencedLeaderEpochException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.ApiKeys
@@ -25,9 +24,9 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import unit.kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 
 import scala.collection.Map
-import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherTierStateMachineTest {
 
@@ -35,16 +34,6 @@ class ReplicaFetcherTierStateMachineTest {
   val topicIds = Map("topic1" -> Uuid.randomUuid(), "topic2" -> Uuid.randomUuid())
   val version = ApiKeys.FETCH.latestVersion()
   private val failedPartitions = new FailedPartitions
-
-  private def mkBatch(baseOffset: Long, leaderEpoch: Int, records: SimpleRecord*): RecordBatch = {
-    MemoryRecords.withRecords(baseOffset, CompressionType.NONE, leaderEpoch, records: _*)
-      .batches.asScala.head
-  }
-
-  private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int): InitialFetchState = {
-    InitialFetchState(topicId = topicId, leader = new BrokerEndPoint(0, "localhost", 9092),
-      initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch)
-  }
 
   @Test
   def testFollowerFetchMovedToTieredStore(): Unit = {
