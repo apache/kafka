@@ -41,7 +41,6 @@ CORE_LIBS_JAR_NAME = "core-libs"
 CORE_DEPENDANT_TEST_LIBS_JAR_NAME = "core-dependant-testlibs"
 TOOLS_JAR_NAME = "tools"
 TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME = "tools-dependant-libs"
-CLIENTS_JAR_NAME = "clients"
 
 JARS = {
     "dev": {
@@ -49,8 +48,7 @@ JARS = {
         CORE_LIBS_JAR_NAME: "core/build/libs/*.jar",
         CORE_DEPENDANT_TEST_LIBS_JAR_NAME: "core/build/dependant-testlibs/*.jar",
         TOOLS_JAR_NAME: "tools/build/libs/kafka-tools*.jar",
-        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar",
-        CLIENTS_JAR_NAME: "clients/build/libs/kafka-clients*.jar"
+        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar"
     },
     # TODO: This is only used in 0.8.2.x system tests, remove with KAFKA-14762
     LATEST_0_9.__str__(): {
