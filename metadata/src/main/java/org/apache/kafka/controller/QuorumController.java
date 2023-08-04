@@ -39,6 +39,7 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -64,6 +65,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
@@ -86,6 +88,7 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
@@ -121,6 +124,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -421,6 +425,18 @@ public final class QuorumController implements Controller {
                 default:
                     break;
             }
+        }
+    }
+
+    class QuorumClusterSupportDescriber implements ClusterSupportDescriber {
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
+            return clusterControl.brokerSupportedFeatures();
+        }
+
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
+            return clusterControl.controllerSupportedFeatures();
         }
     }
 
@@ -1496,6 +1512,9 @@ public final class QuorumController implements Controller {
             case ABORT_TRANSACTION_RECORD:
                 offsetControl.replay((AbortTransactionRecord) message, offset);
                 break;
+            case REGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((RegisterControllerRecord) message);
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1574,6 +1593,11 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final ClientQuotaControlManager clientQuotaControlManager;
+
+    /**
+     * Describes the feature versions in the cluster.
+     */
+    private final QuorumClusterSupportDescriber clusterSupportDescriber;
 
     /**
      * An object which stores the controller's view of the cluster.
@@ -1741,6 +1765,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
+        this.clusterSupportDescriber = new QuorumClusterSupportDescriber();
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1751,6 +1776,7 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
+            setClusterSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -2129,6 +2155,16 @@ public final class QuorumController implements Controller {
                 return result;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> registerController(
+        ControllerRequestContext context,
+        ControllerRegistrationRequestData request
+    ) {
+        return appendWriteEvent("registerController", context.deadlineNs(),
+            () -> clusterControl.registerController(request),
+            EnumSet.of(RUNS_IN_PREMIGRATION));
     }
 
     @Override

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
@@ -75,7 +74,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -136,7 +135,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -189,7 +188,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -244,7 +243,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -273,7 +272,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
@@ -329,7 +328,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -363,7 +362,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -416,7 +415,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
@@ -492,7 +491,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
-                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                setQuorumFeatures(new QuorumFeatures(0,
                         Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(
                                 MetadataVersion.IBP_3_1_IV0.featureLevel(),
                                 MetadataVersion.IBP_3_3_IV0.featureLevel())),

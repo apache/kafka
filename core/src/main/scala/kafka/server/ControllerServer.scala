@@ -34,10 +34,10 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.{ClusterResource, Endpoint}
+import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
-import org.apache.kafka.image.publisher.MetadataPublisher
+import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, MetadataPublisher}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
@@ -91,6 +91,7 @@ class ControllerServer(
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val config = sharedServer.controllerConfig
+  val logContext = new LogContext(s"[ControllerServer id=${config.nodeId}] ")
   val time = sharedServer.time
   def metrics = sharedServer.metrics
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
@@ -116,7 +117,15 @@ class ControllerServer(
   var migrationSupport: Option[ControllerMigrationSupport] = None
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
-  val featuresPublisher = new FeaturesPublisher()
+  val featuresPublisher = new FeaturesPublisher(logContext)
+  val controllerRegistrationsPublisher = new ControllerRegistrationsPublisher()
+  val registrationManager = new ControllerRegistrationManager(config,
+    clusterId,
+    time,
+    s"controller-${config.nodeId}-",
+    QuorumFeatures.defaultFeatureMap(),
+    () => raftManager.client.leaderAndEpoch().epoch(),
+    Uuid.randomUuid())
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -136,7 +145,7 @@ class ControllerServer(
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     val startupDeadline = Deadline.fromDelay(time, config.serverMaxStartupTimeMs, TimeUnit.MILLISECONDS)
     try {
-      this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
+      this.logIdent = logContext.logPrefix()
       info("Starting controller")
       config.dynamicConfig.initialize(zkClientOpt = None)
 
@@ -200,10 +209,9 @@ class ControllerServer(
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections)
-      val quorumFeatures = QuorumFeatures.create(config.nodeId,
-        sharedServer.raftManager.apiVersions,
+      val quorumFeatures = new QuorumFeatures(config.nodeId,
         QuorumFeatures.defaultFeatureMap(),
-        controllerNodes)
+        controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
 
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
@@ -292,7 +300,7 @@ class ControllerServer(
         raftManager,
         config,
         sharedServer.metaProps,
-        controllerNodes.asScala.toSeq,
+        controllerRegistrationsPublisher,
         apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel,
@@ -304,6 +312,9 @@ class ControllerServer(
 
       // Set up the metadata features publisher.
       metadataPublishers.add(featuresPublisher)
+
+      // Set up the controller registrations publisher.
+      metadataPublishers.add(controllerRegistrationsPublisher)
 
       // Set up the dynamic config publisher. This runs even in combined mode, since the broker
       // has its own separate dynamic configuration object.

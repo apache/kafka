@@ -117,6 +117,6 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest
     public void testDefaults(ClusterConfig config) {
-        Assertions.assertEquals(MetadataVersion.IBP_3_6_IV1, config.metadataVersion());
+        Assertions.assertEquals(MetadataVersion.IBP_3_6_IV2, config.metadataVersion());
     }
 }

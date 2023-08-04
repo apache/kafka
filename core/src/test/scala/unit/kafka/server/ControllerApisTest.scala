@@ -46,10 +46,11 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
+import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions._
@@ -154,7 +155,7 @@ class ControllerApisTest {
       raftManager,
       new KafkaConfig(props),
       MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
-      Seq.empty,
+      new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,

@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -78,7 +77,7 @@ public class FeatureControlManagerTest {
     public static QuorumFeatures features(Object... args) {
         Map<String, VersionRange> features = QuorumFeatures.defaultFeatureMap();
         features.putAll(rangeMap(args));
-        return new QuorumFeatures(0, new ApiVersions(), features, emptyList());
+        return new QuorumFeatures(0, features, emptyList());
     }
 
     private static Map<String, Short> updateMap(Object... args) {
@@ -392,7 +391,7 @@ public class FeatureControlManagerTest {
                 MetadataVersion.IBP_3_0_IV1.featureLevel(), MetadataVersion.latest().featureLevel()));
         localSupportedFeatures.put("foo", VersionRange.of(0, 2));
         FeatureControlManager manager = new FeatureControlManager.Builder().
-                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(), localSupportedFeatures, emptyList())).
+                setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).
                 build();
         ControllerResult<Map<String, ApiError>> result  = manager.updateFeatures(
                 Collections.singletonMap("foo", (short) 1),

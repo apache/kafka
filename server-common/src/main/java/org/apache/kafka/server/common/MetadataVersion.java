@@ -180,7 +180,10 @@ public enum MetadataVersion {
     IBP_3_6_IV0(12, "3.6", "IV0", false),
 
     // Add metadata transactions
-    IBP_3_6_IV1(13, "3.6", "IV1", true);
+    IBP_3_6_IV1(13, "3.6", "IV1", true),
+
+    // Implement KIP-919 controller registration.
+    IBP_3_6_IV2(14, "3.6", "IV2", true);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";
@@ -309,6 +312,19 @@ public enum MetadataVersion {
         } else {
             return (short) 0;
         }
+    }
+
+    public short registerControllerRecordVersion() {
+        if (isAtLeast(MetadataVersion.IBP_3_6_IV2)) {
+            return (short) 0;
+        } else {
+            throw new RuntimeException("Controller registration is not supported in " +
+                    "MetadataVersion " + this);
+        }
+    }
+
+    public boolean isControllerRegistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_3_6_IV2);
     }
 
     public short fetchRequestVersion() {

@@ -125,7 +125,7 @@ public class FeatureCommandTest {
                         "disable", "--feature", "metadata.version"))
         );
         assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-13", commandOutput);
+                "metadata.version. Local controller 3000 only supports versions 1-14", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),

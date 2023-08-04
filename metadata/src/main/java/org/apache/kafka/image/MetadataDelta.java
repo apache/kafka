@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
@@ -229,6 +230,9 @@ public final class MetadataDelta {
             case ZK_MIGRATION_STATE_RECORD:
                 replay((ZkMigrationStateRecord) record);
                 break;
+            case REGISTER_CONTROLLER_RECORD:
+                replay((RegisterControllerRecord) record);
+                break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
         }
@@ -315,6 +319,10 @@ public final class MetadataDelta {
 
     public void replay(ZkMigrationStateRecord record) {
         getOrCreateFeaturesDelta().replay(record);
+    }
+
+    public void replay(RegisterControllerRecord record) {
+        getOrCreateClusterDelta().replay(record);
     }
 
     /**

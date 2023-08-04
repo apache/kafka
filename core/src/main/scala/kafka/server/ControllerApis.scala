@@ -26,7 +26,7 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
@@ -46,9 +46,10 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{Node, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
+import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -59,16 +60,18 @@ import scala.jdk.CollectionConverters._
 /**
  * Request handler for Controller APIs
  */
-class ControllerApis(val requestChannel: RequestChannel,
-                     val authorizer: Option[Authorizer],
-                     val quotas: QuotaManagers,
-                     val time: Time,
-                     val controller: Controller,
-                     val raftManager: RaftManager[ApiMessageAndVersion],
-                     val config: KafkaConfig,
-                     val metaProperties: MetaProperties,
-                     val controllerNodes: Seq[Node],
-                     val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
+class ControllerApis(
+  val requestChannel: RequestChannel,
+  val authorizer: Option[Authorizer],
+  val quotas: QuotaManagers,
+  val time: Time,
+  val controller: Controller,
+  val raftManager: RaftManager[ApiMessageAndVersion],
+  val config: KafkaConfig,
+  val metaProperties: MetaProperties,
+  val controllerRegistrations: ControllerRegistrationsPublisher,
+  val apiVersionManager: ApiVersionManager
+) extends ApiRequestHandler with Logging {
 
   this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
   val authHelper = new AuthHelper(authorizer)
@@ -111,6 +114,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
         case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
         case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
+        case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
 
@@ -818,6 +822,20 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
+  def handleControllerRegistration(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val registrationRequest = request.body[ControllerRegistrationRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+
+    controller.registerController(context, registrationRequest.data)
+      .thenApply[Unit] { _ =>
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          new ControllerRegistrationResponse(new ControllerRegistrationResponseData().
+            setThrottleTimeMs(requestThrottleMs)))
+      }
+  }
+
   def handleAlterPartitionReassignments(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val alterRequest = request.body[AlterPartitionReassignmentsRequest]
     authHelper.authorizeClusterOperation(request, ALTER)
@@ -886,5 +904,22 @@ class ControllerApis(val requestChannel: RequestChannel,
             new UpdateFeaturesResponse(response.setThrottleTimeMs(requestThrottleMs)))
         }
       }
+  }
+
+  def handleDescribeCluster(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    // Unlike on the broker, DESCRIBE_CLUSTER on the controller requires a high level of
+    // permissions (ALTER on CLUSTER).
+    authHelper.authorizeClusterOperation(request, ALTER)
+
+    val response = authHelper.computeDescribeClusterResponse(
+      request,
+      EndpointType.CONTROLLER,
+      metaProperties.clusterId,
+      () => controllerRegistrations.describeClusterControllers(request.context.listenerName()),
+      () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
+    )
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    CompletableFuture.completedFuture[Unit](())
   }
 }
