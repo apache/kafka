@@ -102,9 +102,9 @@ public class LogConfig extends AbstractConfig {
 
     public static class RemoteLogConfig {
 
-        private final boolean remoteStorageEnable;
-        private final long localRetentionMs;
-        private final long localRetentionBytes;
+        public final boolean remoteStorageEnable;
+        public final long localRetentionMs;
+        public final long localRetentionBytes;
 
         private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);

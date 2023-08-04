@@ -1020,6 +1020,7 @@ public class RemoteLogManagerTest {
                 1,
                 100000L,
                 1000,
+                Optional.empty(),
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentEpochs);
     }
 

@@ -866,7 +866,7 @@ public class RemoteLogManager implements Closeable {
                     // Publish delete segment started event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
-                                    RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId)).get();
+                                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId)).get();
 
                     // Delete the segment in remote storage.
                     remoteLogStorageManager.deleteLogSegmentData(segmentMetadata);
@@ -874,7 +874,7 @@ public class RemoteLogManager implements Closeable {
                     // Publish delete segment finished event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
-                                    RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
+                                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
                     logger.info("Deleted remote log segment {}", segmentMetadata.remoteLogSegmentId());
                     return true;
                 }
