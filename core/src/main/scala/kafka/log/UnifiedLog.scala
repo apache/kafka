@@ -982,9 +982,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def maybeIncrementLocalLogStartOffset(newLocalLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
-    if(newLocalLogStartOffset > localLogStartOffset()) {
-      _localLogStartOffset = math.max(newLocalLogStartOffset, localLogStartOffset());
-      info(s"Incremented local log start offset to ${localLogStartOffset()} due to reason $reason")
+    lock synchronized {
+      if (newLocalLogStartOffset > localLogStartOffset()) {
+        _localLogStartOffset = math.max(newLocalLogStartOffset, localLogStartOffset());
+        info(s"Incremented local log start offset to ${localLogStartOffset()} due to reason $reason")
+      }
     }
   }
 
@@ -1442,6 +1444,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
+  private def incrementStartOffset(startOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
+    if (remoteLogEnabled()) maybeIncrementLocalLogStartOffset(startOffset, reason)
+    else maybeIncrementLogStartOffset(startOffset, reason)
+  }
+
   private def deleteSegments(deletable: Iterable[LogSegment], reason: SegmentDeletionReason): Int = {
     maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
       val numToDelete = deletable.size
@@ -1459,7 +1466,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // remove the segments for lookups
         localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
         deleteProducerSnapshots(deletable, asyncDelete = true)
-        maybeIncrementLocalLogStartOffset(localLog.segments.firstSegmentBaseOffset.get, LogStartOffsetIncrementReason.SegmentDeletion)
+        incrementStartOffset(localLog.segments.firstSegmentBaseOffset.get, LogStartOffsetIncrementReason.SegmentDeletion)
       }
       numToDelete
     }
@@ -1506,7 +1513,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       }
     }
 
-    deleteOldSegments(shouldDelete, RetentionSizeBreach(this))
+    deleteOldSegments(shouldDelete, RetentionSizeBreach(this, remoteLogEnabled()))
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
@@ -2257,12 +2264,14 @@ case class RetentionMsBreach(log: UnifiedLog) extends SegmentDeletionReason {
   }
 }
 
-case class RetentionSizeBreach(log: UnifiedLog) extends SegmentDeletionReason {
+case class RetentionSizeBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     var size = log.size
     toDelete.foreach { segment =>
       size -= segment.size
-      log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config)} breach. Local log size " +
+      if (remoteLogEnabled) log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config)} breach. " +
+        s"Local log size after deletion will be $size.")
+      else log.info(s"Deleting segment $segment due to log retention size ${log.config.retentionSize} breach. Log size " +
         s"after deletion will be $size.")
     }
   }

@@ -842,7 +842,6 @@ public class RemoteLogManager implements Closeable {
                     logger.info("Deleted remote log segment {} due to log start offset {} breach", metadata.remoteLogSegmentId(), startOffset);
                 }
 
-                // No need to update the logStartOffset.
                 return isSegmentDeleted;
             }
 
@@ -863,6 +862,7 @@ public class RemoteLogManager implements Closeable {
             private boolean deleteRemoteLogSegment(RemoteLogSegmentMetadata segmentMetadata, Predicate<RemoteLogSegmentMetadata> predicate)
                     throws RemoteStorageException, ExecutionException, InterruptedException {
                 if (predicate.test(segmentMetadata)) {
+                    logger.info("Deleting remote log segment {}", segmentMetadata.remoteLogSegmentId());
                     // Publish delete segment started event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
@@ -875,6 +875,7 @@ public class RemoteLogManager implements Closeable {
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
                                     RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
+                    logger.info("Deleted remote log segment {}", segmentMetadata.remoteLogSegmentId());
                     return true;
                 }
 
@@ -910,6 +911,8 @@ public class RemoteLogManager implements Closeable {
             }
 
             final Set<Integer> epochsSet = new HashSet<>();
+            // Good to have an API from RLMM to get all the remote leader epochs of all the segments of a partition
+            // instead of going through all the segments and building it here.
             while (segmentMetadataIter.hasNext()) {
                 RemoteLogSegmentMetadata segmentMetadata = segmentMetadataIter.next();
                 epochsSet.addAll(segmentMetadata.segmentLeaderEpochs().keySet());
@@ -950,7 +953,7 @@ public class RemoteLogManager implements Closeable {
                 }
             }
 
-            // Remove the remote log segments whose segment-leader-epochs are lesser than the earliest-epoch known
+            // Remove the remote log segments whose segment-leader-epochs are less than the earliest-epoch known
             // to the leader. This will remove the unreferenced segments in the remote storage.
             if (earliestEpochEntryOptional.isPresent()) {
                 EpochEntry earliestEpochEntry = earliestEpochEntryOptional.get();
@@ -1029,6 +1032,7 @@ public class RemoteLogManager implements Closeable {
      * @param leaderEpochs    The leader epoch lineage of the partition.
      * @return true if the remote segment's epoch/offsets are within the leader epoch lineage of the partition.
      */
+    // Visible for testing
     public static boolean isRemoteSegmentWithinLeaderEpochs(RemoteLogSegmentMetadata segmentMetadata,
                                                             long logEndOffset,
                                                             NavigableMap<Integer, Long> leaderEpochs) {
@@ -1038,8 +1042,8 @@ public class RemoteLogManager implements Closeable {
         Integer segmentFirstEpoch = segmentLeaderEpochs.firstKey();
         Integer segmentLastEpoch = segmentLeaderEpochs.lastKey();
         if (segmentFirstEpoch < leaderEpochs.firstKey() || segmentLastEpoch > leaderEpochs.lastKey()) {
-            LOGGER.debug("Remote segment {} is not within the partition leader epoch lineage. Remote segment epochs: {} and partition leader epochs: {}",
-                    segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
+            LOGGER.debug("[{}] Remote segment {} is not within the partition leader epoch lineage. Remote segment epochs: {} and partition leader epochs: {}",
+                    segmentMetadata.topicIdPartition(), segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
             return false;
         }
 
@@ -1054,9 +1058,9 @@ public class RemoteLogManager implements Closeable {
                 return false;
             }
 
-            // Segment's first epoch's offset can be more than or equal to the respective leader epoch's offset.
+            // Segment's first epoch's offset should be more than or equal to the respective leader epoch's offset.
             if (epoch == segmentFirstEpoch && offset < leaderEpochs.get(epoch)) {
-                LOGGER.debug("[{}]  Remote segment {}'s first epoch {}'s offset is more than leader epoch's offset {}.",
+                LOGGER.debug("[{}]  Remote segment {}'s first epoch {}'s offset is less than leader epoch's offset {}.",
                         segmentMetadata.topicIdPartition(), segmentMetadata.remoteLogSegmentId(), epoch, leaderEpochs.get(epoch));
                 return false;
             }
