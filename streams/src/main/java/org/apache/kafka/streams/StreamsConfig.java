@@ -914,28 +914,28 @@ public class StreamsConfig extends AbstractConfig {
                     in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
+                Type.INT,
+                null,
+                Importance.MEDIUM,
+                RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC)
             .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
                     Type.STRING,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
                     in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
-            .define(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
-                    Type.INT,
-                    null,
-                    Importance.MEDIUM,
-                    RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
-            .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
-                    Type.INT,
-                    null,
-                    Importance.MEDIUM,
-                    RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
                     Type.LIST,
                     Collections.emptyList(),
                     atMostOfSize(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_TAGS_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
+                Type.INT,
+                null,
+                Importance.MEDIUM,
+                RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
                     -1,
