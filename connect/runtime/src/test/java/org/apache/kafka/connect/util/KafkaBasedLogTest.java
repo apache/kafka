@@ -72,6 +72,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.class)
 public class KafkaBasedLogTest {
@@ -143,8 +144,7 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testStartStop() throws Exception {
-        expectStart();
-        expectStop();
+        expectProducerAndConsumerCreate();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -155,12 +155,12 @@ public class KafkaBasedLogTest {
 
         store.stop();
         assertTrue(consumer.closed());
+        verifyStartAndStop();
     }
 
     @Test
     public void testReloadOnStart() throws Exception {
-        expectStart();
-        expectStop();
+        expectProducerAndConsumerCreate();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 1L);
@@ -197,12 +197,12 @@ public class KafkaBasedLogTest {
         store.stop();
         //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
+        verifyStartAndStop();
     }
 
     @Test
     public void testReloadOnStartWithNoNewRecordsPresent() throws Exception {
-        expectStart();
-        expectStop();
+        expectProducerAndConsumerCreate();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 7L);
@@ -228,11 +228,12 @@ public class KafkaBasedLogTest {
 
         //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
+        verifyStartAndStop();
     }
 
     @Test
     public void testSendAndReadToEnd() throws Exception {
-        expectStart();
+        expectProducerAndConsumerCreate();
         TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
         ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback0 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
@@ -241,11 +242,6 @@ public class KafkaBasedLogTest {
         ProducerRecord<String, String> tp1Record = new ProducerRecord<>(TOPIC, TP1_KEY, TP1_VALUE);
         ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback1 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
         when(producer.send(eq(tp1Record), callback1.capture())).thenReturn(tp1Future);
-
-        // Producer flushes when read to log end is called
-        producer.flush();
-        // PowerMock.expectLastCall();
-        expectStop();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -318,12 +314,13 @@ public class KafkaBasedLogTest {
 
         //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
+        verify(producer).flush();
+        verifyStartAndStop();
     }
 
     @Test
     public void testPollConsumerError() throws Exception {
-        expectStart();
-        expectStop();
+        expectProducerAndConsumerCreate();
 
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -356,17 +353,12 @@ public class KafkaBasedLogTest {
 
         //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
+        verifyStartAndStop();
     }
 
     @Test
     public void testGetOffsetsConsumerErrorOnReadToEnd() throws Exception {
-        expectStart();
-
-        // Producer flushes when read to log end is called
-        producer.flush();
-        // PowerMock.expectLastCall();
-
-        expectStop();
+        expectProducerAndConsumerCreate();
 
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -411,17 +403,17 @@ public class KafkaBasedLogTest {
 
         //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
+        verify(producer).flush();
+        verifyStartAndStop();
     }
 
     @Test
     public void testProducerError() throws Exception {
-        expectStart();
+        expectProducerAndConsumerCreate();
         TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
         ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback0 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
         when(producer.send(eq(tp0Record), callback0.capture())).thenReturn(tp0Future);
-
-        expectStop();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -446,6 +438,7 @@ public class KafkaBasedLogTest {
 
         //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
+        verifyStartAndStop();
     }
 
     @Test
@@ -515,17 +508,9 @@ public class KafkaBasedLogTest {
         doReturn(consumer).when(store).createConsumer();
     }
 
-    private void expectStart() throws Exception {
-        initializer.run();
-        // EasyMock.expectLastCall().times(1);
-
-        expectProducerAndConsumerCreate();
-    }
-
-    private void expectStop() {
-        producer.close();
-        // PowerMock.expectLastCall();
-        // MockConsumer close is checked after test.
+    private void verifyStartAndStop() {
+        verify(initializer).run();
+        verify(producer).close();
     }
 
     private static ByteBuffer buffer(String v) {
