@@ -16,17 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 
-public class SampleConnectorClientConfigOverridePolicy extends NoneConnectorClientConfigOverridePolicy implements Versioned {
+public class SampleConnectorClientConfigOverridePolicy extends NoneConnectorClientConfigOverridePolicy {
     private boolean closed;
-
-    @Override
-    public String version() {
-        return AppInfoParser.getVersion();
-    }
 
     @Override
     public void close() {

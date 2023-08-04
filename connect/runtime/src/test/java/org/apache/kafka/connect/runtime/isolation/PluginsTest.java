@@ -32,7 +32,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -720,7 +719,7 @@ public class PluginsTest {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "test";
         }
     }
 
@@ -782,7 +781,7 @@ public class PluginsTest {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "test";
         }
 
         @Override

@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
@@ -62,7 +61,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
 
         @Override
@@ -404,7 +403,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
 
         public AbstractTestPredicate() { }
@@ -415,7 +414,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
 
     }
@@ -428,7 +427,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
 
         @Override
@@ -451,7 +450,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
             @Override
             public String version() {
-                return AppInfoParser.getVersion();
+                return "1.0";
             }
 
         }
@@ -497,7 +496,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
 
         @Override

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -25,15 +25,10 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TimestampRouterTest {
-    private final TimestampRouter<SourceRecord> xform = new TimestampRouter<>();
-
-    @AfterEach
-    public void teardown() {
-        xform.close();
-    }
 
     @Test
     public void defaultConfiguration() {
+        final TimestampRouter<SourceRecord> xform = new TimestampRouter<>();
         xform.configure(Collections.emptyMap()); // defaults
         final SourceRecord record = new SourceRecord(
                 null, null,
@@ -43,6 +38,15 @@ public class TimestampRouterTest {
                 1483425001864L
         );
         assertEquals("test-20170103", xform.apply(record).topic());
+        xform.close();
+    }
+
+    @Test
+    public void testTimestampRouterVersionRetrievedFromAppInfoParser() {
+        final TimestampRouter<SourceRecord> xform = new TimestampRouter<>();
+        xform.configure(Collections.emptyMap()); // defaults
+        assertEquals(AppInfoParser.getVersion(), xform.version());
+        xform.close();
     }
 
 }

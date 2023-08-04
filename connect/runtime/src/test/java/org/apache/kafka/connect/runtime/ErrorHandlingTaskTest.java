@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.components.Versioned;
@@ -575,7 +574,7 @@ public class ErrorHandlingTaskTest {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
     }
 
@@ -608,7 +607,7 @@ public class ErrorHandlingTaskTest {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
 
         @Override

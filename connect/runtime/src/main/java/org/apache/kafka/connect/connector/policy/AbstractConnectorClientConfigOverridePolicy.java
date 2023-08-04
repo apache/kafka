@@ -29,7 +29,9 @@ import java.util.stream.Collectors;
 public abstract class AbstractConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy, Versioned {
 
     @Override
-    public String version() { return AppInfoParser.getVersion(); }
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void close() {

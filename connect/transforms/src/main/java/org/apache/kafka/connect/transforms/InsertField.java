@@ -107,7 +107,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
-    public String version() { return AppInfoParser.getVersion(); }
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void configure(Map<String, ?> props) {
@@ -268,7 +270,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     public static class Value<R extends ConnectRecord<R>> extends InsertField<R> implements Versioned {
 
         @Override
-        public String version() { return AppInfoParser.getVersion(); }
+        public String version() {
+            return AppInfoParser.getVersion();
+        }
 
         @Override
         protected Schema operatingSchema(R record) {

@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -303,7 +302,7 @@ public class ErrorHandlingIntegrationTest {
 
         @Override
         public String version() {
-            return AppInfoParser.getVersion();
+            return "1.0";
         }
 
         @Override

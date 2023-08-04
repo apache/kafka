@@ -18,8 +18,6 @@ package org.apache.kafka.connect.converters;
 
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -31,14 +29,10 @@ import org.apache.kafka.connect.storage.HeaderConverter;
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
  */
-public class LongConverter extends NumberConverter<Long> implements Versioned {
+public class LongConverter extends NumberConverter<Long> {
 
     public LongConverter() {
         super("long", Schema.OPTIONAL_INT64_SCHEMA, new LongSerializer(), new LongDeserializer());
     }
 
-    @Override
-    public String version() {
-        return AppInfoParser.getVersion();
-    }
 }
