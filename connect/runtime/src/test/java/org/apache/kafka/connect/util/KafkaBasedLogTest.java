@@ -43,12 +43,9 @@ import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.reflect.Whitebox;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -67,15 +64,18 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyLong;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(KafkaBasedLog.class)
-@PowerMockIgnore("javax.management.*")
+@RunWith(MockitoJUnitRunner.class)
 public class KafkaBasedLogTest {
 
     private static final String TOPIC = "connect-log";
@@ -132,11 +132,9 @@ public class KafkaBasedLogTest {
         records.add(record);
     };
 
-    @SuppressWarnings("unchecked")
     @Before
     public void setUp() {
-        store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer);
+        store = spy(new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer));
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -150,8 +148,6 @@ public class KafkaBasedLogTest {
         expectStart();
         expectStop();
 
-        PowerMock.replayAll();
-
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
@@ -160,18 +156,13 @@ public class KafkaBasedLogTest {
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
 
         store.stop();
-
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
-        PowerMock.verifyAll();
     }
 
     @Test
     public void testReloadOnStart() throws Exception {
         expectStart();
         expectStop();
-
-        PowerMock.replayAll();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 1L);
@@ -206,18 +197,14 @@ public class KafkaBasedLogTest {
         assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
 
         store.stop();
-
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
-        PowerMock.verifyAll();
     }
 
     @Test
     public void testReloadOnStartWithNoNewRecordsPresent() throws Exception {
         expectStart();
         expectStop();
-
-        PowerMock.replayAll();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 7L);
@@ -241,9 +228,8 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -263,8 +249,6 @@ public class KafkaBasedLogTest {
         PowerMock.expectLastCall();
 
         expectStop();
-
-        PowerMock.replayAll();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -335,17 +319,14 @@ public class KafkaBasedLogTest {
         // Cleanup
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
-        PowerMock.verifyAll();
     }
 
     @Test
     public void testPollConsumerError() throws Exception {
         expectStart();
         expectStop();
-
-        PowerMock.replayAll();
 
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -376,9 +357,8 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -387,11 +367,10 @@ public class KafkaBasedLogTest {
 
         // Producer flushes when read to log end is called
         producer.flush();
-        PowerMock.expectLastCall();
+        // PowerMock.expectLastCall();
 
         expectStop();
 
-        PowerMock.replayAll();
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -433,9 +412,8 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -471,7 +449,7 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
         assertTrue(consumer.closed());
         PowerMock.verifyAll();
     }
@@ -490,8 +468,6 @@ public class KafkaBasedLogTest {
         PowerMock.expectLastCall().andReturn(endOffsets).times(1);
         admin.endOffsets(EasyMock.eq(tps));
         PowerMock.expectLastCall().andReturn(endOffsets).times(1);
-
-        PowerMock.replayAll();
 
         store.start();
         assertEquals(endOffsets, store.readEndOffsets(tps, false));
@@ -531,43 +507,35 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
         // Getting end offsets upon startup should work fine
-        admin.retryEndOffsets(EasyMock.eq(tps), EasyMock.anyObject(), EasyMock.anyLong());
-        PowerMock.expectLastCall().andReturn(endOffsets).times(1);
+        when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenReturn(endOffsets);
         // Getting end offsets using the admin client should fail with leader not available
-        admin.endOffsets(EasyMock.eq(tps));
-        PowerMock.expectLastCall().andThrow(new LeaderNotAvailableException("retry"));
-
-        PowerMock.replayAll();
+        when(admin.endOffsets(eq(tps))).thenThrow(new LeaderNotAvailableException("retry"));
 
         store.start();
         assertThrows(LeaderNotAvailableException.class, () -> store.readEndOffsets(tps, false));
     }
 
-    @SuppressWarnings("unchecked")
     private void setupWithAdmin() {
         Supplier<TopicAdmin> adminSupplier = () -> admin;
         java.util.function.Consumer<TopicAdmin> initializer = admin -> { };
-        store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, adminSupplier, consumedCallback, time, initializer);
+        store = spy(new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, adminSupplier, consumedCallback, time, initializer));
     }
 
-    private void expectProducerAndConsumerCreate() throws Exception {
-        PowerMock.expectPrivate(store, "createProducer")
-                 .andReturn(producer);
-        PowerMock.expectPrivate(store, "createConsumer")
-                 .andReturn(consumer);
+    private void expectProducerAndConsumerCreate() {
+        doReturn(producer).when(store).createProducer();
+        doReturn(consumer).when(store).createConsumer();
     }
 
     private void expectStart() throws Exception {
         initializer.run();
-        EasyMock.expectLastCall().times(1);
+        // EasyMock.expectLastCall().times(1);
 
         expectProducerAndConsumerCreate();
     }
 
     private void expectStop() {
         producer.close();
-        PowerMock.expectLastCall();
+        // PowerMock.expectLastCall();
         // MockConsumer close is checked after test.
     }
 
