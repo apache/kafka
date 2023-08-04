@@ -37,7 +37,6 @@ import org.mockito.Mockito.{mock, when}
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
-import scala.jdk.CollectionConverters.SetHasAsScala
 
 class KafkaRequestHandlerTest {
 
@@ -91,12 +90,12 @@ class KafkaRequestHandlerTest {
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
     val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
     brokerTopicStats.topicStats(topic)
-    for (metric <- RemoteStorageMetrics.brokerTopicStatsMetrics.asScala) {
+    RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {
         assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
       } else {
         assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
       }
-    }
+    })
   }
 }
