@@ -74,7 +74,7 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.verify;
 
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KafkaBasedLogTest {
 
     private static final String TOPIC = "connect-log";
@@ -154,7 +154,6 @@ public class KafkaBasedLogTest {
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
 
         store.stop();
-        assertTrue(consumer.closed());
         verifyStartAndStop();
     }
 
@@ -195,8 +194,6 @@ public class KafkaBasedLogTest {
         assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
 
         store.stop();
-        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         verifyStartAndStop();
     }
 
@@ -226,8 +223,6 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         verifyStartAndStop();
     }
 
@@ -312,8 +307,6 @@ public class KafkaBasedLogTest {
         // Cleanup
         store.stop();
 
-        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         verify(producer).flush();
         verifyStartAndStop();
     }
@@ -351,8 +344,6 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         verifyStartAndStop();
     }
 
@@ -401,8 +392,6 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         verify(producer).flush();
         verifyStartAndStop();
     }
@@ -436,8 +425,6 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        //assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         verifyStartAndStop();
     }
 
@@ -511,6 +498,7 @@ public class KafkaBasedLogTest {
     private void verifyStartAndStop() {
         verify(initializer).run();
         verify(producer).close();
+        assertTrue(consumer.closed());
     }
 
     private static ByteBuffer buffer(String v) {
