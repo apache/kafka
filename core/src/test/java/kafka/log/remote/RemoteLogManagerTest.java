@@ -58,6 +58,7 @@ import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LazyIndex;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
+import org.apache.kafka.storage.internals.log.RemoteIndexCache;
 import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TimeIndex;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
@@ -92,6 +93,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
+import static kafka.log.remote.RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX;
 import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT;
 import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_READER_METRICS_NAME_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
@@ -825,9 +827,14 @@ public class RemoteLogManagerTest {
             remoteLogManager.close();
 
             KafkaMetricsGroup mockRlmMetricsGroup = mockMetricsGroupCtor.constructed().get(0);
-            KafkaMetricsGroup mockThreadPoolMetricsGroup = mockMetricsGroupCtor.constructed().get(1);
+            KafkaMetricsGroup mockIndexCacheMetricsGroup = mockMetricsGroupCtor.constructed().get(1);
+            KafkaMetricsGroup mockThreadPoolMetricsGroup = mockMetricsGroupCtor.constructed().get(2);
 
             List<String> remoteLogManagerMetricNames = Collections.singletonList(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+            List<String> remoteIndexCacheMetricNames = RemoteIndexCache.metricNames()
+                .stream()
+                .map(suffix -> REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX + suffix)
+                .collect(Collectors.toList());
             List<String> remoteStorageThreadPoolMetricNames = RemoteStorageThreadPool.METRIC_SUFFIXES
                 .stream()
                 .map(suffix -> REMOTE_LOG_READER_METRICS_NAME_PREFIX + suffix)
@@ -837,11 +844,16 @@ public class RemoteLogManagerTest {
             // Verify that the RemoteLogManager metrics are removed
             remoteLogManagerMetricNames.forEach(metricName -> verify(mockRlmMetricsGroup).removeMetric(metricName));
 
+            verify(mockIndexCacheMetricsGroup, times(remoteIndexCacheMetricNames.size())).newGauge(anyString(), any());
+            // Verify that the RemoteIndexCache metrics are removed
+            remoteIndexCacheMetricNames.forEach(metricName -> verify(mockIndexCacheMetricsGroup).removeMetric(metricName));
+
             verify(mockThreadPoolMetricsGroup, times(remoteStorageThreadPoolMetricNames.size())).newGauge(anyString(), any());
             // Verify that the RemoteStorageThreadPool metrics are removed
             remoteStorageThreadPoolMetricNames.forEach(metricName -> verify(mockThreadPoolMetricsGroup).removeMetric(metricName));
 
             verifyNoMoreInteractions(mockRlmMetricsGroup);
+            verifyNoMoreInteractions(mockIndexCacheMetricsGroup);
             verifyNoMoreInteractions(mockThreadPoolMetricsGroup);
         } finally {
             mockMetricsGroupCtor.close();

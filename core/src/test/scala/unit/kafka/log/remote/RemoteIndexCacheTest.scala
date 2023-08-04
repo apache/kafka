@@ -16,11 +16,13 @@
  */
 package kafka.log.remote
 
+import com.yammer.metrics.core.Gauge
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
@@ -37,6 +39,7 @@ import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class RemoteIndexCacheTest {
   private val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
@@ -63,7 +66,8 @@ class RemoteIndexCacheTest {
     rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
 
-    cache = new RemoteIndexCache(rsm, tpDir.toString)
+    TestUtils.clearYammerMetrics();
+    cache = new RemoteIndexCache(rsm, tpDir.toString, RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX)
 
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
       .thenAnswer(ans => {
@@ -155,7 +159,7 @@ class RemoteIndexCacheTest {
   def testCacheEntryExpiry(): Unit = {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString, RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -200,7 +204,7 @@ class RemoteIndexCacheTest {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
 
-    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString, RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -402,7 +406,7 @@ class RemoteIndexCacheTest {
   def testReloadCacheAfterClose(): Unit = {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString, RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -436,11 +440,144 @@ class RemoteIndexCacheTest {
     cache.close()
 
     // Reload the cache from the disk and check the cache size is same as earlier
-    val reloadedCache = new RemoteIndexCache(2, rsm, tpDir.toString)
+    val reloadedCache = new RemoteIndexCache(2, rsm, tpDir.toString, RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX)
     assertEquals(2, reloadedCache.internalCache.asMap().size())
     reloadedCache.close()
 
     verifyNoMoreInteractions(rsm)
+  }
+
+  @Test
+  def testCacheMetrics(): Unit = {
+    Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString, RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
+
+    assertCacheSize(0)
+    // All metrics should be 0
+    verifyCacheMetrics(
+      cacheSize = 0,
+      hitCount = 0,
+      missCount = 0,
+      evictionCount = 0,
+      loadSuccessCount = 0,
+      loadFailureCount = 0,
+      evictionWeight = 0
+    )
+
+    // getIndex for first time will call rsm#fetchIndex
+    cache.getIndexEntry(metadataList.head)
+    // One entry should be added to the cache
+    assertCacheSize(1)
+    // One miss, no hits yet, no evictions yet, one successful load, no failures yet
+    verifyCacheMetrics(
+      cacheSize = 1,
+      hitCount = 0,
+      missCount = 1,
+      evictionCount = 0,
+      loadSuccessCount = 1,
+      loadFailureCount = 0,
+      evictionWeight = 0
+    )
+    // Total load time should be non-zero
+    val loadTime = findKafkaMetric(RemoteIndexCache.TOTAL_LOAD_TIME)
+    assertTrue(loadTime > 0)
+
+    // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
+    cache.getIndexEntry(metadataList.head)
+    // Cache size should remain same since we are able to retrieve from cache
+    assertCacheSize(1)
+    // One hit, no new misses, no evictions yet, no new loads, no failures yet
+    verifyCacheMetrics(
+      cacheSize = 1,
+      hitCount = 1,
+      missCount = 1,
+      evictionCount = 0,
+      loadSuccessCount = 1,
+      loadFailureCount = 0,
+      evictionWeight = 0
+    )
+    // Total load time should remain same
+    assertEquals(loadTime, findKafkaMetric(RemoteIndexCache.TOTAL_LOAD_TIME))
+
+
+    // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
+    cache.getIndexEntry(metadataList(1))
+    assertCacheSize(2)
+    // No new hits, one more miss, no evictions yet, one more successful load, no failures yet
+    verifyCacheMetrics(
+      cacheSize = 2,
+      hitCount = 1,
+      missCount = 2,
+      evictionCount = 0,
+      loadSuccessCount = 2,
+      loadFailureCount = 0,
+      evictionWeight = 0
+    )
+    // Total load time should have increased
+    assertTrue(findKafkaMetric(RemoteIndexCache.TOTAL_LOAD_TIME) > loadTime)
+    // Eviction weight should still be 0 since there are not evictions yet
+    assertEquals(0, findKafkaMetric(RemoteIndexCache.EVICTION_WEIGHT))
+
+    // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex
+    cache.getIndexEntry(metadataList(2))
+    assertCacheSize(2)
+    // No new hits, one more miss, one eviction, one more successful load, no failures yet
+    verifyCacheMetrics(
+      cacheSize = 2,
+      hitCount = 1,
+      missCount = 3,
+      evictionCount = 1,
+      loadSuccessCount = 3,
+      loadFailureCount = 0,
+      evictionWeight = 1
+    )
+
+    // Induce a load failure on the next fetchIndex call
+    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
+      .thenThrow(new RuntimeException("Failed to fetch index"))
+
+    // Here a new key metadataList(0) is invoked, that should call rsm#fetchIndex and causes load failure
+    assertThrows(classOf[RuntimeException], () => cache.getIndexEntry(metadataList.head))
+    assertCacheSize(2)
+    // No new hits, one more miss, no new successful load, one failure
+    // Since there is a failure, the eviction count and weight should not increase
+    verifyCacheMetrics(
+      cacheSize = 2,
+      hitCount = 1,
+      missCount = 4,
+      evictionCount = 1,
+      loadSuccessCount = 3,
+      loadFailureCount = 1,
+      evictionWeight = 1
+    )
+  }
+
+  private def verifyCacheMetrics(cacheSize: Int,
+                                 hitCount: Int,
+                                 missCount: Int,
+                                 evictionCount: Int,
+                                 loadSuccessCount: Int,
+                                 loadFailureCount: Int,
+                                 evictionWeight: Int): Unit = {
+    assertEquals(cacheSize, findKafkaMetric(RemoteIndexCache.CACHE_SIZE))
+    assertEquals(hitCount, findKafkaMetric(RemoteIndexCache.HIT_COUNT))
+    assertEquals(missCount, findKafkaMetric(RemoteIndexCache.MISS_COUNT))
+    assertEquals(evictionCount, findKafkaMetric(RemoteIndexCache.EVICTION_COUNT))
+    assertEquals(loadSuccessCount, findKafkaMetric(RemoteIndexCache.LOAD_SUCCESS_COUNT))
+    assertEquals(loadFailureCount, findKafkaMetric(RemoteIndexCache.LOAD_FAILURE_COUNT))
+    assertEquals(evictionWeight, findKafkaMetric(RemoteIndexCache.EVICTION_WEIGHT))
+  }
+
+  private def findKafkaMetric(metricName: String): Int = {
+    KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().asScala
+      .find(entry => entry.getKey.getName.equals(RemoteLogManager.REMOTE_INDEX_CACHE_METRICS_NAME_PREFIX.concat(metricName)))
+      .map(entry => entry.getValue)
+      .get
+      .asInstanceOf[Gauge[Long]]
+      .value()
+      .toInt
   }
 
   private def generateSpyCacheEntry(): RemoteIndexCache.Entry = {
