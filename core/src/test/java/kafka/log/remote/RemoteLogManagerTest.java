@@ -95,6 +95,9 @@ import java.util.stream.Collectors;
 import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT;
 import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_READER_METRICS_NAME_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -123,6 +126,15 @@ public class RemoteLogManagerTest {
     int brokerId = 0;
     String logDir = TestUtils.tempDirectory("kafka-").toString();
     String clusterId = "dummyId";
+    String remoteLogMetadataTestProp = "remote.log.metadata.test";
+    String remoteLogMetadataTestVal = "metadata.test";
+    String remoteLogMetadataCommonClientTestProp = REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "common.client.test";
+    String remoteLogMetadataCommonClientTestVal = "common.test";
+    String remoteLogMetadataProducerTestProp = REMOTE_LOG_METADATA_PRODUCER_PREFIX + "producer.test";
+    String remoteLogMetadataProducerTestVal = "producer.test";
+    String remoteLogMetadataConsumerTestProp = REMOTE_LOG_METADATA_CONSUMER_PREFIX + "consumer.test";
+    String remoteLogMetadataConsumerTestVal = "consumer.test";
+    String remoteLogMetadataTopicPartitionsNum = "1";
 
     RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
@@ -247,6 +259,40 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
+        Properties props = new Properties();
+        // override common security.protocol
+        props.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(createRLMConfig(props), brokerId, logDir, clusterId, time, tp -> Optional.of(mockLog), brokerTopicStats) {
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
+            }
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+        }) {
+
+            String host = "localhost";
+            String port = "1234";
+            String securityProtocol = "PLAINTEXT";
+            EndPoint endPoint = new EndPoint(host, Integer.parseInt(port), new ListenerName(securityProtocol),
+                    SecurityProtocol.PLAINTEXT);
+            remoteLogManager.onEndPointCreated(endPoint);
+            remoteLogManager.startup();
+
+            ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
+            verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
+            assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
+            // should be overridden as SSL
+            assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
+            assertEquals(clusterId, capture.getValue().get("cluster.id"));
+            assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+        }
+    }
+
+
+
+    @Test
     void testStartup() {
         remoteLogManager.startup();
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
@@ -256,6 +302,14 @@ public class RemoteLogManagerTest {
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
         assertEquals(logDir, capture.getValue().get("log.dir"));
+
+        // verify the configs starting with "remote.log.metadata", "remote.log.metadata.common.client."
+        // "remote.log.metadata.producer.", and "remote.log.metadata.consumer." are correctly passed in
+        assertEquals(remoteLogMetadataTopicPartitionsNum, capture.getValue().get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP));
+        assertEquals(remoteLogMetadataTestVal, capture.getValue().get(remoteLogMetadataTestProp));
+        assertEquals(remoteLogMetadataConsumerTestVal, capture.getValue().get(remoteLogMetadataConsumerTestProp));
+        assertEquals(remoteLogMetadataProducerTestVal, capture.getValue().get(remoteLogMetadataProducerTestProp));
+        assertEquals(remoteLogMetadataCommonClientTestVal, capture.getValue().get(remoteLogMetadataCommonClientTestProp));
     }
 
     // This test creates 2 log segments, 1st one has start offset of 0, 2nd one (and active one) has start offset of 150.
@@ -629,13 +683,15 @@ public class RemoteLogManagerTest {
     @Test
     void testGetClassLoaderAwareRemoteStorageManager() throws Exception {
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
-        RemoteLogManager remoteLogManager =
+        try (RemoteLogManager remoteLogManager =
             new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time, t -> Optional.empty(), brokerTopicStats) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }
             };
-        assertEquals(rsmManager, remoteLogManager.storageManager());
+        ) {
+            assertEquals(rsmManager, remoteLogManager.storageManager());
+        }
     }
 
     private void verifyInCache(TopicIdPartition... topicIdPartitions) {
@@ -913,6 +969,12 @@ public class RemoteLogManagerTest {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
+        props.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionsNum);
+        props.put(remoteLogMetadataTestProp, remoteLogMetadataTestVal);
+        props.put(remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal);
+        props.put(remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal);
+        props.put(remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
+
         AbstractConfig config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props);
         return new RemoteLogManagerConfig(config);
     }

@@ -38,11 +38,16 @@ public class RemoteLogManagerConfigTest {
         String rlmmPrefix = "__custom.rlmm.";
         Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
         Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
+        Map<String, Object> rlmProps = new HashMap<>();
+        rlmProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, "dummy.remote.log.metadata.class");
+        rlmProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP, "dummy.remote.log.metadata.class.path");
+        rlmProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "listener.name");
+        rlmProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, "__custom.rlmm.");
         RemoteLogManagerConfig expectedRemoteLogManagerConfig
                 = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
                                              "dummy.remote.log.metadata.class", "dummy.remote.log.metadata.class.path",
                                              "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100,
-                                             rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
+                                             rsmPrefix, rsmProps, rlmmPrefix, rlmmProps, rlmProps);
 
         Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
