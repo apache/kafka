@@ -1889,7 +1889,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   @deprecated("3.6")
   def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
 
-  //In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
+  // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
   // we are using its value if logMessageTimestampBeforeMaxMs default value hasn't changed.
   @nowarn("cat=deprecation")
   def logMessageTimestampBeforeMaxMs: Long = {
@@ -1900,7 +1900,19 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       logMessageTimestampDifferenceMaxMs
     }
   }
-  def logMessageTimestampAfterMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampAfterMaxMsProp)
+
+  // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
+  // we are using its value if logMessageTimestampAfterMaxMs default value hasn't changed.
+  @nowarn("cat=deprecation")
+  def logMessageTimestampAfterMaxMs: Long = {
+    val messageTimestampAfterMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampAfterMaxMsProp)
+    if (messageTimestampAfterMaxMs != Long.MaxValue) {
+      messageTimestampAfterMaxMs
+    } else {
+      logMessageTimestampDifferenceMaxMs
+    }
+  }
+
   def logMessageDownConversionEnable: Boolean = getBoolean(KafkaConfig.LogMessageDownConversionEnableProp)
 
   /** ********* Replication configuration ***********/

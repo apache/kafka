@@ -29,9 +29,10 @@ import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
 import java.nio.charset.StandardCharsets
+import scala.annotation.nowarn
 
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
@@ -120,17 +121,17 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testSendWithInvalidCreateTime(quorum: String): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("timestampConfigProvider"))
+  def testSendWithInvalidBeforeAndAfterTimestamp(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topicProps = new Properties()
-    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
+    topicProps.setProperty(messageTimeStampConfig, "1000")
     TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
     try {
       val e = assertThrows(classOf[ExecutionException],
-        () => producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
+        () => producer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
     } finally {
       producer.close()
@@ -140,7 +141,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val compressedProducer = createProducer(compressionType = "gzip")
     try {
       val e = assertThrows(classOf[ExecutionException],
-        () => compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
+        () => compressedProducer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
     } finally {
       compressedProducer.close()
@@ -227,4 +228,16 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     assertEquals(classOf[RecordTooLargeException], assertThrows(classOf[ExecutionException], () => producer.send(record1).get).getCause.getClass)
   }
 
+}
+
+object PlaintextProducerSendTest {
+  @nowarn("cat=deprecation")
+  def timestampConfigProvider: java.util.stream.Stream[Arguments] = {
+    val fiveMinutesInMs: Long = 5 * 60 * 60 * 1000L
+    java.util.stream.Stream.of(
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, System.currentTimeMillis() - fiveMinutesInMs),
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, System.currentTimeMillis() - fiveMinutesInMs),
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, System.currentTimeMillis() + fiveMinutesInMs)
+    )
+  }
 }

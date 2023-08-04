@@ -371,7 +371,7 @@ public class LogValidator {
                         batchIndex, record);
                     if (!recordError.isPresent()) {
                         recordError = validateRecord(batch, topicPartition, record, batchIndex, now,
-                            timestampType, timestampBeforeMaxMs ,timestampAfterMaxMs,compactedTopic, metricsRecorder);
+                            timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                     }
 
                     if (!recordError.isPresent()
@@ -601,8 +601,7 @@ public class LogValidator {
                         + " is out of range. The timestamp should be within [" + (now - timestampBeforeMaxMs)
                         + ", " + (now + timestampAfterMaxMs) + "]")));
             }
-        }
-        else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
+        } else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
             return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
                 "Invalid timestamp type in message " + record + ". Producer should not set timestamp "
                 + "type to LogAppendTime.")));
