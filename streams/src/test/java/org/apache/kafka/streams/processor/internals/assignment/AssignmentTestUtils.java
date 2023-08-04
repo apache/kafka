@@ -194,9 +194,9 @@ public final class AssignmentTestUtils {
 
     private static final String USER_END_POINT = "localhost:8080";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
-    private static final String TOPIC_PREFIX = "topic";
-    private static final String CHANGELOG_TOPIC_PREFIX = "changelog-topic";
-    private static final String RACK_PREFIX = "rack";
+    public static final String TOPIC_PREFIX = "topic";
+    public static final String CHANGELOG_TOPIC_PREFIX = "changelog-topic";
+    public static final String RACK_PREFIX = "rack";
 
     private AssignmentTestUtils() {}
 
@@ -587,14 +587,18 @@ public final class AssignmentTestUtils {
         return nodeList;
     }
 
+    static Node[] getRandomReplica(final List<Node> nodeList, final int index) {
+        final Node firstNode = nodeList.get(index % nodeList.size());
+        final Node secondNode = nodeList.get((index + 1) % nodeList.size());
+        return new Node[] {firstNode, secondNode};
+    }
+
     static Cluster getRandomCluster(final int nodeSize, final int tpSize) {
         final List<Node> nodeList = getRandomNodes(nodeSize);
         final Set<PartitionInfo> partitionInfoSet = new HashSet<>();
         for (int i = 0; i < tpSize; i++) {
-            final Node firstNode = nodeList.get(i % nodeSize);
-            final Node secondNode = nodeList.get((i + 1) % nodeSize);
-            final Node[] replica = new Node[] {firstNode, secondNode};
-            partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + i, 0, firstNode, replica, replica));
+            final Node[] replica = getRandomReplica(nodeList, i);
+            partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + i, 0, replica[0], replica, replica));
         }
 
         return new Cluster(

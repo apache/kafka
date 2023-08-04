@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Optional;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Map;
@@ -31,6 +30,6 @@ public interface TaskAssignor {
     boolean assign(final Map<UUID, ClientState> clients,
                    final Set<TaskId> allTaskIds,
                    final Set<TaskId> statefulTaskIds,
-                   final Optional<RackAwareTaskAssignor> rackAwareTaskAssignor,
+                   final RackAwareTaskAssignor rackAwareTaskAssignor,
                    final AssignmentConfigs configs);
 }
