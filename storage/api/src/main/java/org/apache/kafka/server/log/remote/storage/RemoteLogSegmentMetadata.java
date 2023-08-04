@@ -291,6 +291,21 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                '}';
     }
 
+    /**
+     * Custom metadata from a {@link RemoteStorageManager} plugin.
+     *
+     * <p>The content of these metadata is RSM-dependent and is opaque to the broker, i.e.
+     * it's not interpreted, only stored along with the rest of the remote log segment metadata.
+     *
+     * <p>Examples of such metadata are:
+     * <ol>
+     *     <li>The storage path on the remote storage in case it's nondeterministic or version-dependent.</li>
+     *     <li>The actual size of the all files related to the segment on the remote storage.</li>
+     * </ol>
+     *
+     * <p>The maximum size the broker accepts and stores is controlled by
+     * the {@code remote.log.metadata.custom.metadata.max.bytes} setting.
+     */
     public static class CustomMetadata {
         private final byte[] value;
 
