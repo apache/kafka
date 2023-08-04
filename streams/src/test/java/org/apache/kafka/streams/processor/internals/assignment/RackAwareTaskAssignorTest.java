@@ -32,11 +32,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NO_RACK_NODE;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PI_0_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_3;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_4;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.REPLICA_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
