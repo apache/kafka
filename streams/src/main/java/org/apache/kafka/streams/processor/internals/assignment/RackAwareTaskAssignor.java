@@ -338,7 +338,7 @@ public class RackAwareTaskAssignor {
             return 0;
         }
 
-        log.info("Assignment before active optimization is {}\n with cost {}", clientStates,
+        log.info("Assignment before active task optimization is {}\n with cost {}", clientStates,
             activeTasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost));
 
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
@@ -354,7 +354,7 @@ public class RackAwareTaskAssignor {
         assignTaskFromMinCostFlow(graph, clientList, taskIdList, clientStates, originalAssignedTaskNumber,
             taskClientMap, ClientState::assignActive, ClientState::unassignActive, ClientState::hasActiveTask);
 
-        log.info("Assignment after active optimization is {}\n with cost {}", clientStates, cost);
+        log.info("Assignment after active task optimization is {}\n with cost {}", clientStates, cost);
         return cost;
     }
 
@@ -372,7 +372,7 @@ public class RackAwareTaskAssignor {
         final SortedSet<TaskId> standbyTasks = new TreeSet<>();
         clientStates.values().forEach(clientState -> standbyTasks.addAll(clientState.standbyTasks()));
 
-        log.info("Assignment before standby optimization is {}\n with cost {}", clientStates,
+        log.info("Assignment before standby task optimization is {}\n with cost {}", clientStates,
             standByTasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost));
 
         boolean taskMoved = true;
@@ -425,7 +425,7 @@ public class RackAwareTaskAssignor {
             }
         }
         final long cost = standByTasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost);
-        log.info("Assignment after {} rounds of standby optimization is {}\n with cost {}", round, clientStates, cost);
+        log.info("Assignment after {} rounds of standby task optimization is {}\n with cost {}", round, clientStates, cost);
         return cost;
     }
 
