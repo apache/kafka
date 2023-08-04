@@ -161,7 +161,11 @@ public class GetOffsetShell {
 
             String brokerList = options.valueOf(effectiveBrokerListOpt);
 
-            ToolsUtils.validatePortOrExit(parser, brokerList);
+            try {
+                ToolsUtils.validateBootstrapServer(brokerList);
+            } catch (IllegalArgumentException e) {
+                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+            }
         }
 
         public boolean hasTopicPartitionsOpt() {
