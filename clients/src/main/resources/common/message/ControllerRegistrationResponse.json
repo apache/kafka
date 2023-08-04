@@ -14,19 +14,17 @@
 // limitations under the License.
 
 {
-  "apiKey": 60,
-  "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
-  "name": "DescribeClusterRequest",
-  //
-  // Version 1 adds EndpointType for KIP-919 support.
-  //
-  "validVersions": "0-1",
+  "apiKey": 70,
+  "type": "response",
+  "name": "ControllerRegistrationResponse",
+  "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "0+",
-      "about": "Whether to include cluster authorized operations." },
-    { "name": "EndpointType", "type": "int8", "versions": "1+", "default": "1",
-      "about": "The endpoint type to describe. 1=brokers, 2=controllers." }
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The response error code." },
+    { "name": "ErrorMessage", "type": "string", "nullableVersions": "0+", "versions": "0+",
+      "about": "The response error message, or null if there was no error." }
   ]
 }

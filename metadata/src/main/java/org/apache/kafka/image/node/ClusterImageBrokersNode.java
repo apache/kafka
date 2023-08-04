@@ -18,38 +18,44 @@
 package org.apache.kafka.image.node;
 
 import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.metadata.BrokerRegistration;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 
 
-public class ClusterImageNode implements MetadataNode {
+public class ClusterImageBrokersNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public final static String NAME = "cluster";
+    public final static String NAME = "brokers";
 
     /**
      * The cluster image.
      */
     private final ClusterImage image;
 
-    public ClusterImageNode(ClusterImage image) {
+    public ClusterImageBrokersNode(ClusterImage image) {
         this.image = image;
     }
 
     @Override
     public Collection<String> childNames() {
-        return Arrays.asList(ClusterImageBrokersNode.NAME, ClusterImageControllersNode.NAME);
+        ArrayList<String> childNames = new ArrayList<>();
+        for (Integer brokerId : image.brokers().keySet()) {
+            childNames.add(brokerId.toString());
+        }
+        return childNames;
     }
 
     @Override
     public MetadataNode child(String name) {
-        if (name.equals(ClusterImageBrokersNode.NAME)) {
-            return new ClusterImageBrokersNode(image);
-        } else if (name.equals(ClusterImageControllersNode.NAME)) {
-            return new ClusterImageControllersNode(image);
-        } else {
+        try {
+            Integer brokerId = Integer.valueOf(name);
+            BrokerRegistration registration = image.brokers().get(brokerId);
+            if (registration == null) return null;
+            return new MetadataLeafNode(registration.toString());
+        } catch (NumberFormatException e) {
             return null;
         }
     }
