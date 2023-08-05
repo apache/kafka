@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Optional;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
@@ -45,14 +46,14 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
     private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 10;
     private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 1;
-    private static final int DEFAULT_STATELESS_TRAFFIC_COST = 1;
-    private static final int DEFAULT_STATELESS_NON_OVERLAP_COST = 1;
+    private static final int STATELESS_TRAFFIC_COST = 1;
+    private static final int STATELESS_NON_OVERLAP_COST = 1;
 
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
-                          final RackAwareTaskAssignor rackAwareTaskAssignor,
+                          final Optional<RackAwareTaskAssignor> rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
         final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
@@ -115,7 +116,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
     private static void assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
                                                   final SortedSet<TaskId> statefulTasks,
-                                                  final RackAwareTaskAssignor rackAwareTaskAssignor,
+                                                  final Optional<RackAwareTaskAssignor> rackAwareTaskAssignor,
                                                   final AssignmentConfigs configs) {
         Iterator<ClientState> clientStateIterator = null;
         for (final TaskId task : statefulTasks) {
@@ -133,19 +134,19 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             (source, destination) -> true
         );
 
-        if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+        if (rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
             final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
                 DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
             final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
                 DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
-            rackAwareTaskAssignor.optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
+            rackAwareTaskAssignor.get().optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
         }
     }
 
     private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
                                            final Set<TaskId> allTaskIds,
                                            final Set<TaskId> statefulTasks,
-                                           final RackAwareTaskAssignor rackAwareTaskAssignor,
+                                           final Optional<RackAwareTaskAssignor> rackAwareTaskAssignor,
                                            final AssignmentConfigs configs) {
         if (configs.numStandbyReplicas == 0) {
             return;
@@ -163,12 +164,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             standbyTaskAssignor::isAllowedTaskMovement
         );
 
-        if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+        if (rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
             final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
                 DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
             final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
                 DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
-            rackAwareTaskAssignor.optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, standbyTaskAssignor::isAllowedTaskMovement);
+            rackAwareTaskAssignor.get().optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, standbyTaskAssignor::isAllowedTaskMovement);
         }
     }
 
@@ -234,7 +235,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
     private static void assignStatelessActiveTasks(final TreeMap<UUID, ClientState> clientStates,
                                                    final Iterable<TaskId> statelessTasks,
-                                                   final RackAwareTaskAssignor rackAwareTaskAssignor) {
+                                                   final Optional<RackAwareTaskAssignor> rackAwareTaskAssignor) {
         final ConstrainedPrioritySet statelessActiveTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> true,
             client -> clientStates.get(client).activeTaskLoad()
@@ -250,8 +251,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             statelessActiveTaskClientsByTaskLoad.offer(client);
         }
 
-        if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
-            rackAwareTaskAssignor.optimizeActiveTasks(sortedTasks, clientStates, DEFAULT_STATELESS_TRAFFIC_COST, DEFAULT_STATELESS_NON_OVERLAP_COST);
+        if (rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
+            rackAwareTaskAssignor.get().optimizeActiveTasks(sortedTasks, clientStates,
+                STATELESS_TRAFFIC_COST, STATELESS_NON_OVERLAP_COST);
         }
     }
 

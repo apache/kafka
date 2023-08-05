@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Collection;
+import java.util.Optional;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import org.apache.kafka.common.TopicPartition;
@@ -176,7 +177,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -220,7 +221,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -257,7 +258,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
         assertThat(unstable, is(false));
@@ -298,7 +299,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -339,7 +340,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -377,7 +378,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -422,7 +423,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -460,7 +461,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -505,7 +506,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -557,7 +558,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
@@ -594,7 +595,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -620,7 +621,7 @@ public class HighAvailabilityTaskAssignorTest {
         final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(clientStates,
                                                                                          allTasks,
                                                                                          singleton(TASK_0_0),
-                                                                                         rackAwareTaskAssignor,
+                                                                                         Optional.of(rackAwareTaskAssignor),
                                                                                          configs);
 
         assertThat(probingRebalanceNeeded, is(false));
@@ -649,7 +650,7 @@ public class HighAvailabilityTaskAssignorTest {
         final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(clientStates,
                                                                                          allTasks,
                                                                                          statefulTasks,
-                                                                                         rackAwareTaskAssignor,
+                                                                                         Optional.of(rackAwareTaskAssignor),
                                                                                          configs);
 
         assertThat(clientStates.get(UUID_2).standbyTasks(), not(empty()));
@@ -677,7 +678,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
         assertThat(clientStates.get(UUID_1).activeTasks(), is(singleton(TASK_0_1)));
         assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_0)));
@@ -709,7 +710,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-                new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+                new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
         assertThat(clientStates.get(UUID_1).activeTasks(), is(emptySet()));
         assertThat(clientStates.get(UUID_2).activeTasks(), is(emptySet()));
@@ -741,7 +742,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0)));
@@ -767,7 +768,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
 
         assertThat(client1.activeTaskCount(), equalTo(1));
@@ -791,7 +792,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
@@ -829,7 +830,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -868,7 +869,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -893,7 +894,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
@@ -914,7 +915,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
         assertThat(probingRebalanceNeeded, is(false));
@@ -936,7 +937,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
         assertValidAssignment(
             1,
@@ -966,7 +967,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
         assertValidAssignment(
             1,
             2,
@@ -1004,7 +1005,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
         assertThat(client1.activeTasks(), not(empty()));
         assertThat(client2.activeTasks(), not(empty()));
@@ -1029,7 +1030,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
 
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(client1.activeTasks(), equalTo(client1.prevActiveTasks()));
@@ -1051,7 +1052,7 @@ public class HighAvailabilityTaskAssignorTest {
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
         assertThat(probingRebalanceNeeded, is(false));
         assertHasNoStandbyTasks(client1, client2);
 
@@ -1070,7 +1071,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, Optional.of(rackAwareTaskAssignor), configs);
         assertThat(probingRebalanceNeeded, is(true));
         assertThat(client2.standbyTaskCount(), equalTo(1));
 
@@ -1106,7 +1107,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -1152,7 +1153,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -1198,7 +1199,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -1244,7 +1245,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             configs
         );
 
@@ -1290,7 +1291,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStateMap,
             taskIds,
             taskIds,
-            rackAwareTaskAssignor,
+            Optional.of(rackAwareTaskAssignor),
             assignorConfiguration
         );
 

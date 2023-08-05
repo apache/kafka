@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Optional;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -57,7 +58,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
-                          final RackAwareTaskAssignor rackAwareTaskAssignor,
+                          final Optional<RackAwareTaskAssignor> rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;

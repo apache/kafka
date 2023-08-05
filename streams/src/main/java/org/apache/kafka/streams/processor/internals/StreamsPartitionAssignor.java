@@ -645,7 +645,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
                                                                    allTasks,
                                                                    statefulTasks,
-                                                                   rackAwareTaskAssignor,
+                                                                   Optional.of(rackAwareTaskAssignor),
                                                                    assignmentConfigs);
 
         log.info("{} assigned tasks {} including stateful {} to {} clients as: \n{}.",
