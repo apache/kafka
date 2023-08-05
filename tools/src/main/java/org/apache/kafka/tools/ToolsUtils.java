@@ -103,7 +103,7 @@ public class ToolsUtils {
     }
 
     public static void validateBootstrapServer(String hostPort) throws IllegalArgumentException {
-        if (hostPort == null || hostPort.isEmpty()) {
+        if (hostPort == null || hostPort.trim().isEmpty()) {
             throw new IllegalArgumentException("Error while validating the bootstrap address\n");
         }
 
