@@ -111,6 +111,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 
 /**
  * This class is responsible for
@@ -123,8 +124,6 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
-    public static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
-    public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -185,7 +184,7 @@ public class RemoteLogManager implements Closeable {
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
-        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT, new Gauge<Double>() {
+        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
             @Override
             public Double value() {
                 return rlmScheduledThreadPool.getIdlePercent();
@@ -195,13 +194,12 @@ public class RemoteLogManager implements Closeable {
         remoteStorageReaderThreadPool = new RemoteStorageThreadPool(
                 REMOTE_LOG_READER_THREAD_NAME_PREFIX,
                 rlmConfig.remoteLogReaderThreads(),
-                rlmConfig.remoteLogReaderMaxPendingTasks(),
-                REMOTE_LOG_READER_METRICS_NAME_PREFIX
+                rlmConfig.remoteLogReaderMaxPendingTasks()
         );
     }
 
     private void removeMetrics() {
-        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
         remoteStorageReaderThreadPool.removeMetrics();
     }
 
