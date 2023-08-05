@@ -211,13 +211,13 @@ public class TestSslUtils {
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore, Mode mode, File trustStoreFile, String certAlias)
-            throws IOException, GeneralSecurityException {
+        throws IOException, GeneralSecurityException {
         return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, "localhost");
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
             Mode mode, File trustStoreFile, String certAlias, String cn)
-            throws IOException, GeneralSecurityException {
+        throws IOException, GeneralSecurityException {
         return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
