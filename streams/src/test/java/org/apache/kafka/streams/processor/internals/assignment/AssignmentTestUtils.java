@@ -71,11 +71,11 @@ public final class AssignmentTestUtils {
     public static final UUID UUID_8 = uuidForInt(8);
     public static final UUID UUID_9 = uuidForInt(9);
 
-    public static final String RACK_0 = "rock0";
-    public static final String RACK_1 = "rock1";
-    public static final String RACK_2 = "rock2";
-    public static final String RACK_3 = "rock3";
-    public static final String RACK_4 = "rock4";
+    public static final String RACK_0 = "rack0";
+    public static final String RACK_1 = "rack1";
+    public static final String RACK_2 = "rack2";
+    public static final String RACK_3 = "rack3";
+    public static final String RACK_4 = "rack4";
 
     public static final Node NODE_0 = new Node(0, "node0", 1, RACK_0);
     public static final Node NODE_1 = new Node(1, "node1", 1, RACK_1);
@@ -91,6 +91,16 @@ public final class AssignmentTestUtils {
     public static final String TP_0_NAME = "topic0";
     public static final String TP_1_NAME = "topic1";
 
+    public static final String CHANGELOG_TP_0_NAME = "store-0-changelog";
+    public static final String CHANGELOG_TP_1_NAME = "store-1-changelog";
+
+    public static final TopicPartition CHANGELOG_TP_0_0 = new TopicPartition(CHANGELOG_TP_0_NAME, 0);
+    public static final TopicPartition CHANGELOG_TP_0_1 = new TopicPartition(CHANGELOG_TP_0_NAME, 1);
+    public static final TopicPartition CHANGELOG_TP_0_2 = new TopicPartition(CHANGELOG_TP_0_NAME, 2);
+    public static final TopicPartition CHANGELOG_TP_1_0 = new TopicPartition(CHANGELOG_TP_1_NAME, 0);
+    public static final TopicPartition CHANGELOG_TP_1_1 = new TopicPartition(CHANGELOG_TP_1_NAME, 1);
+    public static final TopicPartition CHANGELOG_TP_1_2 = new TopicPartition(CHANGELOG_TP_1_NAME, 2);
+
     public static final TopicPartition TP_0_0 = new TopicPartition(TP_0_NAME, 0);
     public static final TopicPartition TP_0_1 = new TopicPartition(TP_0_NAME, 1);
     public static final TopicPartition TP_0_2 = new TopicPartition(TP_0_NAME, 2);
@@ -100,6 +110,7 @@ public final class AssignmentTestUtils {
 
     public static final PartitionInfo PI_0_0 = new PartitionInfo(TP_0_NAME, 0, NODE_0, REPLICA_0, REPLICA_0);
     public static final PartitionInfo PI_0_1 = new PartitionInfo(TP_0_NAME, 1, NODE_1, REPLICA_1, REPLICA_1);
+    public static final PartitionInfo PI_0_2 = new PartitionInfo(TP_0_NAME, 2, NODE_1, REPLICA_1, REPLICA_1);
     public static final PartitionInfo PI_1_0 = new PartitionInfo(TP_1_NAME, 0, NODE_2, REPLICA_2, REPLICA_2);
     public static final PartitionInfo PI_1_1 = new PartitionInfo(TP_1_NAME, 1, NODE_3, REPLICA_3, REPLICA_3);
     public static final PartitionInfo PI_1_2 = new PartitionInfo(TP_1_NAME, 2, NODE_0, REPLICA_0, REPLICA_0);

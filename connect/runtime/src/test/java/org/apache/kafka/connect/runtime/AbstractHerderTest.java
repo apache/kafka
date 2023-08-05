@@ -35,6 +35,7 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -667,12 +668,12 @@ public class AbstractHerderTest {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private PluginDesc<Predicate<?>> predicatePluginDesc() {
-        return new PluginDesc(SamplePredicate.class, "1.0", classLoader);
+        return new PluginDesc(SamplePredicate.class, "1.0", PluginType.PREDICATE, classLoader);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private PluginDesc<Transformation<?>> transformationPluginDesc() {
-        return new PluginDesc(SampleTransformation.class, "1.0", classLoader);
+        return new PluginDesc(SampleTransformation.class, "1.0", PluginType.TRANSFORMATION, classLoader);
     }
 
     @Test

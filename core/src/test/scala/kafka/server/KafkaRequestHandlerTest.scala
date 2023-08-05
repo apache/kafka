@@ -25,8 +25,11 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.server.log.remote.storage.{RemoteLogManagerConfig, RemoteStorageMetrics}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, when}
@@ -76,5 +79,23 @@ class KafkaRequestHandlerTest {
     assertEquals(startTime + 2000000, request.apiLocalCompleteTimeNanos)
     assertEquals(Some(startTime + 2000000), request.callbackRequestDequeueTimeNanos)
     assertEquals(Some(startTime + 3000000), request.callbackRequestCompleteTimeNanos)
+  }
+
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicStats(systemRemoteStorageEnabled: Boolean): Unit = {
+    val topic = "topic"
+    val props = kafka.utils.TestUtils.createDummyBrokerConfig()
+    props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
+    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    brokerTopicStats.topicStats(topic)
+    RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
+      if (systemRemoteStorageEnabled) {
+        assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
+      } else {
+        assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
+      }
+    })
   }
 }

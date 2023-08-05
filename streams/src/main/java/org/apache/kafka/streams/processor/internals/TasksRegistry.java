@@ -37,6 +37,8 @@ public interface TasksRegistry {
 
     Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId);
 
+    boolean hasPendingTasksToRecycle();
+
     void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions);
 
     Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId);
