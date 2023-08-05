@@ -83,7 +83,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val topic = "topic"
     val partition = 0
     val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
+    topicConfig.setProperty(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
 

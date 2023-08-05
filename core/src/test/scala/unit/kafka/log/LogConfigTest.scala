@@ -298,4 +298,16 @@ class LogConfigTest {
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact, delete")
     assertThrows(classOf[ConfigException], () => LogConfig.validate(props))
   }
+
+  @nowarn("cat=deprecation")
+  @Test
+  def testTimestampBeforeMaxMsUsesDeprecatedConfig(): Unit = {
+    val oneDayInMillis = 24 * 60 * 60 * 1000L
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put(KafkaConfig.LogMessageTimestampBeforeMaxMsProp, Long.MaxValue.toString)
+    kafkaProps.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, oneDayInMillis.toString)
+
+    val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
+    assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG))
+  }
 }

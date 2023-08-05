@@ -124,7 +124,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendWithInvalidCreateTime(quorum: String): Unit = {
     val topicProps = new Properties()
-    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
+    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
     TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()

@@ -642,7 +642,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(KafkaConfig.CompressionTypeProp, "gzip")
     props.put(KafkaConfig.LogPreAllocateProp, true.toString)
     props.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.toString)
-    props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, "1000")
+    props.put(KafkaConfig.LogMessageTimestampBeforeMaxMsProp, "1000")
     props.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogSegmentBytesProp, "4000"))
 
@@ -680,12 +680,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Verify that we can alter subset of log configs
     props.clear()
     props.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.CREATE_TIME.toString)
-    props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, "1000")
+    props.put(KafkaConfig.LogMessageTimestampBeforeMaxMsProp, "1000")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogMessageTimestampTypeProp, TimestampType.CREATE_TIME.toString))
     consumerThread.waitForMatchingRecords(record => record.timestampType == TimestampType.CREATE_TIME)
     // Verify that invalid configs are not applied
     val invalidProps = Map(
-      KafkaConfig.LogMessageTimestampDifferenceMaxMsProp -> "abc", // Invalid type
+      KafkaConfig.LogMessageTimestampBeforeMaxMsProp -> "abc", // Invalid type
       KafkaConfig.LogMessageTimestampTypeProp -> "invalid", // Invalid value
       KafkaConfig.LogRollTimeMillisProp -> "0" // Fails KafkaConfig validation
     )
