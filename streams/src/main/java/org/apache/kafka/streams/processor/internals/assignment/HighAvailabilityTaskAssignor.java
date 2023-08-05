@@ -134,7 +134,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             (source, destination) -> true
         );
 
-        if (rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
+        if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
             final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
                 DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
             final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
@@ -164,7 +164,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             standbyTaskAssignor::isAllowedTaskMovement
         );
 
-        if (rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
+        if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
             final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
                 DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
             final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
@@ -251,7 +251,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             statelessActiveTaskClientsByTaskLoad.offer(client);
         }
 
-        if (rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
+        if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.isPresent() && rackAwareTaskAssignor.get().canEnableRackAwareAssignor()) {
             rackAwareTaskAssignor.get().optimizeActiveTasks(sortedTasks, clientStates,
                 STATELESS_TRAFFIC_COST, STATELESS_NON_OVERLAP_COST);
         }
