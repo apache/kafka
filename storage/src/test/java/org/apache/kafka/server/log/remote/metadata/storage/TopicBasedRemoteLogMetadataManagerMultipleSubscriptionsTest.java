@@ -24,7 +24,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
@@ -43,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
@@ -133,12 +133,14 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
             0, 100, -1L, 0,
             time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-        Assertions.assertThrows(Exception.class, () -> rlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
+        Assertions.assertThrows(ExecutionException.class, () -> rlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get(),
+            "org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Partitions currently assigned: []");
 
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
             0, 100, -1L, 0,
             time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-        Assertions.assertThrows(Exception.class, () -> rlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
+        Assertions.assertThrows(ExecutionException.class, () -> rlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get(),
+            "org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Partitions currently assigned: []");
 
         // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.
         Assertions.assertThrows(RemoteStorageException.class, () -> rlmm().listRemoteLogSegments(leaderTopicIdPartition));
@@ -164,23 +166,11 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         TestUtils.waitForCondition(() -> rlmm().listRemoteLogSegments(followerTopicIdPartition).hasNext(), "No segments found");
     }
 
-    private void waitUntilConsumerCatchesUp(long timeoutMs) throws TimeoutException {
-        long sleepMs = 5000L;
-        long time = System.currentTimeMillis();
-
-        while (true) {
-            if (System.currentTimeMillis() - time > timeoutMs) {
-                throw new TimeoutException("Timed out after " + timeoutMs + "ms ");
-            }
-
+    private void waitUntilConsumerCatchesUp(long timeoutMs) throws TimeoutException, InterruptedException {
+        TestUtils.waitForCondition(() -> {
             // If both the leader and follower partitions are mapped to the same metadata partition which is 0, it
             // should have at least 2 messages. That means, received offset should be >= 1 (including duplicate messages if any).
-            if (rlmm().receivedOffsetForPartition(0).orElse(-1L) >= 1) {
-                break;
-            }
-
-            log.debug("Sleeping for: " + sleepMs);
-            Utils.sleep(sleepMs);
-        }
+            return rlmm().receivedOffsetForPartition(0).orElse(-1L) >= 1;
+        }, timeoutMs, "Consumer did not catch up");
     }
 }

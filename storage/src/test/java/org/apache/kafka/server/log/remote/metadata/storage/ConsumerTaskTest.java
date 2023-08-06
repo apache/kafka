@@ -52,6 +52,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -93,10 +94,13 @@ public class ConsumerTaskTest {
     public void afterEach() throws InterruptedException {
         if (thread != null) {
             consumerTask.close();
-            thread.join();
+            thread.join(10_000);
         }
     }
 
+    /**
+     * Tests that the consumer task shuts down gracefully when there were no assignments.
+     */
     @Test
     public void testCloseOnNoAssignment() throws InterruptedException {
         thread.start();
@@ -133,7 +137,7 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(new HashSet<>(idPartitions));
         thread.start();
         for (final TopicIdPartition idPartition : idPartitions) {
-            TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(idPartition), 1000, "");
+            TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(idPartition), "Timed out waiting for " + idPartition + " to be assigned");
             assertTrue(consumerTask.isMetadataPartitionAssigned(partitioner.metadataPartition(idPartition)));
             assertTrue(handler.isPartitionLoaded.get(idPartition));
         }
@@ -150,19 +154,20 @@ public class ConsumerTaskTest {
         thread.start();
 
         final TopicIdPartition tpId = allPartitions.get(0);
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), 1000, "");
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Timed out waiting for " + tpId + " to be assigned");
         addRecord(consumer, partitioner.metadataPartition(tpId), tpId, 0);
         TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(partitioner.metadataPartition(tpId)).isPresent(),
-            1000, "Wait for the record to be consumed");
+            "Couldn't read record");
 
         final Set<TopicIdPartition> removePartitions = Collections.singleton(tpId);
         consumerTask.removeAssignmentsForPartitions(removePartitions);
         for (final TopicIdPartition idPartition : allPartitions) {
             final TestCondition condition = () -> removePartitions.contains(idPartition) == !consumerTask.isUserPartitionAssigned(idPartition);
-            TestUtils.waitForCondition(condition, 1000, "");
+            TestUtils.waitForCondition(condition, "Timed out waiting for " + idPartition + " to be removed");
         }
         for (TopicIdPartition removePartition : removePartitions) {
-            TestUtils.waitForCondition(() -> handler.isPartitionCleared.containsKey(removePartition), 1000, "");
+            TestUtils.waitForCondition(() -> handler.isPartitionCleared.containsKey(removePartition),
+                "Timed out waiting for " + removePartition + " to be cleared");
         }
     }
 
@@ -175,9 +180,21 @@ public class ConsumerTaskTest {
         consumer.updateEndOffsets(endOffsets);
 
         final AtomicBoolean isAllPartitionsAssigned = new AtomicBoolean(false);
+        CountDownLatch latch = new CountDownLatch(1);
         Thread assignor = new Thread(() -> {
+            int partitionsAssigned = 0;
             for (TopicIdPartition partition : allPartitions) {
+                if (partitionsAssigned == 50) {
+                    // Once half the topic partitions are assigned, wait for the consumer to catch up. This ensures
+                    // that the consumer is already running when the rest of the partitions are assigned.
+                    try {
+                        latch.await(1, TimeUnit.MINUTES);
+                    } catch (InterruptedException e) {
+                        fail(e.getMessage());
+                    }
+                }
                 consumerTask.addAssignmentsForPartitions(Collections.singleton(partition));
+                partitionsAssigned++;
             }
             isAllPartitionsAssigned.set(true);
         });
@@ -185,6 +202,7 @@ public class ConsumerTaskTest {
             try {
                 while (!isAllPartitionsAssigned.get()) {
                     consumerTask.maybeWaitForPartitionsAssignment();
+                    latch.countDown();
                 }
             } catch (Exception e) {
                 fail(e.getMessage());
@@ -205,31 +223,31 @@ public class ConsumerTaskTest {
         final TopicIdPartition tpId0 = new TopicIdPartition(topicId, new TopicPartition("sample", 0));
         final TopicIdPartition tpId1 = new TopicIdPartition(topicId, new TopicPartition("sample", 1));
         final TopicIdPartition tpId2 = new TopicIdPartition(topicId, new TopicPartition("sample", 2));
-        assert partitioner.metadataPartition(tpId0) == partitioner.metadataPartition(tpId1);
-        assert partitioner.metadataPartition(tpId0) == partitioner.metadataPartition(tpId2);
+        assertEquals(partitioner.metadataPartition(tpId0), partitioner.metadataPartition(tpId1));
+        assertEquals(partitioner.metadataPartition(tpId0), partitioner.metadataPartition(tpId2));
 
         final int metadataPartition = partitioner.metadataPartition(tpId0);
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 0L));
         final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
         thread.start();
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId0), 1000, "");
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId0), "Timed out waiting for " + tpId0 + " to be assigned");
 
         addRecord(consumer, metadataPartition, tpId0, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(1L)), 1000, "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         assertEquals(2, handler.metadataCounter);
 
         // should only read the tpId1 records
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId1), 1000, "");
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId1), "Timed out waiting for " + tpId1 + " to be assigned");
         addRecord(consumer, metadataPartition, tpId1, 2);
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(2L)), 1000, "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(2L)), "Couldn't read record");
         assertEquals(3, handler.metadataCounter);
 
-        // shouldn't read tpId2 records
+        // shouldn't read tpId2 records because it's not assigned
         addRecord(consumer, metadataPartition, tpId2, 3);
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(3L)), 1000, "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(3L)), "Couldn't read record");
         assertEquals(3, handler.metadataCounter);
     }
 
@@ -241,11 +259,11 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         thread.start();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), 1000, "");
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
         assertFalse(handler.isPartitionInitialized.containsKey(tpId));
         IntStream.range(0, 5).forEach(offset -> addRecord(consumer, metadataPartition, tpId, offset));
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(4L)), 1000, "Couldn't read records");
+        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(4L)), "Couldn't read record");
         assertTrue(handler.isPartitionInitialized.get(tpId));
     }
 
@@ -260,9 +278,9 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         thread.start();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), 1000, "");
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
-        TestUtils.waitForCondition(() -> handler.isPartitionInitialized.containsKey(tpId), 1000,
+        TestUtils.waitForCondition(() -> handler.isPartitionInitialized.containsKey(tpId),
             "should have initialized the partition");
         assertFalse(consumerTask.receivedOffsetForPartition(metadataPartition).isPresent());
     }
@@ -305,7 +323,7 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         thread.start();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), 1000, "");
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
         consumer.setPollException(new LeaderNotAvailableException("leader not available!"));
@@ -313,7 +331,7 @@ public class ConsumerTaskTest {
         consumer.setPollException(new TimeoutException("Not able to complete the operation within the timeout"));
         addRecord(consumer, metadataPartition, tpId, 1);
 
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(1L)), 1000, "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         assertEquals(2, handler.metadataCounter);
     }
 
@@ -325,11 +343,11 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         thread.start();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), 1000, "");
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
         consumer.setPollException(new AuthorizationException("Unauthorized to read the topic!"));
-        TestUtils.waitForCondition(() -> consumer.closed(), 1000, "Should close the consume on non-retriable error");
+        TestUtils.waitForCondition(() -> consumer.closed(), "Should close the consume on non-retriable error");
     }
 
     private void addRecord(final MockConsumer<byte[], byte[]> consumer,

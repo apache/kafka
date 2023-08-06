@@ -73,12 +73,11 @@ class ConsumerTask implements Runnable, Closeable {
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final Time time = new SystemTime();
 
-    // TODO - Update comments below
-    // It indicates whether the closing process has been started or not. If it is set as true,
-    // consumer will stop consuming messages, and it will not allow partition assignments to be updated.
+    // It indicates whether the ConsumerTask is closed or not.
     private volatile boolean isClosed = false;
-    // It indicates whether the consumer needs to assign the partitions or not. This is set when it is
-    // determined that the consumer needs to be assigned with the updated partitions.
+    // It indicates whether the user topic partition assignment to the consumer has changed or not. If the assignment
+    // has changed, the consumer will eventually start tracking the newly assigned partitions and stop tracking the
+    // ones it is no longer assigned to.
     private volatile boolean isAssignmentChanged = true;
 
     // It represents a lock for any operations related to the assignedTopicPartitions.
@@ -130,7 +129,7 @@ class ConsumerTask implements Runnable, Closeable {
                 isClosed = true;
             } catch (final RetriableException ex) {
                 log.warn("Retriable error occurred while processing the records. Retrying...", ex);
-            }  catch (final Exception ex) {
+            } catch (final Exception ex) {
                 isClosed = true;
                 log.error("Error occurred while processing the records", ex);
             }
@@ -180,7 +179,14 @@ class ConsumerTask implements Runnable, Closeable {
                     // are no records to read.
                     if (readOffset + 1 >= holder.endOffset || holder.endOffset.equals(holder.beginOffset)) {
                         markInitialized(utp);
+                    } else {
+                        log.debug("The user-topic-partition {} could not be marked initialized since the read-offset is {} " +
+                                "but the end-offset is {} for the metadata-partition {}", utp, readOffset, holder.endOffset,
+                            metadataPartition);
                     }
+                } else {
+                    log.debug("The offset-holder is null for the metadata-partition {}. The consumer may not have picked" +
+                            " up the recent assignment", metadataPartition);
                 }
             }
             isAllInitialized = isAllInitialized && utp.isInitialized;
@@ -280,14 +286,13 @@ class ConsumerTask implements Runnable, Closeable {
         log.info("Updating assignments for partitions added: {} and removed: {}", addedPartitions, removedPartitions);
         if (!addedPartitions.isEmpty() || !removedPartitions.isEmpty()) {
             synchronized (assignPartitionsLock) {
-                final Map<TopicIdPartition, UserTopicIdPartition> idealUserPartitions = new HashMap<>(assignedUserTopicIdPartitions);
-                addedPartitions.forEach(tpId -> idealUserPartitions.putIfAbsent(tpId, newUserTopicIdPartition(tpId)));
-                removedPartitions.forEach(idealUserPartitions::remove);
-                if (!idealUserPartitions.equals(assignedUserTopicIdPartitions)) {
-                    assignedUserTopicIdPartitions = Collections.unmodifiableMap(idealUserPartitions);
+                // Make a copy of the existing assignments and update the copy.
+                final Map<TopicIdPartition, UserTopicIdPartition> updatedUserPartitions = new HashMap<>(assignedUserTopicIdPartitions);
+                addedPartitions.forEach(tpId -> updatedUserPartitions.putIfAbsent(tpId, newUserTopicIdPartition(tpId)));
+                removedPartitions.forEach(updatedUserPartitions::remove);
+                if (!updatedUserPartitions.equals(assignedUserTopicIdPartitions)) {
+                    assignedUserTopicIdPartitions = Collections.unmodifiableMap(updatedUserPartitions);
                     isAssignmentChanged = true;
-                }
-                if (isAssignmentChanged) {
                     log.debug("Assigned user-topic-partitions: {}", assignedUserTopicIdPartitions);
                     assignPartitionsLock.notifyAll();
                 }
@@ -414,6 +419,7 @@ class ConsumerTask implements Runnable, Closeable {
                 "topicIdPartition=" + topicIdPartition +
                 ", metadataPartition=" + metadataPartition +
                 ", isInitialized=" + isInitialized +
+                ", isAssigned=" + isAssigned +
                 '}';
         }
 
