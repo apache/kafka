@@ -107,7 +107,7 @@ class MiniKdc(KafkaPathResolverMixin, Service):
         cmd = "for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_libs_jar
         cmd += " for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_dependant_test_libs_jar
         cmd += " export CLASSPATH;"
-        # fixes java.lang.IllegalAccessException because of usage class sun.security.krb5.Config
+        # avoids java.lang.IllegalAccessException due to usage of internal `sun.security.krb5.Config` in `MiniKdc`
         cmd += " export KAFKA_OPTS=\"--add-exports java.security.jgss/sun.security.krb5=ALL-UNNAMED\";"
         cmd += " %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (self.path.script("kafka-run-class.sh", node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
