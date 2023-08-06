@@ -280,6 +280,10 @@ object TestUtils extends Logging {
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
   }
 
+  def createDummyBrokerConfig(): Properties = {
+    createBrokerConfig(0, "")
+  }
+
   /**
     * Create a test config for the provided parameters.
     *

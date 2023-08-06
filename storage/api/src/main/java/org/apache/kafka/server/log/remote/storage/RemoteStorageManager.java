@@ -18,9 +18,11 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.io.Closeable;
 import java.io.InputStream;
+import java.util.Optional;
 
 /**
  * This interface provides the lifecycle of remote log segments that includes copy, fetch, and delete from remote
@@ -81,10 +83,11 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param logSegmentData           data to be copied to tiered storage.
+     * @return custom metadata to be added to the segment metadata after copying.
      * @throws RemoteStorageException if there are any errors in storing the data of the segment.
      */
-    void copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                            LogSegmentData logSegmentData)
+    Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                                LogSegmentData logSegmentData)
             throws RemoteStorageException;
 
     /**

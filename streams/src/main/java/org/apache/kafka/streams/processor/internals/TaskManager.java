@@ -763,7 +763,7 @@ public class TaskManager {
         if (stateUpdater.restoresActiveTasks()) {
             handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
-        return !stateUpdater.restoresActiveTasks();
+        return !stateUpdater.restoresActiveTasks() && !tasks.hasPendingTasksToRecycle();
     }
 
     private void recycleTaskFromStateUpdater(final Task task,
