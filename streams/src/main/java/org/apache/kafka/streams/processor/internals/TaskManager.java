@@ -1850,7 +1850,7 @@ public class TaskManager {
             }
             if (!recordsToDelete.isEmpty()) {
                 deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
-                log.trace("Sent delete-records request: {}", recordsToDelete);
+                log.info("Sent delete-records request: {}", recordsToDelete);
             }
         }
     }
