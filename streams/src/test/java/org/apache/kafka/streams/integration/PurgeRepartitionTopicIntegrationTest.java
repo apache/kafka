@@ -145,7 +145,7 @@ public class PurgeRepartitionTopicIntegrationTest {
                     }
                 }
             } catch (final Exception e) {
-                // swallow
+                e.printStackTrace();
             }
 
             return false;
@@ -215,7 +215,10 @@ public class PurgeRepartitionTopicIntegrationTest {
         // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side
         final long waitForPurgeMs = 120000;
         TestUtils.waitForCondition(
-            new RepartitionTopicVerified(currentSize -> currentSize <= PURGE_SEGMENT_BYTES),
+            new RepartitionTopicVerified(currentSize -> {
+                System.out.println("Current size: " + currentSize);
+                return currentSize <= PURGE_SEGMENT_BYTES.longValue();
+            }),
             waitForPurgeMs,
             "Repartition topic " + REPARTITION_TOPIC + " not purged data after " + waitForPurgeMs + " ms."
         );
