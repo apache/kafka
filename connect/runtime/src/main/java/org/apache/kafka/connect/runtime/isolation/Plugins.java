@@ -63,7 +63,7 @@ public class Plugins {
     // VisibleForTesting
     Plugins(Map<String, String> props, ClassLoader parent, ClassLoaderFactory factory) {
         String pluginPath = WorkerConfig.pluginPath(props);
-        List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
+        Set<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = factory.newDelegatingClassLoader(parent);
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, delegatingLoader, factory);
         scanResult = initLoaders(pluginSources);

@@ -92,7 +92,8 @@ public class RemoteLogSegmentLifecycleTest {
             });
 
             RemoteLogSegmentMetadataUpdate segment0Update = new RemoteLogSegmentMetadataUpdate(
-                    segment0Id, time.milliseconds(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
+                    segment0Id, time.milliseconds(), Optional.empty(),
+                    RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
             remoteLogSegmentLifecycleManager.updateRemoteLogSegmentMetadata(segment0Update);
             RemoteLogSegmentMetadata expectedSegment0Metadata = segment0Metadata.createWithUpdates(segment0Update);
 
@@ -167,6 +168,7 @@ public class RemoteLogSegmentLifecycleTest {
             remoteLogSegmentLifecycleManager
                     .updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(expectedSegment0Metadata.remoteLogSegmentId(),
                                                                                        time.milliseconds(),
+                                                                                       Optional.empty(),
                                                                                        RemoteLogSegmentState.DELETE_SEGMENT_STARTED,
                                                                                        BROKER_ID_1));
             Assertions.assertFalse(remoteLogSegmentLifecycleManager.remoteLogSegmentMetadata(0, 10).isPresent());
@@ -176,6 +178,7 @@ public class RemoteLogSegmentLifecycleTest {
             remoteLogSegmentLifecycleManager
                     .updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(expectedSegment0Metadata.remoteLogSegmentId(),
                                                                                        time.milliseconds(),
+                                                                                       Optional.empty(),
                                                                                        RemoteLogSegmentState.DELETE_SEGMENT_FINISHED,
                                                                                        BROKER_ID_1));
             Assertions.assertFalse(remoteLogSegmentLifecycleManager.remoteLogSegmentMetadata(0, 10).isPresent());
@@ -218,7 +221,9 @@ public class RemoteLogSegmentLifecycleTest {
                                                                                 time.milliseconds(), SEG_SIZE, segmentLeaderEpochs);
         remoteLogSegmentLifecycleManager.addRemoteLogSegmentMetadata(segmentMetadata);
 
-        RemoteLogSegmentMetadataUpdate segMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(), state, BROKER_ID_1);
+        RemoteLogSegmentMetadataUpdate segMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
+                Optional.empty(),
+                state, BROKER_ID_1);
         remoteLogSegmentLifecycleManager.updateRemoteLogSegmentMetadata(segMetadataUpdate);
 
         return segmentMetadata.createWithUpdates(segMetadataUpdate);
@@ -367,6 +372,7 @@ public class RemoteLogSegmentLifecycleTest {
 
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(),
                                                                                                       time.milliseconds(),
+                                                                                                      Optional.empty(),
                                                                                                       RemoteLogSegmentState.DELETE_SEGMENT_FINISHED,
                                                                                                       BROKER_ID_1);
             remoteLogSegmentLifecycleManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate);
