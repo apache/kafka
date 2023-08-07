@@ -317,7 +317,7 @@ object CoreUtils {
     elements.groupMapReduce(key)(f)(reduce)
   }
 
-  def asScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
+  def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
     map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
   }
 }
