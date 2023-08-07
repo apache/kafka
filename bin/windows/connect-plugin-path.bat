@@ -14,4 +14,8 @@ rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
+IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
+	set KAFKA_HEAP_OPTS=-Xms256M -Xmx2G
+)
+
 "%~dp0kafka-run-class.bat" org.apache.kafka.tools.ConnectPluginPath %*
