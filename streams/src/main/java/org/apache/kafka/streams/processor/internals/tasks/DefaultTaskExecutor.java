@@ -16,13 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.slf4j.Logger;
 
@@ -93,9 +98,9 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 boolean progressed = false;
 
                 if (taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
-                    log.trace("processing record for task {}", currentTask.id());
-                    currentTask.process(nowMs);
-                    progressed = true;
+                    if (processTask(currentTask, nowMs, time)) {
+                        progressed = true;
+                    }
                 }
 
                 if (taskExecutionMetadata.canPunctuateTask(currentTask)) {
@@ -113,6 +118,44 @@ public class DefaultTaskExecutor implements TaskExecutor {
                     unassignCurrentTask();
                 }
             }
+        }
+
+        private boolean processTask(final Task task, final long now, final Time time) {
+            boolean processed = false;
+            try {
+                processed = task.process(now);
+                if (processed) {
+                    task.clearTaskTimeout();
+                    // TODO: enable regardless of whether using named topologies
+                    if (taskExecutionMetadata.hasNamedTopologies() && taskExecutionMetadata.processingMode() != EXACTLY_ONCE_V2) {
+                        log.trace("Successfully processed task {}", task.id());
+                        taskExecutionMetadata.addToSuccessfullyProcessed(task);
+                    }
+                }
+            } catch (final TimeoutException timeoutException) {
+                // TODO consolidate TimeoutException retries with general error handling
+                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                log.error(
+                    String.format(
+                        "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
+                        task.id()),
+                    timeoutException
+                );
+            } catch (final TaskMigratedException e) {
+                log.info("Failed to process stream task {} since it got migrated to another thread already. " +
+                    "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
+                throw e;
+            } catch (final StreamsException e) {
+                log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
+                e.setTaskId(task.id());
+                throw e;
+            } catch (final RuntimeException e) {
+                log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
+                throw new StreamsException(e, task.id());
+            } finally {
+                task.recordProcessBatchTime(time.milliseconds() - now);
+            }
+            return processed;
         }
 
         private StreamTask unassignCurrentTask() {
@@ -133,11 +176,11 @@ public class DefaultTaskExecutor implements TaskExecutor {
     private final Time time;
     private final String name;
     private final TaskManager taskManager;
+    private final TaskExecutionMetadata taskExecutionMetadata;
 
     private StreamTask currentTask = null;
     private TaskExecutorThread taskExecutorThread = null;
     private CountDownLatch shutdownGate;
-    private TaskExecutionMetadata taskExecutionMetadata;
 
     public DefaultTaskExecutor(final TaskManager taskManager,
                                final String name,
