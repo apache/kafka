@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -27,7 +28,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -158,6 +161,24 @@ public class DefaultBackgroundThread<K, V> extends KafkaThread implements Closea
             Utils.closeQuietly(requestManagers, "Request managers client");
             Utils.closeQuietly(networkClientDelegate, "network client utils");
             log.debug("Closed the consumer background thread");
+            drainAndComplete();
         }, () -> log.warn("The consumer background thread was previously closed"));
+    }
+
+
+    /**
+     * It is possible for the background thread to close before complete processing all the events in the queue. In
+     * this case, we need throw an exception to notify the user the consumer is closed.
+     */
+    private void drainAndComplete() {
+        List<ApplicationEvent> incompletedEvents = new ArrayList<>();
+        applicationEventQueue.drainTo(incompletedEvents);
+        incompletedEvents.forEach(event -> {
+            if (event instanceof CompletableApplicationEvent) {
+                ((CompletableApplicationEvent<?>) event).future().completeExceptionally(
+                    new KafkaException("The consumer is closed"));
+            }
+        });
+        log.debug("Discarding {} events because the consumer is closed", incompletedEvents.size());
     }
 }

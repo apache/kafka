@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
@@ -59,6 +60,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -255,6 +257,22 @@ public class DefaultBackgroundThreadTest {
         backgroundThread.runOnce();
         verify(this.metadata, times(1)).updateWithCurrentRequestVersion(eq(metadataResponse), eq(false), anyLong());
         backgroundThread.close();
+    }
+
+    @Test
+    void testEnsureEventsAreCompleted() {
+        CompletableApplicationEvent event = mock(CompletableApplicationEvent.class);
+        ApplicationEvent e  = mock(ApplicationEvent.class);
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        when(event.future()).thenReturn(future);
+        applicationEventsQueue.add(event);
+        applicationEventsQueue.add(e);
+        assertFalse(future.isDone());
+        assertFalse(applicationEventsQueue.isEmpty());
+
+        backgroundThread.close();
+        assertTrue(future.isCompletedExceptionally());
+        assertTrue(applicationEventsQueue.isEmpty());
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
