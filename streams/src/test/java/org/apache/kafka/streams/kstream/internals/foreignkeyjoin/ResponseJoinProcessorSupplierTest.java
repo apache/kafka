@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
@@ -39,6 +41,7 @@ import static org.hamcrest.collection.IsEmptyCollection.empty;
 
 public class ResponseJoinProcessorSupplierTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
+    private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
     private static final ValueJoiner<String, String, String> JOINER =
         (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
@@ -76,75 +79,90 @@ public class ResponseJoinProcessorSupplierTest {
 
     @Test
     public void shouldNotForwardWhenHashDoesNotMatch() {
-        final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
+        final TestKTableValueGetterSupplier<Bytes, byte[]> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
         final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
             new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
-                STRING_SERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
-        final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
+        final Processor<Bytes, SubscriptionResponseWrapper<byte[]>, String, String> processor = processorSupplier.get();
         final org.apache.kafka.streams.processor.api.MockProcessorContext<String, String> context = new org.apache.kafka.streams.processor.api.MockProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        valueGetterSupplier.put("lhs1", "lhsValue");
+        valueGetterSupplier.put(new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")), STRING_SERIALIZER.serialize(null, "lhsValue"));
         final long[] oldHash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "oldLhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(oldHash, "rhsValue", 0), 0));
+        processor.process(new Record<>(
+                new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")),
+                new SubscriptionResponseWrapper<>(oldHash, STRING_SERIALIZER.serialize(null, "rhsValue"), 0),
+                0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded, empty());
     }
 
     @Test
     public void shouldIgnoreUpdateWhenLeftHasBecomeNull() {
-        final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
+        final TestKTableValueGetterSupplier<Bytes, byte[]> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
         final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
             new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
-                STRING_SERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
-        final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
+        final Processor<Bytes, SubscriptionResponseWrapper<byte[]>, String, String> processor = processorSupplier.get();
         final MockProcessorContext<String, String> context = new MockProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        valueGetterSupplier.put("lhs1", null);
+        valueGetterSupplier.put(new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")), null);
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue", 0), 0));
+        processor.process(new Record<>(
+                new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")),
+                new SubscriptionResponseWrapper<>(hash, STRING_SERIALIZER.serialize(null, "rhsValue"), 0),
+                0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded, empty());
     }
 
     @Test
     public void shouldForwardWhenHashMatches() {
-        final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
+        final TestKTableValueGetterSupplier<Bytes, byte[]> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
         final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
             new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
-                STRING_SERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
-        final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
+        final Processor<Bytes, SubscriptionResponseWrapper<byte[]>, String, String> processor = processorSupplier.get();
         final MockProcessorContext<String, String> context = new MockProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        valueGetterSupplier.put("lhs1", "lhsValue");
+        valueGetterSupplier.put(new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")), STRING_SERIALIZER.serialize(null, "lhsValue"));
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue", 0), 0));
+        processor.process(new Record<>(
+                new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")),
+                new SubscriptionResponseWrapper<>(hash, STRING_SERIALIZER.serialize(null, "rhsValue"), 0),
+                0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,rhsValue)", 0)));
@@ -152,25 +170,30 @@ public class ResponseJoinProcessorSupplierTest {
 
     @Test
     public void shouldEmitTombstoneForInnerJoinWhenRightIsNull() {
-        final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
+        final TestKTableValueGetterSupplier<Bytes, byte[]> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
         final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
             new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
-                STRING_SERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
-        final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
+        final Processor<Bytes, SubscriptionResponseWrapper<byte[]>, String, String> processor = processorSupplier.get();
         final MockProcessorContext<String, String> context = new MockProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        valueGetterSupplier.put("lhs1", "lhsValue");
+        valueGetterSupplier.put(new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")), STRING_SERIALIZER.serialize(null, "lhsValue"));
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
+        processor.process(new Record<>(
+                new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")),
+                new SubscriptionResponseWrapper<>(hash, null, 0),
+                0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
@@ -178,25 +201,30 @@ public class ResponseJoinProcessorSupplierTest {
 
     @Test
     public void shouldEmitResultForLeftJoinWhenRightIsNull() {
-        final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
+        final TestKTableValueGetterSupplier<Bytes, byte[]> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = true;
         final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
             new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
-                STRING_SERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
-        final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
+        final Processor<Bytes, SubscriptionResponseWrapper<byte[]>, String, String> processor = processorSupplier.get();
         final MockProcessorContext<String, String> context = new MockProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        valueGetterSupplier.put("lhs1", "lhsValue");
+        valueGetterSupplier.put(new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")), STRING_SERIALIZER.serialize(null, "lhsValue"));
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
+        processor.process(new Record<>(
+                new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")),
+                new SubscriptionResponseWrapper<>(hash, null, 0),
+                0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,null)", 0)));
@@ -204,25 +232,30 @@ public class ResponseJoinProcessorSupplierTest {
 
     @Test
     public void shouldEmitTombstoneForLeftJoinWhenRightIsNullAndLeftIsNull() {
-        final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
+        final TestKTableValueGetterSupplier<Bytes, byte[]> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = true;
         final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
             new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
-                STRING_SERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
-        final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
+        final Processor<Bytes, SubscriptionResponseWrapper<byte[]>, String, String> processor = processorSupplier.get();
         final MockProcessorContext<String, String> context = new MockProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        valueGetterSupplier.put("lhs1", null);
+        valueGetterSupplier.put(new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")), null);
         final long[] hash = null;
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
+        processor.process(new Record<>(
+                new Bytes(STRING_SERIALIZER.serialize(null, "lhs1")),
+                new SubscriptionResponseWrapper<>(hash, null, 0),
+                0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
