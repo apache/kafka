@@ -24,7 +24,6 @@ import java.util.Objects;
 
 public class PluginSource {
 
-    public static final Path CLASSPATH = Paths.get("classpath");
     private final Path location;
     private final ClassLoader loader;
     private final URL[] urls;
@@ -48,7 +47,7 @@ public class PluginSource {
     }
 
     public boolean isolated() {
-        return location != CLASSPATH;
+        return location != null;
     }
 
     @Override

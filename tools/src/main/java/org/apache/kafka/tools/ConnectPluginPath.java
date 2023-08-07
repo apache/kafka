@@ -275,10 +275,10 @@ public class ConnectPluginPath {
 
         public Row(Path pluginLocation, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
             this.pluginLocation = pluginLocation;
-            this.className = className;
-            this.version = version;
-            this.type = type;
-            this.aliases = aliases;
+            this.className = Objects.requireNonNull(className, "className must be non-null");
+            this.version = Objects.requireNonNull(version, "version must be non-null");
+            this.type = Objects.requireNonNull(type, "type must be non-null");
+            this.aliases = Objects.requireNonNull(aliases, "aliases must be non-null");
             this.loadable = loadable;
             this.hasManifest = hasManifest;
         }
@@ -291,12 +291,16 @@ public class ConnectPluginPath {
             return loadable && hasManifest;
         }
 
+        private String locationString() {
+            return pluginLocation == null ? "classpath" : pluginLocation.toString();
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             Row row = (Row) o;
-            return pluginLocation.equals(row.pluginLocation) && className.equals(row.className) && type == row.type;
+            return Objects.equals(pluginLocation, row.pluginLocation) && className.equals(row.className) && type == row.type;
         }
 
         @Override
@@ -353,7 +357,8 @@ public class ConnectPluginPath {
                     row.type,
                     row.loadable,
                     row.hasManifest,
-                    row.pluginLocation // last because it is least important and most repetitive
+                    // last because it is least important and most repetitive
+                    row.locationString()
             );
         }
     }
@@ -377,7 +382,7 @@ public class ConnectPluginPath {
                     }
                 }
             }
-            rowsByLocation.remove(PluginSource.CLASSPATH);
+            rowsByLocation.remove(null);
             Set<Row> isolatedRows = rowsByLocation.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
             long totalPlugins = isolatedRows.size();
             long loadablePlugins = isolatedRows.stream().filter(Row::loadable).count();

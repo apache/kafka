@@ -372,7 +372,7 @@ public class PluginUtils {
         List<URL> parentUrls = new ArrayList<>();
         parentUrls.addAll(ClasspathHelper.forJavaClassPath());
         parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader));
-        return new PluginSource(PluginSource.CLASSPATH, classLoader, parentUrls.toArray(new URL[0]));
+        return new PluginSource(null, classLoader, parentUrls.toArray(new URL[0]));
     }
 
     /**
