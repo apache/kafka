@@ -218,6 +218,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
     public static class Key<R extends ConnectRecord<R>> extends ReplaceField<R> {
+
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -236,6 +237,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     }
 
     public static class Value<R extends ConnectRecord<R>> extends ReplaceField<R> {
+
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

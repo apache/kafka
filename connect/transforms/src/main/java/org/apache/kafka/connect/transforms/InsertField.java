@@ -244,6 +244,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
     public static class Key<R extends ConnectRecord<R>> extends InsertField<R> {
+
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -262,6 +263,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     }
 
     public static class Value<R extends ConnectRecord<R>> extends InsertField<R> {
+
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

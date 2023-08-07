@@ -92,7 +92,6 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
     public static class Key<R extends ConnectRecord<R>> extends ExtractField<R> {
-
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -110,7 +109,6 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     }
 
     public static class Value<R extends ConnectRecord<R>> extends ExtractField<R> {
-
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();

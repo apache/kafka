@@ -448,7 +448,6 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     }
 
     public static final class Key<R extends ConnectRecord<R>> extends Cast<R> {
-
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -466,7 +465,6 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     }
 
     public static final class Value<R extends ConnectRecord<R>> extends Cast<R> {
-
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();
