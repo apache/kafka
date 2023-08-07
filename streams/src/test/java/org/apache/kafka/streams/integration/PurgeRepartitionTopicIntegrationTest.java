@@ -65,7 +65,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     private static Admin adminClient;
     private static KafkaStreams kafkaStreams;
-    private static final Integer PURGE_INTERVAL_MS = 10;
+    private static final Integer PURGE_INTERVAL_MS = 5;
     private static final Integer PURGE_SEGMENT_BYTES = 2000;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {

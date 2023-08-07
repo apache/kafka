@@ -1838,7 +1838,7 @@ public class TaskManager {
         if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
 
             if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
-                log.debug("Previous delete-records request has failed: {}. Try sending the new request now",
+                log.info("Previous delete-records request has failed: {}. Try sending the new request now",
                           deleteRecordsResult.lowWatermarks());
             }
 
