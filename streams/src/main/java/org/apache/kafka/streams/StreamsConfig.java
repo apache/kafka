@@ -934,7 +934,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
                     Type.INT,
                     null,
-                Importance.MEDIUM,
+                    Importance.MEDIUM,
                 RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
