@@ -87,10 +87,17 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
             if (currentTask == null) {
                 currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
-            } else {
+            }
+
+            if (currentTask != null) {
                 boolean progressed = false;
 
-                // First, attempt to punctuate
+                if (taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
+                    log.trace("processing record for task {}", currentTask.id());
+                    currentTask.process(nowMs);
+                    progressed = true;
+                }
+
                 if (taskExecutionMetadata.canPunctuateTask(currentTask)) {
                     if (currentTask.maybePunctuateStreamTime()) {
                         log.trace("punctuated stream time for task {} ", currentTask.id());
@@ -100,14 +107,6 @@ public class DefaultTaskExecutor implements TaskExecutor {
                         log.trace("punctuated system time for task {} ", currentTask.id());
                         progressed = true;
                     }
-                }
-
-                // if a task is no longer processable, ask task-manager to give it another
-                // task in the next iteration
-                if (taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
-                    log.trace("processing record for task {}", currentTask.id());
-                    currentTask.process(nowMs);
-                    progressed = true;
                 }
 
                 if (!progressed) {
