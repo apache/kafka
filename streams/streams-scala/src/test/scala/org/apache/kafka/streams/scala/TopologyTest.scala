@@ -46,6 +46,7 @@ import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, S
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -60,6 +61,7 @@ class TopologyTest {
 
   private val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
+  @nowarn("cat=deprecation")
   @Test
   def shouldBuildIdenticalTopologyInJavaNScalaSimple(): Unit = {
 
@@ -88,6 +90,7 @@ class TopologyTest {
     assertEquals(getTopologyScala, getTopologyJava)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def shouldBuildIdenticalTopologyInJavaNScalaAggregate(): Unit = {
 
@@ -127,6 +130,7 @@ class TopologyTest {
     assertEquals(getTopologyScala, getTopologyJava)
   }
 
+  @nowarn("cat=deprecation")
   @Test def shouldBuildIdenticalTopologyInJavaNScalaCogroupSimple(): Unit = {
 
     // build the Scala topology
