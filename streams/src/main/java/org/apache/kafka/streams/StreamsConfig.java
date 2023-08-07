@@ -917,7 +917,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
                     Type.INT,
                     null,
-                Importance.MEDIUM,
+                    Importance.MEDIUM,
                 RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC)
             .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
                     Type.STRING,
