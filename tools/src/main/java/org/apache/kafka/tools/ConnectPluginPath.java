@@ -240,8 +240,8 @@ public class ConnectPluginPath {
             Map<String, Set<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
             PluginScanResult classpathPlugins = discoverPlugins(classpathSource, reflectionScanner, serviceLoaderScanner);
             Map<Path, Set<Row>> rowsByLocation = new LinkedHashMap<>();
-            Set<Row> classpathRows = enumerateRows(classpathSource.location(), classpathManifests, classpathPlugins);
-            rowsByLocation.put(classpathSource.location(), classpathRows);
+            Set<Row> classpathRows = enumerateRows(null, classpathManifests, classpathPlugins);
+            rowsByLocation.put(null, classpathRows);
 
             ClassLoaderFactory factory = new ClassLoaderFactory();
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {

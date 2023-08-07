@@ -34,8 +34,8 @@ public class PluginSource {
         this.urls = urls;
     }
 
-    public Path location() {
-        return location;
+    public String location() {
+        return location == null ? "classpath" : location.toString();
     }
 
     public ClassLoader loader() {
