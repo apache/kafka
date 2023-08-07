@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -28,8 +29,9 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestTestUtils;
-import org.apache.kafka.common.utils.Time;
-import org.junit.jupiter.api.AfterEach;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,29 +46,32 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TopicMetadataRequestManagerTest {
-
-    private ConsumerTestBuilder.DefaultEventHandlerTestBuilder testBuilder;
-    private Time time;
+    private MockTime time;
     private TopicMetadataRequestManager topicMetadataRequestManager;
+    private Properties props;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder.DefaultEventHandlerTestBuilder();
-        time = testBuilder.time;
-        topicMetadataRequestManager = testBuilder.topicMetadataRequestManager;
-    }
-
-    @AfterEach
-    public void tearDown() {
-        if (testBuilder != null)
-            testBuilder.close();
+        this.time = new MockTime();
+        this.props = new Properties();
+        this.props.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, 100);
+        this.props.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
+        this.props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        this.props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        this.topicMetadataRequestManager = new TopicMetadataRequestManager(
+            new LogContext(),
+            new ConsumerConfig(props));
     }
 
     @ParameterizedTest
@@ -83,7 +88,6 @@ public class TopicMetadataRequestManagerTest {
     public void testExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
         String topic = "hello";
         this.topicMetadataRequestManager.requestTopicMetadata(Optional.of("hello"));
-        this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = res.unsentRequests.get(0);
