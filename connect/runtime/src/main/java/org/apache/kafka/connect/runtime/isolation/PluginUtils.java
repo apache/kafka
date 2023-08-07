@@ -207,7 +207,7 @@ public class PluginUtils {
         for (String path : pluginPathElements) {
             try {
                 Path pluginPathElement = Paths.get(path).toAbsolutePath();
-                if (!pluginPath.isEmpty()) {
+                if (pluginPath.isEmpty()) {
                     log.warn("Plugin path element is empty, evaluating to {}.", pluginPathElement);
                 }
                 if (!Files.exists(pluginPathElement)) {
