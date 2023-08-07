@@ -192,20 +192,6 @@ public class ConnectPluginPath {
         return pluginLocations;
     }
 
-    private static Path makeDistinct(Path path) {
-        // When the same jar is present on the classpath and inside a pluginLocation, we still need to be able
-        // to distinguish between them. In order to make them more likely to be distinct, change the path to
-        // include an arbitrary change that makes them still resolve the same file, but fail direct equality checks.
-        Path parent = path.getParent();
-        if (parent == null) {
-            // At the root of the filesystem, add the current directory marker to the end.
-            return path.resolve(".");
-        } else {
-            // If we have a parent directory, add the current directory marker there.
-            return parent.resolve(".").resolve(path.getFileName());
-        }
-    }
-
     enum Command {
         LIST
     }
@@ -237,7 +223,7 @@ public class ConnectPluginPath {
             ReflectionScanner reflectionScanner = new ReflectionScanner();
             // Process the contents of the classpath to exclude it from later results.
             PluginSource classpathSource = PluginUtils.classpathPluginSource(parent);
-            Map<String, Set<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
+            Map<String, List<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
             PluginScanResult classpathPlugins = discoverPlugins(classpathSource, reflectionScanner, serviceLoaderScanner);
             Map<Path, Set<Row>> rowsByLocation = new LinkedHashMap<>();
             Set<Row> classpathRows = enumerateRows(null, classpathManifests, classpathPlugins);
@@ -247,8 +233,8 @@ public class ConnectPluginPath {
             try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
                 beginCommand(config);
                 for (Path pluginLocation : config.locations) {
-                    PluginSource source = PluginUtils.isolatedPluginSource(makeDistinct(pluginLocation), delegatingClassLoader, factory);
-                    Map<String, Set<ManifestEntry>> manifests = findManifests(source, classpathManifests);
+                    PluginSource source = PluginUtils.isolatedPluginSource(pluginLocation, delegatingClassLoader, factory);
+                    Map<String, List<ManifestEntry>> manifests = findManifests(source, classpathManifests);
                     PluginScanResult plugins = discoverPlugins(source, reflectionScanner, serviceLoaderScanner);
                     Set<Row> rows = enumerateRows(pluginLocation, manifests, plugins);
                     rowsByLocation.put(pluginLocation, rows);
@@ -317,7 +303,7 @@ public class ConnectPluginPath {
         }
     }
 
-    private static Set<Row> enumerateRows(Path pluginLocation, Map<String, Set<ManifestEntry>> manifests, PluginScanResult scanResult) {
+    private static Set<Row> enumerateRows(Path pluginLocation, Map<String, List<ManifestEntry>> manifests, PluginScanResult scanResult) {
         Set<Row> rows = new HashSet<>();
         // Perform a deep copy of the manifests because we're going to be mutating our copy.
         Map<String, Set<ManifestEntry>> unloadablePlugins = manifests.entrySet().stream()
@@ -336,7 +322,7 @@ public class ConnectPluginPath {
         return rows;
     }
 
-    private static Row newRow(Path pluginLocation, String className, PluginType type, String version, boolean loadable, Map<String, Set<ManifestEntry>> manifests) {
+    private static Row newRow(Path pluginLocation, String className, PluginType type, String version, boolean loadable, Map<String, List<ManifestEntry>> manifests) {
         Set<String> rowAliases = new LinkedHashSet<>();
         rowAliases.add(PluginUtils.simpleName(className));
         rowAliases.add(PluginUtils.prunedName(className, type));
@@ -457,8 +443,8 @@ public class ConnectPluginPath {
         }
     }
 
-    private static Map<String, Set<ManifestEntry>> findManifests(PluginSource source, Map<String, Set<ManifestEntry>> exclude) {
-        Map<String, Set<ManifestEntry>> manifests = new HashMap<>();
+    private static Map<String, List<ManifestEntry>> findManifests(PluginSource source, Map<String, List<ManifestEntry>> exclude) {
+        Map<String, List<ManifestEntry>> manifests = new LinkedHashMap<>();
         for (PluginType type : PluginType.values()) {
             try {
                 Enumeration<URL> resources = source.loader().getResources(MANIFEST_PREFIX + type.superClass().getName());
@@ -466,15 +452,24 @@ public class ConnectPluginPath {
                     URL url = resources.nextElement();
                     for (String className : parse(url)) {
                         ManifestEntry e = new ManifestEntry(url.toURI(), className, type);
-                        if (!exclude.containsKey(className) || !exclude.get(className).contains(e)) {
-                            manifests.computeIfAbsent(className, ignored -> new HashSet<>()).add(e);
-                        }
+                            manifests.computeIfAbsent(className, ignored -> new ArrayList<>()).add(e);
                     }
                 }
             } catch (URISyntaxException e) {
                 throw new RuntimeException(e);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
+            }
+        }
+        for (Map.Entry<String, List<ManifestEntry>> entry : exclude.entrySet()) {
+            String className = entry.getKey();
+            List<ManifestEntry> excluded = entry.getValue();
+            // Note this must be a remove and not removeAll, because we want to remove only one copy at a time.
+            // If the same jar is present on the classpath and plugin path, then manifests will contain 2 identical
+            // ManifestEntry instances, with a third copy in the excludes. After the excludes are processed,
+            // manifests should contain exactly one copy of the ManifestEntry.
+            for (ManifestEntry e : excluded) {
+                manifests.getOrDefault(className, Collections.emptyList()).remove(e);
             }
         }
         return manifests;
