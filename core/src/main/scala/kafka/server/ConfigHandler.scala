@@ -28,7 +28,7 @@ import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
@@ -66,8 +66,15 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     topicConfig.asScala.forKeyValue { (key, value) =>
       if (!configNamesToExclude.contains(key)) props.put(key, value)
     }
+
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
+
+    if (!kafkaConfig.remoteLogManagerConfig.enableRemoteStorageSystem()
+      && topicConfig.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG) != null) {
+      throw new ConfigException(s"You have to delete all topics with the property remote.storage.enable (i.e. $topic) before disabling tiered storage cluster-wide")
+    }
+
     logManager.updateTopicConfig(topic, props)
     maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
   }
