@@ -45,7 +45,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -59,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
@@ -117,12 +117,14 @@ public class KafkaBasedLogTest {
     private KafkaBasedLog<String, String> store;
 
     @Mock
-    private Runnable initializer;
+    private Consumer<TopicAdmin> initializer;
     @Mock
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
     @Mock
     private TopicAdmin admin;
+    @Mock
+    private Supplier<TopicAdmin> topicAdminSupplier;
 
     private final Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
     private final Callback<ConsumerRecord<String, String>> consumedCallback = (error, record) -> {
@@ -133,7 +135,7 @@ public class KafkaBasedLogTest {
 
     @Before
     public void setUp() {
-        store = spy(new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer));
+        store = spy(new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer));
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -496,13 +498,8 @@ public class KafkaBasedLogTest {
     }
 
     private void verifyStartAndStop() {
-        verify(initializer).run();
+        verify(initializer).accept(any());
         verify(producer).close();
         assertTrue(consumer.closed());
     }
-
-    private static ByteBuffer buffer(String v) {
-        return ByteBuffer.wrap(v.getBytes());
-    }
-
 }
