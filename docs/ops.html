@@ -3615,7 +3615,7 @@ foo
   <p>The following features are not yet supported for ZK to KRaft migrations:</p>
 
   <ul>
-    <li>Downgrading to ZooKeeper mode during or after the migration</li>
+    <li>Reverting to ZooKeeper mode after the migration</li>
     <li>Other features <a href="#kraft_missing">not yet supported in KRaft</a></li>
   </ul>
 
@@ -3777,6 +3777,14 @@ controller.listener.names=CONTROLLER</pre>
   <p>
     Each broker is restarted with a KRaft configuration until the entire cluster is running in KRaft mode.
   </p>
+
+  <h3>Reverting to ZooKeeper mode During the Migration</h3>
+    While the cluster is still in migration mode, it is possible to revert to ZK mode. In order to do this:
+    <ol>
+      <li>One by one, take each KRaft broker down, and restart the broker as KRaft.</li>
+      <li>Take down the KRaft quorum.</li>
+      <li>Using ZooKeeper shell, delete the controller node using <code>rmr /controller</code>
+    </ol>
 
   <h3>Finalizing the migration</h3>
   <p>
