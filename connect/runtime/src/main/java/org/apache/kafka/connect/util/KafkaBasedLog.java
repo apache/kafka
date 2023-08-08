@@ -102,7 +102,7 @@ public class KafkaBasedLog<K, V> {
     private Consumer<K, V> consumer;
     private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
-
+    // Visible for testing
     Thread thread;
     private boolean stopRequested;
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;

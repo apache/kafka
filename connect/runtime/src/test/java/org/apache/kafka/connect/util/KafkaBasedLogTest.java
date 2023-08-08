@@ -114,7 +114,7 @@ public class KafkaBasedLogTest {
     private static final String TP1_VALUE_NEW = "VAL1_NEW";
 
     private final Time time = new MockTime();
-    private MockedKafkaBasedLog store;
+    private KafkaBasedLog<String, String> store;
 
     @Mock
     private Consumer<TopicAdmin> initializer;
@@ -131,31 +131,19 @@ public class KafkaBasedLogTest {
         records.add(record);
     };
 
-    private class MockedKafkaBasedLog extends KafkaBasedLog<String, String> {
-        public MockedKafkaBasedLog(String topic,
-                                   Map<String, Object> producerConfigs,
-                                   Map<String, Object> consumerConfigs,
-                                   Supplier<TopicAdmin> topicAdminSupplier,
-                                   Callback<ConsumerRecord<String, String>> consumedCallback,
-                                   Time time,
-                                   Consumer<TopicAdmin> initializer) {
-            super(topic, producerConfigs, consumerConfigs, topicAdminSupplier, consumedCallback, time, initializer);
-        }
-
-        @Override
-        protected KafkaProducer<String, String> createProducer() {
-            return producer;
-        }
-
-        @Override
-        protected MockConsumer<String, String> createConsumer() {
-            return consumer;
-        }
-    }
-
     @Before
     public void setUp() {
-        store = new MockedKafkaBasedLog(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer);
+        store = new KafkaBasedLog<String, String>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
+            @Override
+            protected KafkaProducer<String, String> createProducer() {
+                return producer;
+            }
+
+            @Override
+            protected MockConsumer<String, String> createConsumer() {
+                return consumer;
+            }
+        };
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -404,6 +392,7 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
+        // Producer flushes when read to log end is called
         verify(producer).flush();
         verifyStartAndStop();
     }
