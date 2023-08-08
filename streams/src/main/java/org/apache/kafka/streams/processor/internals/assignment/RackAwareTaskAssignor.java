@@ -192,6 +192,9 @@ public class RackAwareTaskAssignor {
     }
 
     private boolean validateClientRack(final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer) {
+        if (racksForProcessConsumer == null) {
+            return false;
+        }
         /*
          * Check rack information is populated correctly in clients
          * 1. RackId exist for all clients
