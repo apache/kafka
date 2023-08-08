@@ -199,6 +199,28 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   @Test
+  def testSetAndRemoveDefaultClientIdQuotaWithEmptyClientId(): Unit = {
+    // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
+    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+      metrics, Produce, time, "")
+
+    try {
+      // no quota set yet, should not throttle
+      checkQuota(clientQuotaManager, "userA", "", Long.MaxValue, 1000, false)
+
+      // Set default <client-id> quota config
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(10, true)))
+      checkQuota(clientQuotaManager, "userA", "", 10, 1000, true)
+
+      // Remove default <user> quota config, back to no quotas
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), None)
+      checkQuota(clientQuotaManager, "userA", "", Long.MaxValue, 1000, false)
+    } finally {
+      clientQuotaManager.shutdown()
+    }
+  }
+
+  @Test
   def testSetAndRemoveDefaultClientIdQuotaWithNullClientId(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
     val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
