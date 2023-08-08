@@ -24,6 +24,7 @@ from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
 
+
 class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
 
     PERSISTENT_ROOT = "/mnt/producer_performance"
