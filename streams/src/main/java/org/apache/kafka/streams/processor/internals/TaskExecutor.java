@@ -81,6 +81,7 @@ public class TaskExecutor {
                 executionMetadata.registerTaskError(task, t, now);
                 executionMetadata.removeTaskFromSuccessfullyProcessedBeforeClosing(lastProcessed);
                 commitSuccessfullyProcessedTasks();
+                t.printStackTrace();
                 throw t;
             }
         }

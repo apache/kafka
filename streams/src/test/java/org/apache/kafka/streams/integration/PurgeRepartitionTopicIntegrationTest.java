@@ -65,7 +65,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     private static Admin adminClient;
     private static KafkaStreams kafkaStreams;
-    private static final Integer PURGE_INTERVAL_MS = 5;
+    private static final Integer PURGE_INTERVAL_MS = 10;
     private static final Integer PURGE_SEGMENT_BYTES = 2000;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
@@ -161,7 +161,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 2 * PURGE_INTERVAL_MS);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());

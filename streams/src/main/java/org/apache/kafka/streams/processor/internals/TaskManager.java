@@ -1848,6 +1848,7 @@ public class TaskManager {
                     recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
                 }
             }
+            System.out.println("recordsToDelete is " + (recordsToDelete.isEmpty() ? "empty" : "is not empty"));
             if (!recordsToDelete.isEmpty()) {
                 deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
                 log.info("Sent delete-records request: {}", recordsToDelete);
