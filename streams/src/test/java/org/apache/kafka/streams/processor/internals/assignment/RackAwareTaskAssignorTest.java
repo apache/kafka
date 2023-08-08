@@ -533,10 +533,11 @@ public class RackAwareTaskAssignorTest {
     public void shouldOptimizeRandomActive() {
         final int nodeSize = 30;
         final int tpSize = 40;
+        final int partitionSize = 3;
         final int clientSize = 30;
-        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, false);
+        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, false);
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            getRandomCluster(nodeSize, tpSize),
+            getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
             mkMap(),
             getTopologyGroupTaskMap(),
@@ -545,8 +546,8 @@ public class RackAwareTaskAssignorTest {
             getRackAwareEnabledConfig()
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, 1);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, partitionSize, 1, taskIds);
 
         final Map<UUID, Integer> clientTaskCount = clientTaskCount(clientStateMap, ClientState::activeTaskCount);
 
@@ -564,10 +565,11 @@ public class RackAwareTaskAssignorTest {
     public void shouldMaintainOriginalAssignment() {
         final int nodeSize = 20;
         final int tpSize = 40;
+        final int partitionSize = 3;
         final int clientSize = 30;
-        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, false);
+        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, false);
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            getRandomCluster(nodeSize, tpSize),
+            getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
             mkMap(),
             getTopologyGroupTaskMap(),
@@ -576,8 +578,8 @@ public class RackAwareTaskAssignorTest {
             getRackAwareEnabledConfig()
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, 1);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, partitionSize, 1, taskIds);
 
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         for (final Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
@@ -983,26 +985,27 @@ public class RackAwareTaskAssignorTest {
     public void shouldOptimizeRandomStandby() {
         final int nodeSize = 50;
         final int tpSize = 60;
+        final int partionSize = 3;
         final int clientSize = 50;
         final int replicaCount = 3;
         final int maxCapacity = 3;
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(
-            tpSize, false);
+            tpSize, partionSize, false);
         final AssignmentConfigs assignorConfiguration = getRackAwareEnabledConfigWithStandby(replicaCount);
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            getRandomCluster(nodeSize, tpSize),
+            getRandomCluster(nodeSize, tpSize, partionSize),
             taskTopicPartitionMap,
-            getTaskTopicPartitionMap(tpSize, true),
+            getTaskTopicPartitionMap(tpSize, partionSize, true),
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
-            mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize),
+            mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partionSize),
             assignorConfiguration
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
-            tpSize, maxCapacity);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+            tpSize, partionSize, maxCapacity, taskIds);
 
         final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(
             assignorConfiguration, assignor);

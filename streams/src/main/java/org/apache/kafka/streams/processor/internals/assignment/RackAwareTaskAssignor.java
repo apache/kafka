@@ -346,6 +346,7 @@ public class RackAwareTaskAssignor {
         log.info("Assignment before active task optimization is {}\n with cost {}", clientStates,
             activeTasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost));
 
+        final long startTime = System.currentTimeMillis();
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
@@ -359,7 +360,8 @@ public class RackAwareTaskAssignor {
         assignTaskFromMinCostFlow(graph, clientList, taskIdList, clientStates, originalAssignedTaskNumber,
             taskClientMap, ClientState::assignActive, ClientState::unassignActive, ClientState::hasActiveTask);
 
-        log.info("Assignment after active task optimization is {}\n with cost {}", clientStates, cost);
+        final long duration = System.currentTimeMillis() - startTime;
+        log.info("Assignment after {} milliseconds for active task optimization is {}\n with cost {}", duration, clientStates, cost);
         return cost;
     }
 
@@ -373,6 +375,7 @@ public class RackAwareTaskAssignor {
             .sorted()
             .collect(Collectors.toList());
 
+        final long startTime = System.currentTimeMillis();
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final SortedSet<TaskId> standbyTasks = new TreeSet<>();
         clientStates.values().forEach(clientState -> standbyTasks.addAll(clientState.standbyTasks()));
@@ -430,7 +433,9 @@ public class RackAwareTaskAssignor {
             }
         }
         final long cost = standByTasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost);
-        log.info("Assignment after {} rounds of standby task optimization is {}\n with cost {}", round, clientStates, cost);
+
+        final long duration = System.currentTimeMillis() - startTime;
+        log.info("Assignment after {} rounds and {} milliseconds for standby task optimization is {}\n with cost {}", round, duration, clientStates, cost);
         return cost;
     }
 

@@ -122,7 +122,7 @@ public class TaskAssignorConvergenceTest {
                     statelessTasks.add(taskId);
                     remainingStatelessTasks--;
 
-                    final Node[] replica = getRandomReplica(nodes, nodeIndex);
+                    final Node[] replica = getRandomReplica(nodes, nodeIndex, i);
                     partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
                     nodeIndex++;
 
@@ -145,7 +145,7 @@ public class TaskAssignorConvergenceTest {
                     statefulTaskEndOffsetSums.put(taskId, 150000L);
                     remainingStatefulTasks--;
 
-                    Node[] replica = getRandomReplica(nodes, nodeIndex);
+                    Node[] replica = getRandomReplica(nodes, nodeIndex, i);
                     partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
                     nodeIndex++;
 
@@ -154,7 +154,7 @@ public class TaskAssignorConvergenceTest {
                     tasksForTopicGroup.computeIfAbsent(new Subtopology(subtopology, null), k -> new HashSet<>()).add(taskId);
 
                     final int changelogNodeIndex = random.nextInt(nodes.size());
-                    replica = getRandomReplica(nodes, changelogNodeIndex);
+                    replica = getRandomReplica(nodes, changelogNodeIndex, i);
                     final TopicPartitionInfo info = new TopicPartitionInfo(i, replica[0], Arrays.asList(replica[0], replica[1]), Collections.emptyList());
                     topicPartitionInfo.computeIfAbsent(changelogTopicName, tp -> new ArrayList<>()).add(info);
                 }

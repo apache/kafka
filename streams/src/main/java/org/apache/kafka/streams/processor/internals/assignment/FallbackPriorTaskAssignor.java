@@ -44,7 +44,8 @@ public class FallbackPriorTaskAssignor implements TaskAssignor {
                           final Set<TaskId> statefulTaskIds,
                           final RackAwareTaskAssignor rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
-        delegate.assign(clients, allTaskIds, statefulTaskIds, rackAwareTaskAssignor, configs);
+        // Pass null for RackAwareTaskAssignor to disable it if we fallback
+        delegate.assign(clients, allTaskIds, statefulTaskIds, null, configs);
         return true;
     }
 }
