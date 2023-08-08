@@ -46,7 +46,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 10;
     private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 1;
     private static final int STATELESS_TRAFFIC_COST = 1;
-    private static final int STATELESS_NON_OVERLAP_COST = 1;
+    private static final int STATELESS_NON_OVERLAP_COST = 0;
 
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
