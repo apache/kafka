@@ -52,7 +52,6 @@ import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -327,7 +326,7 @@ public class QuorumControllerTest {
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
         long sessionTimeoutMillis = 1000;
-        long leaderImbalanceCheckIntervalNs = 1_000_000_000;
+        long leaderImbalanceCheckIntervalNs = 100_000_000;
 
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
@@ -445,26 +444,22 @@ public class QuorumControllerTest {
             active.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest
                 .Builder(alterPartitionRequest, false).build((short) 0).data()).get();
 
-            AtomicLong lastHeartbeatMs = new AtomicLong(getMonotonicMs(active.time()));
+            AtomicLong lastHeartbeatNs = new AtomicLong(active.time().nanoseconds());
             sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
             // Check that partitions are balanced
             TestUtils.waitForCondition(
                 () -> {
-                    long currentMonotonicMs = getMonotonicMs(active.time());
-                    if (currentMonotonicMs > lastHeartbeatMs.get() + (sessionTimeoutMillis / 2)) {
-                        lastHeartbeatMs.set(currentMonotonicMs);
+                    long nowNs = active.time().nanoseconds();
+                    if (nowNs - lastHeartbeatNs.get() > TimeUnit.MILLISECONDS.toNanos(sessionTimeoutMillis / 2)) {
+                        lastHeartbeatNs.set(nowNs);
                         sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
                     }
                     return !active.replicationControl().arePartitionLeadersImbalanced();
                 },
-                TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 10, TimeUnit.NANOSECONDS),
+                TimeUnit.NANOSECONDS.toMillis(leaderImbalanceCheckIntervalNs * 10),
                 "Leaders were not balanced after unfencing all of the brokers"
             );
         }
-    }
-
-    private static long getMonotonicMs(Time time) {
-        return TimeUnit.NANOSECONDS.toMillis(time.nanoseconds());
     }
 
     @Test
