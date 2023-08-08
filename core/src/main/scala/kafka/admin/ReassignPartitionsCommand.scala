@@ -607,9 +607,8 @@ object ReassignPartitionsCommand extends Logging {
     val proposedAssignments = mutable.Map[TopicPartition, Seq[Int]]()
     groupedByTopic.forKeyValue { (topic, assignment) =>
       val (_, replicas) = assignment.head
-      val assignedReplicas = AdminUtils.
-        assignReplicasToBrokers(brokerMetadatas.asJavaCollection, assignment.size, replicas.size).
-        asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
+      val assignedReplicas = CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.
+        assignReplicasToBrokers(brokerMetadatas.asJavaCollection, assignment.size, replicas.size))
       proposedAssignments ++= assignedReplicas.map { case (partition, replicas) =>
         new TopicPartition(topic, partition) -> replicas
       }
