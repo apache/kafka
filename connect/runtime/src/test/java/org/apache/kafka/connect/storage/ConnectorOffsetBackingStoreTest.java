@@ -41,12 +41,10 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.mockito.Mockito.mock;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -77,11 +75,10 @@ public class ConnectorOffsetBackingStoreTest {
                 mock(TopicAdmin.class));
 
 
-        Future<Void> flushFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, null), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, null), (error, result) -> {
             assertEquals(PRODUCE_EXCEPTION, error);
             assertNull(result);
-        });
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
+        }).get(1000L, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -155,12 +152,10 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        Future<Void> flushFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
             assertEquals(PRODUCE_EXCEPTION, error);
             assertNull(result);
-        });
-
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
+        }).get(1000L, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -176,12 +171,10 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        Future<Void> flushFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, null), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, null), (error, result) -> {
             assertEquals(PRODUCE_EXCEPTION, error);
             assertNull(result);
-        });
-
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
+        }).get(1000L, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -213,11 +206,11 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        Future<Void> flushFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
             assertEquals(PRODUCE_EXCEPTION, error);
             assertNull(result);
-        });
-        assertThrows(ExecutionException.class, () -> flushFuture.get(1000L, TimeUnit.MILLISECONDS));
+        }).get(1000L, TimeUnit.MILLISECONDS);
+
     }
 
     @SuppressWarnings("unchecked")
