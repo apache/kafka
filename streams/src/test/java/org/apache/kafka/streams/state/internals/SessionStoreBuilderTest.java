@@ -114,7 +114,7 @@ public class SessionStoreBuilderTest {
     }
 
     @Test
-    public void shouldThrowNullPointerIfSupplierIsNull() {
+    public void shouldThrowNullPointerIfStoreSupplierIsNull() {
         final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
         assertThat(e.getMessage(), equalTo("storeSupplier cannot be null"));
     }
