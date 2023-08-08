@@ -39,11 +39,15 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class Plugins {
 
@@ -63,16 +67,64 @@ public class Plugins {
     // VisibleForTesting
     Plugins(Map<String, String> props, ClassLoader parent, ClassLoaderFactory factory) {
         String pluginPath = WorkerConfig.pluginPath(props);
+        PluginDiscoveryMode discoveryMode = WorkerConfig.pluginDiscovery(props);
         Set<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = factory.newDelegatingClassLoader(parent);
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, delegatingLoader, factory);
-        scanResult = initLoaders(pluginSources);
+        scanResult = initLoaders(pluginSources, discoveryMode);
     }
 
-    private PluginScanResult initLoaders(Set<PluginSource> pluginSources) {
-        PluginScanResult reflectiveScanResult = new ReflectionScanner().discoverPlugins(pluginSources);
-        delegatingLoader.installDiscoveredPlugins(reflectiveScanResult);
-        return reflectiveScanResult;
+    public PluginScanResult initLoaders(Set<PluginSource> pluginSources, PluginDiscoveryMode discoveryMode) {
+        PluginScanResult empty = new PluginScanResult(Collections.emptyList());
+        PluginScanResult serviceLoadingScanResult;
+        try {
+            serviceLoadingScanResult = discoveryMode.serviceLoad() ?
+                    new ServiceLoaderScanner().discoverPlugins(pluginSources) : empty;
+        } catch (Throwable t) {
+            throw new ConnectException(String.format(
+                    "Unable to perform ServiceLoader scanning as requested by %s=%s. It may be possible to fix this issue by reconfiguring %s=%s",
+                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG, discoveryMode,
+                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.ONLY_SCAN), t);
+        }
+        PluginScanResult reflectiveScanResult = discoveryMode.reflectivelyScan() ?
+                new ReflectionScanner().discoverPlugins(pluginSources) : empty;
+        PluginScanResult scanResult = new PluginScanResult(Arrays.asList(reflectiveScanResult, serviceLoadingScanResult));
+        maybeReportHybridDiscoveryIssue(discoveryMode, serviceLoadingScanResult, scanResult);
+        delegatingLoader.installDiscoveredPlugins(scanResult);
+        return scanResult;
+    }
+
+    // visible for testing
+    static void maybeReportHybridDiscoveryIssue(PluginDiscoveryMode discoveryMode, PluginScanResult serviceLoadingScanResult, PluginScanResult mergedResult) {
+        SortedSet<PluginDesc<?>> missingPlugins = new TreeSet<>();
+        mergedResult.forEach(missingPlugins::add);
+        serviceLoadingScanResult.forEach(missingPlugins::remove);
+        if (missingPlugins.isEmpty()) {
+            if (discoveryMode == PluginDiscoveryMode.HYBRID_WARN || discoveryMode == PluginDiscoveryMode.HYBRID_FAIL) {
+                log.warn("All plugins have ServiceLoader manifests, consider reconfiguring {}={}",
+                        WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.SERVICE_LOAD);
+            }
+        } else {
+            String message = String.format(
+                "One or more plugins are missing ServiceLoader manifests may not be usable with %s=%s: %s%n" +
+                        "Read the documentation at %s for instructions on migrating your plugins " +
+                        "to take advantage of the performance improvements of %s mode.",
+                            WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
+                    PluginDiscoveryMode.SERVICE_LOAD,
+                    missingPlugins.stream()
+                            .map(pluginDesc -> pluginDesc.location() + "\t" + pluginDesc.className() + "\t" + pluginDesc.type() + "\t" + pluginDesc.version())
+                            .collect(Collectors.joining("\n", "[\n", "\n]")),
+                    "https://kafka.apache.org/documentation.html#connect_plugindiscovery",
+                    PluginDiscoveryMode.SERVICE_LOAD
+            );
+            if (discoveryMode == PluginDiscoveryMode.HYBRID_WARN) {
+                log.warn("{} To silence this warning, set {}={} in the worker config.",
+                        message, WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.ONLY_SCAN);
+            } else if (discoveryMode == PluginDiscoveryMode.HYBRID_FAIL) {
+                throw new ConnectException(String.format("%s To silence this error, set %s=%s in the worker config.",
+                        message, WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.HYBRID_WARN));
+            }
+        }
     }
 
     private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {
