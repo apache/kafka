@@ -18,7 +18,10 @@
 package test.plugins;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
@@ -26,6 +29,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.transforms.Transformation;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,7 +37,7 @@ import java.util.Map;
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
  * <p>Class which is not migrated to include a service loader manifest.
  */
-public final class NonMigratedMultiPlugin implements Converter, HeaderConverter, Predicate, Transformation {
+public final class NonMigratedMultiPlugin implements Converter, HeaderConverter, Predicate, Transformation, ConnectorClientConfigOverridePolicy {
 
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
@@ -83,5 +87,10 @@ public final class NonMigratedMultiPlugin implements Converter, HeaderConverter,
   @Override
   public void configure(Map<String, ?> configs) {
 
+  }
+
+  @Override
+  public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
+    return null;
   }
 }
