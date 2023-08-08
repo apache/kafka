@@ -451,6 +451,8 @@ public class KafkaBasedLogTest {
 
         store.start();
         assertEquals(endOffsets, store.readEndOffsets(tps, false));
+        verify(admin).retryEndOffsets(eq(tps), any(), anyLong());
+        verify(admin).endOffsets(eq(tps));
     }
 
     @Test
@@ -468,6 +470,7 @@ public class KafkaBasedLogTest {
 
         store.start();
         assertEquals(endOffsets, store.readEndOffsets(tps, false));
+        verify(admin).retryEndOffsets(eq(tps), any(), anyLong());
     }
 
     @Test
@@ -484,6 +487,8 @@ public class KafkaBasedLogTest {
 
         store.start();
         assertThrows(LeaderNotAvailableException.class, () -> store.readEndOffsets(tps, false));
+        verify(admin).retryEndOffsets(eq(tps), any(), anyLong());
+        verify(admin).endOffsets(eq(tps));
     }
 
     private void verifyStartAndStop() {
