@@ -335,7 +335,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             }
 
             do {
-                updateAssignmentMetadataIfNeeded();
+                updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
 
                 if (!fetch.isEmpty()) {
@@ -472,7 +472,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (position != null)
                 return position.offset;
 
-            updateFetchPositions();
+            updateFetchPositions(timer);
         } while (timer.notExpired());
 
         throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
@@ -978,7 +978,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      *             defined
      * @return true iff the operation completed without timing out
      */
-    private boolean updateFetchPositions() {
+    private boolean updateFetchPositions(final Timer timer) {
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
         ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
         eventHandler.add(validatePositionsEvent);
@@ -986,7 +986,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHasAllFetchPositions) return true;
 
-        // TODO: integrate committed offsets related logic when supporting Kafka-based offsets management
+        // If there are any partitions which do not have a valid position and are not
+        // awaiting reset, then we need to fetch committed offsets. We will only do a
+        // coordinator lookup if there are partitions which have missing positions, so
+        // a consumer with manually assigned partitions can avoid a coordinator dependence
+        // by always ensuring that assigned partitions have an initial position.
+        if (isCommittedOffsetsManagementEnabled() && !refreshCommittedOffsetsIfNeeded(timer))
+            return false;
+
 
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there
@@ -998,6 +1005,34 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         ResetPositionsApplicationEvent resetPositionsEvent = new ResetPositionsApplicationEvent();
         eventHandler.add(resetPositionsEvent);
         return true;
+    }
+
+    /**
+     *
+     * Indicates if the consumer is using the Kafka-based offset management strategy,
+     * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
+     */
+    private boolean isCommittedOffsetsManagementEnabled() {
+        return groupId.isPresent();
+    }
+
+    /**
+     * Refresh the committed offsets for provided partitions.
+     *
+     * @param timer Timer bounding how long this method can block
+     * @return true iff the operation completed within the timeout
+     */
+    private boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
+        final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
+
+        log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+        try {
+            final Map<TopicPartition, OffsetAndMetadata> offsets = eventHandler.addAndGet(new OffsetFetchApplicationEvent(initializingPartitions), timer);
+            return Utils.refreshCommittedOffsets(offsets, this.metadata, this.subscriptions);
+        } catch (org.apache.kafka.common.errors.TimeoutException e) {
+            log.error("Couldn't refresh committed offsets before timeout expired");
+            return false;
+        }
     }
 
     // This is here temporary as we don't have public access to the ConsumerConfig in this module.
@@ -1041,10 +1076,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         return clientId;
     }
 
-    boolean updateAssignmentMetadataIfNeeded() {
+    boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
         // in the previous implementation, because it will eventually involve group coordination
         // logic
-        return updateFetchPositions();
+        return updateFetchPositions(timer);
     }
 }
