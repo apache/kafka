@@ -17,46 +17,70 @@
 
 package org.apache.kafka.metadata.authorizer;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.controller.ControllerRequestContext;
-import org.apache.kafka.controller.MockAclControlManager;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
+import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
+
+
 public class MockAclMutator implements AclMutator {
-    MockAclControlManager aclControlManager;
+    private final StandardAuthorizer authorizer;
+    private long nextUuid;
+    private Map<Uuid, StandardAcl> acls;
 
     public MockAclMutator(StandardAuthorizer authorizer) {
-        aclControlManager = createAclControlManager(authorizer);
-    }
-
-    private MockAclControlManager createAclControlManager(StandardAuthorizer standardAuthorizer) {
-        LogContext logContext = new LogContext();
-        return new MockAclControlManager(logContext, Optional.of(standardAuthorizer));
+        this.authorizer = authorizer;
+        this.nextUuid = 1L;
+        this.acls = new HashMap<>();
     }
 
     @Override
-    public CompletableFuture<List<AclCreateResult>> createAcls(
+    public synchronized CompletableFuture<List<AclCreateResult>> createAcls(
         ControllerRequestContext context,
         List<AclBinding> aclBindings
     ) {
-        CompletableFuture<List<AclCreateResult>> future = new CompletableFuture<>();
-        future.complete(aclControlManager.createAndReplayAcls(aclBindings));
-        return future;
+        List<AclCreateResult> results = new ArrayList<>();
+        for (AclBinding aclBinding : aclBindings) {
+            StandardAcl acl = StandardAcl.fromAclBinding(aclBinding);
+            Uuid id = new Uuid(1L, ++nextUuid);
+            authorizer.addAcl(id, acl);
+            acls.put(id, acl);
+            results.add(AclCreateResult.SUCCESS);
+        }
+        return CompletableFuture.completedFuture(results);
     }
 
     @Override
-    public CompletableFuture<List<AclDeleteResult>> deleteAcls(
+    public synchronized CompletableFuture<List<AclDeleteResult>> deleteAcls(
         ControllerRequestContext context,
         List<AclBindingFilter> aclBindingFilters
     ) {
-        CompletableFuture<List<AclDeleteResult>> future = new CompletableFuture<>();
-        future.complete(aclControlManager.deleteAndReplayAcls(aclBindingFilters));
-        return future;
+        List<AclDeleteResult> results = new ArrayList<>();
+        for (AclBindingFilter aclBindingFilter : aclBindingFilters) {
+            List<AclBindingDeleteResult> resultList = new ArrayList<>();
+            for (Iterator<Entry<Uuid, StandardAcl>> iterator = acls.entrySet().iterator();
+                    iterator.hasNext(); ) {
+                Entry<Uuid, StandardAcl> entry = iterator.next();
+                AclBinding aclBinding = entry.getValue().toBinding();
+                if (aclBindingFilter.matches(aclBinding)) {
+                    resultList.add(new AclBindingDeleteResult(aclBinding));
+                    authorizer.removeAcl(entry.getKey());
+                    iterator.remove();
+                }
+            }
+            results.add(new AclDeleteResult(resultList));
+        }
+        return CompletableFuture.completedFuture(results);
     }
 }

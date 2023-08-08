@@ -25,7 +25,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.config.ConfigException
@@ -419,7 +419,12 @@ class BrokerServer(
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           credentialProvider),
-        authorizer,
+        new AclPublisher(
+          config.nodeId,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          authorizer
+        ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)
       metadataPublishers.add(brokerMetadataPublisher)
