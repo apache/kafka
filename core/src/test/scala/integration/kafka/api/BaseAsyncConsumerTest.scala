@@ -69,6 +69,26 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
   }
 
   @Test
+  def testCommitSyncAllConsumed(): Unit = {
+    val numRecords = 10000
+
+    val producer = createProducer()
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    consumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
+
+    consumer.commitSync()
+    val committedOffset = consumer.committed(Set(tp).asJava)
+    assertNotNull(committedOffset)
+    assertNotNull(committedOffset.get(tp))
+    assertEquals(numRecords, committedOffset.get(tp).offset())
+  }
+
+  @Test
   def testSimpleConsume(): Unit = {
     val numRecords = 10
 
