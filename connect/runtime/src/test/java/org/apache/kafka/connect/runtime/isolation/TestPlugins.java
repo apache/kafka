@@ -125,7 +125,7 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, and is missing a superclass definition.
          */
-        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclass", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclassConverter", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
          */

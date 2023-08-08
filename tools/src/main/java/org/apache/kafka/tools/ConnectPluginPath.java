@@ -70,7 +70,7 @@ import java.util.stream.Stream;
 public class ConnectPluginPath {
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
-    private static final Object[] LIST_TABLE_COLUMNS = {
+    public static final Object[] LIST_TABLE_COLUMNS = {
         "pluginName",
         "firstAlias",
         "secondAlias",
@@ -80,6 +80,7 @@ public class ConnectPluginPath {
         "hasManifest",
         "pluginLocation" // last because it is least important and most repetitive
     };
+    public static final String NO_ALIAS = "N/A";
 
     public static void main(String[] args) {
         Exit.exit(mainNoExit(args, System.out, System.err));
@@ -340,8 +341,8 @@ public class ConnectPluginPath {
 
     private static void handlePlugin(Config config, Row row) {
         if (config.command == Command.LIST) {
-            String firstAlias = row.aliases.size() > 0 ? row.aliases.get(0) : "N/A";
-            String secondAlias = row.aliases.size() > 1 ? row.aliases.get(1) : "N/A";
+            String firstAlias = row.aliases.size() > 0 ? row.aliases.get(0) : NO_ALIAS;
+            String secondAlias = row.aliases.size() > 1 ? row.aliases.get(1) : NO_ALIAS;
             listTablePrint(config,
                     row.className,
                     firstAlias,
