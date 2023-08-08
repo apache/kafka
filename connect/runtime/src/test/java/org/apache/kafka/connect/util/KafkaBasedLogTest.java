@@ -62,6 +62,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -309,6 +310,7 @@ public class KafkaBasedLogTest {
         // Cleanup
         store.stop();
 
+        // Producer flushes when read to log end is called
         verify(producer).flush();
         verifyStartAndStop();
     }
@@ -501,5 +503,6 @@ public class KafkaBasedLogTest {
         verify(initializer).accept(any());
         verify(producer).close();
         assertTrue(consumer.closed());
+        assertFalse(store.thread.isAlive());
     }
 }
