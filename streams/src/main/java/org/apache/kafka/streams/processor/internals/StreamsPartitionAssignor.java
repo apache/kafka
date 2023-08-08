@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -46,6 +47,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
@@ -316,6 +318,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();
         final Set<TopicPartition> allOwnedPartitions = new HashSet<>();
+        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = new HashMap<>();
 
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
@@ -345,6 +348,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             } else {
                 processId = info.processId();
             }
+
+            racksForProcessConsumer.computeIfAbsent(processId, kv -> new HashMap<>()).put(consumerId, subscription.rackId());
 
             ClientMetadata clientMetadata = clientMetadataMap.get(processId);
 
@@ -410,7 +415,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             final Set<TaskId> statefulTasks = new HashSet<>();
 
-            final boolean probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups, clientMetadataMap, partitionsForTask, statefulTasks);
+            final boolean probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups,
+                clientMetadataMap, partitionsForTask, racksForProcessConsumer, statefulTasks);
 
             // ---------------- Step Three ---------------- //
 
@@ -597,6 +603,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<Subtopology, TopicsInfo> topicGroups,
                                          final Map<UUID, ClientMetadata> clientMetadataMap,
                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                         final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
                                          final Set<TaskId> statefulTasks) {
         if (!statefulTasks.isEmpty()) {
             throw new TaskAssignmentException("The stateful tasks should not be populated before assigning tasks to clients");
@@ -633,9 +640,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
+        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(fullMetadata, partitionsForTask,
+            changelogTopics.changelogPartionsForTask(), tasksForTopicGroup, racksForProcessConsumer, internalTopicManager, assignmentConfigs);
         final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
                                                                    allTasks,
                                                                    statefulTasks,
+                                                                   Optional.of(rackAwareTaskAssignor),
                                                                    assignmentConfigs);
 
         log.info("{} assigned tasks {} including stateful {} to {} clients as: \n{}.",
