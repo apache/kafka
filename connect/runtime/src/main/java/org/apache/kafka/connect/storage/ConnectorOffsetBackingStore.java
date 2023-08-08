@@ -311,7 +311,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         // offsets present in the global offsets topic, instead of indicating to the task that no offsets can be found.
         CompletableFuture<Void> offsetWriteFuture = CompletableFuture.completedFuture(null);
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-            offsetWriteFuture.thenApply(v -> {
+            offsetWriteFuture.thenAccept(v -> {
                 Future<Void> secondaryWriteFuture = secondaryStore.set(tombstoneOffsets, new FutureCallback<>());
                 try {
                     if (exactlyOnce) {
@@ -321,16 +321,18 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                     }
                 } catch (ExecutionException e) {
                     log.error("{} Flush of tombstone(s) offsets to secondary store threw an unexpected exception: ", this, e.getCause());
+                    callback.onCompletion(e.getCause(), null);
                 } catch (Exception e) {
                     log.error("{} Got Exception when trying to flush tombstone(s) offsets to secondary store", this, e);
+                    callback.onCompletion(e, null);
                 }
-                return null;
             });
         }
-        offsetWriteFuture.thenApply(v -> primaryStore.set(values, new FutureCallback<>((primaryWriteError, ignored) -> {
+        offsetWriteFuture.thenAccept(v -> primaryStore.set(values, new FutureCallback<>((primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
                 if (primaryWriteError != null) {
                     log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
+                    callback.onCompletion(primaryWriteError, null);
                 } else {
                     try {
                         // Invoke OffsetBackingStore::set but ignore the resulting future; we don't block on writes to this
@@ -347,15 +349,11 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                     } catch (Exception e) {
                         log.warn("Failed to write offsets to secondary backing store", e);
                     }
+                    callback.onCompletion(null, null);
                 }
             }
         })));
-
-        return offsetWriteFuture.whenComplete((ignored, writeError) -> {
-            try (LoggingContext context = loggingContext()) {
-                callback.onCompletion(writeError, ignored);
-            }
-        });
+        return offsetWriteFuture;
     }
 
     @Override
