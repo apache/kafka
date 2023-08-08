@@ -70,6 +70,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -116,11 +117,10 @@ public class KafkaBasedLogTest {
     private MockedKafkaBasedLog store;
 
     @Mock
-    private TopicAdmin admin = null;
-    @Mock
     private Consumer<TopicAdmin> initializer;
     @Mock
     private KafkaProducer<String, String> producer;
+    private TopicAdmin admin;
     private final Supplier<TopicAdmin> topicAdminSupplier = () -> admin;
     private MockConsumer<String, String> consumer;
 
@@ -445,6 +445,7 @@ public class KafkaBasedLogTest {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
         when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenReturn(endOffsets);
         when(admin.endOffsets(eq(tps))).thenReturn(endOffsets);
 
@@ -455,6 +456,7 @@ public class KafkaBasedLogTest {
     @Test
     public void testReadEndOffsetsUsingAdminThatFailsWithUnsupported() {
         Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        admin = mock(TopicAdmin.class);
         // Getting end offsets using the admin client should fail with unsupported version
         when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenThrow(new UnsupportedVersionException("too old"));
 
@@ -474,6 +476,7 @@ public class KafkaBasedLogTest {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
         // Getting end offsets upon startup should work fine
         when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenReturn(endOffsets);
         // Getting end offsets using the admin client should fail with leader not available
