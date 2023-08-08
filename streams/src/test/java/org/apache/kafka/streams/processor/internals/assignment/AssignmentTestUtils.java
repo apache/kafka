@@ -811,8 +811,8 @@ public final class AssignmentTestUtils {
         final Map<UUID, ClientState> clientStateMap,
         final Integer replica,
         final boolean relaxRackCheck,
-        final Map<UUID, Integer> standbyTaskCount)
-    {
+        final Map<UUID, Integer> standbyTaskCount
+    ) {
         if (standbyTaskCount != null) {
             for (final Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
                 final int expected = standbyTaskCount.get(entry.getKey());
