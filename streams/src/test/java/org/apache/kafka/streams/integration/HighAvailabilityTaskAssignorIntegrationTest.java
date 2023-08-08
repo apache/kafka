@@ -170,8 +170,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
         produceTestData(inputTopic, numberOfRecords);
 
-        try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor));
-             final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor));
+        try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor, AssignmentTestUtils.RACK_0));
+             final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor, AssignmentTestUtils.RACK_1));
              final Consumer<String, String> consumer = new KafkaConsumer<>(getConsumerProperties())) {
             kafkaStreams0.start();
 
@@ -312,7 +312,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
     private static Properties streamsProperties(final String appId,
                                                 final AssignmentListener configuredAssignmentListener,
-                                                final boolean enableRackAwareAssignor) {
+                                                final boolean enableRackAwareAssignor,
+                                                final String rack) {
         final String rackAwareStrategy = enableRackAwareAssignor ? StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC : StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
         return mkObjectProperties(
             mkMap(
@@ -330,7 +331,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 40),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
-                mkEntry(CommonClientConfigs.CLIENT_RACK_CONFIG, AssignmentTestUtils.RACK_0),
+                mkEntry(CommonClientConfigs.CLIENT_RACK_CONFIG, rack),
                 mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareStrategy)
             )
         );

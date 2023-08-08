@@ -313,14 +313,14 @@ public class StreamsPartitionAssignorTest {
 
         if (topicPartitionInfo != null) {
             lenient().when(mockInternalTopicManager.getTopicPartitionInfo(anySet())).thenAnswer(
-                i -> {
-                    final Set<String> topics = i.getArgument(0);
+                invocation -> {
+                    final Set<String> topics = invocation.getArgument(0);
                     for (final Map<String, List<TopicPartitionInfo>> tp : topicPartitionInfo) {
                         if (topics.equals(tp.keySet())) {
                             return tp;
                         }
                     }
-                    return null;
+                    return emptyMap();
                 }
             );
         }
@@ -890,7 +890,8 @@ public class StreamsPartitionAssignorTest {
         );
 
         createDefaultMockTaskManager();
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(3,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            3,
             singletonList(mkSet(
                 APPLICATION_ID + "-store1-changelog",
                 APPLICATION_ID + "-store2-changelog",
@@ -1068,7 +1069,8 @@ public class StreamsPartitionAssignorTest {
             singletonList(3))
         );
 
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(3,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            3,
             singletonList(mkSet(APPLICATION_ID + "-store1-changelog")));
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1), changelogTopicPartitionInfo);
 
@@ -1228,7 +1230,8 @@ public class StreamsPartitionAssignorTest {
                 singletonList(APPLICATION_ID + "-store1-changelog"),
                 singletonList(3))
         );
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(3,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            3,
             singletonList(mkSet(APPLICATION_ID + "-store1-changelog")));
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1), changelogTopicPartitionInfo);
 
@@ -1278,7 +1281,8 @@ public class StreamsPartitionAssignorTest {
                 singletonList(APPLICATION_ID + "-store1-changelog"),
                 singletonList(3))
         );
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(3,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            3,
             singletonList(mkSet(APPLICATION_ID + "-store1-changelog")));
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1), changelogTopicPartitionInfo);
 
@@ -1377,7 +1381,8 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
         createDefaultMockTaskManager();
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(4,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            4,
             singletonList(mkSet(APPLICATION_ID + "-topicX")));
         final MockInternalTopicManager internalTopicManager = configurePartitionAssignorWith(emptyMap(), changelogTopicPartitionInfo);
 
@@ -1411,7 +1416,8 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
         createDefaultMockTaskManager();
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(4,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            4,
             singletonList(mkSet(APPLICATION_ID + "-topicX", APPLICATION_ID + "-topicZ")));
         final MockInternalTopicManager internalTopicManager = configurePartitionAssignorWith(emptyMap(), changelogTopicPartitionInfo);
 
@@ -1465,7 +1471,8 @@ public class StreamsPartitionAssignorTest {
         );
 
         createDefaultMockTaskManager();
-        final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo = getTopicPartitionInfo(4,
+        final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo = getTopicPartitionInfo(
+            4,
             asList(
                 mkSet(
                     APPLICATION_ID + "-topic3-STATE-STORE-0000000002-changelog",
@@ -1992,7 +1999,8 @@ public class StreamsPartitionAssignorTest {
 
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        subscriptions.put(CONSUMER_1,
+        subscriptions.put(
+            CONSUMER_1,
             new Subscription(
                 Collections.singletonList("topic1"),
                 getInfo(UUID_1, allTasks, EMPTY_TASKS).encode(),
@@ -2001,7 +2009,8 @@ public class StreamsPartitionAssignorTest {
                 Optional.of(RACK_1)
             )
         );
-        subscriptions.put(CONSUMER_2,
+        subscriptions.put(
+            CONSUMER_2,
             new Subscription(
                 Collections.singletonList("topic1"),
                 getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
@@ -2144,7 +2153,8 @@ public class StreamsPartitionAssignorTest {
         final List<String> topics = asList("input-stream", "test-even_store-repartition", "test-even_store_2-repartition", "test-odd_store-repartition", "test-odd_store_2-repartition");
 
         createDefaultMockTaskManager();
-        final List<Map<String, List<TopicPartitionInfo>>> repartitionTopics = getTopicPartitionInfo(4,
+        final List<Map<String, List<TopicPartitionInfo>>> repartitionTopics = getTopicPartitionInfo(
+            4,
             asList(
                 mkSet(APPLICATION_ID + "-odd_store-repartition"),
                 mkSet(
@@ -2219,7 +2229,8 @@ public class StreamsPartitionAssignorTest {
         );
 
         createDefaultMockTaskManager();
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(changelogNumPartitions - 1,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            changelogNumPartitions - 1,
             singletonList(mkSet(APPLICATION_ID + "-store1-changelog")));
         configurePartitionAssignorWith(emptyMap(), changelogTopicPartitionInfo);
 
@@ -2247,7 +2258,8 @@ public class StreamsPartitionAssignorTest {
         );
 
         createDefaultMockTaskManager();
-        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(3,
+        final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
+            3,
             singletonList(mkSet(APPLICATION_ID + "-store1-changelog")));
         configurePartitionAssignorWith(emptyMap(), changelogTopicPartitionInfo);
 
@@ -2670,19 +2682,20 @@ public class StreamsPartitionAssignorTest {
             KeyValue.pair(NODE_3, asList(REPLICA_3))
         );
 
-        final List<Map<String, List<TopicPartitionInfo>>> ret = new ArrayList<>();
+        final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo = new ArrayList<>();
         for (final Set<String> topics : topicsList) {
-            ret.add(new HashMap<>());
+            final Map<String, List<TopicPartitionInfo>> topicInfoMap = new HashMap<>();
+            topicPartitionInfo.add(topicInfoMap);
             for (final String topic : topics) {
                 final List<TopicPartitionInfo> topicPartitionInfoList = new ArrayList<>();
-                ret.get(ret.size() - 1).put(topic, topicPartitionInfoList);
+                topicInfoMap.put(topic, topicPartitionInfoList);
                 for (int i = 0; i < replicaCount; i++) {
                     topicPartitionInfoList.add(new TopicPartitionInfo(i, nodes.get(i).key, nodes.get(i).value, nodes.get(i).value));
                 }
             }
         }
 
-        return ret;
+        return topicPartitionInfo;
     }
 
 }

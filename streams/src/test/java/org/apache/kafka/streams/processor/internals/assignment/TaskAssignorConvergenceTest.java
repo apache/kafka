@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Map;
@@ -74,6 +75,15 @@ import static org.mockito.Mockito.spy;
 
 @RunWith(Parameterized.class)
 public class TaskAssignorConvergenceTest {
+    private static Random random;
+
+    @BeforeClass
+    public static void beforeClass() {
+        final long seed = System.currentTimeMillis();
+        System.out.println("Seed is " + seed);
+        random = new Random(seed);
+    }
+
     private static final class Harness {
         private final Set<TaskId> statelessTasks;
         private final Map<TaskId, Long> statefulTaskEndOffsetSums;
@@ -87,6 +97,8 @@ public class TaskAssignorConvergenceTest {
         public final Cluster fullMetadata;
         public final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer;
         public final InternalTopicManager internalTopicManager;
+
+
 
         private static Harness initializeCluster(final int numStatelessTasks,
                                                  final int numStatefulTasks,
@@ -141,7 +153,6 @@ public class TaskAssignorConvergenceTest {
                     changelogPartitionsForTask.put(taskId, mkSet(new TopicPartition(changelogTopicName, i)));
                     tasksForTopicGroup.computeIfAbsent(new Subtopology(subtopology, null), k -> new HashSet<>()).add(taskId);
 
-                    final Random random = new Random();
                     final int changelogNodeIndex = random.nextInt(nodes.size());
                     replica = getRandomReplica(nodes, changelogNodeIndex);
                     final TopicPartitionInfo info = new TopicPartitionInfo(i, replica[0], Arrays.asList(replica[0], replica[1]), Collections.emptyList());
@@ -175,7 +186,6 @@ public class TaskAssignorConvergenceTest {
             for (int i = 0; i < numClients; i++) {
                 final UUID uuid = uuidForInt(i);
                 clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
-                final Random random = new Random();
                 final String rack = RACK_PREFIX + random.nextInt(nodes.size());
                 racksForProcessConsumer.put(uuid, mkMap(mkEntry("consumer", Optional.of(rack))));
             }
@@ -221,7 +231,7 @@ public class TaskAssignorConvergenceTest {
             history.append("Adding new node ").append(uuid).append('\n');
             clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
             final int nodeSize = fullMetadata.nodes().size();
-            final String rack = RACK_PREFIX + new Random().nextInt(nodeSize);
+            final String rack = RACK_PREFIX + random.nextInt(nodeSize);
             racksForProcessConsumer.computeIfAbsent(uuid, k -> new HashMap<>()).put("consumer", Optional.of(rack));
         }
 
