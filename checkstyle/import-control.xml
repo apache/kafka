@@ -261,6 +261,10 @@
       <allow pkg="org.apache.kafka.storage"/>
       <subpackage name="remote">
         <allow pkg="scala.collection" />
+        <subpackage name="storage">
+          <allow pkg="com.yammer.metrics.core" />
+          <allow pkg="org.apache.kafka.server.metrics" />
+        </subpackage>
       </subpackage>
 
     </subpackage>

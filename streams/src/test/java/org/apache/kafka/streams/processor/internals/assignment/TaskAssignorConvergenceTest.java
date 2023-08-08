@@ -413,6 +413,7 @@ public class TaskAssignorConvergenceTest {
                 harness.clientStates,
                 allTasks,
                 harness.statefulTaskEndOffsetSums.keySet(),
+                null,
                 configs
             );
             harness.recordAfter(iteration, rebalancePending);

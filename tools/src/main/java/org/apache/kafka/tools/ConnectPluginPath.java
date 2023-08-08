@@ -64,7 +64,6 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -452,7 +451,7 @@ public class ConnectPluginPath {
                     URL url = resources.nextElement();
                     for (String className : parse(url)) {
                         ManifestEntry e = new ManifestEntry(url.toURI(), className, type);
-                            manifests.computeIfAbsent(className, ignored -> new ArrayList<>()).add(e);
+                        manifests.computeIfAbsent(className, ignored -> new ArrayList<>()).add(e);
                     }
                 }
             } catch (URISyntaxException e) {
