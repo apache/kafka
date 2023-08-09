@@ -49,12 +49,4 @@ final class PartitionMove {
     public int hashCode() {
         return Objects.hash(sources, destinations);
     }
-
-    @Override
-    public String toString() {
-        return "PartitionMove{" +
-            "sources=" + sources +
-            ", destinations=" + destinations +
-            '}';
-    }
 }
