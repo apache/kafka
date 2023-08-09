@@ -1361,8 +1361,6 @@ public class HighAvailabilityTaskAssignorTest {
             tpSize, maxCapacity, partitionSize, false, statefulTasks);
         final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
 
-
-
         new HighAvailabilityTaskAssignor().assign(
             clientStateMap,
             taskIds,

@@ -984,8 +984,6 @@ public class StickyTaskAssignorTest {
             tpSize, maxCapacity, partitionSize, false, statefulTasks);
         final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
 
-
-
         new StickyTaskAssignor().assign(
             clientStateMap,
             taskIds,
