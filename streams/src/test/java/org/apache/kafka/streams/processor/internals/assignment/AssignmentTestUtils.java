@@ -226,6 +226,7 @@ public final class AssignmentTestUtils {
 
     private static final String USER_END_POINT = "localhost:8080";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
+    private static Random random;
     public static final String TOPIC_PREFIX = "topic";
     public static final String CHANGELOG_TOPIC_PREFIX = "changelog-topic";
     public static final String RACK_PREFIX = "rack";
@@ -615,7 +616,8 @@ public final class AssignmentTestUtils {
         for (int i = 0; i < nodeSize; i++) {
             nodeList.add(new Node(i, "node" + i, 1, RACK_PREFIX + i));
         }
-        Collections.shuffle(nodeList);
+        final Random rand = getRandom();
+        Collections.shuffle(nodeList, rand);
         return nodeList;
     }
 
@@ -650,7 +652,8 @@ public final class AssignmentTestUtils {
         for (int i = 0; i < nodeSize; i++) {
             racks.add(RACK_PREFIX + i);
         }
-        Collections.shuffle(racks);
+        final Random rand = getRandom();
+        Collections.shuffle(racks, rand);
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
         for (int i = 1; i <= clientSize; i++) {
             final String rack = racks.get(i % nodeSize);
@@ -728,11 +731,9 @@ public final class AssignmentTestUtils {
     }
 
     static List<Set<TaskId>> getRandomSubset(final Set<TaskId> taskIds, final int listSize) {
+        final Random rand = getRandom();
         final List<TaskId> taskIdList = new ArrayList<>(taskIds);
-        Collections.shuffle(taskIdList);
-        final long seed = System.currentTimeMillis();
-        System.out.println("seed for getRandomSubset: " + seed);
-        final Random random = new Random(seed);
+        Collections.shuffle(taskIdList, rand);
         int start = 0;
         final List<Set<TaskId>> subSets = new ArrayList<>(listSize);
         for (int i = 0; i < listSize; i++) {
@@ -740,7 +741,7 @@ public final class AssignmentTestUtils {
             final Set<TaskId> subset = new HashSet<>();
             if (remaining != 0) {
                 // In last round, get all tasks
-                final int subSetSize = (i == listSize - 1) ? remaining : random.nextInt(remaining) + 1;
+                final int subSetSize = (i == listSize - 1) ? remaining : rand.nextInt(remaining) + 1;
                 for (int j = 0; j < subSetSize; j++) {
                     subset.add(taskIdList.get(start + j));
                 }
@@ -770,12 +771,10 @@ public final class AssignmentTestUtils {
         final List<Set<TaskId>> previousActives = getRandomSubset(taskIds, clientSize);
         final List<Set<TaskId>> previousStandbys = getRandomSubset(statefulTasks, clientSize);
 
-        final long seed = System.currentTimeMillis();
-        System.out.println("seed for getRandomClientState: " + seed);
-        final Random random = new Random(seed);
+        final Random rand = getRandom();
 
         for (int i = 1; i <= clientSize; i++) {
-            final int capacity = random.nextInt(maxCapacity) + 1;
+            final int capacity = rand.nextInt(maxCapacity) + 1;
             final UUID processId = uuidForInt(i);
             final ClientState clientState = new ClientState(previousActives.get(i - 1), previousStandbys.get(i - 1), taskLags, EMPTY_CLIENT_TAGS, capacity, processId);
             clientStates.put(processId, clientState);
@@ -784,7 +783,7 @@ public final class AssignmentTestUtils {
         if (initialAssignment) {
             Iterator<Entry<UUID, ClientState>> iterator = clientStates.entrySet().iterator();
             final List<TaskId> taskIdList = new ArrayList<>(taskIds);
-            Collections.shuffle(taskIdList);
+            Collections.shuffle(taskIdList, rand);
             for (final TaskId taskId : taskIdList) {
                 if (!iterator.hasNext()) {
                     iterator = clientStates.entrySet().iterator();
@@ -1004,7 +1003,8 @@ public final class AssignmentTestUtils {
                 new HashMap<>(),
                 getProcessRacksForAllProcess(),
                 mockInternalTopicManagerForChangelog(),
-                configs
+                configs,
+                new MockTime()
             )
         );
     }
@@ -1033,9 +1033,18 @@ public final class AssignmentTestUtils {
             .collect(
                 Collectors.toMap(
                     Entry::getKey,
-                    entry -> entry.getValue().copy()
+                    entry -> new ClientState(entry.getValue())
                 )
             )
         );
+    }
+
+    static synchronized Random getRandom() {
+        if (random == null) {
+            final long seed = System.currentTimeMillis();
+            System.out.println("seed for getRandom: " + seed);
+            random = new Random(seed);
+        }
+        return random;
     }
 }

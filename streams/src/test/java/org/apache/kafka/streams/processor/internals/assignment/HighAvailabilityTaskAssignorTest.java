@@ -23,6 +23,8 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
@@ -125,6 +127,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
     }
+
+    private final Time time = new MockTime();
 
     @Parameter
     public boolean enableRackAwareTaskAssignor;
@@ -1279,7 +1283,8 @@ public class HighAvailabilityTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize),
-            assignorConfiguration
+            assignorConfiguration,
+            time
         ));
 
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
@@ -1345,7 +1350,8 @@ public class HighAvailabilityTaskAssignorTest {
             subtopologySetMap,
             processRackMap,
             mockInternalTopicManager,
-            configs
+            configs,
+            time
         ));
 
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
@@ -1383,7 +1389,8 @@ public class HighAvailabilityTaskAssignorTest {
             subtopologySetMap,
             processRackMap,
             mockInternalTopicManager,
-            configs
+            configs,
+            time
         ));
 
         new HighAvailabilityTaskAssignor().assign(

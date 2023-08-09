@@ -112,6 +112,18 @@ public class ClientState {
         this.processId = processId;
     }
 
+    // For testing only
+    public ClientState(final ClientState clientState) {
+        this(
+            new HashSet<>(clientState.previousActiveTasks.taskIds()),
+            new HashSet<>(clientState.previousStandbyTasks.taskIds()),
+            clientState.taskLagTotals,
+            clientState.clientTags,
+            clientState.capacity,
+            clientState.processId
+        );
+    }
+
     int capacity() {
         return capacity;
     }

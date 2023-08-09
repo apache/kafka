@@ -640,8 +640,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
-        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(fullMetadata, partitionsForTask,
-            changelogTopics.changelogPartionsForTask(), tasksForTopicGroup, racksForProcessConsumer, internalTopicManager, assignmentConfigs);
+        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+            fullMetadata,
+            partitionsForTask,
+            changelogTopics.changelogPartionsForTask(),
+            tasksForTopicGroup,
+            racksForProcessConsumer,
+            internalTopicManager,
+            assignmentConfigs,
+            time
+        );
         final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
                                                                    allTasks,
                                                                    statefulTasks,

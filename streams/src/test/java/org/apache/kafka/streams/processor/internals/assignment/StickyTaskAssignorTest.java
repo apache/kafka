@@ -22,6 +22,8 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
@@ -104,7 +106,7 @@ import static org.mockito.Mockito.spy;
 public class StickyTaskAssignorTest {
 
     private final List<Integer> expectedTopicGroupIds = asList(1, 2);
-
+    private final Time time = new MockTime();
     private final Map<UUID, ClientState> clients = new TreeMap<>();
 
     @Parameter
@@ -479,7 +481,8 @@ public class StickyTaskAssignorTest {
             tasksForTopicGroup,
             racksForProcessConsumer,
             internalTopicManager,
-            configs
+            configs,
+            time
         );
 
         final boolean probingRebalanceNeeded = assign(configs, rackAwareTaskAssignor, taskIdArray);
@@ -787,7 +790,8 @@ public class StickyTaskAssignorTest {
             tasksForTopicGroup,
             racksForProcessConsumer,
             internalTopicManager,
-            configs
+            configs,
+            time
         );
 
         final boolean probingRebalanceNeeded = new StickyTaskAssignor(true).assign(
@@ -837,7 +841,8 @@ public class StickyTaskAssignorTest {
             tasksForTopicGroup,
             racksForProcessConsumer,
             internalTopicManager,
-            configs
+            configs,
+            time
         );
 
         final boolean probingRebalanceNeeded = new StickyTaskAssignor().assign(
@@ -901,7 +906,8 @@ public class StickyTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize),
-            configs
+            configs,
+            time
         ));
 
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
@@ -967,7 +973,8 @@ public class StickyTaskAssignorTest {
             subtopologySetMap,
             processRackMap,
             mockInternalTopicManager,
-            configs
+            configs,
+            time
         ));
 
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
@@ -1005,7 +1012,8 @@ public class StickyTaskAssignorTest {
             subtopologySetMap,
             processRackMap,
             mockInternalTopicManager,
-            configs
+            configs,
+            time
         ));
 
         new StickyTaskAssignor().assign(

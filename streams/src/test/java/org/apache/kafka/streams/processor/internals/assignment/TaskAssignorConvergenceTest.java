@@ -30,6 +30,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
@@ -76,6 +77,7 @@ import static org.mockito.Mockito.spy;
 @RunWith(Parameterized.class)
 public class TaskAssignorConvergenceTest {
     private static Random random;
+    private static final Time TIME = new MockTime();
 
     @BeforeClass
     public static void beforeClass() {
@@ -596,7 +598,8 @@ public class TaskAssignorConvergenceTest {
             harness.tasksForTopicGroup,
             harness.racksForProcessConsumer,
             harness.internalTopicManager,
-            configs
+            configs,
+            TIME
         );
         while (rebalancePending && iteration < iterationLimit) {
             iteration++;

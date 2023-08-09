@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import static org.apache.kafka.common.utils.Utils.diff;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_TRAFFIC_COST;
 
 import java.util.SortedSet;
 import java.util.TreeMap;
@@ -41,13 +43,10 @@ import java.util.UUID;
 public class StickyTaskAssignor implements TaskAssignor {
 
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
+
     // For stateful tasks, by default we want to maintain stickiness. So we have higher non_overlap_cost
     private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 1;
     private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 10;
-
-    // For stateless tasks, it's ok to move them around. So we have 0 non_overlap_cost
-    private static final int STATELESS_TRAFFIC_COST = 1;
-    private static final int STATELESS_NON_OVERLAP_COST = 0;
 
     private Map<UUID, ClientState> clients;
     private Set<TaskId> allTaskIds;
