@@ -973,12 +973,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (partitionResponse.errorCode() != Errors.NONE.code()
             || FetchResponse.recordsSize(partitionResponse) > 0
             || request.maxWaitMs() == 0
-            || isPartitionTruncated(partitionResponse)) {
+            || isPartitionDiverged(partitionResponse)
+            || isPartitionSnapshotted(partitionResponse)) {
             // Reply immediately if any of the following is true
             // 1. The response contains an errror
             // 2. There are records in the response
-            // 3. The fetching replica doesn't want to wait for data partition to contain new data
-            // 4. The fetching replica needs to truncate because it either diverged or needs to fetch a snapshot
+            // 3. The fetching replica doesn't want to wait for the partition to contain new data
+            // 4. The fetching replica needs to truncate because the log diverged
+            // 5. The fetching replica needs to fetch a snapshot
             return completedFuture(response);
         }
 
@@ -1063,12 +1065,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private static boolean isPartitionTruncated(FetchResponseData.PartitionData partitionResponseData) {
+    private static boolean isPartitionDiverged(FetchResponseData.PartitionData partitionResponseData) {
         FetchResponseData.EpochEndOffset divergingEpoch = partitionResponseData.divergingEpoch();
+
+        return divergingEpoch.epoch() != -1 || divergingEpoch.endOffset() != -1;
+    }
+
+    private static boolean isPartitionSnapshotted(FetchResponseData.PartitionData partitionResponseData) {
         FetchResponseData.SnapshotId snapshotId = partitionResponseData.snapshotId();
 
-        return divergingEpoch.epoch() != -1 || divergingEpoch.endOffset() != -1 ||
-            snapshotId.epoch() != -1 || snapshotId.endOffset() != -1;
+        return snapshotId.epoch() != -1 || snapshotId.endOffset() != -1;
     }
 
     private static OptionalInt optionalLeaderId(int leaderIdOrNil) {
