@@ -387,8 +387,8 @@ public class TaskAssignorConvergenceTest {
                                                                 0,
                                                                 60_000L,
                                                                 EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-                                    null,
-                                null,
+                                                                null,
+                                                                null,
                                                                 rackAwareStrategy);
 
         final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1, 1);
@@ -411,8 +411,8 @@ public class TaskAssignorConvergenceTest {
                                                                 numStandbyReplicas,
                                                                 60_000L,
                                                                 EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-                                    null,
-                                null,
+                                                                null,
+                                                                null,
                                                                 rackAwareStrategy);
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5, numNodes);
