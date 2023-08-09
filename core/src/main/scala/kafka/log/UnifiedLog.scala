@@ -984,7 +984,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def maybeIncrementLocalLogStartOffset(newLocalLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
     lock synchronized {
       if (newLocalLogStartOffset > localLogStartOffset()) {
-        _localLogStartOffset = math.max(newLocalLogStartOffset, localLogStartOffset());
+        _localLogStartOffset = newLocalLogStartOffset
         info(s"Incremented local log start offset to ${localLogStartOffset()} due to reason $reason")
       }
     }
@@ -1001,7 +1001,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return true if the log start offset was updated; otherwise false
    */
   def maybeIncrementLogStartOffset(newLogStartOffset: Long,
-                                           reason: LogStartOffsetIncrementReason): Boolean = {
+                                   reason: LogStartOffsetIncrementReason): Boolean = {
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
@@ -1347,7 +1347,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           val segmentsCopy = logSegments.toBuffer
 
           val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
-          targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, _localLogStartOffset))
+          targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, localLogStartOffset()))
         }
       }
     }
@@ -1518,7 +1518,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      nextSegmentOpt.exists(_.baseOffset <= localLogStartOffset())
+      nextSegmentOpt.exists(_.baseOffset <= (if(remoteLogEnabled()) localLogStartOffset() else logStartOffset))
     }
 
     deleteOldSegments(shouldDelete, StartOffsetBreach(this))
