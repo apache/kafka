@@ -2851,7 +2851,7 @@ public class DistributedHerderTest {
         Map<String, ArgumentCaptor<KafkaFuture.BaseFunction<Void, Void>>> workerFencingFollowups = new HashMap<>();
 
         Map<String, CountDownLatch> callbacksInstalled = new HashMap<>();
-        tasksPerConnector.forEach((connector, numStackedRequests) -> {
+        tasksPerConnector.keySet().forEach(connector -> {
             // The future returned by Worker::fenceZombies
             KafkaFuture<Void> workerFencingFuture = mock(KafkaFuture.class);
             // The future tracked by the herder (which tracks the fencing performed by the worker and the possible followup write to the config topic)
@@ -2873,13 +2873,7 @@ public class DistributedHerderTest {
                 return herderFencingFuture;
             });
 
-            // We should only perform a single physical zombie fencing; all the subsequent requests should be stacked onto the first one
-            when(worker.fenceZombies(eq(connector), eq(taskCountRecords.get(connector)), any()))
-                    .thenReturn(workerFencingFuture)
-                    .thenAnswer(invocation -> {
-                        fail("Expected only a single zombie fencing per connector");
-                        return null;
-                    });
+            when(worker.fenceZombies(eq(connector), eq(taskCountRecords.get(connector)), any())).thenReturn(workerFencingFuture);
         });
 
         tasksPerConnector.forEach((connector, taskCount) -> doNothing().when(configBackingStore).putTaskCountRecord(eq(connector), eq(taskCount)));
@@ -2917,6 +2911,8 @@ public class DistributedHerderTest {
 
         stopBackgroundHerder();
 
+        // We should only perform a single physical zombie fencing for each connector; all the subsequent requests should be stacked onto the first one
+        tasksPerConnector.keySet().forEach(connector -> verify(worker).fenceZombies(eq(connector), eq(taskCountRecords.get(connector)), any()));
         verifyNoMoreInteractions(member, worker, configBackingStore, statusBackingStore);
     }
 
