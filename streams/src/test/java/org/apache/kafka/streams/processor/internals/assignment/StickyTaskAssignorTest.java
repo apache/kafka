@@ -955,7 +955,7 @@ public class StickyTaskAssignorTest {
             replicaCount,
             60_000L,
             EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-            0,
+            0, // Override traffic cost to 0 to maintain original assignment
             10,
             rackAwareStrategy
         );

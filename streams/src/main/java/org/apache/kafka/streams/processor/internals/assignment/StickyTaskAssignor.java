@@ -41,8 +41,11 @@ import java.util.UUID;
 public class StickyTaskAssignor implements TaskAssignor {
 
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
+    // For stateful tasks, by default we want to maintain stickiness. So we have higher non_overlap_cost
     private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 1;
     private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 10;
+
+    // For stateless tasks, it's ok to move them around. So we have 0 non_overlap_cost
     private static final int STATELESS_TRAFFIC_COST = 1;
     private static final int STATELESS_NON_OVERLAP_COST = 0;
 
