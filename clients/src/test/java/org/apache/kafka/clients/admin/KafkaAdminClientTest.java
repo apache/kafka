@@ -2395,7 +2395,7 @@ public class KafkaAdminClientTest {
                             env.cluster().nodes(),
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
-                            asList()));
+                            emptyList()));
             try {
                 DescribeTopicsResult result = env.adminClient().describeTopics(
                         TopicCollection.ofTopicIds(singletonList(nonExistID)));
