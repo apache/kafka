@@ -3157,7 +3157,7 @@ public class DistributedHerderTest {
         // task reconfiguration herder request with double the initial retry backoff
         verify(member).poll(eq(500L));
 
-        verifyNoMoreInteractions(member, worker);
+        verifyNoMoreInteractions(member, worker, restClient);
     }
 
     @Test
