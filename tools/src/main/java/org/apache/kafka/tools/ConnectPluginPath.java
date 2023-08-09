@@ -476,7 +476,6 @@ public class ConnectPluginPath {
     }
 
     // Based on implementation from ServiceLoader.LazyClassPathLookupIterator from OpenJDK11
-    // visible for testing
     private static Set<String> parse(URL u) {
         Set<String> names = new LinkedHashSet<>(); // preserve insertion order
         try {
