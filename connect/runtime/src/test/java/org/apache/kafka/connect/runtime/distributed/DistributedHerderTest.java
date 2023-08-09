@@ -763,9 +763,6 @@ public class DistributedHerderTest {
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
         doNothing().when(member).poll(anyLong());
 
-        // Initial rebalance where this member becomes the leader
-        herder.tick();
-
         HashMap<String, String> config = new HashMap<>(CONN2_CONFIG);
         config.remove(ConnectorConfig.NAME_CONFIG);
 
@@ -777,13 +774,12 @@ public class DistributedHerderTest {
             return null;
         }).when(herder).validateConnectorConfig(eq(config), validateCallback.capture());
 
-        // This will occur just before/during the second tick
-        doNothing().when(member).ensureActive();
-
         herder.putConnectorConfig(CONN2, config, false, putConnectorCallback);
         herder.tick();
-        herder.tick();
 
+        // We don't need another rebalance to occur
+        doNothing().when(member).ensureActive();
+        herder.tick();
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
 
@@ -821,9 +817,6 @@ public class DistributedHerderTest {
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
         doNothing().when(member).poll(anyLong());
 
-        // Initial rebalance where this member becomes the leader
-        herder.tick();
-
         // mock the actual validation since its asynchronous nature is difficult to test and should
         // be covered sufficiently by the unit tests for the AbstractHerder class
         ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
@@ -832,13 +825,12 @@ public class DistributedHerderTest {
             return null;
         }).when(herder).validateConnectorConfig(eq(CONN1_CONFIG), validateCallback.capture());
 
-        // This will occur just before/during the second tick
-        doNothing().when(member).ensureActive();
-
         herder.putConnectorConfig(CONN1, CONN1_CONFIG, false, putConnectorCallback);
         herder.tick();
-        herder.tick();
 
+        // We don't need another rebalance to occur
+        doNothing().when(member).ensureActive();
+        herder.tick();
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
 
