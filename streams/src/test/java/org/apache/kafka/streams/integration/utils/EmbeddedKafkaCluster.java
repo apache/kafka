@@ -53,6 +53,7 @@ public class EmbeddedKafkaCluster {
     private final KafkaEmbedded[] brokers;
 
     private final Properties brokerConfig;
+    private final List<Properties> brokerConfigOverrides;
     public final MockTime time;
 
     public EmbeddedKafkaCluster(final int numBrokers) {
@@ -67,16 +68,31 @@ public class EmbeddedKafkaCluster {
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig,
                                 final long mockTimeMillisStart) {
-        this(numBrokers, brokerConfig, mockTimeMillisStart, System.nanoTime());
+        this(numBrokers, brokerConfig, Collections.emptyList(), mockTimeMillisStart);
     }
 
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig,
+                                final List<Properties> brokerConfigOverrides) {
+        this(numBrokers, brokerConfig, brokerConfigOverrides, System.currentTimeMillis());
+    }
+
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig,
+                                final List<Properties> brokerConfigOverrides,
+                                final long mockTimeMillisStart) {
+        this(numBrokers, brokerConfig, brokerConfigOverrides, mockTimeMillisStart, System.nanoTime());
+    }
+
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig,
+                                final List<Properties> brokerConfigOverrides,
                                 final long mockTimeMillisStart,
                                 final long mockTimeNanoStart) {
         brokers = new KafkaEmbedded[numBrokers];
         this.brokerConfig = brokerConfig;
         time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
+        this.brokerConfigOverrides = brokerConfigOverrides;
     }
 
     /**
@@ -102,7 +118,13 @@ public class EmbeddedKafkaCluster {
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
             log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(KafkaConfig.ListenersProp()));
-            brokers[i] = new KafkaEmbedded(brokerConfig, time);
+
+            final Properties effectiveConfig = new Properties();
+            effectiveConfig.putAll(brokerConfig);
+            if (brokerConfigOverrides != null && brokerConfigOverrides.size() > i) {
+                effectiveConfig.putAll(brokerConfigOverrides.get(i));
+            }
+            brokers[i] = new KafkaEmbedded(effectiveConfig, time);
 
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
                 brokers[i].brokerList(), brokers[i].zookeeperConnect());
