@@ -2286,6 +2286,7 @@ public class DistributedHerderTest {
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
+        verifyNoMoreInteractions(member, taskConfigCb);
     }
 
     @Test
@@ -2297,6 +2298,7 @@ public class DistributedHerderTest {
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
+        verifyNoMoreInteractions(member, taskConfigCb);
     }
 
     @Test
@@ -2310,7 +2312,7 @@ public class DistributedHerderTest {
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
         assertTrue(errorCapture.getValue() instanceof BadRequestException);
 
-        verifyNoMoreInteractions(member);
+        verifyNoMoreInteractions(member, taskConfigCb);
     }
 
     @Test
@@ -2327,7 +2329,7 @@ public class DistributedHerderTest {
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
         assertTrue(errorCapture.getValue() instanceof BadRequestException);
 
-        verifyNoMoreInteractions(member);
+        verifyNoMoreInteractions(member, taskConfigCb);
     }
 
     @Test
@@ -2354,7 +2356,7 @@ public class DistributedHerderTest {
         assertTrue(errorCapture.getValue() instanceof ConnectRestException);
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
-        verifyNoMoreInteractions(member);
+        verifyNoMoreInteractions(member, taskConfigCb);
     }
 
     @Test
@@ -2372,7 +2374,7 @@ public class DistributedHerderTest {
         assertTrue(errorCapture.getValue() instanceof ConnectRestException);
         assertEquals(SERVICE_UNAVAILABLE.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
-        verifyNoMoreInteractions(member);
+        verifyNoMoreInteractions(member, taskConfigCb);
     }
 
     @Test
@@ -2396,6 +2398,7 @@ public class DistributedHerderTest {
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
+        verifyNoMoreInteractions(member, taskConfigCb);
     }
 
     @Test
