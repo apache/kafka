@@ -642,6 +642,7 @@ public class DistributedHerderTest {
         verify(worker, times(2)).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), any());
         verify(worker, times(2)).connectorTaskConfigs(eq(CONN1), eq(conn1SinkConfig));
         verify(worker).startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED));
+        verify(worker).stopAndAwaitConnector(CONN1);
 
         // The tick loop where the revoke happens returns early (because there's a subsequent rebalance) and doesn't result in a poll at
         // the end of the method
