@@ -18,7 +18,7 @@
 package kafka.server.metadata
 
 import kafka.utils.Logging
-import org.apache.kafka.image.loader.LoaderManifest
+import org.apache.kafka.image.loader.{LoaderManifest, LoaderManifestType}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
@@ -28,14 +28,14 @@ import scala.concurrent.TimeoutException
 
 
 class AclPublisher(
-  id: Int,
+  nodeId: Int,
   faultHandler: FaultHandler,
   nodeType: String,
   authorizer: Option[Authorizer],
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
-  override def name(): String = s"AclPublisher ${nodeType} id=${id}"
+  override def name(): String = s"AclPublisher ${nodeType} id=${nodeId}"
 
   var completedInitialLoad = false
 
@@ -54,7 +54,7 @@ class AclPublisher(
     // there could be a window during which incorrect authorization results are returned.
     Option(delta.aclsDelta()).foreach { aclsDelta =>
       authorizer match {
-        case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta) {
+        case Some(authorizer: ClusterMetadataAuthorizer) => if (manifest.`type`().equals(LoaderManifestType.SNAPSHOT)) {
           try {
             // If the delta resulted from a snapshot load, we want to apply the new changes
             // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
@@ -82,6 +82,9 @@ class AclPublisher(
           }
         }
         if (!completedInitialLoad) {
+          // If we are receiving this onMetadataUpdate call, that means the MetadataLoader has
+          // loaded up to the local high water mark. So we complete the initial load, enabling
+          // the authorizer.
           completedInitialLoad = true
           authorizer.completeInitialLoad()
         }
