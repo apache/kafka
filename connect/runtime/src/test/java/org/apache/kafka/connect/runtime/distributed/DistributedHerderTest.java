@@ -923,6 +923,7 @@ public class DistributedHerderTest {
 
         verify(worker, times(2)).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), any());
         verify(worker, times(2)).connectorTaskConfigs(eq(CONN1), any());
+        verify(worker).stopAndAwaitConnector(CONN1);
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
 
