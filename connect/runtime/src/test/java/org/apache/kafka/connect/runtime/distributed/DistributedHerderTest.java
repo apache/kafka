@@ -362,15 +362,15 @@ public class DistributedHerderTest {
 
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
+
         herder.tick();
-
-        expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
-                1, Arrays.asList(CONN1), Arrays.asList());
-
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
-        herder.tick();
 
+        // Rebalance and get a new assignment
+        expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
+                1, Arrays.asList(CONN1), Arrays.asList());
+        herder.tick();
         time.sleep(3000L);
         assertStatistics(3, 2, 100, 3000);
 
