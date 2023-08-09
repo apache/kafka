@@ -289,11 +289,7 @@ public class PartitionChangeBuilder {
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {
             boolean bumpLeaderEpochOnIsrShrink = metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled;
-
-            if (!Replicas.contains(targetReplicas, partition.replicas)) {
-                // Reassignment
-                record.setLeader(partition.leader);
-            } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
+            if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
                 // ISR shrink
                 record.setLeader(partition.leader);
             }
