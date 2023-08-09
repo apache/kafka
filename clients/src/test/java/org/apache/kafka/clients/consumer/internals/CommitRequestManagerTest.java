@@ -87,7 +87,6 @@ public class CommitRequestManagerTest {
     @Test
     public void testPoll_SkipIfCoordinatorUnknown() {
         CommitRequestManager commitRequestManger = create(false, 0);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
         assertPoll(false, 0, commitRequestManger);
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
