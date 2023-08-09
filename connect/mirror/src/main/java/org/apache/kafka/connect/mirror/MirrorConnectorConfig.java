@@ -85,7 +85,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
 
     private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED =  MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED;
-private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC;
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC;
     public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT =
         DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
 

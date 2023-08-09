@@ -406,6 +406,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "New topic was not replicated to primary cluster.");
         }
     }
+    
     @Test
     public void testReplicationWithEmptyPartition() throws Exception {
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
@@ -878,17 +879,13 @@ public class MirrorConnectorsIntegrationBaseTest {
      * Run tests for Exclude Filter for copying topic configurations
      */
     void createAndTestNewTopicWithConfigFilter() throws Exception {
-        final String topic = "test-topic-with-config";
-        final String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
-
-        createAndTestNewTopicWithConfigFilter(topic, backupTopic);
-    }
-
-    void createAndTestNewTopicWithConfigFilter(String topic, String backupTopic) throws Exception {
         // create topic with configuration to test:
         final Map<String, String> topicConfig = new HashMap<>();
         topicConfig.put("delete.retention.ms", "1000"); // should be excluded (default value is 86400000)
         topicConfig.put("retention.bytes", "1000"); // should be included, default value is -1
+
+        final String topic = "test-topic-with-config";
+        final String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
 
         primary.kafka().createTopic(topic, NUM_PARTITIONS, 1, topicConfig);
         waitForTopicCreated(backup, backupTopic);
@@ -913,11 +910,7 @@ public class MirrorConnectorsIntegrationBaseTest {
      * Returns expected topic name on target cluster.
      */
     String remoteTopicName(String topic, String clusterAlias) {
-        return remoteTopicName(topic, clusterAlias, ".");
-    }
-
-    String remoteTopicName(String topic, String clusterAlias, String separator) {
-        return clusterAlias + separator + topic;
+        return clusterAlias + "." + topic;
     }
 
     /*
@@ -1019,8 +1012,8 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    protected static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
-        MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName
+    private static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
+            MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName
     ) throws InterruptedException {
         return waitForNewCheckpointOnAllPartitions(client, consumerGroupName, remoteClusterAlias, topicName, Collections.emptyMap());
     }
@@ -1114,7 +1107,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    protected static void assertMonotonicCheckpoints(EmbeddedConnectCluster cluster, String checkpointTopic) {
+    private static void assertMonotonicCheckpoints(EmbeddedConnectCluster cluster, String checkpointTopic) {
         TopicPartition checkpointTopicPartition = new TopicPartition(checkpointTopic, 0);
         try (Consumer<byte[], byte[]> backupConsumer = cluster.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
                 "auto.offset.reset", "earliest"), checkpointTopic)) {
