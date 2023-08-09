@@ -36,6 +36,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import javax.crypto.SecretKey;
 import javax.ws.rs.core.Response;
@@ -107,7 +108,7 @@ public class RestClientTest {
     public static class RequestFailureParameterizedTest {
 
         @Rule
-        public MockitoRule initRule = MockitoJUnit.rule();
+        public MockitoRule initRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
         @Mock
         private HttpClient httpClient;
@@ -142,7 +143,7 @@ public class RestClientTest {
     }
 
 
-    @RunWith(MockitoJUnitRunner.class)
+    @RunWith(MockitoJUnitRunner.StrictStubs.class)
     public static class Tests {
         @Mock
         private HttpClient httpClient;

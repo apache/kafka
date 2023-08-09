@@ -57,7 +57,9 @@ import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.util.Callback;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.ws.rs.BadRequestException;
 import java.util.ArrayList;
@@ -89,6 +91,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ConnectorPluginsResourceTest {
 
     private static final Map<String, String> PROPS;
