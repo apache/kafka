@@ -2115,7 +2115,6 @@ public class DistributedHerderTest {
 
     @Test
     public void testPutConnectorConfig() throws Exception {
-        // connectorConfig and putConnectorConfig use an async request
         when(member.memberId()).thenReturn("leader");
         expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), true);
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
@@ -2199,6 +2198,9 @@ public class DistributedHerderTest {
 
         herder.tick();
 
+        // First rebalance: poll indefinitely as no key has been read yet, so expiration doesn't come into play
+        verify(member).poll(eq(Long.MAX_VALUE));
+
         expectRebalance(2, Collections.emptyList(), Collections.emptyList());
         SessionKey initialKey = new SessionKey(mock(SecretKey.class), 0);
         ClusterConfigState snapshotWithKey =  new ClusterConfigState(
@@ -2217,6 +2219,9 @@ public class DistributedHerderTest {
         configUpdateListener.onSessionKeyUpdate(initialKey);
         herder.tick();
 
+        // Second rebalance: poll indefinitely as worker is follower, so expiration still doesn't come into play
+        verify(member, times(2)).poll(eq(Long.MAX_VALUE));
+
         expectRebalance(2, Collections.emptyList(), Collections.emptyList(), "member", MEMBER_URL, true);
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
         ArgumentCaptor<SessionKey> updatedKey = ArgumentCaptor.forClass(SessionKey.class);
@@ -2227,9 +2232,6 @@ public class DistributedHerderTest {
 
         herder.tick();
 
-        // First rebalance: poll indefinitely as no key has been read yet, so expiration doesn't come into play
-        // Second rebalance: poll indefinitely as worker is follower, so expiration still doesn't come into play
-        verify(member, times(2)).poll(eq(Long.MAX_VALUE));
         // Third rebalance: poll for a limited time as worker has become leader and must wake up for key expiration
         verify(member).poll(eq(rotationTtlDelay));
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
@@ -2264,11 +2266,12 @@ public class DistributedHerderTest {
         configUpdateListener.onSessionKeyUpdate(initialKey);
         herder.tick();
 
+        // First rebalance: poll for a limited time as worker is leader and must wake up for key expiration
+        verify(member).poll(leq(rotationTtlDelay));
+
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         herder.tick();
 
-        // First rebalance: poll for a limited time as worker is leader and must wake up for key expiration
-        verify(member).poll(leq(rotationTtlDelay));
         // Second rebalance: poll indefinitely as worker is no longer leader, so key expiration doesn't come into play
         verify(member).poll(eq(Long.MAX_VALUE));
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
