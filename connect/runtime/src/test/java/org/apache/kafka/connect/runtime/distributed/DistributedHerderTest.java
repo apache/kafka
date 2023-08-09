@@ -396,6 +396,7 @@ public class DistributedHerderTest {
 
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
+
         herder.tick();
 
         // The new member got its assignment
@@ -415,8 +416,8 @@ public class DistributedHerderTest {
 
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
-        herder.tick();
 
+        herder.tick();
         time.sleep(3000L);
         assertStatistics(3, 2, 100, 3000);
 
@@ -441,6 +442,7 @@ public class DistributedHerderTest {
         herder.configState = SNAPSHOT;
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
+
         herder.tick();
 
         // In the second rebalance the new member gets its assignment and this member has no
@@ -449,8 +451,8 @@ public class DistributedHerderTest {
 
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
-        herder.tick();
 
+        herder.tick();
         time.sleep(3000L);
         assertStatistics(3, 2, 100, 3000);
 
@@ -483,6 +485,7 @@ public class DistributedHerderTest {
 
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
+
         herder.tick();
 
         // The member got its assignment and revocation
@@ -527,9 +530,11 @@ public class DistributedHerderTest {
         doNothing().when(member).poll(anyLong());
 
         herder.tick();
+
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
 
+        // Rebalance and get a new assignment
         expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
                 1, Arrays.asList(CONN1), Arrays.asList());
 
@@ -689,7 +694,6 @@ public class DistributedHerderTest {
         // Once that validation is complete, another request is added to the herder request queue
         // for actually performing the config write; this tick is for that request
         herder.tick();
-
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
 
@@ -733,7 +737,6 @@ public class DistributedHerderTest {
         // Once that validation is complete, another request is added to the herder request queue
         // for actually performing the config write; this tick is for that request
         herder.tick();
-
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
 
@@ -859,8 +862,8 @@ public class DistributedHerderTest {
         doNothing().when(putConnectorCallback).onCompletion(null, new Herder.Created<>(false, null));
 
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
-        herder.tick();
 
+        herder.tick();
         time.sleep(1000L);
         assertStatistics("leaderUrl", false, 3, 1, 100, 1000L);
 
@@ -994,8 +997,8 @@ public class DistributedHerderTest {
 
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartConnector(CONN1, callback);
-        herder.tick();
 
+        herder.tick();
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 3000L);
 
@@ -1905,6 +1908,7 @@ public class DistributedHerderTest {
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
+
         herder.tick();
 
         // The leader gets the same assignment after a rebalance is triggered
@@ -1914,6 +1918,7 @@ public class DistributedHerderTest {
 
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
+
         herder.tick();
 
         // Another rebalance is triggered but this time it fails to read to the max offset and
@@ -1977,6 +1982,7 @@ public class DistributedHerderTest {
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
+
         herder.tick();
 
         // The leader gets the same assignment after a rebalance is triggered
@@ -1986,6 +1992,7 @@ public class DistributedHerderTest {
 
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
+
         herder.tick();
 
         // Another rebalance is triggered but this time it fails to read to the max offset and
