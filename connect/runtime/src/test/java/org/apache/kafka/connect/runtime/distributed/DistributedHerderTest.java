@@ -1163,6 +1163,8 @@ public class DistributedHerderTest {
         when(herder.assignment.connectors()).thenReturn(Collections.singletonList(CONN1));
         when(herder.assignment.tasks()).thenReturn(Collections.emptyList());
 
+        herder.configState = SNAPSHOT;
+
         doNothing().when(worker).stopAndAwaitConnector(CONN1);
 
         ArgumentCaptor<Callback<TargetState>>  stateCallback = ArgumentCaptor.forClass(Callback.class);
