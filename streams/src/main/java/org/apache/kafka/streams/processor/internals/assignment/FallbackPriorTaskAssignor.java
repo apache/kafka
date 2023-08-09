@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Optional;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
@@ -42,8 +43,9 @@ public class FallbackPriorTaskAssignor implements TaskAssignor {
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
+                          final Optional<RackAwareTaskAssignor> rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
-        delegate.assign(clients, allTaskIds, statefulTaskIds, configs);
+        delegate.assign(clients, allTaskIds, statefulTaskIds, rackAwareTaskAssignor, configs);
         return true;
     }
 }

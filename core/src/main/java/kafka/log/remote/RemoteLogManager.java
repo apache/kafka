@@ -47,6 +47,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
@@ -110,6 +111,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 
 /**
  * This class is responsible for
@@ -122,8 +124,6 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
-    public static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
-    public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -184,7 +184,7 @@ public class RemoteLogManager implements Closeable {
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
-        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT, new Gauge<Double>() {
+        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
             @Override
             public Double value() {
                 return rlmScheduledThreadPool.getIdlePercent();
@@ -194,13 +194,12 @@ public class RemoteLogManager implements Closeable {
         remoteStorageReaderThreadPool = new RemoteStorageThreadPool(
                 REMOTE_LOG_READER_THREAD_NAME_PREFIX,
                 rlmConfig.remoteLogReaderThreads(),
-                rlmConfig.remoteLogReaderMaxPendingTasks(),
-                REMOTE_LOG_READER_METRICS_NAME_PREFIX
+                rlmConfig.remoteLogReaderMaxPendingTasks()
         );
     }
 
     private void removeMetrics() {
-        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
         remoteStorageReaderThreadPool.removeMetrics();
     }
 
@@ -480,12 +479,14 @@ public class RemoteLogManager implements Closeable {
     class RLMTask extends CancellableRunnable {
 
         private final TopicIdPartition topicIdPartition;
+        private final int customMetadataSizeLimit;
         private final Logger logger;
 
         private volatile int leaderEpoch = -1;
 
-        public RLMTask(TopicIdPartition topicIdPartition) {
+        public RLMTask(TopicIdPartition topicIdPartition, int customMetadataSizeLimit) {
             this.topicIdPartition = topicIdPartition;
+            this.customMetadataSizeLimit = customMetadataSizeLimit;
             LogContext logContext = new LogContext("[RemoteLogManager=" + brokerId + " partition=" + topicIdPartition + "] ");
             logger = logContext.logger(RLMTask.class);
         }
@@ -586,6 +587,11 @@ public class RemoteLogManager implements Closeable {
                 } else {
                     logger.debug("Skipping copying segments, current read-offset:{}, and LSO:{}", copiedOffset, lso);
                 }
+            } catch (CustomMetadataSizeLimitExceededException e) {
+                // Only stop this task. Logging is done where the exception is thrown.
+                brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
+                brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
+                this.cancel();
             } catch (InterruptedException ex) {
                 throw ex;
             } catch (Exception ex) {
@@ -597,7 +603,8 @@ public class RemoteLogManager implements Closeable {
             }
         }
 
-        private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException {
+        private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException,
+                CustomMetadataSizeLimitExceededException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
 
@@ -623,10 +630,30 @@ public class RemoteLogManager implements Closeable {
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
             brokerTopicStats.topicStats(log.topicPartition().topic()).remoteCopyRequestRate().mark();
             brokerTopicStats.allTopicsStats().remoteCopyRequestRate().mark();
-            remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+            Optional<CustomMetadata> customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
-                    RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+                    customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+
+            if (customMetadata.isPresent()) {
+                long customMetadataSize = customMetadata.get().value().length;
+                if (customMetadataSize > this.customMetadataSizeLimit) {
+                    CustomMetadataSizeLimitExceededException e = new CustomMetadataSizeLimitExceededException();
+                    logger.error("Custom metadata size {} exceeds configured limit {}." +
+                                    " Copying will be stopped and copied segment will be attempted to clean." +
+                                    " Original metadata: {}",
+                            customMetadataSize, this.customMetadataSizeLimit, copySegmentStartedRlsm, e);
+                    try {
+                        // For deletion, we provide back the custom metadata by creating a new metadata object from the update.
+                        // However, the update itself will not be stored in this case.
+                        remoteLogStorageManager.deleteLogSegmentData(copySegmentStartedRlsm.createWithUpdates(copySegmentFinishedRlsm));
+                        logger.info("Successfully cleaned segment after custom metadata size exceeded");
+                    } catch (RemoteStorageException e1) {
+                        logger.error("Error while cleaning segment after custom metadata size exceeded, consider cleaning manually", e1);
+                    }
+                    throw e;
+                }
+            }
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
@@ -883,7 +910,7 @@ public class RemoteLogManager implements Closeable {
                                             Consumer<RLMTask> convertToLeaderOrFollower) {
         RLMTaskWithFuture rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
                 topicIdPartition -> {
-                    RLMTask task = new RLMTask(topicIdPartition);
+                    RLMTask task = new RLMTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
                     // set this upfront when it is getting initialized instead of doing it after scheduling.
                     convertToLeaderOrFollower.accept(task);
                     LOGGER.info("Created a new task: {} and getting scheduled", task);

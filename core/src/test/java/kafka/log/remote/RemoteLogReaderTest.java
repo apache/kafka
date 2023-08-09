@@ -17,9 +17,11 @@
 package kafka.log.remote;
 
 import kafka.server.BrokerTopicStats;
+import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
@@ -30,6 +32,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
+import java.util.Optional;
+import java.util.Properties;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,13 +48,16 @@ import static org.mockito.Mockito.when;
 public class RemoteLogReaderTest {
     public static final String TOPIC = "test";
     RemoteLogManager mockRLM = mock(RemoteLogManager.class);
-    BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    BrokerTopicStats brokerTopicStats = null;
     LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
     Records records = mock(Records.class);
 
     @BeforeEach
     public void setUp() {
         TestUtils.clearYammerMetrics();
+        Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
+        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
+        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
     }
 
     @Test

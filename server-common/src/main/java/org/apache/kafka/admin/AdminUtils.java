@@ -139,22 +139,21 @@ public class AdminUtils {
 
     private static Map<Integer, List<Integer>> assignReplicasToBrokersRackUnaware(int nPartitions,
                                                                                   int replicationFactor,
-                                                                                  Collection<Integer> brokerList,
+                                                                                  List<Integer> brokerList,
                                                                                   int fixedStartIndex,
                                                                                   int startPartitionId) {
         Map<Integer, List<Integer>> ret = new HashMap<>();
-        Integer[] brokerArray = brokerList.toArray(new Integer[0]);
-        int startIndex = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerArray.length);
+        int startIndex = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerList.size());
         int currentPartitionId = Math.max(0, startPartitionId);
-        int nextReplicaShift = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerArray.length);
+        int nextReplicaShift = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerList.size());
         for (int i = 0; i < nPartitions; i++) {
-            if (currentPartitionId > 0 && (currentPartitionId % brokerArray.length == 0))
+            if (currentPartitionId > 0 && (currentPartitionId % brokerList.size() == 0))
                 nextReplicaShift += 1;
-            int firstReplicaIndex = (currentPartitionId + startIndex) % brokerArray.length;
+            int firstReplicaIndex = (currentPartitionId + startIndex) % brokerList.size();
             List<Integer> replicaBuffer = new ArrayList<>();
-            replicaBuffer.add(brokerArray[firstReplicaIndex]);
+            replicaBuffer.add(brokerList.get(firstReplicaIndex));
             for (int j = 0; j < replicationFactor - 1; j++)
-                replicaBuffer.add(brokerArray[replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerArray.length)]);
+                replicaBuffer.add(brokerList.get(replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size())));
             ret.put(currentPartitionId, replicaBuffer);
             currentPartitionId += 1;
         }
