@@ -2821,13 +2821,6 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
         SessionKey sessionKey = expectNewSessionKey();
 
-        // We invoke the herder's fenceZombies method repeatedly, which adds a new request to the queue.
-        // If the queue is empty, the member is woken up; however, if two or more requests are issued in rapid
-        // succession, the member won't be woken up. We allow the member to be woken up any number of times
-        // here since it's not critical to the testing logic and it's difficult to mock things in order to lead to an
-        // exact number of wakeups.
-        doNothing().when(member).wakeup();
-
         Map<String, Integer> taskCountRecords = new HashMap<>();
         taskCountRecords.put(CONN1, 2);
         taskCountRecords.put(CONN2, 3);
