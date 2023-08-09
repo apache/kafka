@@ -1041,9 +1041,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             nullKeyFilterProcessorName = repartitionTopicName + "-filter";
         }
 
-        final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
         final ProcessorParameters<K1, V1, ?, ?> processorParameters = new ProcessorParameters<>(
-            new KStreamFilter<>(notNullKeyPredicate, false),
+            new KStreamFilter<>((k, v) -> true, false),
             nullKeyFilterProcessorName
         );
 
