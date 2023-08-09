@@ -367,6 +367,10 @@ public class DistributedHerderTest {
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
 
+        verify(worker).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), any());
+        verify(worker).connectorTaskConfigs(eq(CONN1), eq(conn1SinkConfig));
+        verify(worker).startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED));
+
         // Rebalance and get a new assignment
         expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
                 1, Arrays.asList(CONN1), Arrays.asList());
@@ -530,9 +534,12 @@ public class DistributedHerderTest {
         doNothing().when(member).poll(anyLong());
 
         herder.tick();
-
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
+
+        verify(worker).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), any());
+        verify(worker).connectorTaskConfigs(eq(CONN1), eq(conn1SinkConfig));
+        verify(worker).startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED));
 
         // Rebalance and get a new assignment
         expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
