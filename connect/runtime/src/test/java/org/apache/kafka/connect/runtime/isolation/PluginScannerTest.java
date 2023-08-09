@@ -156,7 +156,7 @@ public class PluginScannerTest {
     }
 
     @Test
-    public void testScannedPluingsForVersion() {
+    public void testVersionedPluginsHasVersion() {
         PluginScanResult versionedPluginResult = scan(filterPluginsResourceDir(TestPlugins.pluginPath(), TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1.resourceDir()));
         assertFalse(versionedPluginResult.isEmpty());
         versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
