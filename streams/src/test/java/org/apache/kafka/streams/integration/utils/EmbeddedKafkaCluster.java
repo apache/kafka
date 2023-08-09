@@ -89,11 +89,6 @@ public class EmbeddedKafkaCluster {
                                 final List<Properties> brokerConfigOverrides,
                                 final long mockTimeMillisStart,
                                 final long mockTimeNanoStart) {
-        if (brokerConfigOverrides.size() != numBrokers) {
-            throw new IllegalArgumentException("Size of brokerConfigOverrides " + brokerConfigOverrides.size()
-                + " must match broker number " + numBrokers);
-        }
-
         brokers = new KafkaEmbedded[numBrokers];
         this.brokerConfig = brokerConfig;
         time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
