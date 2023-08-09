@@ -149,7 +149,7 @@ public class PluginScannerTest {
     }
 
     @Test
-    public void testScannedPluingsForUndefinedVersion() {
+    public void testNonVersionedPluginHasUndefinedVersion() {
         PluginScanResult unversionedPluginsResult = scan(filterPluginsResourceDir(TestPlugins.pluginPath(), TestPlugins.TestPlugin.SAMPLING_HEADER_CONVERTER.resourceDir()));
         assertFalse(unversionedPluginsResult.isEmpty());
         unversionedPluginsResult.forEach(pluginDesc -> assertEquals(PluginDesc.UNDEFINED_VERSION, pluginDesc.version()));
