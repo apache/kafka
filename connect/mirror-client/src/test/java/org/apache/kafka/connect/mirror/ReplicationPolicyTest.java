@@ -81,7 +81,7 @@ public class ReplicationPolicyTest {
     }
 
     @Test
-    public void heartbeatsTopic_shouldNotEffectedByInternalTopicSeparatorConfig() {
+    public void heartbeatsTopic_shouldNotBeEffectedByInternalTopicSeparatorConfig() {
         Map<String, Object> config =  new HashMap<>();
         config.put(MirrorClientConfig.REPLICATION_POLICY_SEPARATOR, "__");
 
