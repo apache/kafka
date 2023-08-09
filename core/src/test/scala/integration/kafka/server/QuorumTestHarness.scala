@@ -383,7 +383,7 @@ abstract class QuorumTestHarness extends Logging {
         Time.SYSTEM,
         name = "ZooKeeperTestHarness",
         new ZKClientConfig)
-      adminZkClient = new AdminZkClient(zkClient)
+      adminZkClient = new AdminZkClient(zkClient, None)
     } catch {
       case t: Throwable =>
         CoreUtils.swallow(zookeeper.shutdown(), this)
