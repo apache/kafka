@@ -216,10 +216,13 @@ public class OffsetSyncStoreTest {
     private void assertSyncSpacingHasBoundedExpirations(long firstOffset, LongStream steps, int maximumExpirations) {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
             store.start();
+            store.sync(tp, firstOffset, firstOffset);
             PrimitiveIterator.OfLong iterator = steps.iterator();
             long offset = firstOffset;
             int lastCount = 1;
             while (iterator.hasNext()) {
+                offset += iterator.nextLong();
+                assertTrue(offset >= 0, "Test is invalid, offset overflowed");
                 store.sync(tp, offset, offset);
                 // Invariant A: the latest sync is present
                 assertEquals(offset, store.syncFor(tp, 0).upstreamOffset());
@@ -232,8 +235,6 @@ public class OffsetSyncStoreTest {
                         "Store expired too many syncs: " + expiredSyncs + " > " + maximumExpirations
                                 + " after receiving offset " + offset);
                 lastCount = count;
-                offset += iterator.nextLong();
-                assertTrue(offset >= 0, "Test is invalid, offset overflowed");
             }
         }
     }
