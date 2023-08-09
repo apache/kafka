@@ -16,13 +16,14 @@
 */
 package kafka.zk
 
-import java.util.Properties
-import kafka.admin.{AdminUtils, BrokerMetadata, RackAwareMode}
+import java.util.{Optional, Properties}
+import kafka.admin.RackAwareMode
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -30,6 +31,7 @@ import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 
 /**
@@ -55,8 +57,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                   topicConfig: Properties = new Properties,
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                   usesTopicId: Boolean = false): Unit = {
-    val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
-    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
+    val brokerMetadatas = getBrokerMetadatas(rackAwareMode).asJava
+    val replicaAssignment = CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor))
     createTopicWithAssignment(topic, topicConfig, replicaAssignment, usesTopicId = usesTopicId)
   }
 
@@ -77,10 +79,10 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         " to make replica assignment without rack information.")
     }
     val brokerMetadatas = rackAwareMode match {
-      case RackAwareMode.Disabled => brokers.map(broker => BrokerMetadata(broker.id, None))
+      case RackAwareMode.Disabled => brokers.map(broker => new BrokerMetadata(broker.id, Optional.empty()))
       case RackAwareMode.Safe if brokersWithRack.size < brokers.size =>
-        brokers.map(broker => BrokerMetadata(broker.id, None))
-      case _ => brokers.map(broker => BrokerMetadata(broker.id, broker.rack))
+        brokers.map(broker => new BrokerMetadata(broker.id, Optional.empty()))
+      case _ => brokers.map(broker => new BrokerMetadata(broker.id, Optional.ofNullable(broker.rack.orNull)))
     }
     brokerMetadatas.sortBy(_.id)
   }
@@ -268,8 +270,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
     val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
       val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
-        startIndex, existingAssignment.size)
+      CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(allBrokers.asJava, partitionsToAdd, existingAssignmentPartition0.size,
+        startIndex, existingAssignment.size))
     }
 
     proposedAssignmentForNewPartitions.map { case (tp, replicas) =>
