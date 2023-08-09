@@ -31,9 +31,12 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+
 
 @RunWith(Parameterized.class)
 public class PluginScannerTest {
@@ -145,10 +148,28 @@ public class PluginScannerTest {
         assertEquals(expectedClasses, classes);
     }
 
+    @Test
+    public void testScannedPluingsForUndefinedVersion() {
+        PluginScanResult unversionedPluginsResult = scan(filterPluginsResourceDir(TestPlugins.pluginPath(), TestPlugins.TestPlugin.SAMPLING_HEADER_CONVERTER.resourceDir()));
+        assertFalse(unversionedPluginsResult.isEmpty());
+        unversionedPluginsResult.forEach(pluginDesc -> assertEquals(PluginDesc.UNDEFINED_VERSION, pluginDesc.version()));
+    }
+
+    @Test
+    public void testScannedPluingsForVersion() {
+        PluginScanResult versionedPluginResult = scan(filterPluginsResourceDir(TestPlugins.pluginPath(), TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1.resourceDir()));
+        assertFalse(versionedPluginResult.isEmpty());
+        versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
+
+    }
+
     private PluginScanResult scan(Set<Path> pluginLocations) {
         ClassLoaderFactory factory = new ClassLoaderFactory();
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, PluginScannerTest.class.getClassLoader(), factory);
         return scanner.discoverPlugins(pluginSources);
     }
 
+    private Set<Path> filterPluginsResourceDir(Set<Path> pluginLocations, String resourceDir) {
+        return pluginLocations.stream().filter(plugin -> plugin.getFileName().toString().contains(resourceDir)).collect(Collectors.toSet());
+    }
 }
