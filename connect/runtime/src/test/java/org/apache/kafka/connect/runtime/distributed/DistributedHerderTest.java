@@ -1380,8 +1380,7 @@ public class DistributedHerderTest {
         herder.tick(); // join
 
         // Checks for config updates and starts rebalance
-        doNothing().when(configBackingStore).refresh(anyLong(), any());
-        when(configBackingStore.snapshot()).thenReturn(SNAPSHOT);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
         // Performs rebalance and gets new assignment
         expectRebalance(Collections.emptyList(), Collections.emptyList(),
                 ConnectProtocol.Assignment.NO_ERROR, 1, Arrays.asList(CONN1), Collections.emptyList());
