@@ -1276,6 +1276,7 @@ public class DistributedHerderTest {
         callback.get(1000L, TimeUnit.MILLISECONDS);
 
         verify(worker, times(2)).startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any());
+        verify(worker).stopAndAwaitTask(TASK0);
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
 
