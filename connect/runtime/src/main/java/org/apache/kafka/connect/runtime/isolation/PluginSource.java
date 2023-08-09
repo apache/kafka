@@ -34,8 +34,8 @@ public class PluginSource {
         this.urls = urls;
     }
 
-    public String location() {
-        return location == null ? "classpath" : location.toString();
+    public Path location() {
+        return location;
     }
 
     public ClassLoader loader() {
@@ -63,5 +63,9 @@ public class PluginSource {
         int result = Objects.hash(location, loader);
         result = 31 * result + Arrays.hashCode(urls);
         return result;
+    }
+
+    public String toString() {
+        return location == null ? "classpath" : location.toString();
     }
 }
