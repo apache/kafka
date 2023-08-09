@@ -3807,11 +3807,6 @@ public class DistributedHerderTest {
         }
     }
 
-    private void expectAnyTicks() {
-        doNothing().when(member).ensureActive();
-        doNothing().when(member).poll(anyLong());
-    }
-
     private SessionKey expectNewSessionKey() {
         SecretKey secretKey = mock(SecretKey.class);
         when(secretKey.getAlgorithm()).thenReturn(INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
