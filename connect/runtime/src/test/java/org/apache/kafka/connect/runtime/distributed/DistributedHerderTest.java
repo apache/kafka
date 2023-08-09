@@ -1121,7 +1121,7 @@ public class DistributedHerderTest {
         herder.tick();
         assertEquals(connectorStateInfo,  callback.get(1000L, TimeUnit.MILLISECONDS));
 
-        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
+        verifyNoMoreInteractions(restartPlan, worker, member, configBackingStore, statusBackingStore);
     }
 
     @Test
@@ -1146,7 +1146,7 @@ public class DistributedHerderTest {
         herder.assignment = ExtendedAssignment.empty();
         herder.doRestartConnectorAndTasks(restartRequest);
 
-        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
+        verifyNoMoreInteractions(restartPlan, worker, member, configBackingStore, statusBackingStore);
     }
 
     @Test
@@ -1175,7 +1175,7 @@ public class DistributedHerderTest {
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
-        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
+        verifyNoMoreInteractions(restartPlan, worker, member, configBackingStore, statusBackingStore);
     }
 
     @Test
@@ -1201,7 +1201,7 @@ public class DistributedHerderTest {
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
-        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
+        verifyNoMoreInteractions(restartPlan, worker, member, configBackingStore, statusBackingStore);
     }
 
     @Test
@@ -1237,7 +1237,7 @@ public class DistributedHerderTest {
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
-        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
+        verifyNoMoreInteractions(restartPlan, worker, member, configBackingStore, statusBackingStore);
     }
 
     @Test
