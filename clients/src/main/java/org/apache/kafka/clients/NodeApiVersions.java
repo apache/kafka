@@ -68,7 +68,7 @@ public class NodeApiVersions {
      */
     public static NodeApiVersions create(Collection<ApiVersion> overrides) {
         List<ApiVersion> apiVersions = new LinkedList<>(overrides);
-        for (ApiKeys apiKey : ApiKeys.clientApis()) {
+        for (ApiKeys apiKey : ApiKeys.zkBrokerApis()) {
             boolean exists = false;
             for (ApiVersion apiVersion : apiVersions) {
                 if (apiVersion.apiKey() == apiKey.id) {
