@@ -131,7 +131,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         }
     }
 
-    private V2 getValue2(Record<K1, V1> record, K2 mappedKey) {
+    private V2 getValue2(final Record<K1, V1> record, final K2 mappedKey) {
         if (mappedKey == null) return null;
         final ValueAndTimestamp<V2> valueAndTimestamp = valueGetter.isVersioned()
             ? valueGetter.get(mappedKey, record.timestamp())
@@ -149,7 +149,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
         final K2 mappedKey = keyMapper.apply(record.key(), record.value());
-        if (leftJoin && record.key() == null && record.value() != null){
+        if (leftJoin && record.key() == null && record.value() != null) {
             return false;
         }
         if (mappedKey == null || record.value() == null) {

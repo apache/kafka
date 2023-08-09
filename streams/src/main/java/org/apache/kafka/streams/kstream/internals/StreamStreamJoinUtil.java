@@ -46,7 +46,7 @@ public final class StreamStreamJoinUtil {
         }
     }
 
-    public static <KOut, VOut> void dropRecord(Logger logger, Sensor droppedRecordsSensor, ProcessorContext<KOut, VOut> context) {
+    public static <KOut, VOut> void dropRecord(final Logger logger, final Sensor droppedRecordsSensor, final ProcessorContext<KOut, VOut> context) {
         if (context.recordMetadata().isPresent()) {
             final RecordMetadata recordMetadata = context.recordMetadata().get();
             logger.warn(

@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.Serdes;
@@ -26,11 +42,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RelaxedNullKeyRequirementJoinTest {
 
-    private final JoinWindows WINDOW = ofTimeDifferenceAndGrace(Duration.ofSeconds(60), Duration.ofSeconds(10));
-    private final ValueJoiner<String, String, String> JOINER = (lv, rv) -> lv + "|" + rv;
-    private final String LEFT = "left";
-    private final String RIGHT = "right";
-    private final String OUT = "out";
+    private static final JoinWindows WINDOW = ofTimeDifferenceAndGrace(Duration.ofSeconds(60), Duration.ofSeconds(10));
+    private static final ValueJoiner<String, String, String> JOINER = (lv, rv) -> lv + "|" + rv;
+    private static final String LEFT = "left";
+    private static final String RIGHT = "right";
+    private static final String OUT = "out";
     private TopologyTestDriver testDriver;
     private StreamsBuilder builder;
     private KStream<String, String> leftStream;
@@ -87,7 +103,7 @@ public class RelaxedNullKeyRequirementJoinTest {
     // No implementation change, just sanity check: see KIP-962 for details.
     @Test
     void testRelaxedLeftStreamGlobalTableJoin() {
-        GlobalKTable<String, String> global = builder.globalTable("global");
+        final GlobalKTable<String, String> global = builder.globalTable("global");
         leftStream
             .leftJoin(global, (key, value) -> null, JOINER)
             .to(OUT);
@@ -116,7 +132,7 @@ public class RelaxedNullKeyRequirementJoinTest {
     }
 
     private static Properties props() {
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         return props;
