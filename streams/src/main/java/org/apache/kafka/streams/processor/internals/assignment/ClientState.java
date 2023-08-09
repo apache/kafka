@@ -517,15 +517,4 @@ public class ClientState {
             throw new IllegalArgumentException("Tried to assign task " + task + ", but it is already assigned: " + this);
         }
     }
-
-    public ClientState copy() {
-        return new ClientState(
-            new HashSet<>(previousActiveTasks.taskIds()),
-            new HashSet<>(previousStandbyTasks.taskIds()),
-            taskLagTotals,
-            clientTags,
-            capacity,
-            processId
-        );
-    }
 }
