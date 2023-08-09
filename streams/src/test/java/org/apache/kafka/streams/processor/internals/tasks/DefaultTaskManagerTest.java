@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
@@ -37,6 +40,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,10 +48,13 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class DefaultTaskManagerTest {
+
+    private final static long VERIFICATION_TIMEOUT = 15000;
 
     private final Time time = new MockTime(1L);
     private final StreamTask task = mock(StreamTask.class);
@@ -73,6 +80,8 @@ public class DefaultTaskManagerTest {
         when(task.id()).thenReturn(new TaskId(0, 0, "A"));
         when(task.isProcessable(anyLong())).thenReturn(true);
         when(task.isActive()).thenReturn(true);
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(tasks.task(new TaskId(0, 0, "A"))).thenReturn(task);
     }
 
     @Test
@@ -92,6 +101,114 @@ public class DefaultTaskManagerTest {
 
         assertEquals(task, taskManager.assignNextTask(taskExecutor));
         assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    private class AwaitingRunnable implements Runnable {
+        private final CountDownLatch awaitDone = new CountDownLatch(1);
+        private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+        @Override
+        public void run() {
+            while (!shutdownRequested.get()) {
+                try {
+                    taskManager.awaitProcessableTasks();
+                } catch (final InterruptedException ignored) {
+                }
+                awaitDone.countDown();
+            }
+        }
+
+        public void shutdown() {
+            shutdownRequested.set(true);
+            taskManager.signalProcessableTasks();
+        }
+    }
+
+    @Test
+    public void shouldBlockOnAwait() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+
+        assertFalse(awaitingRunnable.awaitDone.await(100, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnInterruption() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        awaitingThread.interrupt();
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnSignalProcessableTasks() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.signalProcessableTasks();
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnUnassignment() throws InterruptedException {
+        taskManager.add(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+
+        final StreamTask t = taskManager.assignNextTask(taskExecutor);
+        assertNotNull(t);
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.unassignTask(t, taskExecutor);
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnAdding() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.add(Collections.singleton(task));
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnUnlocking() throws InterruptedException {
+        taskManager.add(Collections.singleton(task));
+        taskManager.lockTasks(Collections.singleton(task.id()));
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.unlockAllTasks();
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
     }
 
     @Test
