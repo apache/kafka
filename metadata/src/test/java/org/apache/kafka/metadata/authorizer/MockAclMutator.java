@@ -27,22 +27,26 @@ import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 
 public class MockAclMutator implements AclMutator {
     private final StandardAuthorizer authorizer;
     private long nextUuid;
-    private Map<Uuid, StandardAcl> acls;
+    private Map<Uuid, StandardAcl> aclsById;
+    private Set<StandardAcl> acls;
 
     public MockAclMutator(StandardAuthorizer authorizer) {
         this.authorizer = authorizer;
         this.nextUuid = 1L;
-        this.acls = new HashMap<>();
+        this.aclsById = new HashMap<>();
+        this.acls = new HashSet<>();
     }
 
     @Override
@@ -53,9 +57,11 @@ public class MockAclMutator implements AclMutator {
         List<AclCreateResult> results = new ArrayList<>();
         for (AclBinding aclBinding : aclBindings) {
             StandardAcl acl = StandardAcl.fromAclBinding(aclBinding);
-            Uuid id = new Uuid(1L, ++nextUuid);
-            authorizer.addAcl(id, acl);
-            acls.put(id, acl);
+            if (acls.add(acl)) {
+                Uuid id = new Uuid(1L, ++nextUuid);
+                authorizer.addAcl(id, acl);
+                aclsById.put(id, acl);
+            }
             results.add(AclCreateResult.SUCCESS);
         }
         return CompletableFuture.completedFuture(results);
@@ -69,7 +75,7 @@ public class MockAclMutator implements AclMutator {
         List<AclDeleteResult> results = new ArrayList<>();
         for (AclBindingFilter aclBindingFilter : aclBindingFilters) {
             List<AclBindingDeleteResult> resultList = new ArrayList<>();
-            for (Iterator<Entry<Uuid, StandardAcl>> iterator = acls.entrySet().iterator();
+            for (Iterator<Entry<Uuid, StandardAcl>> iterator = aclsById.entrySet().iterator();
                     iterator.hasNext(); ) {
                 Entry<Uuid, StandardAcl> entry = iterator.next();
                 AclBinding aclBinding = entry.getValue().toBinding();
