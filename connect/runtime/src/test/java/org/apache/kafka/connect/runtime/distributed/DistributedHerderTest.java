@@ -1381,6 +1381,12 @@ public class DistributedHerderTest {
 
         // Checks for config updates and starts rebalance
         expectConfigRefreshAndSnapshot(SNAPSHOT);
+        // Rebalance will be triggered when the new config is detected
+        doNothing().when(member).requestRejoin();
+
+        configUpdateListener.onConnectorConfigUpdate(CONN1); // read updated config
+        herder.tick(); // apply config
+
         // Performs rebalance and gets new assignment
         expectRebalance(Collections.emptyList(), Collections.emptyList(),
                 ConnectProtocol.Assignment.NO_ERROR, 1, Arrays.asList(CONN1), Collections.emptyList());
@@ -1392,16 +1398,9 @@ public class DistributedHerderTest {
         }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
 
-        herder.tick(); // apply config
-
-        doNothing().when(member).ensureActive();
-        configUpdateListener.onConnectorConfigUpdate(CONN1); // read updated config
-        doNothing().when(worker).stopAndAwaitConnector(CONN1);
         herder.tick(); // do rebalance
 
-        // The connector will first be started when the assignment is received. The second start will occur when the updated config is processed (after
-        // the previous instance is stopped)
-        verify(worker, times(2)).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
+        verify(worker).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
 
@@ -1824,7 +1823,11 @@ public class DistributedHerderTest {
 
         // Checks for config updates and starts rebalance
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT);
+        // Rebalance will be triggered when the new config is detected
         doNothing().when(member).requestRejoin();
+
+        configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK0, TASK1, TASK2)); // read updated config
+        herder.tick(); // apply config
 
         // Performs rebalance and gets new assignment
         expectRebalance(Collections.emptyList(), Collections.emptyList(),
@@ -1833,8 +1836,6 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
-        configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK0, TASK1, TASK2)); // read updated config
-        herder.tick(); // apply config
         herder.tick(); // do rebalance
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
