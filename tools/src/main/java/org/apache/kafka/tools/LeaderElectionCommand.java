@@ -64,8 +64,6 @@ public class LeaderElectionCommand {
     public static void main(String... args) {
         try {
             run(Duration.ofMillis(30000), args);
-        } catch (TerseException e) {
-            System.err.println(e.getMessage());
         } catch (Exception e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -117,17 +115,17 @@ public class LeaderElectionCommand {
         } catch (ExecutionException e) {
             if (e.getCause() instanceof TimeoutException) {
                 String message = "Timeout waiting for election results";
-                System.err.println(message);
+                System.out.println(message);
                 throw new AdminCommandFailedException(message, e.getCause());
             } else if (e.getCause() instanceof ClusterAuthorizationException) {
                 String message = "Not authorized to perform leader election";
-                System.err.println(message);
+                System.out.println(message);
                 throw new AdminCommandFailedException(message, e.getCause().getCause());
             } else {
                 throw new RuntimeException(e);
             }
         } catch (InterruptedException e) {
-            System.err.println("Error while making request");
+            System.out.println("Error while making request");
             throw new RuntimeException(e);
         }
 
@@ -167,7 +165,7 @@ public class LeaderElectionCommand {
             AdminCommandFailedException rootException =
                 new AdminCommandFailedException(String.format("%s replica(s) could not be elected", failed.size()));
             failed.entrySet().forEach(entry -> {
-                System.err.println(String.format("Error completing leader election (%s) for partition: %s: %s",
+                System.out.println(String.format("Error completing leader election (%s) for partition: %s: %s",
                     electionType, entry.getKey(), entry.getValue()));
                 rootException.addSuppressed(entry.getValue());
             });
