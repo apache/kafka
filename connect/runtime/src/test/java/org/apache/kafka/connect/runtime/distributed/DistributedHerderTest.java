@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
@@ -1167,13 +1168,15 @@ public class DistributedHerderTest {
 
         doNothing().when(worker).stopAndAwaitConnector(CONN1);
 
+        ConnectorStatus status = new ConnectorStatus(CONN1, AbstractStatus.State.RESTARTING, WORKER_ID, 0);
+        doNothing().when(statusBackingStore).put(eq(status));
+
         ArgumentCaptor<Callback<TargetState>>  stateCallback = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             stateCallback.getValue().onCompletion(null, TargetState.STARTED);
             return true;
         }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), any(), stateCallback.capture());
         doNothing().when(member).wakeup();
-        doNothing().when(statusBackingStore).put(any(ConnectorStatus.class));
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1198,7 +1201,10 @@ public class DistributedHerderTest {
         herder.configState = SNAPSHOT;
 
         doNothing().when(worker).stopAndAwaitTasks(Collections.singletonList(TASK0));
-        doNothing().when(statusBackingStore).put(any(TaskStatus.class));
+
+        TaskStatus status = new TaskStatus(TASK0, AbstractStatus.State.RESTARTING, WORKER_ID, 0);
+        doNothing().when(statusBackingStore).put(eq(status));
+
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
 
         herder.doRestartConnectorAndTasks(restartRequest);
@@ -1224,18 +1230,22 @@ public class DistributedHerderTest {
 
         doNothing().when(worker).stopAndAwaitConnector(CONN1);
 
+        ConnectorStatus status = new ConnectorStatus(CONN1, AbstractStatus.State.RESTARTING, WORKER_ID, 0);
+        doNothing().when(statusBackingStore).put(eq(status));
+
         ArgumentCaptor<Callback<TargetState>>  stateCallback = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             stateCallback.getValue().onCompletion(null, TargetState.STARTED);
             return true;
         }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), any(), stateCallback.capture());
         doNothing().when(member).wakeup();
-        doNothing().when(statusBackingStore).put(any(ConnectorStatus.class));
 
         doNothing().when(worker).stopAndAwaitTasks(Collections.singletonList(taskId));
 
+        TaskStatus taskStatus = new TaskStatus(TASK0, AbstractStatus.State.RESTARTING, WORKER_ID, 0);
+        doNothing().when(statusBackingStore).put(eq(taskStatus));
+
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
-        doNothing().when(statusBackingStore).put(any(TaskStatus.class));
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
