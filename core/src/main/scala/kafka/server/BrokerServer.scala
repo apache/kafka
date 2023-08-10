@@ -25,6 +25,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
+import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.NetworkClient
@@ -77,6 +78,8 @@ class BrokerServer(
 
   // Get raftManager from SharedServer. It will be initialized during startup.
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
+
+  Server.maybeRegisterLinuxMetrics(config, time, logger.underlying)
 
   override def brokerState: BrokerState = Option(lifecycleManager).
     flatMap(m => Some(m.state)).getOrElse(BrokerState.NOT_RUNNING)
@@ -175,7 +178,6 @@ class BrokerServer(
       sharedServer.startForBroker()
 
       info("Starting broker")
-
       config.dynamicConfig.initialize(zkClientOpt = None)
 
       lifecycleManager = new BrokerLifecycleManager(config,
@@ -363,8 +365,7 @@ class BrokerServer(
       }
 
       // Create and initialize an authorizer if one is configured.
-      authorizer = config.createNewAuthorizer()
-      authorizer.foreach(_.configure(config.originals))
+      authorizer = AuthorizerUtils.configureAuthorizer(config)
 
       val fetchManager = new FetchManager(Time.SYSTEM,
         new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
@@ -615,7 +616,7 @@ class BrokerServer(
         CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
       if (controlPlaneRequestProcessor != null)
         CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
-      CoreUtils.swallow(authorizer.foreach(_.close()), this)
+      authorizer.foreach(AuthorizerUtils.closeAuthorizer)
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other

@@ -22,6 +22,7 @@ import kafka.migration.MigrationPropagator
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
+import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.QuotaFactory.QuotaManagers
 
@@ -145,15 +146,10 @@ class ControllerServer(
       metricsGroup.newGauge("ClusterId", () => clusterId)
       metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
-      linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger.underlying)
-      if (linuxIoMetricsCollector.usable()) {
-        metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-        metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
-      }
+      Server.maybeRegisterLinuxMetrics(config, time, logger.underlying)
 
       val javaListeners = config.controllerListeners.map(_.toJava).asJava
-      authorizer = config.createNewAuthorizer()
-      authorizer.foreach(_.configure(config.originals))
+      authorizer = AuthorizerUtils.configureAuthorizer(config)
 
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
@@ -291,7 +287,8 @@ class ControllerServer(
         sharedServer.metaProps,
         controllerNodes.asScala.toSeq,
         apiVersionManager)
-      controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
+      controllerApisHandlerPool = new KafkaRequestHandlerPool(
+        config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
         time,
@@ -400,7 +397,7 @@ class ControllerServer(
         controller.close()
       if (quorumControllerMetrics != null)
         CoreUtils.swallow(quorumControllerMetrics.close(), this)
-      CoreUtils.swallow(authorizer.foreach(_.close()), this)
+      authorizer.foreach(AuthorizerUtils.closeAuthorizer(_))
       createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))

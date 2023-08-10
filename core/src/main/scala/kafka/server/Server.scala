@@ -16,9 +16,12 @@
  */
 package kafka.server
 
+import kafka.metrics.LinuxIoMetricsCollector
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.metrics.{KafkaMetricsContext, MetricConfig, Metrics, MetricsReporter, Sensor}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.slf4j.Logger
 
 import java.util
 import java.util.concurrent.TimeUnit
@@ -43,6 +46,15 @@ object Server {
   ): Metrics = {
     val metricsContext = createKafkaMetricsContext(config, clusterId)
     buildMetrics(config, time, metricsContext)
+  }
+
+  def maybeRegisterLinuxMetrics(
+    config: KafkaConfig,
+    time: Time,
+    logger: Logger
+  ): Unit = {
+    val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger)
+    linuxIoMetricsCollector.maybeRegisterMetrics(KafkaYammerMetrics.defaultRegistry())
   }
 
   private def buildMetrics(
