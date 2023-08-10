@@ -16,7 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Collection;
+import java.util.Optional;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -29,6 +42,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -49,12 +65,31 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_4;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_5;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_6;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.copyClientStateMap;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClusterForAllTopics;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getProcessRacksForAllProcess;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRackAwareTaskAssignor;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomClientState;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomCluster;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomProcessRacks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomSubset;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskChangelogMapForAllTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMap;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMapForAllTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTopologyGroupTaskMap;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForChangelog;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForRandomChangelog;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.verifyTaskPlacementWithRackAwareAssignor;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
@@ -64,12 +99,35 @@ import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
+import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.spy;
 
+@RunWith(Parameterized.class)
 public class StickyTaskAssignorTest {
 
     private final List<Integer> expectedTopicGroupIds = asList(1, 2);
-
+    private final Time time = new MockTime();
     private final Map<UUID, ClientState> clients = new TreeMap<>();
+
+    @Parameter
+    public boolean enableRackAwareTaskAssignor;
+
+    private String rackAwareStrategy = StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
+
+    @Before
+    public void setUp() {
+        if (enableRackAwareTaskAssignor) {
+            rackAwareStrategy = StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC;
+        }
+    }
+
+    @Parameterized.Parameters(name = "enableRackAwareTaskAssignor={0}")
+    public static Collection<Object[]> data() {
+        return asList(new Object[][] {
+            {true},
+            {false}
+        });
+    }
 
     @Test
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() {
@@ -361,15 +419,15 @@ public class StickyTaskAssignorTest {
             TASK_0_0,
             TASK_0_1,
             TASK_0_2,
-            new TaskId(1, 0),
-            new TaskId(1, 1),
-            new TaskId(1, 2),
-            new TaskId(2, 0),
-            new TaskId(2, 1),
-            new TaskId(2, 2),
-            new TaskId(3, 0),
-            new TaskId(3, 1),
-            new TaskId(3, 2)
+            TASK_1_0,
+            TASK_1_1,
+            TASK_1_2,
+            TASK_2_0,
+            TASK_2_1,
+            TASK_2_2,
+            TASK_3_0,
+            TASK_3_1,
+            TASK_3_2
         );
 
         assertThat(probingRebalanceNeeded, is(false));
@@ -387,7 +445,7 @@ public class StickyTaskAssignorTest {
         final List<TaskId> taskIds = new ArrayList<>();
         final TaskId[] taskIdArray = new TaskId[16];
 
-        for (int i = 1; i <= 2; i++) {
+        for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 8; j++) {
                 taskIds.add(new TaskId(i, j));
             }
@@ -396,7 +454,38 @@ public class StickyTaskAssignorTest {
         Collections.shuffle(taskIds);
         taskIds.toArray(taskIdArray);
 
-        final boolean probingRebalanceNeeded = assign(taskIdArray);
+        final int nodeSize = 5;
+        final int topicSize = 2;
+        final int partitionSize = 8;
+        final int clientSize = 4;
+        final Cluster cluster = getRandomCluster(nodeSize, topicSize, partitionSize);
+        final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, false);
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, true);
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
+        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
+        final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
+        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+            0L,
+            1,
+            1,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            null,
+            null,
+            rackAwareStrategy
+        );
+        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+            cluster,
+            partitionsForTask,
+            changelogPartitionsForTask,
+            tasksForTopicGroup,
+            racksForProcessConsumer,
+            internalTopicManager,
+            configs,
+            time
+        );
+
+        final boolean probingRebalanceNeeded = assign(configs, rackAwareTaskAssignor, taskIdArray);
         assertThat(probingRebalanceNeeded, is(false));
 
         Collections.sort(taskIds);
@@ -482,7 +571,6 @@ public class StickyTaskAssignorTest {
                                not(equalTo(taskIds)));
                 }
             }
-
         }
     }
 
@@ -673,17 +761,271 @@ public class StickyTaskAssignorTest {
 
         final List<TaskId> taskIds = asList(TASK_0_0, TASK_0_1, TASK_0_2);
         Collections.shuffle(taskIds);
+
+        final int nodeSize = 5;
+        final int topicSize = 1;
+        final int partitionSize = 3;
+        final int clientSize = 2;
+        final Cluster cluster = getRandomCluster(nodeSize, topicSize, partitionSize);
+        final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, false);
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, true);
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
+        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
+        final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
+
+        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+            0L,
+            1,
+            0,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            null,
+            null,
+            rackAwareStrategy
+        );
+        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+            cluster,
+            partitionsForTask,
+            changelogPartitionsForTask,
+            tasksForTopicGroup,
+            racksForProcessConsumer,
+            internalTopicManager,
+            configs,
+            time
+        );
+
         final boolean probingRebalanceNeeded = new StickyTaskAssignor(true).assign(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            null,
-            new AssignorConfiguration.AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            rackAwareTaskAssignor,
+            configs
         );
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(c2.activeTasks(), empty());
+    }
+
+    @Test
+    public void shouldOptimizeStatefulAndStatelessTaskTraffic() {
+        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_1_0, TASK_1_1, TASK_0_3, TASK_1_3);
+        final ClientState c3 = createClientWithPreviousActiveTasks(UUID_3, 1, TASK_1_2);
+
+        final List<TaskId> taskIds = asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
+        final List<TaskId> statefulTaskIds = asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        Collections.shuffle(taskIds);
+
+        final Cluster cluster = getClusterForAllTopics();
+        final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMapForAllTasks();
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskChangelogMapForAllTasks();
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
+        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getProcessRacksForAllProcess();
+        final InternalTopicManager internalTopicManager = mockInternalTopicManagerForChangelog();
+
+        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+            0L,
+            1,
+            1,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            10,
+            1,
+            rackAwareStrategy
+        );
+        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+            cluster,
+            partitionsForTask,
+            changelogPartitionsForTask,
+            tasksForTopicGroup,
+            racksForProcessConsumer,
+            internalTopicManager,
+            configs,
+            time
+        );
+
+        final boolean probingRebalanceNeeded = new StickyTaskAssignor().assign(
+            clients,
+            new HashSet<>(taskIds),
+            new HashSet<>(statefulTaskIds),
+            rackAwareTaskAssignor,
+            configs
+        );
+        assertThat(probingRebalanceNeeded, is(false));
+
+        if (enableRackAwareTaskAssignor) {
+            // Total cost for active stateful: 3
+            // Total cost for active stateless: 0
+            // Total cost for standby: 20
+            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_1_2)));
+            assertThat(c1.standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_2, TASK_1_1)));
+            assertThat(c2.standbyTasks(), empty());
+            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_3)));
+            assertThat(c3.standbyTasks(), equalTo(mkSet(TASK_1_0, TASK_1_1)));
+        } else {
+            // Total cost for active stateful: 30
+            // Total cost for active stateless: 40
+            // Total cost for standby: 10
+            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2, TASK_1_3)));
+            assertThat(c1.standbyTasks(), equalTo(mkSet(TASK_0_0)));
+            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_1_1)));
+            assertThat(c2.standbyTasks(), equalTo(mkSet(TASK_0_1)));
+            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_2)));
+            assertThat(c3.standbyTasks(), equalTo(mkSet(TASK_1_0, TASK_1_1)));
+        }
+
+    }
+
+    @Test
+    public void shouldAssignRandomInput() {
+        final int nodeSize = 50;
+        final int tpSize = 60;
+        final int partitionSize = 3;
+        final int clientSize = 50;
+        final int replicaCount = 1;
+        final int maxCapacity = 3;
+        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(
+            tpSize, partitionSize, false);
+        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+            0L,
+            1,
+            replicaCount,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            10,
+            1,
+            rackAwareStrategy
+        );
+
+        final RackAwareTaskAssignor rackAwareTaskAssignor = spy(new RackAwareTaskAssignor(
+            getRandomCluster(nodeSize, tpSize, partitionSize),
+            taskTopicPartitionMap,
+            getTaskTopicPartitionMap(tpSize, partitionSize, true),
+            getTopologyGroupTaskMap(),
+            getRandomProcessRacks(clientSize, nodeSize),
+            mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize),
+            configs,
+            time
+        ));
+
+        final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
+        final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
+        final Set<TaskId> statelessTasks = statefulAndStatelessTasks.get(1);
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+            tpSize, maxCapacity, partitionSize, false, statefulTasks);
+
+
+        final boolean probing = new StickyTaskAssignor().assign(
+            clientStateMap,
+            taskIds,
+            statefulTasks,
+            rackAwareTaskAssignor,
+            configs
+        );
+
+        assertFalse(probing);
+        assertValidAssignment(
+            replicaCount,
+            statefulTasks,
+            statelessTasks,
+            clientStateMap,
+            new StringBuilder()
+        );
+        verifyTaskPlacementWithRackAwareAssignor(rackAwareTaskAssignor, taskIds, clientStateMap, true, enableRackAwareTaskAssignor);
+    }
+
+    @Test
+    public void shouldRemainOriginalAssignmentWithoutTrafficCost() {
+        // This test tests that if the traffic cost is 0, we should have same assignment with or without
+        // rack aware assignor enabled
+        final int nodeSize = 50;
+        final int tpSize = 60;
+        final int partitionSize = 3;
+        final int clientSize = 50;
+        final int replicaCount = 1;
+        final int maxCapacity = 3;
+        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(
+            tpSize, partitionSize, false);
+        final Cluster cluster = getRandomCluster(nodeSize, tpSize, partitionSize);
+        final Map<TaskId, Set<TopicPartition>> taskChangelogTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, true);
+        final Map<Subtopology, Set<TaskId>> subtopologySetMap = getTopologyGroupTaskMap();
+        final Map<UUID, Map<String, Optional<String>>> processRackMap = getRandomProcessRacks(clientSize, nodeSize);
+        final InternalTopicManager mockInternalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize);
+
+        AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+            0L,
+            1,
+            replicaCount,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            0, // Override traffic cost to 0 to maintain original assignment
+            10,
+            rackAwareStrategy
+        );
+
+        RackAwareTaskAssignor rackAwareTaskAssignor = spy(new RackAwareTaskAssignor(
+            cluster,
+            taskTopicPartitionMap,
+            taskChangelogTopicPartitionMap,
+            subtopologySetMap,
+            processRackMap,
+            mockInternalTopicManager,
+            configs,
+            time
+        ));
+
+        final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
+        final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+            tpSize, maxCapacity, partitionSize, false, statefulTasks);
+        final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
+
+        new StickyTaskAssignor().assign(
+            clientStateMap,
+            taskIds,
+            statefulTasks,
+            rackAwareTaskAssignor,
+            configs
+        );
+
+        configs = new AssignorConfiguration.AssignmentConfigs(
+            0L,
+            1,
+            replicaCount,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            0,
+            10,
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE
+        );
+
+        rackAwareTaskAssignor = spy(new RackAwareTaskAssignor(
+            cluster,
+            taskTopicPartitionMap,
+            taskChangelogTopicPartitionMap,
+            subtopologySetMap,
+            processRackMap,
+            mockInternalTopicManager,
+            configs,
+            time
+        ));
+
+        new StickyTaskAssignor().assign(
+            clientStateMapCopy,
+            taskIds,
+            statefulTasks,
+            rackAwareTaskAssignor,
+            configs
+        );
+
+        for (final Map.Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
+            assertThat(entry.getValue().statefulActiveTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).statefulActiveTasks()));
+            assertThat(entry.getValue().standbyTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).standbyTasks()));
+        }
     }
 
     private boolean assign(final TaskId... tasks) {
@@ -693,12 +1035,29 @@ public class StickyTaskAssignorTest {
     private boolean assign(final int numStandbys, final TaskId... tasks) {
         final List<TaskId> taskIds = asList(tasks);
         Collections.shuffle(taskIds);
+        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+            0L,
+            1,
+            numStandbys,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            null,
+            null,
+            rackAwareStrategy
+        );
+
+        return assign(configs, getRackAwareTaskAssignor(configs), tasks);
+    }
+
+    private boolean assign(final AssignmentConfigs configs, final RackAwareTaskAssignor rackAwareTaskAssignor, final TaskId... tasks) {
+        final List<TaskId> taskIds = asList(tasks);
+        Collections.shuffle(taskIds);
         return new StickyTaskAssignor().assign(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            null,
-            new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbys, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            rackAwareTaskAssignor,
+            configs
         );
     }
 
@@ -725,7 +1084,7 @@ public class StickyTaskAssignorTest {
     }
 
     private ClientState createClientWithPreviousActiveTasks(final UUID processId, final int capacity, final TaskId... taskIds) {
-        final ClientState clientState = new ClientState(capacity);
+        final ClientState clientState = new ClientState(processId, capacity);
         clientState.addPreviousActiveTasks(mkSet(taskIds));
         clients.put(processId, clientState);
         return clientState;

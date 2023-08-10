@@ -38,6 +38,8 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.diff;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_TRAFFIC_COST;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignStandbyTaskMovements;
 
@@ -45,8 +47,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
     private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 10;
     private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 1;
-    private static final int STATELESS_TRAFFIC_COST = 1;
-    private static final int STATELESS_NON_OVERLAP_COST = 0;
 
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,

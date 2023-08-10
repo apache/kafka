@@ -30,6 +30,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
@@ -76,6 +77,7 @@ import static org.mockito.Mockito.spy;
 @RunWith(Parameterized.class)
 public class TaskAssignorConvergenceTest {
     private static Random random;
+    private static final Time TIME = new MockTime();
 
     @BeforeClass
     public static void beforeClass() {
@@ -122,7 +124,7 @@ public class TaskAssignorConvergenceTest {
                     statelessTasks.add(taskId);
                     remainingStatelessTasks--;
 
-                    final Node[] replica = getRandomReplica(nodes, nodeIndex);
+                    final Node[] replica = getRandomReplica(nodes, nodeIndex, i);
                     partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
                     nodeIndex++;
 
@@ -145,7 +147,7 @@ public class TaskAssignorConvergenceTest {
                     statefulTaskEndOffsetSums.put(taskId, 150000L);
                     remainingStatefulTasks--;
 
-                    Node[] replica = getRandomReplica(nodes, nodeIndex);
+                    Node[] replica = getRandomReplica(nodes, nodeIndex, i);
                     partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
                     nodeIndex++;
 
@@ -154,7 +156,7 @@ public class TaskAssignorConvergenceTest {
                     tasksForTopicGroup.computeIfAbsent(new Subtopology(subtopology, null), k -> new HashSet<>()).add(taskId);
 
                     final int changelogNodeIndex = random.nextInt(nodes.size());
-                    replica = getRandomReplica(nodes, changelogNodeIndex);
+                    replica = getRandomReplica(nodes, changelogNodeIndex, i);
                     final TopicPartitionInfo info = new TopicPartitionInfo(i, replica[0], Arrays.asList(replica[0], replica[1]), Collections.emptyList());
                     topicPartitionInfo.computeIfAbsent(changelogTopicName, tp -> new ArrayList<>()).add(info);
                 }
@@ -596,7 +598,8 @@ public class TaskAssignorConvergenceTest {
             harness.tasksForTopicGroup,
             harness.racksForProcessConsumer,
             harness.internalTopicManager,
-            configs
+            configs,
+            TIME
         );
         while (rebalancePending && iteration < iterationLimit) {
             iteration++;
