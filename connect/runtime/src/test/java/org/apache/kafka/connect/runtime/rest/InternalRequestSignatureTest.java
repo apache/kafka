@@ -121,6 +121,8 @@ public class InternalRequestSignatureTest {
                 signatureAlgorithmCapture.capture()
             )).thenReturn(request);
 
+        when(request.getAgent()).thenThrow(new RuntimeException());
+
         InternalRequestSignature.addToRequest(crypto, KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
 
         assertEquals(
