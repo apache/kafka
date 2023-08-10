@@ -218,8 +218,6 @@ public class MirrorConnectorsIntegrationBaseTest {
         primaryProducer = initializeProducer(primary);
         backupProducer = initializeProducer(backup);
 
-        createTopics();
-
         waitForTopicCreated(backup, "mm2-status.primary.internal");
         waitForTopicCreated(backup, "mm2-offsets.primary.internal");
         waitForTopicCreated(backup, "mm2-configs.primary.internal");
