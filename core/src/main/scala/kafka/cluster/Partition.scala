@@ -989,7 +989,17 @@ class Partition(val topicPartition: TopicPartition,
   private def needsShrinkIsr(): Boolean = {
     leaderLogIfLocal.exists { log =>
       val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-      outOfSyncReplicaIds.nonEmpty && (inSyncReplicaIds -- outOfSyncReplicaIds).size >= log.config.minInSyncReplicas
+      if (outOfSyncReplicaIds.isEmpty) {
+        // Do not shrink ISR if there is no out of sync replicas
+        return false
+      }
+
+      if ((inSyncReplicaIds -- outOfSyncReplicaIds).size >= log.config.minInSyncReplicas) {
+        return true
+      } else {
+        info(s"Refuse to shrink ISR for partition ${topicPartition} to avoid underMinISR. Out of sync replicas: ${outOfSyncReplicaIds}.")
+        return false
+      }
     }
   }
 
