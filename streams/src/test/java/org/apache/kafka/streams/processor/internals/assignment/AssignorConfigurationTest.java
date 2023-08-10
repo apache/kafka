@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import junit.framework.AssertionFailedError;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.StreamsConfig;
@@ -60,8 +61,11 @@ public class AssignorConfigurationTest {
             config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
             final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
 
-            // next call should not throw
-            assignorConfiguration.rebalanceProtocol();
+            try {
+                assignorConfiguration.rebalanceProtocol();
+            } catch (final Exception throwable) {
+                throw new AssertionFailedError("Upgrade from " + upgradeFrom + " failed with " + throwable.getMessage() + "!");
+            }
         }
     }
 
@@ -71,8 +75,11 @@ public class AssignorConfigurationTest {
             config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
             final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
 
-            // next call should not throw
-            assignorConfiguration.configuredMetadataVersion(0);
+            try {
+                assignorConfiguration.configuredMetadataVersion(0);
+            } catch (final Exception throwable) {
+                throw new AssertionFailedError("Upgrade from " + upgradeFrom + " failed with " + throwable.getMessage() + "!");
+            }
         }
     }
 
