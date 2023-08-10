@@ -50,11 +50,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -63,7 +60,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -364,42 +360,14 @@ public class ConnectPluginPath {
         if (config.command == Command.LIST) {
             // end the table with an empty line to enable users to separate the table from the summary.
             config.out.println();
-            Set<Row> allRows = rowsByLocation.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
-            Map<String, Set<String>> aliasCollisions = aliasCollisions(allRows);
-            for (Map.Entry<String, Set<String>> entry : aliasCollisions.entrySet()) {
-                String alias = entry.getKey();
-                Set<String> classNames = entry.getValue();
-                if (classNames.size() != 1) {
-                    config.out.printf("%s is an ambiguous alias and will not be usable. One of the fully qualified classes must be used instead:%n", alias);
-                    for (String className : classNames) {
-                        config.out.printf("\t%s%n", className);
-                    }
-                }
-            }
-            Set<Row> classpathOnlyPlugins = findClasspathOnlyPlugins(allRows);
-            Set<String> classNames = classpathOnlyPlugins.stream().filter(Row::incompatible).map(row -> row.className).collect(Collectors.toSet());
-            if (classNames.size() != 0) {
-                config.out.printf("%d plugins on the classpath are not compatible, and will not be auto-migrated. " +
-                        "Please move these plugins to a plugin path location.%n", classNames.size());
-                for (String className : classNames) {
-                    config.out.printf("\t%s%n", className);
-                }
-            }
             rowsByLocation.remove(null);
             Set<Row> isolatedRows = rowsByLocation.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
             long totalPlugins = isolatedRows.size();
             long loadablePlugins = isolatedRows.stream().filter(Row::loadable).count();
             long compatiblePlugins = isolatedRows.stream().filter(Row::compatible).count();
-            long totalLocations = rowsByLocation.size();
-            long compatibleLocations = rowsByLocation.values().stream().filter(location -> location.stream().allMatch(Row::compatible)).count();
-            boolean allLocationsCompatible = isolatedRows.stream().allMatch(Row::compatible);
-            config.out.printf("Total plugins:           \t%d%n", totalPlugins);
-            config.out.printf("Loadable plugins:        \t%d%n", loadablePlugins);
-            config.out.printf("Compatible plugins:      \t%d%n", compatiblePlugins);
-            config.out.printf("Total locations:         \t%d%n", totalLocations);
-            config.out.printf("Compatible locations:    \t%d%n", compatibleLocations);
-            config.out.printf("All locations compatible?\t%b%n", allLocationsCompatible);
-
+            config.out.printf("Total plugins:      \t%d%n", totalPlugins);
+            config.out.printf("Loadable plugins:   \t%d%n", loadablePlugins);
+            config.out.printf("Compatible plugins: \t%d%n", compatiblePlugins);
         }
     }
 
@@ -521,39 +489,4 @@ public class ConnectPluginPath {
         }
         return lc + 1;
     }
-
-    private static Map<String, Set<String>> aliasCollisions(Set<Row> rows) {
-        Map<String, Set<String>> collisions = new HashMap<>();
-        rows.forEach(row -> row.aliases.forEach(alias ->
-                collisions.computeIfAbsent(alias, ignored -> new HashSet<>()).add(row.className)));
-        return collisions;
-    }
-
-    /**
-     * Find plugins which are only present on the classpath.
-     * <p>This excludes plugins which are on the classpath, but which have a similar plugin appear on the plugin path.
-     * Plugins are considered similar if they have the same fully-qualified class name and plugin type.
-     * @param allRows All rows, including both classpath and plugin path plugins
-     * @return The set of rows from the classpath for which a similar plugin does not exist on the plugin path.
-     */
-    private static Set<Row> findClasspathOnlyPlugins(Set<Row> allRows) {
-        Map<String, EnumMap<PluginType, Row>> rowsByNameAndType = new LinkedHashMap<>();
-        Function<String, EnumMap<PluginType, Row>> emptyInnerMap = ignored -> new EnumMap<>(PluginType.class);
-        for (Row row : allRows) {
-            if (row.pluginLocation == null) {
-                rowsByNameAndType.computeIfAbsent(row.className, emptyInnerMap).put(row.type, row);
-            }
-        }
-        for (Row row : allRows) {
-            if (row.pluginLocation != null) {
-                rowsByNameAndType.computeIfAbsent(row.className, emptyInnerMap).remove(row.type);
-            }
-        }
-        return rowsByNameAndType.values()
-                .stream()
-                .map(EnumMap::values)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toSet());
-    }
-
 }
