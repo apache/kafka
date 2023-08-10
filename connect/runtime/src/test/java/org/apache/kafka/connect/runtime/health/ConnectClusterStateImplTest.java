@@ -39,7 +39,7 @@ import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ConnectClusterStateImplTest {
     protected static final String KAFKA_CLUSTER_ID = "franzwashere";
 

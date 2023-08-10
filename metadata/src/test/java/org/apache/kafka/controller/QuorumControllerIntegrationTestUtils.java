@@ -34,6 +34,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -168,14 +169,16 @@ public class QuorumControllerIntegrationTestUtils {
             request.topics().add(
                 new CreatableTopic().
                     setName(prefix + i).
-                    setNumPartitions(-1).
+                    setNumPartitions(1).
                     setReplicationFactor((short) replicationFactor));
         }
         CreateTopicsResponseData response =
             controller.createTopics(ANONYMOUS_CONTEXT, request, describable).get();
         for (int i = 0; i < numTopics; i++) {
             CreatableTopicResult result = response.topics().find(prefix + i);
-            assertEquals((short) 0, result.errorCode());
+            if (result.errorCode() != Errors.TOPIC_ALREADY_EXISTS.code()) {
+                assertEquals((short) 0, result.errorCode());
+            }
         }
     }
 

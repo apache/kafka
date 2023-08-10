@@ -14,46 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.admin;
+
+import java.util.Objects;
+import java.util.Optional;
 
 /**
- * Metadata of a topic.
+ * Broker metadata used by admin tools.
  */
-public class AssignmentTopicMetadata {
+public class BrokerMetadata {
+    public final int id;
+
+    public final Optional<String> rack;
 
     /**
-     * The number of partitions.
+     * @param id an integer that uniquely identifies this broker
+     * @param rack the rack of the broker, which is used to in rack aware partition assignment for fault tolerance.
+     *             Examples: "RACK1", "us-east-1d"
      */
-    private final int numPartitions;
-
-    public AssignmentTopicMetadata(
-        int numPartitions
-    ) {
-        this.numPartitions = numPartitions;
-    }
-
-    /**
-     * @return The number of partitions present for the topic.
-     */
-    public int numPartitions() {
-        return numPartitions;
+    public BrokerMetadata(int id, Optional<String> rack) {
+        this.id = id;
+        this.rack = rack;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        AssignmentTopicMetadata that = (AssignmentTopicMetadata) o;
-        return numPartitions == that.numPartitions;
+        BrokerMetadata that = (BrokerMetadata) o;
+        return id == that.id && Objects.equals(rack, that.rack);
     }
 
     @Override
     public int hashCode() {
-        return numPartitions;
-    }
-
-    @Override
-    public String toString() {
-        return "AssignmentTopicMetadata(numPartitions=" + numPartitions + ')';
+        return Objects.hash(id, rack);
     }
 }

@@ -188,8 +188,7 @@ class BrokerServer(
       kafkaScheduler.startup()
 
       /* register broker metrics */
-      brokerTopicStats = new BrokerTopicStats
-
+      brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
@@ -532,6 +531,7 @@ class BrokerServer(
         config.consumerGroupMaxSize,
         config.consumerGroupAssignors,
         config.offsetsTopicSegmentBytes,
+        config.offsetMetadataMaxSize,
         config.groupMaxSize,
         config.groupInitialRebalanceDelay,
         GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,

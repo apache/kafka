@@ -998,7 +998,14 @@ class Partition(val topicPartition: TopicPartition,
       // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
       //    request broker epoch is -1 which bypasses the epoch verification.
       case kRaftMetadataCache: KRaftMetadataCache =>
-        val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch
+        val mayBeReplica = getReplica(followerReplicaId)
+        // The topic is already deleted and we don't have any replica information. In this case, we can return false
+        // so as to avoid NPE
+        if (mayBeReplica.isEmpty) {
+          warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
+          return false
+        }
+        val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
         val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
