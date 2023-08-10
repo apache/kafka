@@ -96,6 +96,10 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -123,6 +127,8 @@ public class RemoteLogManagerTest {
     int brokerId = 0;
     String logDir = TestUtils.tempDirectory("kafka-").toString();
     String clusterId = "dummyId";
+    String remoteLogStorageTestProp = "remote.log.storage.test";
+    String remoteLogStorageTestVal = "storage.test";
     String remoteLogMetadataTestProp = "remote.log.metadata.test";
     String remoteLogMetadataTestVal = "metadata.test";
     String remoteLogMetadataCommonClientTestProp = REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "common.client.test";
@@ -261,8 +267,8 @@ public class RemoteLogManagerTest {
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();
-        // override common security.protocol
-        props.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
+        // override common security.protocol by adding "RLMM prefix" and "remote log metadata common client prefix"
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(createRLMConfig(props), brokerId, logDir, clusterId, time, tp -> Optional.of(mockLog), brokerTopicStats) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
@@ -298,6 +304,7 @@ public class RemoteLogManagerTest {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteStorageManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(remoteLogStorageTestVal, capture.getValue().get(remoteLogStorageTestProp));
 
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
@@ -1061,11 +1068,13 @@ public class RemoteLogManagerTest {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
-        props.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionsNum);
-        props.put(remoteLogMetadataTestProp, remoteLogMetadataTestVal);
-        props.put(remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal);
-        props.put(remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal);
-        props.put(remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
+        props.put(DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + remoteLogStorageTestProp, remoteLogStorageTestVal);
+        // adding configs with "remote log metadata manager config prefix"
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionsNum);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataTestProp, remoteLogMetadataTestVal);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
 
         AbstractConfig config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props);
         return new RemoteLogManagerConfig(config);

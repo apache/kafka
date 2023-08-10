@@ -42,7 +42,8 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP = "remote.log.storage.manager.impl.prefix";
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteStorageManager " +
-            "implementation. For example this value can be `rsm.s3.`.";
+            "implementation. For example this value can be `rsm.config.`.";
+    public static final String DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "rsm.config.";
 
     /**
      * Prefix used for properties to be passed to {@link RemoteLogMetadataManager} implementation. Remote log subsystem collects all the properties having
@@ -50,7 +51,9 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP = "remote.log.metadata.manager.impl.prefix";
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteLogMetadataManager " +
-            "implementation. For example this value can be `rlmm.s3.`.";
+            "implementation. For example this value can be `rlmm.config.`.";
+    public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX = "rlmm.config.";
+
 
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tier storage functionality in a broker or not. Valid values " +
@@ -141,8 +144,6 @@ public final class RemoteLogManagerConfig {
             "less than or equal to `log.retention.bytes` value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
-    public static final String REMOTE_LOG_METADATA_PREFIX = "remote.log.metadata";
-
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
     static {
@@ -154,13 +155,13 @@ public final class RemoteLogManagerConfig {
                                   REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC)
                   .defineInternal(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
                                   STRING,
-                                  null,
+                                  DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC)
                   .defineInternal(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
                                   STRING,
-                                  null,
+                                  DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC)
@@ -275,7 +276,6 @@ public final class RemoteLogManagerConfig {
     private final String remoteLogMetadataManagerPrefix;
     private final HashMap<String, Object> remoteLogMetadataManagerProps;
     private final String remoteLogMetadataManagerListenerName;
-    private final HashMap<String, Object> remoteLogMetadataProps;
     private final int remoteLogMetadataCustomMetadataMaxBytes;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
@@ -301,8 +301,7 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP),
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
                  ? config.originalsWithPrefix(config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
-                 : Collections.emptyMap(),
-             config.originalsWithPrefix(REMOTE_LOG_METADATA_PREFIX, false));
+                 : Collections.emptyMap());
     }
 
     // Visible for testing
@@ -324,8 +323,7 @@ public final class RemoteLogManagerConfig {
                                   String remoteStorageManagerPrefix,
                                   Map<String, Object> remoteStorageManagerProps, /* properties having keys stripped out with remoteStorageManagerPrefix */
                                   String remoteLogMetadataManagerPrefix,
-                                  Map<String, Object> remoteLogMetadataManagerProps, /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
-                                  Map<String, Object> remoteLogMetadataProps
+                                  Map<String, Object> remoteLogMetadataManagerProps /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
     ) {
         this.enableRemoteStorageSystem = enableRemoteStorageSystem;
         this.remoteStorageManagerClassName = remoteStorageManagerClassName;
@@ -345,7 +343,6 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerPrefix = remoteLogMetadataManagerPrefix;
         this.remoteLogMetadataManagerProps = new HashMap<>(remoteLogMetadataManagerProps);
         this.remoteLogMetadataManagerListenerName = remoteLogMetadataManagerListenerName;
-        this.remoteLogMetadataProps = new HashMap<>(remoteLogMetadataProps);
         this.remoteLogMetadataCustomMetadataMaxBytes = remoteLogMetadataCustomMetadataMaxBytes;
     }
 
@@ -425,10 +422,6 @@ public final class RemoteLogManagerConfig {
         return Collections.unmodifiableMap(remoteLogMetadataManagerProps);
     }
 
-    public Map<String, Object> remoteLogMetadataProps() {
-        return Collections.unmodifiableMap(remoteLogMetadataProps);
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -452,8 +445,7 @@ public final class RemoteLogManagerConfig {
                 && Objects.equals(remoteStorageManagerProps, that.remoteStorageManagerProps)
                 && Objects.equals(remoteLogMetadataManagerProps, that.remoteLogMetadataManagerProps)
                 && Objects.equals(remoteStorageManagerPrefix, that.remoteStorageManagerPrefix)
-                && Objects.equals(remoteLogMetadataManagerPrefix, that.remoteLogMetadataManagerPrefix)
-                && Objects.equals(remoteLogMetadataProps, that.remoteLogMetadataProps);
+                && Objects.equals(remoteLogMetadataManagerPrefix, that.remoteLogMetadataManagerPrefix);
     }
 
     @Override
@@ -463,6 +455,6 @@ public final class RemoteLogManagerConfig {
                             remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
-                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogMetadataProps);
+                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix);
     }
 }
