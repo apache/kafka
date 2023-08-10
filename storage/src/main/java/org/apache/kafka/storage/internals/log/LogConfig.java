@@ -188,6 +188,7 @@ public class LogConfig extends AbstractConfig {
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "leader.replication.throttled.replicas";
     public static final String FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "follower.replication.throttled.replicas";
 
+    /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
     @SuppressWarnings("deprecation")
     private static final String MESSAGE_FORMAT_VERSION_CONFIG = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG;
 

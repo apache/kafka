@@ -301,7 +301,8 @@ class LogConfigTest {
 
   /* Verify that when the deprecated config LogMessageTimestampDifferenceMaxMsProp has non default value the new configs
    * LogMessageTimestampBeforeMaxMsProp and LogMessageTimestampAfterMaxMsProp are not changed from the default we are using
-   * the deprecated config for backward compatibility */
+   * the deprecated config for backward compatibility.
+   * See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details */
   @nowarn("cat=deprecation")
   @Test
   def testTimestampBeforeMaxMsUsesDeprecatedConfig(): Unit = {

@@ -1891,10 +1891,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
   // we are using its value if logMessageTimestampBeforeMaxMs default value hasn't changed.
+  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
   def logMessageTimestampBeforeMaxMs: Long = {
     val messageTimestampBeforeMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampBeforeMaxMsProp)
-    if (messageTimestampBeforeMaxMs != Long.MaxValue) {
+    if (messageTimestampBeforeMaxMs != LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS) {
       messageTimestampBeforeMaxMs
     } else {
       logMessageTimestampDifferenceMaxMs
@@ -1903,6 +1904,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
   // we are using its value if logMessageTimestampAfterMaxMs default value hasn't changed.
+  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
   def logMessageTimestampAfterMaxMs: Long = {
     val messageTimestampAfterMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampAfterMaxMsProp)

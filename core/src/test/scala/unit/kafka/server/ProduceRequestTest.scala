@@ -257,7 +257,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
 object ProduceRequestTest {
 
-  @nowarn("cat=deprecation")
+  @nowarn("cat=deprecation") // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   def timestampConfigProvider: java.util.stream.Stream[Arguments] = {
     val fiveMinutesInMs: Long = 5 * 60 * 60 * 1000L
     java.util.stream.Stream.of[Arguments](

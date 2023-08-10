@@ -125,7 +125,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @MethodSource(Array("timestampConfigProvider"))
   def testSendWithInvalidBeforeAndAfterTimestamp(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topicProps = new Properties()
-    topicProps.setProperty(messageTimeStampConfig, "1000")
+    // set the TopicConfig for timestamp validation to have 1 minute threshold. Note that recordTimestamp has 5 minutes diff
+    val oneMinuteInMs: Long = 1 * 60 * 60 * 1000L
+    topicProps.setProperty(messageTimeStampConfig, oneMinuteInMs.toString)
     TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
@@ -146,6 +148,47 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     } finally {
       compressedProducer.close()
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("timestampConfigProvider"))
+  def testValidBeforeAndAfterTimestampsAtThreshold(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
+    val topicProps = new Properties()
+
+    // set the TopicConfig for timestamp validation to be the same as the record timestamp
+    topicProps.setProperty(messageTimeStampConfig, recordTimestamp.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
+
+    val producer = createProducer()
+
+    assertDoesNotThrow(() => producer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    producer.close()
+
+    // Test compressed messages.
+    val compressedProducer = createProducer(compressionType = "gzip")
+    assertDoesNotThrow(() => compressedProducer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    compressedProducer.close()
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("timestampConfigProvider"))
+  def testValidBeforeAndAfterTimestampsWithinThreshold(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
+    val topicProps = new Properties()
+
+    // set the TopicConfig for timestamp validation to have 10 minute threshold. Note that recordTimestamp has 5 minutes diff
+    val tenMinutesInMs: Long = 10 * 60 * 60 * 1000L
+    topicProps.setProperty(messageTimeStampConfig, tenMinutesInMs.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
+
+    val producer = createProducer()
+
+    assertDoesNotThrow(() => producer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    producer.close()
+
+    // Test compressed messages.
+    val compressedProducer = createProducer(compressionType = "gzip")
+    assertDoesNotThrow(() => compressedProducer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    compressedProducer.close()
   }
 
   // Test that producer with max.block.ms=0 can be used to send in non-blocking mode
@@ -231,13 +274,16 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 }
 
 object PlaintextProducerSendTest {
+
+  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
   def timestampConfigProvider: java.util.stream.Stream[Arguments] = {
+    val now: Long = System.currentTimeMillis()
     val fiveMinutesInMs: Long = 5 * 60 * 60 * 1000L
     java.util.stream.Stream.of[Arguments](
-      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.box(System.currentTimeMillis() - fiveMinutesInMs)),
-      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(System.currentTimeMillis() - fiveMinutesInMs)),
-      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(System.currentTimeMillis() + fiveMinutesInMs))
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(now + fiveMinutesInMs))
     )
   }
 }

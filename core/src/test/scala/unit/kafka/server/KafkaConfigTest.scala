@@ -761,7 +761,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  @nowarn("cat=deprecation")
+  @nowarn("cat=deprecation") // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   def testFromPropsInvalid(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
