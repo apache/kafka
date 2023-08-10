@@ -92,6 +92,10 @@ public class CommitRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+        if (!coordinatorRequestManager.coordinator().isPresent()) {
+            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
+        }
+
         maybeAutoCommit(this.subscriptions.allConsumed());
         if (!pendingRequests.hasUnsentRequests()) {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());

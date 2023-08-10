@@ -144,4 +144,24 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 10,
       startingTimestamp = startingTimestamp)
   }
+
+  @Test
+  def testFetchCommittedOffsets(): Unit = {
+    val numRecords = 100
+    val startingTimestamp = System.currentTimeMillis()
+    val producer = createProducer()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    val consumer = createAsyncConsumer()
+    consumer.assign(List(tp).asJava)
+    // First consumer consumes and commits offsets
+    consumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0,
+      startingTimestamp = startingTimestamp)
+    consumer.commitSync()
+    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+    // We should see the committed offsets from another consumer
+    val anotherConsumer = createAsyncConsumer()
+    anotherConsumer.assign(List(tp).asJava)
+    assertEquals(numRecords, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+  }
 }

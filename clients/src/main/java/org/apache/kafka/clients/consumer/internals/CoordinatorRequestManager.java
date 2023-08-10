@@ -127,7 +127,7 @@ public class CoordinatorRequestManager implements RequestManager {
      */
     public void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
         if (this.coordinator != null) {
-            log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
+            log.info("Group coordinator {} is unavailable or invalid due to cause: {} "
                     + "Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
             timeMarkedUnknownMs = currentTimeMs;
