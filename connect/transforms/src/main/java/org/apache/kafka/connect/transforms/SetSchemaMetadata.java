@@ -18,6 +18,7 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
@@ -35,29 +36,34 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     private static final Logger log = LoggerFactory.getLogger(SetSchemaMetadata.class);
 
     public static final String OVERVIEW_DOC =
-            "Set the schema name, version or both on the record's key (<code>" + Key.class.getName() + "</code>)"
-                    + " or value (<code>" + Value.class.getName() + "</code>) schema.";
+            "Set the name, namespace and version of the schema on the record's key " +
+                    "(<code>" + Key.class.getName() + "</code>) or value " +
+                    "(<code>" + Value.class.getName() + "</code>).";
 
     private interface ConfigName {
         String SCHEMA_NAME = "schema.name";
+        String SCHEMA_NAMESPACE = "schema.namespace";
         String SCHEMA_VERSION = "schema.version";
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.SCHEMA_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema name to set.")
+            .define(ConfigName.SCHEMA_NAMESPACE, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema namespace to prepend to the schema name.")
             .define(ConfigName.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.");
 
     private String schemaName;
+    private String schemaNamespace;
     private Integer schemaVersion;
 
     @Override
     public void configure(Map<String, ?> configs) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         schemaName = config.getString(ConfigName.SCHEMA_NAME);
+        schemaNamespace = config.getString(ConfigName.SCHEMA_NAMESPACE);
         schemaVersion = config.getInt(ConfigName.SCHEMA_VERSION);
 
-        if (schemaName == null && schemaVersion == null) {
-            throw new ConfigException("Neither schema name nor version configured");
+        if (schemaName == null && schemaNamespace == null && schemaVersion == null) {
+            throw new ConfigException("Neither schema name nor namespace nor version configured");
         }
     }
 
@@ -75,7 +81,10 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
                 schema.type(),
                 schema.isOptional(),
                 schema.defaultValue(),
-                schemaName != null ? schemaName : schema.name(),
+                buildSchemaName(
+                        schemaNamespace,
+                        schemaName != null ? schemaName : schema.name()
+                ),
                 schemaVersion != null ? schemaVersion : schema.version(),
                 schema.doc(),
                 schema.parameters(),
@@ -169,5 +178,19 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
             return newStruct;
         }
         return keyOrValue;
+    }
+
+    protected static String buildSchemaName(final String namespace, final String name) {
+        if (Utils.isBlank(namespace)) {
+            return name;
+        }
+
+        String normalizedNamespace = namespace.trim().replaceAll("[.]+$", "");
+        if (Utils.isBlank(name)) {
+            return normalizedNamespace;
+        }
+
+        String normalizedName = name.trim().replaceAll("^[.]+", "");
+        return normalizedNamespace + "." + normalizedName;
     }
 }
