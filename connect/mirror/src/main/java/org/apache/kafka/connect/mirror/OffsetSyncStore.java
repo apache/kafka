@@ -293,7 +293,7 @@ class OffsetSyncStore implements AutoCloseable {
                 break;
             } else {
                 // Invariant B violated for syncs[current]: sync is now too old and must be updated
-                // Repair Invariant B: swap in replacement, and save the old value for the next iteration
+                // Repair Invariant B: swap in replacement
                 syncs[current] = replacement;
 
                 assert invariantB(syncs[previous], syncs[current], previous, current);
