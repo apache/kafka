@@ -108,6 +108,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
 
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -155,6 +156,8 @@ public class SenderTest {
     private Sender sender = null;
     private SenderMetricsRegistry senderMetricsRegistry = null;
     private final LogContext logContext = new LogContext();
+
+    private final Logger log = logContext.logger(SenderTest.class);
 
     @BeforeEach
     public void setup() {
@@ -3145,6 +3148,97 @@ public class SenderTest {
         result.await();
 
         txnManager.beginTransaction();
+    }
+    @Test
+    public void testProducerBatchRetriesWhenPartitionLeaderChanges() throws Exception {
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        try {
+            // SETUP
+            String metricGrpName = "producer-metrics-test-stats-1";
+            long totalSize = 1024 * 1024;
+            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
+                metricGrpName);
+            long retryBackoffMaxMs = 100L;
+            // lingerMs is 0 to send batch as soon as any records are available on it.
+            this.accumulator = new RecordAccumulator(logContext, batchSize,
+                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
+                MAX_REQUEST_SIZE, ACKS_ALL,
+                10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null,
+                apiVersions);
+            // Update metadata with leader-epochs.
+            int tp0LeaderEpoch = 100;
+            int epoch = tp0LeaderEpoch;
+            this.client.updateMetadata(
+                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2),
+                    tp -> {
+                        if (tp0.equals(tp)) {
+                            return epoch;
+                        }  else if (tp1.equals(tp)) {
+                            return 0;
+                        } else {
+                            throw new RuntimeException("unexpected tp " + tp);
+                        }
+                    }));
+
+            // Produce batch, it returns with a retry-able error like NOT_LEADER_OR_FOLLOWER, scheduled for retry.
+            // This triggers a metadata-request, that discovers a new-leader for tp0.
+            Future<RecordMetadata> futureIsProduced = appendToAccumulator(tp0, 0L, "key", "value");
+            sender.runOnce(); // connect
+            sender.runOnce(); // send produce request
+            assertEquals(1, client.inFlightRequestCount(),
+                "We should have a single produce request in flight.");
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertTrue(client.hasInFlightRequests());
+            client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
+            sender.runOnce(); // receive produce response, batch scheduled for retry
+            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+
+            // TEST that as new-leader(with epochA) is discovered, the batch is retried immediately i.e. skips any backoff period.
+            // Update leader epoch for tp0
+            log.info("Test that to a new-leader, batch is retried immediately.");
+            int newEpoch = ++tp0LeaderEpoch;
+            this.client.updateMetadata(
+                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2),
+                    tp -> {
+                        if (tp0.equals(tp)) {
+                            return newEpoch;
+                        } else if (tp1.equals(tp)) {
+                            return 0;
+                        } else {
+                            throw new RuntimeException("unexpected tp " + tp);
+                        }
+                    }));
+            sender.runOnce(); // send produce request, immediately.
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertTrue(client.hasInFlightRequests());
+            client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
+            sender.runOnce(); // receive produce response, schedule batch for retry.
+            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+
+            // TEST that a subsequent retry to the same leader(epochA) waits the backoff period.
+            log.info("Test that subsequent retry to the new-leader discovered earlier, batch isn't retried immediately");
+            sender.runOnce(); //send produce request
+            // No batches in-flight
+            assertEquals(0, sender.inFlightBatches(tp0).size());
+            assertTrue(!client.hasInFlightRequests());
+
+            // TEST that after waiting for longer than backoff period, batch is retried again.
+            log.info("TEST that after waiting for longer than backoff period, batch is retried again.");
+            time.sleep(2 * retryBackoffMaxMs);
+            sender.runOnce(); // send produce request
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertTrue(client.hasInFlightRequests());
+            long offset = 999;
+            client.respond(produceResponse(tp0, offset, Errors.NONE, 0));
+            sender.runOnce(); // receive response.
+            assertTrue(futureIsProduced.isDone(), "Request to tp0 successfully done");
+            assertEquals(offset, futureIsProduced.get().offset());
+        } finally {
+            m.close();
+        }
     }
 
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {

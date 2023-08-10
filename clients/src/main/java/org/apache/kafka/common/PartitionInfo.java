@@ -20,26 +20,35 @@ package org.apache.kafka.common;
  * This is used to describe per-partition state in the MetadataResponse.
  */
 public class PartitionInfo {
+    public static final int UNKNOWN_LEADER_EPOCH = -1;
     private final String topic;
     private final int partition;
     private final Node leader;
+    private final int leaderEpoch;
     private final Node[] replicas;
     private final Node[] inSyncReplicas;
     private final Node[] offlineReplicas;
 
     public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) {
-        this(topic, partition, leader, replicas, inSyncReplicas, new Node[0]);
+        this(topic, partition, leader, UNKNOWN_LEADER_EPOCH, replicas, inSyncReplicas, new Node[0]);
+    }
+
+    public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas,
+        Node[] offlineReplicas) {
+        this(topic, partition, leader, UNKNOWN_LEADER_EPOCH, replicas, inSyncReplicas, offlineReplicas);
     }
 
     public PartitionInfo(String topic,
                          int partition,
                          Node leader,
+                         int leaderEpoch,
                          Node[] replicas,
                          Node[] inSyncReplicas,
                          Node[] offlineReplicas) {
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
+        this.leaderEpoch = leaderEpoch;
         this.replicas = replicas;
         this.inSyncReplicas = inSyncReplicas;
         this.offlineReplicas = offlineReplicas;
@@ -60,10 +69,17 @@ public class PartitionInfo {
     }
 
     /**
-     * The node id of the node currently acting as a leader for this partition or null if there is no leader
+     * The node currently acting as a leader for this partition or null if there is no leader
      */
     public Node leader() {
         return leader;
+    }
+
+    /**
+     * The epoch of the partition's leader.
+     */
+    public int leaderEpoch() {
+        return leaderEpoch;
     }
 
     /**
@@ -90,10 +106,11 @@ public class PartitionInfo {
 
     @Override
     public String toString() {
-        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s, offlineReplicas = %s)",
+        return String.format("Partition(topic = %s, partition = %d, leader = %s, leaderEpoch = %s, replicas = %s, isr = %s, offlineReplicas = %s)",
                              topic,
                              partition,
                              leader == null ? "none" : leader.idString(),
+                             leaderEpoch == UNKNOWN_LEADER_EPOCH ? "unknown" : Integer.toString(leaderEpoch),
                              formatNodeIds(replicas),
                              formatNodeIds(inSyncReplicas),
                              formatNodeIds(offlineReplicas));

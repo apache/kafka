@@ -64,6 +64,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,6 +97,8 @@ public class RecordAccumulatorTest {
     private Metrics metrics = new Metrics(time);
     private final long maxBlockTimeMs = 1000;
     private final LogContext logContext = new LogContext();
+
+    private final Logger log = logContext.logger(RecordAccumulatorTest.class);
 
     @AfterEach
     public void teardown() {
@@ -1405,6 +1409,135 @@ public class RecordAccumulatorTest {
             int actualBatchSize = batches.get(0).records().sizeInBytes();
             assertTrue(actualBatchSize > batchSize / 2, "Batch must be greater than half batch.size");
             assertTrue(actualBatchSize < batchSize, "Batch must be less than batch.size");
+        }
+    }
+
+    /**
+     * For a batch being retried, this validates ready() and drain() whether a batch should skip-backoff(retries-immediately), or backoff, based on -
+     * 1. how long it has waited between retry attempts.
+     * 2. change in leader hosting the partition.
+     */
+    @Test
+    public void testReadyAndDrainWhenABatchIsBeingRetried() throws InterruptedException {
+        int part1LeaderEpoch = 100;
+        // Create cluster metadata, partition1 being hosted by node1.
+        part1 = new PartitionInfo(topic, partition1, node1, part1LeaderEpoch, null, null, null);
+        cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1),
+            Collections.emptySet(), Collections.emptySet());
+
+        int batchSize = 10;
+        int lingerMs = 10;
+        int retryBackoffMs = 100;
+        int retryBackoffMaxMs = 1000;
+        int deliveryTimeoutMs = Integer.MAX_VALUE;
+        long totalSize = 10 * 1024;
+        String metricGrpName = "producer-metrics";
+        final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
+            CompressionType.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
+            deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+
+        // Create 1 batch(batchA) to be produced to partition1.
+        long now = time.milliseconds();
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, now, cluster);
+
+        // 1st attempt to produce batchA, it should be ready & drained to be produced.
+        {
+            log.info("Running 1st attempt to produce batchA, it should be ready & drained to be produced.");
+            now += lingerMs + 1;
+            RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, now);
+            assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
+
+            Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster,
+                result.readyNodes, 999999 /* maxSize */, now);
+            assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
+            ProducerBatch batch = batches.get(node1.id()).get(0);
+            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
+            assertEquals(-1, batch.leaderChangedAttempts());
+            // Re-enqueue batch for subsequent retries & test-cases
+            accum.reenqueue(batch, now);
+        }
+
+        // In this retry of batchA, wait-time between retries is less than configured and no leader change, so should backoff.
+        {
+            log.info("In this retry of batchA, wait-time between retries is less than configured and no leader change, so should backoff.");
+            now += 1;
+            RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, now);
+            assertFalse(result.readyNodes.contains(node1), "Node1 is not ready");
+
+            // Try to drain from node1, it should return no batches.
+            Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster,
+                new HashSet<>(Arrays.asList(node1)), 999999 /* maxSize */, now);
+            assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).isEmpty(),
+                "No batches ready to be drained on Node1");
+        }
+
+        // In this retry of batchA, wait-time between retries is less than configured and leader has changed, so should not backoff.
+        {
+            log.info("In this retry of batchA, wait-time between retries is less than configured and leader has changed, so should not backoff.");
+            now += 1;
+            part1LeaderEpoch++;
+            // Create cluster metadata, with new leader epoch.
+            part1 = new PartitionInfo(topic, partition1, node1, part1LeaderEpoch, null, null, null);
+            cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1),
+                Collections.emptySet(), Collections.emptySet());
+            RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, now);
+            assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
+
+            Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster,
+                result.readyNodes, 999999 /* maxSize */, now);
+            assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
+            ProducerBatch batch = batches.get(node1.id()).get(0);
+            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
+            assertEquals(1, batch.leaderChangedAttempts());
+
+            // Re-enqueue batch for subsequent retries/test-cases.
+            accum.reenqueue(batch, now);
+        }
+
+        // In this retry of batchA, wait-time between retries is more than configured and no leader change, so should not backoff.
+        {
+            log.info("In this retry of batchA, wait-time between retries is more than configured and no leader change, so should not backoff");
+            now += 2 * retryBackoffMaxMs;
+            // Create cluster metadata, with new leader epoch.
+            part1 = new PartitionInfo(topic, partition1, node1, part1LeaderEpoch, null, null, null);
+            cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1),
+                Collections.emptySet(), Collections.emptySet());
+            RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, now);
+            assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
+
+            Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster,
+                result.readyNodes, 999999 /* maxSize */, now);
+            assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
+            ProducerBatch batch = batches.get(node1.id()).get(0);
+            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
+            assertEquals(1, batch.leaderChangedAttempts());
+
+            // Re-enqueue batch for subsequent retries/test-cases.
+            accum.reenqueue(batch, now);
+        }
+
+        // In this retry of batchA, wait-time between retries is more than configured and leader has changed, so should not backoff.
+        {
+            log.info("In this retry of batchA, wait-time between retries is more than configured and leader has changed, so should not backoff.");
+            now += 2 * retryBackoffMaxMs;
+            part1LeaderEpoch++;
+            // Create cluster metadata, with new leader epoch.
+            part1 = new PartitionInfo(topic, partition1, node1, part1LeaderEpoch, null, null, null);
+            cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1),
+                Collections.emptySet(), Collections.emptySet());
+            RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, now);
+            assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
+
+            Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster,
+                result.readyNodes, 999999 /* maxSize */, now);
+            assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
+            ProducerBatch batch = batches.get(node1.id()).get(0);
+            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
+            assertEquals(3, batch.leaderChangedAttempts());
+
+            // Re-enqueue batch for subsequent retries/test-cases.
+            accum.reenqueue(batch, now);
         }
     }
 

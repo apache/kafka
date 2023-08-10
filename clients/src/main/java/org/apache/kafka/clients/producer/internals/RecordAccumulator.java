@@ -682,6 +682,7 @@ public class RecordAccumulator {
             TopicPartition part = new TopicPartition(topic, entry.getKey());
             // Advance queueSizesIndex so that we properly index available
             // partitions.  Do it here so that it's done for all code paths.
+
             Node leader = cluster.leaderFor(part);
             if (leader != null && queueSizes != null) {
                 ++queueSizesIndex;
@@ -703,6 +704,7 @@ public class RecordAccumulator {
             // synchronized block, as this lock is also used to synchronize producer threads
             // attempting to append() to a partition/batch.
 
+            int leaderEpoch = cluster.leaderEpochFor(part);
             synchronized (deque) {
                 // Deques are often empty in this path, esp with large partition counts,
                 // so we exit early if we can.
@@ -712,7 +714,7 @@ public class RecordAccumulator {
                 }
 
                 waitedTimeMs = batch.waitedTimeMs(nowMs);
-                backingOff = shouldBackoff(batch, waitedTimeMs);
+                backingOff = shouldBackoff(batch.hasLeaderChanged(leaderEpoch), batch, waitedTimeMs);
                 backoffAttempts = batch.attempts();
                 dequeSize = deque.size();
                 full = dequeSize > 1 || batch.isFull();
@@ -800,8 +802,8 @@ public class RecordAccumulator {
         return false;
     }
 
-    private boolean shouldBackoff(final ProducerBatch batch, final long waitedTimeMs) {
-        return batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
+    private boolean shouldBackoff(boolean hasLeaderChanged, final ProducerBatch batch, final long waitedTimeMs) {
+        return !hasLeaderChanged && batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
     }
 
     private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
@@ -851,6 +853,8 @@ public class RecordAccumulator {
         int start = drainIndex = drainIndex % parts.size();
         do {
             PartitionInfo part = parts.get(drainIndex);
+            int leaderEpoch = part.leaderEpoch();
+
             TopicPartition tp = new TopicPartition(part.topic(), part.partition());
             updateDrainIndex(node.idString(), drainIndex);
             drainIndex = (drainIndex + 1) % parts.size();
@@ -859,8 +863,9 @@ public class RecordAccumulator {
                 continue;
 
             Deque<ProducerBatch> deque = getDeque(tp);
-            if (deque == null)
+            if (deque == null) {
                 continue;
+            }
 
             final ProducerBatch batch;
             synchronized (deque) {
@@ -871,7 +876,7 @@ public class RecordAccumulator {
 
                 // first != null
                 // Only drain the batch if it is not during backoff period.
-                if (shouldBackoff(first, first.waitedTimeMs(now)))
+                if (shouldBackoff(first.hasLeaderChanged(leaderEpoch), first, first.waitedTimeMs(now)))
                     continue;
 
                 if (size + first.estimatedSizeInBytes() > maxSize && !ready.isEmpty()) {
