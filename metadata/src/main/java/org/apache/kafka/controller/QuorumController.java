@@ -83,7 +83,6 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
@@ -195,7 +194,6 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
-        private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
@@ -310,11 +308,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setAuthorizer(ClusterMetadataAuthorizer authorizer) {
-            this.authorizer = Optional.of(authorizer);
-            return this;
-        }
-
         public Builder setStaticConfig(Map<String, Object> staticConfig) {
             this.staticConfig = staticConfig;
             return this;
@@ -373,7 +366,6 @@ public final class QuorumController implements Controller {
                     createTopicPolicy,
                     alterConfigPolicy,
                     configurationValidator,
-                    authorizer,
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
@@ -965,7 +957,6 @@ public final class QuorumController implements Controller {
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
-                    maybeCompleteAuthorizerInitialLoad();
                     boolean isActive = isActiveController();
                     while (reader.hasNext()) {
                         Batch<ApiMessageAndVersion> batch = reader.next();
@@ -1063,7 +1054,6 @@ public final class QuorumController implements Controller {
                         reader.lastContainedLogEpoch(),
                         reader.lastContainedLogTimestamp());
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-                    authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
                 } finally {
                     reader.close();
                 }
@@ -1112,32 +1102,9 @@ public final class QuorumController implements Controller {
                 if (this != metaLogListener) {
                     log.debug("Ignoring {} raft event from an old registration", name);
                 } else {
-                    try {
-                        runnable.run();
-                    } finally {
-                        maybeCompleteAuthorizerInitialLoad();
-                    }
+                    runnable.run();
                 }
             });
-        }
-    }
-
-    private void maybeCompleteAuthorizerInitialLoad() {
-        if (!needToCompleteAuthorizerLoad) return;
-        OptionalLong highWatermark = raftClient.highWatermark();
-        if (highWatermark.isPresent()) {
-            if (lastCommittedOffset + 1 >= highWatermark.getAsLong()) {
-                log.info("maybeCompleteAuthorizerInitialLoad: completing authorizer " +
-                    "initial load at last committed offset {}.", lastCommittedOffset);
-                authorizer.get().completeInitialLoad();
-                needToCompleteAuthorizerLoad = false;
-            } else {
-                log.trace("maybeCompleteAuthorizerInitialLoad: can't proceed because " +
-                    "lastCommittedOffset  = {}, but highWatermark = {}.",
-                    lastCommittedOffset, highWatermark.getAsLong());
-            }
-        } else {
-            log.trace("maybeCompleteAuthorizerInitialLoad: highWatermark not set.");
         }
     }
 
@@ -1342,7 +1309,6 @@ public final class QuorumController implements Controller {
                         lastCommittedEpoch + " in snapshot registry.");
             }
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
-            authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
             updateWriteOffset(-1);
             clusterControl.deactivate();
             cancelMaybeFenceReplicas();
@@ -1572,10 +1538,10 @@ public final class QuorumController implements Controller {
                 clusterControl.replay((BrokerRegistrationChangeRecord) message);
                 break;
             case ACCESS_CONTROL_ENTRY_RECORD:
-                aclControlManager.replay((AccessControlEntryRecord) message, snapshotId);
+                aclControlManager.replay((AccessControlEntryRecord) message);
                 break;
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
-                aclControlManager.replay((RemoveAccessControlEntryRecord) message, snapshotId);
+                aclControlManager.replay((RemoveAccessControlEntryRecord) message);
                 break;
             case USER_SCRAM_CREDENTIAL_RECORD:
                 scramControlManager.replay((UserScramCredentialRecord) message);
@@ -1702,12 +1668,6 @@ public final class QuorumController implements Controller {
     private final ScramControlManager scramControlManager;
 
     /**
-     * The ClusterMetadataAuthorizer, if one is configured. Note that this will still be
-     * Optional.empty() if an Authorizer is configured that doesn't use __cluster_metadata.
-     */
-    private final Optional<ClusterMetadataAuthorizer> authorizer;
-
-    /**
      * Manages the standard ACLs in the cluster.
      * This must be accessed only by the event queue thread.
      */
@@ -1753,12 +1713,6 @@ public final class QuorumController implements Controller {
      * The timestamp in milliseconds of the last batch we have committed, or -1 if we have not committed any offset.
      */
     private long lastCommittedTimestamp = -1;
-
-    /**
-     * True if we need to complete the authorizer initial load.
-     * This must be accessed only by the event queue thread.
-     */
-    private boolean needToCompleteAuthorizerLoad;
 
     /**
      * If we have called scheduleWrite, this is the last offset we got back from it.
@@ -1834,7 +1788,6 @@ public final class QuorumController implements Controller {
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
         ConfigurationValidator configurationValidator,
-        Optional<ClusterMetadataAuthorizer> authorizer,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
@@ -1908,12 +1861,9 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
-        this.authorizer = authorizer;
-        authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
-            setClusterMetadataAuthorizer(authorizer).
             build();
         this.logReplayTracker = new LogReplayTracker.Builder().
             setLogContext(logContext).
@@ -1923,7 +1873,6 @@ public final class QuorumController implements Controller {
         this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
-        this.needToCompleteAuthorizerLoad = authorizer.isPresent();
         this.zkRecordConsumer = new MigrationRecordConsumer();
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
@@ -1931,8 +1880,8 @@ public final class QuorumController implements Controller {
 
         resetToEmptyState();
 
-        log.info("Creating new QuorumController with clusterId {}, authorizer {}.{}",
-                clusterId, authorizer, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
+        log.info("Creating new QuorumController with clusterId {}.{}",
+                clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
 
         this.raftClient.register(metaLogListener);
     }
