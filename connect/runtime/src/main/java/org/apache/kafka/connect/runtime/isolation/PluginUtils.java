@@ -385,11 +385,6 @@ public class PluginUtils {
         return plugin.pluginClass().getSimpleName();
     }
 
-    public static String simpleName(String fullClassName) {
-        return fullClassName.substring(fullClassName.lastIndexOf('.') + 1);
-    }
-
-
     /**
      * Remove the plugin type name at the end of a plugin class name, if such suffix is present.
      * This method is meant to be used to extract plugin aliases.
@@ -398,22 +393,18 @@ public class PluginUtils {
      * @return the pruned simple class name of the plugin.
      */
     public static String prunedName(PluginDesc<?> plugin) {
-        return prunedName(plugin.className(), plugin.type());
-    }
-
-    public static String prunedName(String fullClassName, PluginType type) {
         // It's currently simpler to switch on type than do pattern matching.
-        switch (type) {
+        switch (plugin.type()) {
             case SOURCE:
             case SINK:
-                return prunePluginName(fullClassName, "Connector");
+                return prunePluginName(plugin, "Connector");
             default:
-                return prunePluginName(fullClassName, type.simpleName());
+                return prunePluginName(plugin, plugin.type().simpleName());
         }
     }
 
-    private static String prunePluginName(String fullClassName, String suffix) {
-        String simple = simpleName(fullClassName);
+    private static String prunePluginName(PluginDesc<?> plugin, String suffix) {
+        String simple = plugin.pluginClass().getSimpleName();
         int pos = simple.lastIndexOf(suffix);
         if (pos > 0) {
             return simple.substring(0, pos);

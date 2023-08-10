@@ -310,24 +310,24 @@ public class ConnectPluginPath {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())));
         scanResult.forEach(pluginDesc -> {
             // Emit a loadable row for this scan result, since it was found during plugin discovery
-            rows.add(newRow(pluginLocation, pluginDesc.className(), pluginDesc.type(), pluginDesc.version(), true, manifests));
+            Set<String> rowAliases = new LinkedHashSet<>();
+            rowAliases.add(PluginUtils.simpleName(pluginDesc));
+            rowAliases.add(PluginUtils.prunedName(pluginDesc));
+            rows.add(newRow(pluginLocation, pluginDesc.className(), new ArrayList<>(rowAliases), pluginDesc.type(), pluginDesc.version(), true, manifests));
             // Remove the ManifestEntry if it has the same className and type as one of the loadable plugins.
             unloadablePlugins.getOrDefault(pluginDesc.className(), Collections.emptySet()).removeIf(entry -> entry.type == pluginDesc.type());
         });
         unloadablePlugins.values().forEach(entries -> entries.forEach(entry -> {
             // Emit a non-loadable row, since all the loadable rows showed up in the previous iteration.
             // Two ManifestEntries may produce the same row if they have different URIs
-            rows.add(newRow(pluginLocation, entry.className, entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests));
+            rows.add(newRow(pluginLocation, entry.className, Collections.emptyList(), entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests));
         }));
         return rows;
     }
 
-    private static Row newRow(Path pluginLocation, String className, PluginType type, String version, boolean loadable, Map<String, List<ManifestEntry>> manifests) {
-        Set<String> rowAliases = new LinkedHashSet<>();
-        rowAliases.add(PluginUtils.simpleName(className));
-        rowAliases.add(PluginUtils.prunedName(className, type));
+    private static Row newRow(Path pluginLocation, String className, List<String> rowAliases, PluginType type, String version, boolean loadable, Map<String, List<ManifestEntry>> manifests) {
         boolean hasManifest = manifests.containsKey(className) && manifests.get(className).stream().anyMatch(e -> e.type == type);
-        return new Row(pluginLocation, className, type, version, new ArrayList<>(rowAliases), loadable, hasManifest);
+        return new Row(pluginLocation, className, type, version, rowAliases, loadable, hasManifest);
     }
 
     private static void beginCommand(Config config) {
@@ -523,12 +523,10 @@ public class ConnectPluginPath {
     }
 
     private static Map<String, Set<String>> aliasCollisions(Set<Row> rows) {
-        Map<String, Set<String>> aliasCollisions = new HashMap<>();
-        rows.forEach(row -> {
-            aliasCollisions.computeIfAbsent(PluginUtils.simpleName(row.className), ignored -> new HashSet<>()).add(row.className);
-            aliasCollisions.computeIfAbsent(PluginUtils.prunedName(row.className, row.type), ignored -> new HashSet<>()).add(row.className);
-        });
-        return aliasCollisions;
+        Map<String, Set<String>> collisions = new HashMap<>();
+        rows.forEach(row -> row.aliases.forEach(alias ->
+                collisions.computeIfAbsent(alias, ignored -> new HashSet<>()).add(row.className)));
+        return collisions;
     }
 
     /**
