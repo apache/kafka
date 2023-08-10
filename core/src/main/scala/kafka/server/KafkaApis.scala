@@ -240,6 +240,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
+        case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3658,6 +3659,37 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupHeartbeatResponse(response))
         }
       }
+    }
+  }
+
+  def handleConsumerGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    // TODO: This method is Work-In-Progress
+    // It will be finished in the second PR of KAFKA-14509
+    val consumerGroupDescribeRequest = request.body[ConsumerGroupDescribeRequest]
+
+    if (!config.isNewGroupCoordinatorEnabled) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+
+//      val response = new ConsumerGroupDescribeResponseData()
+      consumerGroupDescribeRequest.data().groupIds().forEach { groupId =>
+        val describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+          .setGroupId(groupId)
+
+        // TODO: Check if group id exists
+
+        if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
+          describedGroup.setErrorMessage(new ApiError(Errors.GROUP_AUTHORIZATION_FAILED).message())
+          describedGroup.setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
+        }
+      }
+
+//      This must be changed to handle all groups together instead of foreach
+//      groupCoordinator.describeGroups(request.context, )
+      CompletableFuture.completedFuture[Unit](())
     }
   }
 

@@ -31,7 +31,11 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
         private final ConsumerGroupDescribeRequestData data;
 
         public Builder(ConsumerGroupDescribeRequestData data) {
-            super(ApiKeys.CONSUMER_GROUP_DESCRIBE);
+            this(data, false);
+        }
+
+        public Builder(ConsumerGroupDescribeRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.CONSUMER_GROUP_DESCRIBE, enableUnstableLastVersion);
             this.data = data;
         }
 
