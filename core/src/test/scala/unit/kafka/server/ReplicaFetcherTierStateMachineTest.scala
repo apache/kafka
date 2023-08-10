@@ -24,7 +24,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import unit.kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
+import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 
 import scala.collection.Map
 

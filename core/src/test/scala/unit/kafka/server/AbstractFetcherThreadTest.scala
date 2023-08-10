@@ -30,7 +30,7 @@ import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
-import unit.kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
+import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
