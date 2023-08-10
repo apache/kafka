@@ -148,7 +148,7 @@ public class RestServerTest {
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
         server.stop();
 
-        // Listener is overriden by advertised values
+        // Listener is overridden by advertised values
         configMap = new HashMap<>(baseWorkerProps());
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
         configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");

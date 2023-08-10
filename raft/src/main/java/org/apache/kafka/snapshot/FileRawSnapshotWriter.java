@@ -107,6 +107,9 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         try {
             checkIfFrozen("Freeze");
 
+            // force the channel to write to the file system before closing, to make sure that the file has the data
+            // on disk before performing the atomic file move
+            channel.force(true);
             channel.close();
             frozen = true;
 

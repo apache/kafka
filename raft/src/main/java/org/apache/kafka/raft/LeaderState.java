@@ -48,7 +48,7 @@ public class LeaderState<T> implements EpochState {
     private final int epoch;
     private final long epochStartOffset;
 
-    private Optional<LogOffsetMetadata> highWatermark;
+    private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private final Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Set<Integer> grantingVoters = new HashSet<>();
@@ -70,7 +70,6 @@ public class LeaderState<T> implements EpochState {
         this.localId = localId;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
-        this.highWatermark = Optional.empty();
 
         for (int voterId : voters) {
             boolean hasAcknowledgedLeader = voterId == localId;
@@ -336,7 +335,7 @@ public class LeaderState<T> implements EpochState {
             .setErrorCode(Errors.NONE.code())
             .setLeaderId(localId)
             .setLeaderEpoch(epoch)
-            .setHighWatermark(highWatermark().map(offsetMetadata -> offsetMetadata.offset).orElse(-1L))
+            .setHighWatermark(highWatermark.map(offsetMetadata -> offsetMetadata.offset).orElse(-1L))
             .setCurrentVoters(describeReplicaStates(voterStates, currentTimeMs))
             .setObservers(describeReplicaStates(observerStates, currentTimeMs));
     }

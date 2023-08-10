@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -271,6 +272,21 @@ public class SnapshottableHashTableTest {
         assertEquals(Collections.emptyList(), registry.epochsList());
         // Check that the table is empty
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testIteratorAtOlderEpoch() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+                new SnapshottableHashTable<>(registry, 4);
+        assertNull(table.snapshottableAddOrReplace(E_3B));
+        registry.getOrCreateSnapshot(0);
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        registry.getOrCreateSnapshot(1);
+        assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
+        registry.getOrCreateSnapshot(2);
+        assertEquals(E_1B, table.snapshottableRemove(E_1B));
+        assertIteratorYields(table.snapshottableIterator(1), E_3B, E_1A);
     }
 
     /**
