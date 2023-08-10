@@ -34,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -97,7 +98,11 @@ public class RelaxedNullKeyRequirementJoinTest {
             .to(OUT);
         initTopology();
         right.pipeInput(null, "rightValue", 1);
-        assertEquals(Collections.singletonList(new KeyValue<>(null, "null|rightValue")), out.readKeyValuesToList());
+        left.pipeInput(null, "leftValue");
+        assertEquals(
+            Arrays.asList(new KeyValue<>(null, "null|rightValue"), new KeyValue<>(null, "leftValue|null")),
+            out.readKeyValuesToList()
+        );
     }
 
     // No implementation change, just sanity check: see KIP-962 for details.
