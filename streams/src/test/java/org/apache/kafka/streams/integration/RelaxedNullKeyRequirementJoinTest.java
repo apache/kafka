@@ -105,7 +105,6 @@ public class RelaxedNullKeyRequirementJoinTest {
         );
     }
 
-    // No implementation change, just sanity check: see KIP-962 for details.
     @Test
     void testRelaxedLeftStreamGlobalTableJoin() {
         final GlobalKTable<String, String> global = builder.globalTable("global");
