@@ -570,6 +570,8 @@
       <allow pkg="javax.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
+      <!-- for tests -->
+      <allow pkg="org.apache.kafka.server.util" />
     </subpackage>
 
     <subpackage name="json">
@@ -589,6 +591,7 @@
 
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.server.util" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
