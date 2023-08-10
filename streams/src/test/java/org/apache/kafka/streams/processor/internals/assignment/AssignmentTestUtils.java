@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.hamcrest.BaseMatcher;
@@ -77,10 +78,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public final class AssignmentTestUtils {
@@ -117,15 +123,20 @@ public final class AssignmentTestUtils {
     public static final String TP_0_NAME = "topic0";
     public static final String TP_1_NAME = "topic1";
     public static final String TP_2_NAME = "topic2";
+    public static final String TP_3_NAME = "topic3";
 
     public static final String CHANGELOG_TP_0_NAME = "store-0-changelog";
     public static final String CHANGELOG_TP_1_NAME = "store-1-changelog";
     public static final String CHANGELOG_TP_2_NAME = "store-2-changelog";
+    public static final String CHANGELOG_TP_3_NAME = "store-3-changelog";
 
     public static final TopicPartition CHANGELOG_TP_0_0 = new TopicPartition(CHANGELOG_TP_0_NAME, 0);
     public static final TopicPartition CHANGELOG_TP_0_1 = new TopicPartition(CHANGELOG_TP_0_NAME, 1);
     public static final TopicPartition CHANGELOG_TP_0_2 = new TopicPartition(CHANGELOG_TP_0_NAME, 2);
     public static final TopicPartition CHANGELOG_TP_0_3 = new TopicPartition(CHANGELOG_TP_0_NAME, 3);
+    public static final TopicPartition CHANGELOG_TP_0_4 = new TopicPartition(CHANGELOG_TP_0_NAME, 4);
+    public static final TopicPartition CHANGELOG_TP_0_5 = new TopicPartition(CHANGELOG_TP_0_NAME, 5);
+    public static final TopicPartition CHANGELOG_TP_0_6 = new TopicPartition(CHANGELOG_TP_0_NAME, 6);
     public static final TopicPartition CHANGELOG_TP_1_0 = new TopicPartition(CHANGELOG_TP_1_NAME, 0);
     public static final TopicPartition CHANGELOG_TP_1_1 = new TopicPartition(CHANGELOG_TP_1_NAME, 1);
     public static final TopicPartition CHANGELOG_TP_1_2 = new TopicPartition(CHANGELOG_TP_1_NAME, 2);
@@ -133,11 +144,18 @@ public final class AssignmentTestUtils {
     public static final TopicPartition CHANGELOG_TP_2_0 = new TopicPartition(CHANGELOG_TP_2_NAME, 0);
     public static final TopicPartition CHANGELOG_TP_2_1 = new TopicPartition(CHANGELOG_TP_2_NAME, 1);
     public static final TopicPartition CHANGELOG_TP_2_2 = new TopicPartition(CHANGELOG_TP_2_NAME, 2);
+    public static final TopicPartition CHANGELOG_TP_2_3 = new TopicPartition(CHANGELOG_TP_2_NAME, 3);
+    public static final TopicPartition CHANGELOG_TP_3_0 = new TopicPartition(CHANGELOG_TP_3_NAME, 0);
+    public static final TopicPartition CHANGELOG_TP_3_1 = new TopicPartition(CHANGELOG_TP_3_NAME, 1);
+    public static final TopicPartition CHANGELOG_TP_3_2 = new TopicPartition(CHANGELOG_TP_3_NAME, 2);
 
     public static final TopicPartition TP_0_0 = new TopicPartition(TP_0_NAME, 0);
     public static final TopicPartition TP_0_1 = new TopicPartition(TP_0_NAME, 1);
     public static final TopicPartition TP_0_2 = new TopicPartition(TP_0_NAME, 2);
     public static final TopicPartition TP_0_3 = new TopicPartition(TP_0_NAME, 3);
+    public static final TopicPartition TP_0_4 = new TopicPartition(TP_0_NAME, 4);
+    public static final TopicPartition TP_0_5 = new TopicPartition(TP_0_NAME, 5);
+    public static final TopicPartition TP_0_6 = new TopicPartition(TP_0_NAME, 6);
     public static final TopicPartition TP_1_0 = new TopicPartition(TP_1_NAME, 0);
     public static final TopicPartition TP_1_1 = new TopicPartition(TP_1_NAME, 1);
     public static final TopicPartition TP_1_2 = new TopicPartition(TP_1_NAME, 2);
@@ -145,11 +163,18 @@ public final class AssignmentTestUtils {
     public static final TopicPartition TP_2_0 = new TopicPartition(TP_2_NAME, 0);
     public static final TopicPartition TP_2_1 = new TopicPartition(TP_2_NAME, 1);
     public static final TopicPartition TP_2_2 = new TopicPartition(TP_2_NAME, 2);
+    public static final TopicPartition TP_2_3 = new TopicPartition(TP_2_NAME, 3);
+    public static final TopicPartition TP_3_0 = new TopicPartition(TP_3_NAME, 0);
+    public static final TopicPartition TP_3_1 = new TopicPartition(TP_3_NAME, 1);
+    public static final TopicPartition TP_3_2 = new TopicPartition(TP_3_NAME, 2);
 
     public static final PartitionInfo PI_0_0 = new PartitionInfo(TP_0_NAME, 0, NODE_0, REPLICA_0, REPLICA_0);
     public static final PartitionInfo PI_0_1 = new PartitionInfo(TP_0_NAME, 1, NODE_1, REPLICA_1, REPLICA_1);
     public static final PartitionInfo PI_0_2 = new PartitionInfo(TP_0_NAME, 2, NODE_1, REPLICA_1, REPLICA_1);
     public static final PartitionInfo PI_0_3 = new PartitionInfo(TP_0_NAME, 3, NODE_2, REPLICA_2, REPLICA_2);
+    public static final PartitionInfo PI_0_4 = new PartitionInfo(TP_0_NAME, 4, NODE_3, REPLICA_3, REPLICA_3);
+    public static final PartitionInfo PI_0_5 = new PartitionInfo(TP_0_NAME, 5, NODE_4, REPLICA_4, REPLICA_4);
+    public static final PartitionInfo PI_0_6 = new PartitionInfo(TP_0_NAME, 6, NODE_2, REPLICA_2, REPLICA_2);
     public static final PartitionInfo PI_1_0 = new PartitionInfo(TP_1_NAME, 0, NODE_2, REPLICA_2, REPLICA_2);
     public static final PartitionInfo PI_1_1 = new PartitionInfo(TP_1_NAME, 1, NODE_3, REPLICA_3, REPLICA_3);
     public static final PartitionInfo PI_1_2 = new PartitionInfo(TP_1_NAME, 2, NODE_0, REPLICA_0, REPLICA_0);
@@ -157,6 +182,10 @@ public final class AssignmentTestUtils {
     public static final PartitionInfo PI_2_0 = new PartitionInfo(TP_2_NAME, 0, NODE_4, REPLICA_4, REPLICA_4);
     public static final PartitionInfo PI_2_1 = new PartitionInfo(TP_2_NAME, 1, NODE_3, REPLICA_3, REPLICA_3);
     public static final PartitionInfo PI_2_2 = new PartitionInfo(TP_2_NAME, 2, NODE_1, REPLICA_4, REPLICA_4);
+    public static final PartitionInfo PI_2_3 = new PartitionInfo(TP_2_NAME, 3, NODE_0, REPLICA_0, REPLICA_0);
+    public static final PartitionInfo PI_3_0 = new PartitionInfo(TP_3_NAME, 0, NODE_2, REPLICA_2, REPLICA_2);
+    public static final PartitionInfo PI_3_1 = new PartitionInfo(TP_3_NAME, 1, NODE_3, REPLICA_3, REPLICA_3);
+    public static final PartitionInfo PI_3_2 = new PartitionInfo(TP_3_NAME, 2, NODE_4, REPLICA_4, REPLICA_4);
 
     public static final TaskId TASK_0_0 = new TaskId(0, 0);
     public static final TaskId TASK_0_1 = new TaskId(0, 1);
@@ -173,6 +202,9 @@ public final class AssignmentTestUtils {
     public static final TaskId TASK_2_1 = new TaskId(2, 1);
     public static final TaskId TASK_2_2 = new TaskId(2, 2);
     public static final TaskId TASK_2_3 = new TaskId(2, 3);
+    public static final TaskId TASK_3_0 = new TaskId(3, 0);
+    public static final TaskId TASK_3_1 = new TaskId(3, 1);
+    public static final TaskId TASK_3_2 = new TaskId(3, 2);
 
     public static final TaskId NAMED_TASK_T0_0_0 = new TaskId(0, 0, "topology0");
     public static final TaskId NAMED_TASK_T0_0_1 = new TaskId(0, 1, "topology0");
@@ -194,6 +226,7 @@ public final class AssignmentTestUtils {
 
     private static final String USER_END_POINT = "localhost:8080";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
+    private static Random random;
     public static final String TOPIC_PREFIX = "topic";
     public static final String CHANGELOG_TOPIC_PREFIX = "changelog-topic";
     public static final String RACK_PREFIX = "rack";
@@ -583,22 +616,26 @@ public final class AssignmentTestUtils {
         for (int i = 0; i < nodeSize; i++) {
             nodeList.add(new Node(i, "node" + i, 1, RACK_PREFIX + i));
         }
-        Collections.shuffle(nodeList);
+        final Random rand = getRandom();
+        Collections.shuffle(nodeList, rand);
         return nodeList;
     }
 
-    static Node[] getRandomReplica(final List<Node> nodeList, final int index) {
-        final Node firstNode = nodeList.get(index % nodeList.size());
-        final Node secondNode = nodeList.get((index + 1) % nodeList.size());
+    static Node[] getRandomReplica(final List<Node> nodeList, final int index, final int partition) {
+        final Node firstNode = nodeList.get((index * partition) % nodeList.size());
+        final Node secondNode = nodeList.get((index * partition + 1) % nodeList.size());
         return new Node[] {firstNode, secondNode};
     }
 
-    static Cluster getRandomCluster(final int nodeSize, final int tpSize) {
+    static Cluster getRandomCluster(final int nodeSize, final int tpSize, final int partitionSize) {
         final List<Node> nodeList = getRandomNodes(nodeSize);
         final Set<PartitionInfo> partitionInfoSet = new HashSet<>();
         for (int i = 0; i < tpSize; i++) {
-            final Node[] replica = getRandomReplica(nodeList, i);
-            partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + i, 0, replica[0], replica, replica));
+            for (int j = 0; j < partitionSize; j++) {
+                final Node[] replica = getRandomReplica(nodeList, i, j);
+                partitionInfoSet.add(
+                    new PartitionInfo(TOPIC_PREFIX + i, j, replica[0], replica, replica));
+            }
         }
 
         return new Cluster(
@@ -615,23 +652,26 @@ public final class AssignmentTestUtils {
         for (int i = 0; i < nodeSize; i++) {
             racks.add(RACK_PREFIX + i);
         }
-        Collections.shuffle(racks);
+        final Random rand = getRandom();
+        Collections.shuffle(racks, rand);
         final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
-        for (int i = 0; i < clientSize; i++) {
+        for (int i = 1; i <= clientSize; i++) {
             final String rack = racks.get(i % nodeSize);
             processRacks.put(uuidForInt(i), mkMap(mkEntry("1", Optional.of(rack))));
         }
         return processRacks;
     }
 
-    static SortedMap<TaskId, Set<TopicPartition>> getTaskTopicPartitionMap(final int tpSize, final boolean changelog) {
+    static SortedMap<TaskId, Set<TopicPartition>> getTaskTopicPartitionMap(final int tpSize, final int partitionSize, final boolean changelog) {
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = new TreeMap<>();
         final String topicName = changelog ? CHANGELOG_TOPIC_PREFIX : TOPIC_PREFIX;
         for (int i = 0; i < tpSize; i++) {
-            taskTopicPartitionMap.put(new TaskId(i, 0), mkSet(
-                new TopicPartition(topicName + i, 0),
-                new TopicPartition(topicName + (i + 1) % tpSize, 0)
-            ));
+            for (int j = 0; j < partitionSize; j++) {
+                taskTopicPartitionMap.put(new TaskId(i, j), mkSet(
+                    new TopicPartition(topicName + i, j),
+                    new TopicPartition(topicName + ((i + 1) % tpSize), j)
+                ));
+            }
         }
         return taskTopicPartitionMap;
     }
@@ -654,7 +694,7 @@ public final class AssignmentTestUtils {
         return configurationMap;
     }
 
-    static InternalTopicManager mockInternalTopicManagerForRandomChangelog(final int nodeSize, final int tpSize) {
+    static InternalTopicManager mockInternalTopicManagerForRandomChangelog(final int nodeSize, final int tpSize, final int partitionSize) {
         final MockTime time = new MockTime();
         final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
         final MockClientSupplier mockClientSupplier = new MockClientSupplier();
@@ -671,12 +711,14 @@ public final class AssignmentTestUtils {
         for (int i = 0; i < tpSize; i++) {
             final String topicName = CHANGELOG_TOPIC_PREFIX + i;
             changelogNames.add(topicName);
+            for (int j = 0; j < partitionSize; j++) {
 
-            final Node firstNode = nodeList.get(i % nodeSize);
-            final Node secondNode = nodeList.get((i + 1) % nodeSize);
-            final TopicPartitionInfo info = new TopicPartitionInfo(0, firstNode, Arrays.asList(firstNode, secondNode), Collections.emptyList());
+                final Node[] replica = getRandomReplica(nodeList, i, j);
+                final TopicPartitionInfo info = new TopicPartitionInfo(j, replica[0],
+                    Arrays.asList(replica), Arrays.asList(replica));
 
-            topicPartitionInfo.computeIfAbsent(topicName, tp -> new ArrayList<>()).add(info);
+                topicPartitionInfo.computeIfAbsent(topicName, tp -> new ArrayList<>()).add(info);
+            }
         }
 
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
@@ -684,34 +726,65 @@ public final class AssignmentTestUtils {
         return spyTopicManager;
     }
 
-    static SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int maxCapacity) {
-        return getRandomClientState(clientSize, tpSize, maxCapacity, true);
+    static SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int partitionSize, final int maxCapacity, final Set<TaskId> statefulTasks) {
+        return getRandomClientState(clientSize, tpSize, partitionSize, maxCapacity, true, statefulTasks);
     }
 
-    static SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int maxCapacity, final boolean initialAssignment) {
+    static List<Set<TaskId>> getRandomSubset(final Set<TaskId> taskIds, final int listSize) {
+        final Random rand = getRandom();
+        final List<TaskId> taskIdList = new ArrayList<>(taskIds);
+        Collections.shuffle(taskIdList, rand);
+        int start = 0;
+        final List<Set<TaskId>> subSets = new ArrayList<>(listSize);
+        for (int i = 0; i < listSize; i++) {
+            final int remaining = taskIdList.size() - start;
+            final Set<TaskId> subset = new HashSet<>();
+            if (remaining != 0) {
+                // In last round, get all tasks
+                final int subSetSize = (i == listSize - 1) ? remaining : rand.nextInt(remaining) + 1;
+                for (int j = 0; j < subSetSize; j++) {
+                    subset.add(taskIdList.get(start + j));
+                }
+                start += subSetSize;
+            }
+            subSets.add(subset);
+        }
+        return subSets;
+    }
+
+    static SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int partitionSize, final int maxCapacity, final boolean initialAssignment, final Set<TaskId> statefulTasks) {
         final SortedMap<UUID, ClientState> clientStates = new TreeMap<>();
-        final Map<TaskId, Long> taskLags = new HashMap<>();
+        final Map<TaskId, Long> taskLags = statefulTasks.stream().collect(Collectors.toMap(taskId -> taskId, taskId -> 0L));
+        final Set<TaskId> taskIds = new HashSet<>();
         for (int i = 0; i < tpSize; i++) {
-            taskLags.put(new TaskId(i, 0), 0L);
+            for (int j = 0; j < partitionSize; j++) {
+                taskIds.add(new TaskId(i, j));
+            }
         }
 
-        final long seed = System.currentTimeMillis();
-        System.out.println("seed: " + seed);
-        final Random random = new Random(seed);
-        for (int i = 0; i < clientSize; i++) {
-            final int capacity = random.nextInt(maxCapacity) + 1;
-            final ClientState clientState = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, capacity, uuidForInt(i));
-            clientStates.put(uuidForInt(i), clientState);
+        final Set<TaskId> missingTaskIds = taskLags.keySet().stream().filter(id -> !taskIds.contains(id)).collect(
+            Collectors.toSet());
+        if (!missingTaskIds.isEmpty()) {
+            throw new IllegalArgumentException(missingTaskIds + " missing in all task ids " + taskIds);
+        }
+
+        final List<Set<TaskId>> previousActives = getRandomSubset(taskIds, clientSize);
+        final List<Set<TaskId>> previousStandbys = getRandomSubset(statefulTasks, clientSize);
+
+        final Random rand = getRandom();
+
+        for (int i = 1; i <= clientSize; i++) {
+            final int capacity = rand.nextInt(maxCapacity) + 1;
+            final UUID processId = uuidForInt(i);
+            final ClientState clientState = new ClientState(previousActives.get(i - 1), previousStandbys.get(i - 1), taskLags, EMPTY_CLIENT_TAGS, capacity, processId);
+            clientStates.put(processId, clientState);
         }
 
         if (initialAssignment) {
             Iterator<Entry<UUID, ClientState>> iterator = clientStates.entrySet().iterator();
-            final List<TaskId> taskIds = new ArrayList<>(tpSize);
-            for (int i = 0; i < tpSize; i++) {
-                taskIds.add(new TaskId(i, 0));
-            }
-            Collections.shuffle(taskIds);
-            for (final TaskId taskId : taskIds) {
+            final List<TaskId> taskIdList = new ArrayList<>(taskIds);
+            Collections.shuffle(taskIdList, rand);
+            for (final TaskId taskId : taskIdList) {
                 if (!iterator.hasNext()) {
                     iterator = clientStates.entrySet().iterator();
                 }
@@ -725,7 +798,26 @@ public final class AssignmentTestUtils {
         return new Cluster(
             "cluster",
             mkSet(NODE_0, NODE_1, NODE_2, NODE_3, NODE_4),
-            mkSet(PI_0_0, PI_0_1, PI_0_2, PI_0_3, PI_1_0, PI_1_1, PI_1_2, PI_1_3, PI_2_0, PI_2_1, PI_2_2),
+            mkSet(
+                PI_0_0,
+                PI_0_1,
+                PI_0_2,
+                PI_0_3,
+                PI_0_4,
+                PI_0_5,
+                PI_0_6,
+                PI_1_0,
+                PI_1_1,
+                PI_1_2,
+                PI_1_3,
+                PI_2_0,
+                PI_2_1,
+                PI_2_2,
+                PI_2_3,
+                PI_3_0,
+                PI_3_1,
+                PI_3_2
+            ),
             Collections.emptySet(),
             Collections.emptySet()
         );
@@ -737,13 +829,20 @@ public final class AssignmentTestUtils {
             mkEntry(TASK_0_1, mkSet(TP_0_1)),
             mkEntry(TASK_0_2, mkSet(TP_0_2)),
             mkEntry(TASK_0_3, mkSet(TP_0_3)),
+            mkEntry(TASK_0_4, mkSet(TP_0_4)),
+            mkEntry(TASK_0_5, mkSet(TP_0_5)),
+            mkEntry(TASK_0_6, mkSet(TP_0_6)),
             mkEntry(TASK_1_0, mkSet(TP_1_0)),
             mkEntry(TASK_1_1, mkSet(TP_1_1)),
             mkEntry(TASK_1_2, mkSet(TP_1_2)),
             mkEntry(TASK_1_3, mkSet(TP_1_3)),
             mkEntry(TASK_2_0, mkSet(TP_2_0)),
             mkEntry(TASK_2_1, mkSet(TP_2_1)),
-            mkEntry(TASK_2_2, mkSet(TP_2_2))
+            mkEntry(TASK_2_2, mkSet(TP_2_2)),
+            mkEntry(TASK_2_3, mkSet(TP_2_3)),
+            mkEntry(TASK_3_0, mkSet(TP_3_0)),
+            mkEntry(TASK_3_1, mkSet(TP_3_1)),
+            mkEntry(TASK_3_2, mkSet(TP_3_2))
         );
     }
 
@@ -753,13 +852,20 @@ public final class AssignmentTestUtils {
             mkEntry(TASK_0_1, mkSet(CHANGELOG_TP_0_1)),
             mkEntry(TASK_0_2, mkSet(CHANGELOG_TP_0_2)),
             mkEntry(TASK_0_3, mkSet(CHANGELOG_TP_0_3)),
+            mkEntry(TASK_0_4, mkSet(CHANGELOG_TP_0_4)),
+            mkEntry(TASK_0_5, mkSet(CHANGELOG_TP_0_5)),
+            mkEntry(TASK_0_6, mkSet(CHANGELOG_TP_0_6)),
             mkEntry(TASK_1_0, mkSet(CHANGELOG_TP_1_0)),
             mkEntry(TASK_1_1, mkSet(CHANGELOG_TP_1_1)),
             mkEntry(TASK_1_2, mkSet(CHANGELOG_TP_1_2)),
             mkEntry(TASK_1_3, mkSet(CHANGELOG_TP_1_3)),
             mkEntry(TASK_2_0, mkSet(CHANGELOG_TP_2_0)),
             mkEntry(TASK_2_1, mkSet(CHANGELOG_TP_2_1)),
-            mkEntry(TASK_2_2, mkSet(CHANGELOG_TP_2_2))
+            mkEntry(TASK_2_2, mkSet(CHANGELOG_TP_2_2)),
+            mkEntry(TASK_2_3, mkSet(CHANGELOG_TP_2_3)),
+            mkEntry(TASK_3_0, mkSet(CHANGELOG_TP_3_0)),
+            mkEntry(TASK_3_1, mkSet(CHANGELOG_TP_3_1)),
+            mkEntry(TASK_3_2, mkSet(CHANGELOG_TP_3_2))
         );
     }
 
@@ -782,7 +888,10 @@ public final class AssignmentTestUtils {
                         new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
                         new TopicPartitionInfo(1, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
                         new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
-                        new TopicPartitionInfo(3, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList())
+                        new TopicPartitionInfo(3, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
+                        new TopicPartitionInfo(4, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
+                        new TopicPartitionInfo(5, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
+                        new TopicPartitionInfo(6, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList())
                     )
                 ),
                 mkEntry(
@@ -797,11 +906,19 @@ public final class AssignmentTestUtils {
                     CHANGELOG_TP_2_NAME, Arrays.asList(
                         new TopicPartitionInfo(0, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
                         new TopicPartitionInfo(1, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList())
+                        new TopicPartitionInfo(2, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
+                        new TopicPartitionInfo(3, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList())
+                    )
+                ),
+                mkEntry(
+                    CHANGELOG_TP_3_NAME, Arrays.asList(
+                        new TopicPartitionInfo(0, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
+                        new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
+                        new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList())
                     )
                 )
             )
-        ).when(spyTopicManager).getTopicPartitionInfo(mkSet(CHANGELOG_TP_0_NAME, CHANGELOG_TP_1_NAME, CHANGELOG_TP_2_NAME));
+        ).when(spyTopicManager).getTopicPartitionInfo(anySet());
         return spyTopicManager;
     }
 
@@ -875,5 +992,59 @@ public final class AssignmentTestUtils {
             mkEntry(UUID_6, mkMap(mkEntry("1", Optional.of(RACK_0)))),
             mkEntry(UUID_7, mkMap(mkEntry("1", Optional.of(RACK_1))))
         );
+    }
+
+    static RackAwareTaskAssignor getRackAwareTaskAssignor(final AssignmentConfigs configs) {
+        return spy(
+            new RackAwareTaskAssignor(
+                getClusterForAllTopics(),
+                getTaskTopicPartitionMapForAllTasks(),
+                getTaskChangelogMapForAllTasks(),
+                new HashMap<>(),
+                getProcessRacksForAllProcess(),
+                mockInternalTopicManagerForChangelog(),
+                configs,
+                new MockTime()
+            )
+        );
+    }
+
+    static void verifyTaskPlacementWithRackAwareAssignor(final RackAwareTaskAssignor rackAwareTaskAssignor,
+                                                         final Set<TaskId> allTaskIds,
+                                                         final Map<UUID, ClientState> clientStates,
+                                                         final boolean hasStandby,
+                                                         final boolean enableRackAwareTaskAssignor) {
+        // Verifies active and standby are in different clients
+        verifyStandbySatisfyRackReplica(allTaskIds, rackAwareTaskAssignor.racksForProcess(), clientStates, null, true, null);
+
+        if (enableRackAwareTaskAssignor) {
+            verify(rackAwareTaskAssignor, times(2)).optimizeActiveTasks(any(), any(), anyInt(), anyInt());
+            verify(rackAwareTaskAssignor, hasStandby ? times(1) : never()).optimizeStandbyTasks(any(), anyInt(), anyInt(), any());
+        } else {
+            verify(rackAwareTaskAssignor, never()).optimizeActiveTasks(any(), any(), anyInt(), anyInt());
+            verify(rackAwareTaskAssignor, never()).optimizeStandbyTasks(any(), anyInt(), anyInt(), any());
+        }
+    }
+
+    static SortedMap<UUID, ClientState> copyClientStateMap(final Map<UUID, ClientState> originalMap) {
+        return new TreeMap<>(originalMap
+            .entrySet()
+            .stream()
+            .collect(
+                Collectors.toMap(
+                    Entry::getKey,
+                    entry -> new ClientState(entry.getValue())
+                )
+            )
+        );
+    }
+
+    static synchronized Random getRandom() {
+        if (random == null) {
+            final long seed = System.currentTimeMillis();
+            System.out.println("seed for getRandom: " + seed);
+            random = new Random(seed);
+        }
+        return random;
     }
 }

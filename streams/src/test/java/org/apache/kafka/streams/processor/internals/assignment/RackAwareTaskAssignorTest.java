@@ -179,7 +179,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
-            getRackAwareDisabledConfig()
+            getRackAwareDisabledConfig(),
+            time
         ));
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
@@ -197,7 +198,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         ));
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
@@ -216,7 +218,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         ));
 
         // False since nodeMissingRack has one node which doesn't have rack
@@ -235,7 +238,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(true),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
         // False since process1 doesn't have rackId
         assertFalse(assignor.validClientRack());
@@ -250,7 +254,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessWithNoConsumerRacks(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
         // False since process1 doesn't have rackId
         assertFalse(assignor.validClientRack());
@@ -266,7 +271,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
         final Map<UUID, String> racksForProcess = assignor.racksForProcess();
         assertEquals(mkMap(mkEntry(UUID_1, RACK_1)), racksForProcess);
@@ -288,7 +294,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             processRacks,
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         assertFalse(assignor.validClientRack());
@@ -303,7 +310,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         // partitionWithoutInfo00 has rackInfo in cluster metadata
@@ -319,7 +327,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         ));
 
         // partitionWithoutInfo00 has rackInfo in cluster metadata
@@ -351,7 +360,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         assertTrue(assignor.canEnableRackAwareAssignor());
@@ -385,7 +395,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
-            getRackAwareEnabledConfigWithStandby(1)
+            getRackAwareEnabledConfigWithStandby(1),
+            time
         ));
 
         assertTrue(assignor.canEnableRackAwareAssignor());
@@ -422,7 +433,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
-            getRackAwareEnabledConfigWithStandby(1)
+            getRackAwareEnabledConfigWithStandby(1),
+            time
         ));
 
         assertFalse(assignor.canEnableRackAwareAssignor());
@@ -443,7 +455,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         ));
 
         assertFalse(assignor.canEnableRackAwareAssignor());
@@ -461,7 +474,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -492,7 +506,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -533,20 +548,22 @@ public class RackAwareTaskAssignorTest {
     public void shouldOptimizeRandomActive() {
         final int nodeSize = 30;
         final int tpSize = 40;
+        final int partitionSize = 3;
         final int clientSize = 30;
-        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, false);
+        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, false);
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            getRandomCluster(nodeSize, tpSize),
+            getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
             mkMap(),
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, 1);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, partitionSize, 1, taskIds);
 
         final Map<UUID, Integer> clientTaskCount = clientTaskCount(clientStateMap, ClientState::activeTaskCount);
 
@@ -564,20 +581,22 @@ public class RackAwareTaskAssignorTest {
     public void shouldMaintainOriginalAssignment() {
         final int nodeSize = 20;
         final int tpSize = 40;
+        final int partitionSize = 3;
         final int clientSize = 30;
-        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, false);
+        final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, false);
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            getRandomCluster(nodeSize, tpSize),
+            getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
             mkMap(),
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, 1);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize, tpSize, partitionSize, 1, taskIds);
 
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         for (final Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
@@ -609,7 +628,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -654,7 +674,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -699,7 +720,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -741,7 +763,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -770,7 +793,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -801,7 +825,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
-            getRackAwareEnabledConfig()
+            getRackAwareEnabledConfig(),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
@@ -831,7 +856,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManagerForChangelog(),
-            getRackAwareEnabledConfigWithStandby(1)
+            getRackAwareEnabledConfigWithStandby(1),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_1);
@@ -866,7 +892,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManagerForChangelog(),
-            getRackAwareEnabledConfigWithStandby(replicaCount)
+            getRackAwareEnabledConfigWithStandby(replicaCount),
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_1);
@@ -928,7 +955,8 @@ public class RackAwareTaskAssignorTest {
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManagerForChangelog(),
-            assignorConfiguration
+            assignorConfiguration,
+            time
         );
 
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1, UUID_1);
@@ -983,26 +1011,28 @@ public class RackAwareTaskAssignorTest {
     public void shouldOptimizeRandomStandby() {
         final int nodeSize = 50;
         final int tpSize = 60;
+        final int partionSize = 3;
         final int clientSize = 50;
         final int replicaCount = 3;
         final int maxCapacity = 3;
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(
-            tpSize, false);
+            tpSize, partionSize, false);
         final AssignmentConfigs assignorConfiguration = getRackAwareEnabledConfigWithStandby(replicaCount);
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            getRandomCluster(nodeSize, tpSize),
+            getRandomCluster(nodeSize, tpSize, partionSize),
             taskTopicPartitionMap,
-            getTaskTopicPartitionMap(tpSize, true),
+            getTaskTopicPartitionMap(tpSize, partionSize, true),
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
-            mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize),
-            assignorConfiguration
+            mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partionSize),
+            assignorConfiguration,
+            time
         );
 
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
-            tpSize, maxCapacity);
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
+        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+            tpSize, partionSize, maxCapacity, taskIds);
 
         final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(
             assignorConfiguration, assignor);

@@ -41,6 +41,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
@@ -60,8 +61,11 @@ public class RackAwareTaskAssignor {
                         final Map<UUID, ClientState> clientStateMap);
     }
 
-    private static final Logger log = LoggerFactory.getLogger(RackAwareTaskAssignor.class);
+    // For stateless tasks, it's ok to move them around. So we have 0 non_overlap_cost
+    public static final int STATELESS_TRAFFIC_COST = 1;
+    public static final int STATELESS_NON_OVERLAP_COST = 0;
 
+    private static final Logger log = LoggerFactory.getLogger(RackAwareTaskAssignor.class);
     private static final int SOURCE_ID = -1;
     // This is number is picked based on testing. Usually the optimization for standby assignment
     // stops after 3 rounds
@@ -75,6 +79,7 @@ public class RackAwareTaskAssignor {
     private final Map<UUID, String> racksForProcess;
     private final InternalTopicManager internalTopicManager;
     private final boolean validClientRack;
+    private final Time time;
     private Boolean canEnable = null;
 
     public RackAwareTaskAssignor(final Cluster fullMetadata,
@@ -83,7 +88,8 @@ public class RackAwareTaskAssignor {
                                  final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
                                  final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
                                  final InternalTopicManager internalTopicManager,
-                                 final AssignmentConfigs assignmentConfigs) {
+                                 final AssignmentConfigs assignmentConfigs,
+                                 final Time time) {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
         this.changelogPartitionsForTask = changelogPartitionsForTask;
@@ -91,6 +97,7 @@ public class RackAwareTaskAssignor {
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
         this.racksForProcess = new HashMap<>();
+        this.time = Objects.requireNonNull(time, "Time was not specified");
         validClientRack = validateClientRack(racksForProcessConsumer);
     }
 
@@ -346,6 +353,7 @@ public class RackAwareTaskAssignor {
         log.info("Assignment before active task optimization is {}\n with cost {}", clientStates,
             activeTasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost));
 
+        final long startTime = time.milliseconds();
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
@@ -359,7 +367,8 @@ public class RackAwareTaskAssignor {
         assignTaskFromMinCostFlow(graph, clientList, taskIdList, clientStates, originalAssignedTaskNumber,
             taskClientMap, ClientState::assignActive, ClientState::unassignActive, ClientState::hasActiveTask);
 
-        log.info("Assignment after active task optimization is {}\n with cost {}", clientStates, cost);
+        final long duration = time.milliseconds() - startTime;
+        log.info("Assignment after {} milliseconds for active task optimization is {}\n with cost {}", duration, clientStates, cost);
         return cost;
     }
 
@@ -373,6 +382,7 @@ public class RackAwareTaskAssignor {
             .sorted()
             .collect(Collectors.toList());
 
+        final long startTime = time.milliseconds();
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final SortedSet<TaskId> standbyTasks = new TreeSet<>();
         clientStates.values().forEach(clientState -> standbyTasks.addAll(clientState.standbyTasks()));
@@ -430,7 +440,9 @@ public class RackAwareTaskAssignor {
             }
         }
         final long cost = standByTasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost);
-        log.info("Assignment after {} rounds of standby task optimization is {}\n with cost {}", round, clientStates, cost);
+
+        final long duration = time.milliseconds() - startTime;
+        log.info("Assignment after {} rounds and {} milliseconds for standby task optimization is {}\n with cost {}", round, duration, clientStates, cost);
         return cost;
     }
 
