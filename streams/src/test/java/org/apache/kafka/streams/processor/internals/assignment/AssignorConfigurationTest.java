@@ -57,8 +57,8 @@ public class AssignorConfigurationTest {
 
     @Test
     public void rebalanceProtocolShouldSupportAllUpgradeFromVersions() {
-        for (final String upgradeFrom : TestConfig.upgradeFromVersions()) {
-            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+        for (final StreamsConfig.UpgradeFromValues upgradeFrom : StreamsConfig.UpgradeFromValues.values()) {
+            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
             final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
 
             try {
@@ -71,8 +71,8 @@ public class AssignorConfigurationTest {
 
     @Test
     public void configuredMetadataVersionShouldSupportAllUpgradeFromVersions() {
-        for (final String upgradeFrom : TestConfig.upgradeFromVersions()) {
-            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+        for (final StreamsConfig.UpgradeFromValues upgradeFrom : StreamsConfig.UpgradeFromValues.values()) {
+            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
             final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
 
             try {
@@ -81,31 +81,5 @@ public class AssignorConfigurationTest {
                 throw new AssertionFailedError("Upgrade from " + upgradeFrom + " failed with " + throwable.getMessage() + "!");
             }
         }
-    }
-
-    private static class TestValidString extends ConfigDef.ValidString {
-        protected TestValidString(final ConfigDef.ValidString validString) {
-            super(validString);
-        }
-
-        List<String> validStrings() {
-            return validStrings;
-        }
-    }
-
-    private static class TestConfig extends StreamsConfig {
-        public TestConfig() {
-            super(mkMap(
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "app.id"),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy")
-            ));
-        }
-
-        private static List<String> upgradeFromVersions() {
-            return new TestValidString(
-                    (ConfigDef.ValidString) CONFIG.configKeys().get(StreamsConfig.UPGRADE_FROM_CONFIG).validator
-            ).validStrings();
-        }
-
     }
 }
