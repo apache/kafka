@@ -24,6 +24,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.DataException;
@@ -81,5 +82,8 @@ public class BooleanConverterTest {
 
         assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, null).schema());
         assertNull(converter.toConnectData(TOPIC, null).value());
+
+        byte[] invalidValue = "42".getBytes(StandardCharsets.UTF_8);
+        assertThrows(DataException.class, () -> converter.toConnectData(TOPIC, invalidValue));
     }
 }

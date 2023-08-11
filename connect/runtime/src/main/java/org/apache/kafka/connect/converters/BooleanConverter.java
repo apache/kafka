@@ -19,6 +19,7 @@ package org.apache.kafka.connect.converters;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.BooleanDeserializer;
 import org.apache.kafka.common.serialization.BooleanSerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -80,8 +81,12 @@ public class BooleanConverter implements Converter, HeaderConverter {
 
     @Override
     public SchemaAndValue toConnectData(String topic, byte[] value) {
-        return new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA,
-            deserializer.deserialize(topic, value));
+        try {
+            return new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA,
+                deserializer.deserialize(topic, value));
+        } catch (SerializationException e) {
+            throw new DataException("Failed to deserialize boolean: ", e);
+        }
     }
 
 
