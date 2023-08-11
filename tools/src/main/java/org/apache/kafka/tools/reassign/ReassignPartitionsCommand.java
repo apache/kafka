@@ -47,6 +47,7 @@ import org.apache.kafka.server.util.Json;
 import org.apache.kafka.server.util.json.DecodeJson;
 import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
+import org.apache.kafka.tools.TerseException;
 import org.apache.kafka.tools.ToolsUtils;
 
 import java.io.IOException;
@@ -139,7 +140,7 @@ public class ReassignPartitionsCommand {
             adminClient = Admin.create(props);
             handleAction(adminClient, opts);
             failed = false;
-        } catch (TerseReassignmentFailureException e) {
+        } catch (TerseException e) {
             System.out.println(e.getMessage());
         } catch (Throwable e) {
             System.out.println("Error: " + e.getMessage());
@@ -156,7 +157,7 @@ public class ReassignPartitionsCommand {
         }
     }
 
-    private static void handleAction(Admin adminClient, ReassignPartitionsCommandOptions opts) throws IOException, ExecutionException, InterruptedException {
+    private static void handleAction(Admin adminClient, ReassignPartitionsCommandOptions opts) throws IOException, ExecutionException, InterruptedException, TerseException {
         if (opts.options.has(opts.verifyOpt)) {
             verifyAssignment(adminClient,
                 Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
@@ -728,7 +729,7 @@ public class ReassignPartitionsCommand {
                                           Long interBrokerThrottle,
                                           Long logDirThrottle,
                                           Long timeoutMs,
-                                          Time time) throws ExecutionException, InterruptedException, JsonProcessingException {
+                                          Time time) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         Tuple<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> t0 = parseExecuteAssignmentArgs(reassignmentJson);
 
         Map<TopicPartition, List<Integer>> proposedParts = t0.v1;
@@ -738,7 +739,7 @@ public class ReassignPartitionsCommand {
         // If there is an existing assignment, check for --additional before proceeding.
         // This helps avoid surprising users.
         if (!additional && !currentReassignments.isEmpty()) {
-            throw new TerseReassignmentFailureException(CANNOT_EXECUTE_BECAUSE_OF_EXISTING_MESSAGE);
+            throw new TerseException(CANNOT_EXECUTE_BECAUSE_OF_EXISTING_MESSAGE);
         }
         Set<Integer> brokers = new HashSet<>();
         proposedParts.values().forEach(brokers::addAll);
@@ -764,7 +765,7 @@ public class ReassignPartitionsCommand {
         // Execute the partition reassignments.
         Map<TopicPartition, Throwable> errors = alterPartitionReassignments(adminClient, proposedParts);
         if (!errors.isEmpty()) {
-            throw new TerseReassignmentFailureException(
+            throw new TerseException(
                 String.format("Error reassigning partition(s):%n%s",
                     errors.keySet().stream().
                         sorted(ReassignPartitionsCommand::compareTopicPartitions).
@@ -795,7 +796,7 @@ public class ReassignPartitionsCommand {
     private static void executeMoves(Admin adminClient,
                                      Map<TopicPartitionReplica, String> proposedReplicas,
                                      Long timeoutMs,
-                                     Time time) throws InterruptedException {
+                                     Time time) throws InterruptedException, TerseException {
         long startTimeMs = time.milliseconds();
         Map<TopicPartitionReplica, String> pendingReplicas = new HashMap<>();
         pendingReplicas.putAll(proposedReplicas);
@@ -814,7 +815,7 @@ public class ReassignPartitionsCommand {
             if (pendingReplicas.isEmpty()) {
                 done = true;
             } else if (time.milliseconds() >= startTimeMs + timeoutMs) {
-                throw new TerseReassignmentFailureException(String.format(
+                throw new TerseException(String.format(
                     "Timed out before log directory move%s could be started for: %s",
                         pendingReplicas.size() == 1 ? "" : "s",
                         pendingReplicas.keySet().stream().
@@ -1234,7 +1235,7 @@ public class ReassignPartitionsCommand {
                                                                                    String jsonString,
                                                                                    Boolean preserveThrottles,
                                                                                    Long timeoutMs,
-                                                                                   Time time) throws ExecutionException, InterruptedException, JsonProcessingException {
+                                                                                   Time time) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
 
         List<Tuple<TopicPartition, List<Integer>>> targetParts = t0.v1;
@@ -1248,7 +1249,7 @@ public class ReassignPartitionsCommand {
         if (!curReassigningParts.isEmpty()) {
             Map<TopicPartition, Throwable> errors = cancelPartitionReassignments(adminClient, curReassigningParts);
             if (!errors.isEmpty()) {
-                throw new TerseReassignmentFailureException(String.format(
+                throw new TerseException(String.format(
                     "Error cancelling partition reassignment%s for:%n%s",
                     errors.size() == 1 ? "" : "s",
                     errors.keySet().stream().
