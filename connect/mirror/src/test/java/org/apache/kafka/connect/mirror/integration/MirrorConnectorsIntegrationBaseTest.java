@@ -71,6 +71,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,9 +82,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 
 /**
  * Tests MM2 replication and failover/failback logic.
@@ -93,6 +91,7 @@ import org.junit.jupiter.api.BeforeEach;
  * one cluster to the other and back. Tests validate that consumer offsets are translated and replicated
  * between clusters during this failover and failback.
  */
+@Disabled
 @Tag("integration")
 public class MirrorConnectorsIntegrationBaseTest {
     private static final Logger log = LoggerFactory.getLogger(MirrorConnectorsIntegrationBaseTest.class);

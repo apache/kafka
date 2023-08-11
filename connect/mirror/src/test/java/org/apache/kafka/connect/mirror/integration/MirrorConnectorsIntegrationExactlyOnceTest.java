@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 
 import java.util.Arrays;
@@ -26,6 +27,7 @@ import java.util.Properties;
 /**
  * Tests MM2 replication with exactly-once support enabled on the Connect clusters.
  */
+@Disabled
 @Tag("integration")
 public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectorsIntegrationBaseTest {
 

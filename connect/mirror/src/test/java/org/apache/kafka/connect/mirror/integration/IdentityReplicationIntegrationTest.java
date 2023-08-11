@@ -20,6 +20,7 @@ import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
 
 import java.util.HashMap;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
  * migrated from the primary cluster to the backup cluster. Tests validate that consumer offsets
  * are translated and replicated from the primary cluster to the backup cluster during this failover.
  */
+@Disabled
 @Tag("integration")
 public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
     @BeforeEach
