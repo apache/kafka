@@ -23,7 +23,7 @@ import java.util.Map;
 /**
  * SourceConnectors implement the connector interface to pull data from another system and send
  * it to Kafka.
- * <p>Kafka Connect discovers extensions of this class using the Java {@link java.util.ServiceLoader} mechanism.
+ * <p>Kafka Connect may discover implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.connect.source.SourceConnector}.
  */
