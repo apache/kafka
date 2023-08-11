@@ -501,11 +501,9 @@ public abstract class AbstractCoordinator implements Closeable {
                     final String fullReason = String.format("rebalance failed due to '%s' (%s)",
                         exception.getMessage(),
                         simpleName);
-                    // Don't log error info to avoid confusing users
-                    if (MemberIdRequiredException.class.getSimpleName().equals(simpleName)) {
-                        requestRejoin(shortReason, fullReason, false);
-                    } else {
-                        requestRejoin(shortReason, fullReason, true);
+                    // Don't need to request rejoin again for MemberIdRequiredException since we've done that in JoinGroupResponseHandler
+                    if (!MemberIdRequiredException.class.getSimpleName().equals(simpleName)) {
+                        requestRejoin(shortReason, fullReason);
                     }
                 }
 
@@ -1062,12 +1060,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     public synchronized void requestRejoin(final String shortReason) {
-        requestRejoin(shortReason, shortReason, true);
-    }
-
-    public synchronized void requestRejoin(final String shortReason,
-                                           final String fullReason) {
-        requestRejoin(shortReason, fullReason, true);
+        requestRejoin(shortReason, shortReason);
     }
 
     /**
@@ -1076,14 +1069,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * @param shortReason This is the reason passed up to the group coordinator. It must be
      *                    reasonably small.
      * @param fullReason This is the reason logged locally.
-     * @param shouldLog Should log the reason why requesting joining group
      */
     public synchronized void requestRejoin(final String shortReason,
-                                           final String fullReason,
-                                           final boolean shouldLog) {
-        if (shouldLog) {
-            log.info("Request joining group due to: {}", fullReason);
-        }
+                                           final String fullReason) {
+        log.info("Request joining group due to: {}", fullReason);
         this.rejoinReason = shortReason;
         this.rejoinNeeded = true;
     }
