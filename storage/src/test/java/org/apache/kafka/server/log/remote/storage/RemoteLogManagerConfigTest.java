@@ -41,7 +41,7 @@ public class RemoteLogManagerConfigTest {
         RemoteLogManagerConfig expectedRemoteLogManagerConfig
                 = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
                                              "dummy.remote.log.metadata.class", "dummy.remote.log.metadata.class.path",
-                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100,
+                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
                                              rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
 
         Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);
@@ -82,6 +82,8 @@ public class RemoteLogManagerConfigTest {
                   remoteLogManagerConfig.remoteLogReaderThreads());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
                   remoteLogManagerConfig.remoteLogReaderMaxPendingTasks());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP,
+                  remoteLogManagerConfig.remoteLogMetadataCustomMetadataMaxBytes());
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
                   remoteLogManagerConfig.remoteStorageManagerPrefix());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,

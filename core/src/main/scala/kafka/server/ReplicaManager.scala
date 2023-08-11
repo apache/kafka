@@ -732,8 +732,7 @@ class ReplicaManager(val config: KafkaConfig,
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
         
         val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
-          // NOTE: Older clients return INVALID_RECORD, but newer clients will return INVALID_TXN_STATE
-          val message = if (error.equals(Errors.INVALID_RECORD)) "Partition was not added to the transaction" else error.message()
+          val message = if (error == Errors.INVALID_TXN_STATE) "Partition was not added to the transaction" else error.message()
           topicPartition -> LogAppendResult(
             LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
             Some(error.exception(message))
@@ -862,7 +861,8 @@ class ReplicaManager(val config: KafkaConfig,
 
         if (transactionalBatches.nonEmpty) {
           // We return verification guard if the partition needs to be verified. If no state is present, no need to verify.
-          val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(records.firstBatch.producerId)
+          val firstBatch = records.firstBatch
+          val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(firstBatch.producerId, firstBatch.baseSequence, firstBatch.producerEpoch)
           if (verificationGuard != null) {
             verificationGuards.put(topicPartition, verificationGuard)
             unverifiedEntries.put(topicPartition, records)
