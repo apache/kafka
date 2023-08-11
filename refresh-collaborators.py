@@ -19,6 +19,7 @@ import os
 import io
 from bs4 import BeautifulSoup
 from github import Github
+from github import GithubException
 from ruamel.yaml import YAML
 from datetime import datetime, timedelta
 
@@ -38,7 +39,7 @@ end_date = datetime.now()
 start_date = end_date - timedelta(days=365)
 repo = g.get_repo("apache/kafka")
 for commit in repo.get_commits(since=start_date, until=end_date):
-    if commit.author is None and commit.author.login is None:
+    if commit.author is None or commit.author.login is None:
         continue
     login = commit.author.login
     contributors_login_to_commit_volume[login] = contributors_login_to_commit_volume.get(login, 0) + 1
@@ -68,16 +69,28 @@ updated_yaml = io.StringIO()
 yml.dump(yaml_content, updated_yaml)
 updated_yaml_str = updated_yaml.getvalue()
 
-# Create a new branch for the changes
-new_branch_name = "update-asf.yaml-github-whitelist-and-collaborators"
-repo.create_git_ref(f"refs/heads/{new_branch_name}", repo.default_branch)
-
-# Commit the changes to the new branch
+branch_name = "update-asf.yaml-github-whitelist-and-collaborators"
 commit_message = "MINOR: Update .asf.yaml file with refreshed github_whitelist, and collaborators"
-repo.update_file(file_path, commit_message, updated_yaml_str, file.sha, branch=new_branch_name)
-
-# Open a pull request with the updated .asf.yaml file:
 pr_title = "MINOR: Update .asf.yaml file with refreshed github_whitelist, and collaborators"
 pr_body = "This pull request updates the github_whitelist and collaborators lists in .asf.yaml."
-repo.create_pull(title=pr_title, body=pr_body, base=repo.default_branch, head=new_branch_name)
 
+# If branch already exists
+try:
+    branch = repo.get_branch(branch=branch_name)
+
+    # Commit the changes to the branch
+    repo.update_file(file_path, commit_message, updated_yaml_str, file.sha, branch=branch_name)
+
+    # Open a pull request with the updated .asf.yaml file:
+    repo.create_pull(title=pr_title, body=pr_body, base=repo.default_branch, head=branch_name)
+
+# If branch does not exist
+except GithubException:
+    # Create a new branch for the changes
+    repo.create_git_ref(f"refs/heads/{branch_name}", repo.default_branch)
+
+    # Commit the changes to the new branch
+    repo.update_file(file_path, commit_message, updated_yaml_str, file.sha, branch=branch_name)
+
+    # Open a pull request with the updated .asf.yaml file:
+    repo.create_pull(title=pr_title, body=pr_body, base=repo.default_branch, head=branch_name)
