@@ -701,9 +701,9 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
               <code class="docutils literal"><span class="pre">rack.aware.assignment.non_overlap_cost</span></code> to 100 and <code class="docutils literal"><span class="pre">rack.aware.assignment.traffic_cost</span></code> to 50.
             </p>
             <p>
-              The default value is null which means default non_overlap_cost in different assignors will be used. In <code class="docutils literal"><span class="pre">StickyTaskAssignor</span></code>, it has a higher default value than <code class="docutils literal"><span class="pre">rack.aware.assignment.traffic_cost</span></code> which means
-              maintaining stickiness is preferred in <code class="docutils literal"><span class="pre">StickyTaskAssignor</span></code>. In <code class="docutils literal"><span class="pre">HighAvailabilityTaskAssignor</span></code>, it has a lower default value than <code class="docutils literal"><span class="pre">rack.aware.assignment.traffic_cost</span></code>
-              which means minimizing cross rack traffic is preferred in <code class="docutils literal"><span class="pre">HighAvailabilityTaskAssignor</span></code>.
+              The default value is null which means default <code class="docutils literal"><span class="pre">non_overlap_cost</span></code> in different assignors will be used. In <code class="docutils literal"><span class="pre">StickyTaskAssignor</span></code>, it has a default value of 10 and <code class="docutils literal"><span class="pre">rack.aware.assignment.traffic_cost</span></code> has
+              a default value of 1, which means maintaining stickiness is preferred in <code class="docutils literal"><span class="pre">StickyTaskAssignor</span></code>. In <code class="docutils literal"><span class="pre">HighAvailabilityTaskAssignor</span></code>, it has a default value of 1 and <code class="docutils literal"><span class="pre">rack.aware.assignment.traffic_cost</span></code> has
+              a default value of 10, which means minimizing cross rack traffic is preferred in <code class="docutils literal"><span class="pre">HighAvailabilityTaskAssignor</span></code>.
             </p>
           </div>
         </blockquote>
@@ -714,7 +714,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
           <div>
             <p>
               This configuration sets the strategy Kafka Streams uses for rack aware task assignment so that cross traffic from broker to client can be reduced. This config will only take effect when <code class="docutils literal"><span class="pre">broker.rack</span></code>
-              is set on broker side and <code class="docutils literal"><span class="pre">client.rack</span></code> is set on Kafka Streams side. There are two settings for this config:
+              is set on the brokers and <code class="docutils literal"><span class="pre">client.rack</span></code> is set on Kafka Streams side. There are two settings for this config:
             </p>
             <ul class="simple">
               <li><code class="docutils literal"><span class="pre">none</span></code>. This is the default value which means rack aware task assignment will be disabled.</li>
@@ -773,8 +773,8 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
               <code class="docutils literal"><span class="pre">rack.aware.assignment.traffic_cost</span></code> to 100 and <code class="docutils literal"><span class="pre">rack.aware.assignment.non_overlap_cost</span></code> to 50.
             </p>
             <p>
-              The default value is null which means default traffic cost in different assignors will be used. In <code class="docutils literal"><span class="pre">StickyTaskAssignor</span></code>, it has a lower default value than <code class="docutils literal"><span class="pre">rack.aware.assignment.non_overlap_cost</span></code>.
-              In <code class="docutils literal"><span class="pre">HighAvailabilityTaskAssignor</span></code>, it has a higher default value than <code class="docutils literal"><span class="pre">rack.aware.assignment.non_overlap_cost</span></code>.
+              The default value is null which means default traffic cost in different assignors will be used. In <code class="docutils literal"><span class="pre">StickyTaskAssignor</span></code>, it has a default value of 1 and <code class="docutils literal"><span class="pre">rack.aware.assignment.non_overlap_cost</span></code>
+              has a default value of 10. In <code class="docutils literal"><span class="pre">HighAvailabilityTaskAssignor</span></code>, it has a default value of 10 and <code class="docutils literal"><span class="pre">rack.aware.assignment.non_overlap_cost</span></code> has a default value of 1.
             </p>
           </div>
         </blockquote>
