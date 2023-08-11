@@ -1859,6 +1859,8 @@ project(':tools') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':connect:api')
+    implementation project(':connect:runtime')
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
@@ -1877,6 +1879,9 @@ project(':tools') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':connect:api')
+    testImplementation project(':connect:runtime')
+    testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension

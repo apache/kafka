@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,12 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-log4j.rootLogger=WARN, stderr
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+  export KAFKA_HEAP_OPTS="-Xms256M -Xmx2G"
+fi
 
-log4j.appender.stderr=org.apache.log4j.ConsoleAppender
-log4j.appender.stderr.layout=org.apache.log4j.PatternLayout
-log4j.appender.stderr.layout.ConversionPattern=[%d] %p %m (%c)%n
-log4j.appender.stderr.Target=System.err
-
-# for connect-plugin-path
-log4j.logger.org.reflections=ERROR
+exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.tools.ConnectPluginPath "$@"
