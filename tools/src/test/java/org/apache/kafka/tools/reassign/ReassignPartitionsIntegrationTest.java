@@ -43,6 +43,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.tools.TerseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -146,7 +147,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    private void executeAndVerifyReassignment() throws ExecutionException, InterruptedException, JsonProcessingException {
+    private void executeAndVerifyReassignment() throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
             "{\"topic\":\"bar\",\"partition\":0,\"replicas\":[3,2,0],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
@@ -683,7 +684,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                                       Boolean additional,
                                       String reassignmentJson,
                                       Long interBrokerThrottle,
-                                      Long replicaAlterLogDirsThrottle) throws ExecutionException, InterruptedException, JsonProcessingException {
+                                      Long replicaAlterLogDirsThrottle) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         System.out.println("==> executeAssignment(adminClient, additional=" + additional + ", " +
             "reassignmentJson=" + reassignmentJson + ", " +
             "interBrokerThrottle=" + interBrokerThrottle + ", " +
@@ -692,7 +693,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM);
     }
 
-    private Tuple<Set<TopicPartition>, Set<TopicPartitionReplica>> runCancelAssignment(Admin adminClient, String jsonString, Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
+    private Tuple<Set<TopicPartition>, Set<TopicPartitionReplica>> runCancelAssignment(Admin adminClient, String jsonString, Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         System.out.println("==> cancelAssignment(adminClient, jsonString=" + jsonString);
         return cancelAssignment(adminClient, jsonString, preserveThrottles, 10000L, Time.SYSTEM);
     }
