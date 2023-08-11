@@ -29,7 +29,7 @@ import java.util.Map;
  * layer (e.g. JsonNode, GenericRecord, Message).
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
- * {@code META-INF/service/org.apache.kafka.connect.storage.Converter}.
+ * {@code META-INF/services/org.apache.kafka.connect.storage.Converter}.
  */
 public interface Converter {
 

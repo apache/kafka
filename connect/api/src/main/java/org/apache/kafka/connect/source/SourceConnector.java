@@ -25,7 +25,7 @@ import java.util.Map;
  * it to Kafka.
  * <p>Kafka Connect discovers extensions of this class using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
- * {@code META-INF/service/org.apache.kafka.connect.source.SourceConnector}.
+ * {@code META-INF/services/org.apache.kafka.connect.source.SourceConnector}.
  */
 public abstract class SourceConnector extends Connector {
 

@@ -30,7 +30,7 @@ import java.io.Closeable;
  * {@link org.apache.kafka.connect.header.Headers Headers}.
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
- * {@code META-INF/service/org.apache.kafka.connect.storage.HeaderConverter}.
+ * {@code META-INF/services/org.apache.kafka.connect.storage.HeaderConverter}.
  */
 public interface HeaderConverter extends Configurable, Closeable {
 

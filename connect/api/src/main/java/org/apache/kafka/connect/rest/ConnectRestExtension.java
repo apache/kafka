@@ -30,7 +30,7 @@ import java.util.Map;
  *
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
- * {@code META-INF/service/org.apache.kafka.connect.rest.ConnectRestExtension}.
+ * {@code META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension}.
  * <p>The extension class(es) must be packaged as a plugin, including the JARs of all dependencies except those
  * already provided by the Connect framework.
  *

@@ -28,7 +28,7 @@ import java.util.Set;
  * <p>Implementations are required to safely support concurrent calls to any of the methods in this interface.
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
- * {@code META-INF/service/org.apache.kafka.common.config.provider.ConfigProvider}.
+ * {@code META-INF/services/org.apache.kafka.common.config.provider.ConfigProvider}.
  */
 public interface ConfigProvider extends Configurable, Closeable {
 

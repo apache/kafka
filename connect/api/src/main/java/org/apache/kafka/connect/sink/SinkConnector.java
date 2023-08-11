@@ -25,7 +25,7 @@ import java.util.Map;
  * SinkConnectors implement the Connector interface to send Kafka data to another system.
  * <p>Kafka Connect discovers extensions of this class using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
- * {@code META-INF/service/org.apache.kafka.connect.sink.SinkConnector}.
+ * {@code META-INF/services/org.apache.kafka.connect.sink.SinkConnector}.
  */
 public abstract class SinkConnector extends Connector {
 

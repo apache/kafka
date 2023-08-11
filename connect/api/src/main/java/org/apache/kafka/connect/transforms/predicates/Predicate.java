@@ -29,7 +29,7 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  *
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
- * {@code META-INF/service/org.apache.kafka.connect.transforms.predicates.Predicate}.
+ * {@code META-INF/services/org.apache.kafka.connect.transforms.predicates.Predicate}.
  *
  * @param <R> The type of record.
  */
