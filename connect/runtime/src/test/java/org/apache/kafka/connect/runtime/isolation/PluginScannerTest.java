@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -34,6 +35,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 @RunWith(Parameterized.class)
 public class PluginScannerTest {
@@ -65,6 +67,12 @@ public class PluginScannerTest {
             default:
                 throw new IllegalArgumentException("Unknown type " + scannerType);
         }
+    }
+
+    @BeforeClass
+    public static void setUp() {
+        // Work around a circular-dependency in TestPlugins.
+        TestPlugins.pluginPath();
     }
 
     @Test
@@ -143,6 +151,21 @@ public class PluginScannerTest {
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
         Set<String> expectedClasses = new HashSet<>(TestPlugins.pluginClasses());
         assertEquals(expectedClasses, classes);
+    }
+
+    @Test
+    public void testNonVersionedPluginHasUndefinedVersion() {
+        PluginScanResult unversionedPluginsResult = scan(TestPlugins.pluginPath(TestPlugins.TestPlugin.SAMPLING_HEADER_CONVERTER));
+        assertFalse(unversionedPluginsResult.isEmpty());
+        unversionedPluginsResult.forEach(pluginDesc -> assertEquals(PluginDesc.UNDEFINED_VERSION, pluginDesc.version()));
+    }
+
+    @Test
+    public void testVersionedPluginsHasVersion() {
+        PluginScanResult versionedPluginResult = scan(TestPlugins.pluginPath(TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1));
+        assertFalse(versionedPluginResult.isEmpty());
+        versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
+
     }
 
     private PluginScanResult scan(Set<Path> pluginLocations) {

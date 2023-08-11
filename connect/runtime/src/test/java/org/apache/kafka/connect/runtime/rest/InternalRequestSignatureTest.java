@@ -22,7 +22,9 @@ import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.eclipse.jetty.client.api.Request;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
@@ -43,6 +45,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class InternalRequestSignatureTest {
 
     private static final byte[] REQUEST_BODY =

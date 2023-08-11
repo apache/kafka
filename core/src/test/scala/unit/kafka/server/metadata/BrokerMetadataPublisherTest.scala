@@ -289,7 +289,7 @@ class BrokerMetadataPublisherTest {
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[ScramPublisher]),
-      None,
+      mock(classOf[AclPublisher]),
       faultHandler,
       faultHandler
     )

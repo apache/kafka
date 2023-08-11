@@ -256,15 +256,17 @@ public class RemoteLogManager implements Closeable {
     }
 
     private void configureRLMM() {
-        final Map<String, Object> rlmmProps = new HashMap<>(rlmConfig.remoteLogMetadataManagerProps());
-
-        rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
-        rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
-        rlmmProps.put("cluster.id", clusterId);
+        final Map<String, Object> rlmmProps = new HashMap<>();
         endpoint.ifPresent(e -> {
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers", e.host() + ":" + e.port());
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", e.securityProtocol().name);
         });
+        // update the remoteLogMetadataProps here to override endpoint config if any
+        rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
+
+        rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
+        rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
+        rlmmProps.put("cluster.id", clusterId);
 
         remoteLogMetadataManager.configure(rlmmProps);
     }
