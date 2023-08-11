@@ -756,8 +756,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_CLIENT_SUPPLIER_CONFIG = "default.client.supplier";
     public static final String DEFAULT_CLIENT_SUPPLIER_DOC = "Client supplier class that implements the <code>org.apache.kafka.streams.KafkaClientSupplier</code> interface.";
 
-    public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_NONE = "NONE";
-    public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC = "MIN_TRAFFIC";
+    public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_NONE = "none";
+    public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC = "min_traffic";
 
     /** {@code } rack.aware.assignment.strategy */
     @SuppressWarnings("WeakerAccess")
