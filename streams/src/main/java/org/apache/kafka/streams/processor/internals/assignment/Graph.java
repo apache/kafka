@@ -359,7 +359,7 @@ public class Graph<V extends Comparable<V>> {
      */
     V detectNegativeCycles(final V source, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
         // Use long to account for any overflow
-        final Map<V, Long> distance = nodes.stream().collect(Collectors.toMap(node -> node, node -> (long) Integer.MAX_VALUE));
+        final Map<V, Long> distance = new HashMap<>();
         distance.put(source, 0L);
         final int nodeCount = nodes.size();
 
@@ -376,11 +376,14 @@ public class Graph<V extends Comparable<V>> {
                         continue;
                     }
                     final V v = edge.destination;
-                    if (distance.get(v) > distance.get(u) + edge.cost) {
+                    final Long distanceU = distance.get(u);
+                    final Long distanceV = distance.get(v);
+                    // There's a path to u and either we haven't computed V or distance to V is shorter
+                    if (distanceU != null && (distanceV == null || distanceV > distanceU + edge.cost)) {
                         if (i == nodeCount - 1) {
                             return v;
                         }
-                        distance.put(v, distance.get(u) + edge.cost);
+                        distance.put(v, distanceU + edge.cost);
                         parentNodes.put(v, u);
                         parentEdges.put(v, edge);
                     }
