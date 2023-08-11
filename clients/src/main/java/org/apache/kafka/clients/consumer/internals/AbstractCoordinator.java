@@ -497,13 +497,16 @@ public abstract class AbstractCoordinator implements Closeable {
                 resetJoinGroupFuture();
                 synchronized (AbstractCoordinator.this) {
                     final String simpleName = exception.getClass().getSimpleName();
-                    final String shortReason = MemberIdRequiredException.class.getSimpleName().equals(simpleName) ?
-                            exception.getMessage() : String.format("rebalance failed due to %s", simpleName);
-                    final String fullReason = MemberIdRequiredException.class.getSimpleName().equals(simpleName) ?
-                            exception.getMessage() : String.format("rebalance failed due to '%s' (%s)",
+                    final String shortReason = String.format("rebalance failed due to %s", simpleName);
+                    final String fullReason = String.format("rebalance failed due to '%s' (%s)",
                         exception.getMessage(),
                         simpleName);
-                    requestRejoin(shortReason, fullReason);
+                    // Don't log error info to avoid confusing users
+                    if (MemberIdRequiredException.class.getSimpleName().equals(simpleName)) {
+                        requestRejoin(shortReason, fullReason, false);
+                    } else {
+                        requestRejoin(shortReason, fullReason, true);
+                    }
                 }
 
                 if (exception instanceof UnknownMemberIdException ||
@@ -1059,7 +1062,12 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     public synchronized void requestRejoin(final String shortReason) {
-        requestRejoin(shortReason, shortReason);
+        requestRejoin(shortReason, shortReason, true);
+    }
+
+    public synchronized void requestRejoin(final String shortReason,
+                                           final String fullReason) {
+        requestRejoin(shortReason, fullReason, true);
     }
 
     /**
@@ -1068,10 +1076,14 @@ public abstract class AbstractCoordinator implements Closeable {
      * @param shortReason This is the reason passed up to the group coordinator. It must be
      *                    reasonably small.
      * @param fullReason This is the reason logged locally.
+     * @param shouldLog Should log the reason why requesting joining group
      */
     public synchronized void requestRejoin(final String shortReason,
-                                           final String fullReason) {
-        log.info("Request joining group due to: {}", fullReason);
+                                           final String fullReason,
+                                           final boolean shouldLog) {
+        if (shouldLog) {
+            log.info("Request joining group due to: {}", fullReason);
+        }
         this.rejoinReason = shortReason;
         this.rejoinNeeded = true;
     }
