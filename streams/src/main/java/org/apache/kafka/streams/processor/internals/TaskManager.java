@@ -1835,7 +1835,10 @@ public class TaskManager {
         // we do not check any possible exceptions since none of them are fatal
         // that should cause the application to fail, and we will try delete with
         // newer offsets anyways.
-        if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
+        System.out.println("deleteRecordsResult is " + (deleteRecordsResult == null ? "null" : "not null"));
+        final boolean isDone = deleteRecordsResult != null && deleteRecordsResult.all().isDone();
+        System.out.println("deleteRecordsResult.all().isDone() is " + (isDone ? "true" : "false"));
+        if (deleteRecordsResult == null || isDone) {
 
             if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
                 log.info("Previous delete-records request has failed: {}. Try sending the new request now",
