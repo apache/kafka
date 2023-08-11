@@ -54,11 +54,24 @@ public class ProducerIdsImageTest {
             setBrokerId(3).
             setBrokerEpoch(100).
             setNextProducerId(789), (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
+            setBrokerId(3).
+            setBrokerEpoch(100).
+            setNextProducerId(780), (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
+            setBrokerId(3).
+            setBrokerEpoch(100).
+            setNextProducerId(785), (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
+            setBrokerId(2).
+            setBrokerEpoch(100).
+            setNextProducerId(460), (short) 0));
 
         DELTA1 = new ProducerIdsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        IMAGE2 = new ProducerIdsImage(789);
+        // next producer id must be increasing, but only replay checks for this condition (not apply)
+        IMAGE2 = new ProducerIdsImage(460);
     }
 
     @Test
