@@ -121,9 +121,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("timestampConfigProvider"))
-  def testSendWithInvalidBeforeAndAfterTimestamp(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @MethodSource(Array("quorumAndTimestampConfigProvider"))
+  def testSendWithInvalidBeforeAndAfterTimestamp(quorum: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topicProps = new Properties()
     // set the TopicConfig for timestamp validation to have 1 minute threshold. Note that recordTimestamp has 5 minutes diff
     val oneMinuteInMs: Long = 1 * 60 * 60 * 1000L
@@ -277,13 +277,16 @@ object PlaintextProducerSendTest {
 
   // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
-  def timestampConfigProvider: java.util.stream.Stream[Arguments] = {
+  def quorumAndTimestampConfigProvider: java.util.stream.Stream[Arguments] = {
     val now: Long = System.currentTimeMillis()
     val fiveMinutesInMs: Long = 5 * 60 * 60 * 1000L
     java.util.stream.Stream.of[Arguments](
-      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
-      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
-      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(now + fiveMinutesInMs))
+      Arguments.of("zk", TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
+      Arguments.of("zk", TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
+      Arguments.of("zk", TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(now + fiveMinutesInMs)),
+      Arguments.of("kraft", TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
+      Arguments.of("kraft", TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)),
+      Arguments.of("kraft", TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(now + fiveMinutesInMs))
     )
   }
 }

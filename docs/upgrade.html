@@ -37,6 +37,10 @@
             For more detailed information please refer to the Compatibility, Deprecation, and Migration Plan section in
             <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-902%3A+Upgrade+Zookeeper+to+3.8.1">KIP-902</a>.
         </li>
+        <li>The configuration <code>log.message.timestamp.difference.max.ms</code> is deprecated.
+            Two new configurations, <code>log.message.timestamp.before.max.ms</code> and <code>log.message.timestamp.after.max.ms</code>, have been added.
+            For more detailed information, please refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-937%3A+Improve+Message+Timestamp+Validation">KIP-937</a>.
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>
