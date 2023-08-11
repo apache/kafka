@@ -392,19 +392,16 @@ public class ConnectPluginPath {
             config.out.printf("Loadable plugins:   \t%d%n", loadablePlugins);
             config.out.printf("Compatible plugins: \t%d%n", compatiblePlugins);
         } else if (config.command == Command.SYNC_MANIFESTS) {
-            config.out.println("Writing changes to plugins...");
-            if (workspace.commit(config.dryRun)) {
+            if (workspace.commit(true)) {
                 if (config.dryRun) {
                     config.out.println("Dry run passed: All above changes can be committed to disk if re-run with dry run disabled.");
                 } else {
+                    config.out.println("Writing changes to plugins...");
+                    workspace.commit(false);
                     config.out.println("All plugins have accurate ServiceLoader manifests");
                 }
             } else {
-                if (config.dryRun) {
-                    config.out.println("Dry run passed: No changes required.");
-                } else {
-                    config.out.println("No changes required.");
-                }
+                config.out.println("No changes required.");
             }
         }
     }

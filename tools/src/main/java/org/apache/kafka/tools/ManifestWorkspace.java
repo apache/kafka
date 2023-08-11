@@ -208,7 +208,7 @@ public class ManifestWorkspace {
 
         @Override
         protected boolean commit(boolean dryRun) throws IOException, TerseException {
-            if (startSync(location(), initial, manifests)) {
+            if (startSync(dryRun, location(), initial, manifests)) {
                 rewriteJar(dryRun, location(), manifests);
                 return true;
             }
@@ -300,13 +300,13 @@ public class ManifestWorkspace {
         }
 
         @Override
-        protected boolean commit(boolean dryRun) throws IOException, TerseException {
+        public boolean commit(boolean dryRun) throws IOException, TerseException {
             boolean changed = false;
             for (Map.Entry<Path, Map<PluginType, Set<String>>> manifestSource : manifests.entrySet()) {
                 Path jarPath = manifestSource.getKey();
                 Map<PluginType, Set<String>> before = initial.get(jarPath);
                 Map<PluginType, Set<String>> after = manifestSource.getValue();
-                if (startSync(jarPath, before, after)) {
+                if (startSync(dryRun, jarPath, before, after)) {
                     rewriteJar(dryRun, jarPath, after);
                     changed = true;
                 }
@@ -331,7 +331,7 @@ public class ManifestWorkspace {
         }
 
         protected boolean commit(boolean dryRun) throws IOException, TerseException {
-            if (startSync(location(), initial, manifests)) {
+            if (startSync(dryRun, location(), initial, manifests)) {
                 rewriteClassHierarchyManifest(dryRun, location(), manifests);
                 return true;
             }
@@ -339,7 +339,7 @@ public class ManifestWorkspace {
         }
     }
 
-    private boolean startSync(Path syncLocation, Map<PluginType, Set<String>> before, Map<PluginType, Set<String>> after) {
+    private boolean startSync(boolean dryRun, Path syncLocation, Map<PluginType, Set<String>> before, Map<PluginType, Set<String>> after) {
         Objects.requireNonNull(syncLocation, "syncLocation must be non-null");
         Objects.requireNonNull(before, "before must be non-null");
         Objects.requireNonNull(after, "after must be non-null");
@@ -352,7 +352,7 @@ public class ManifestWorkspace {
         Set<String> removed = new HashSet<>();
         before.values().forEach(removed::addAll);
         after.values().forEach(removed::removeAll);
-        out.printf("Sync\t\t%s Add %s Remove %s%n", syncLocation, added, removed);
+        out.printf("%sSync\t\t%s Add %s Remove %s%n", dryRun ? "Dry Run " : "", syncLocation, added, removed);
         return true;
     }
 
