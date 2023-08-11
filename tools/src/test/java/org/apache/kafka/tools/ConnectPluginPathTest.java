@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -60,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConnectPluginPathTest {
 
@@ -192,6 +194,51 @@ public class ConnectPluginPathTest {
                 TestPlugins.TestPlugin.SERVICE_LOADER);
     }
 
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifests(PluginLocationType type) {
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER)
+        );
+        assertEquals(0, res.returnCode);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.reflective);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.serviceLoading);
+    }
+
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifestsDryRun(PluginLocationType type) {
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER),
+                "--dry-run"
+        );
+        assertEquals(0, res.returnCode);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.reflective);
+        assertScanResult(false, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.serviceLoading);
+    }
+
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifestsKeepNotFound(PluginLocationType type) {
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION),
+                "--plugin-location",
+                setupLocation(workspace.resolve("location-b"), type, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER),
+                "--keep-not-found"
+        );
+        assertEquals(0, res.returnCode);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.reflective);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.serviceLoading);
+        assertScanResult(false, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION, res.reflective);
+        assertScanResult(false, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION, res.serviceLoading);
+    }
+
 
     private static Map<String, List<String[]>> assertListSuccess(CommandResult result) {
         assertEquals(0, result.returnCode);
@@ -274,6 +321,20 @@ public class ConnectPluginPathTest {
                     assertEquals(compatible, Boolean.parseBoolean(row[MANIFEST_COL]), "Plugin hasManifest column for " + plugin.className() + " incorrect");
                 }
             }
+        }
+    }
+
+    private static void assertScanResult(boolean expectToBeDiscovered, TestPlugins.TestPlugin plugin, PluginScanResult result) {
+        AtomicBoolean actuallyDiscovered = new AtomicBoolean();
+        result.forEach(pluginDesc -> {
+            if (pluginDesc.className().equals(plugin.className())) {
+                actuallyDiscovered.set(true);
+            }
+        });
+        if (expectToBeDiscovered && !actuallyDiscovered.get()) {
+            fail("Expected plugin " + plugin + " to be discoverable, but it was not.");
+        } else if (!expectToBeDiscovered && actuallyDiscovered.get()) {
+            fail("Expected plugin " + plugin + " to not be discoverable, but it was.");
         }
     }
 
