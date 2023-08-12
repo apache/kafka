@@ -1207,6 +1207,36 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testLeaderImmediatelySendsDivergingEpoch() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(5)
+            .appendToLog(1, Arrays.asList("a", "b", "c"))
+            .appendToLog(3, Arrays.asList("d", "e", "f"))
+            .appendToLog(5, Arrays.asList("g", "h", "i"))
+            .build();
+
+        // Start off as the leader
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Send a fetch request for an end offset and epoch which has diverged
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 6, 2, 500));
+        context.client.poll();
+
+        // Expect that the leader replies immediately with a diverging epoch
+        FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(1, partitionResponse.divergingEpoch().epoch());
+        assertEquals(3, partitionResponse.divergingEpoch().endOffset());
+    }
+
+    @Test
     public void testCandidateIgnoreVoteRequestOnSameEpoch() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
