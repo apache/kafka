@@ -23,7 +23,7 @@
   //
   // Version 3 is the first flexible version.
   //
-  // Version 4 adds the GroupState field (KIP-518).
+  // Version 4 adds the MemberState field (KIP-518).
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [

@@ -62,7 +62,7 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
     private SubscriptionState subscriptionState;
-    private GroupState groupState;
+    private MemberState memberState;
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
@@ -74,7 +74,7 @@ public class CommitRequestManagerTest {
         this.time = new MockTime(0);
         this.subscriptionState = mock(SubscriptionState.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        this.groupState = new GroupState("group-1", Optional.empty());
+        this.memberState = new MemberState("group-1", Optional.empty());
 
         this.props = new Properties();
         this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
@@ -333,7 +333,7 @@ public class CommitRequestManagerTest {
                 this.subscriptionState,
                 new ConsumerConfig(props),
                 this.coordinatorRequestManager,
-                this.groupState);
+                this.memberState);
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

@@ -73,7 +73,7 @@ public class DefaultBackgroundThreadTest {
     private ErrorEventHandler errorEventHandler;
     private SubscriptionState subscriptionState;
     private int requestTimeoutMs = 500;
-    private GroupState groupState;
+    private MemberState memberState;
     private CommitRequestManager commitManager;
 
     @BeforeEach
@@ -96,7 +96,7 @@ public class DefaultBackgroundThreadTest {
                 Optional.empty(),
                 100,
                 true);
-        this.groupState = new GroupState(rebalanceConfig);
+        this.memberState = new MemberState(rebalanceConfig);
         this.commitManager = mock(CommitRequestManager.class);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -252,7 +252,7 @@ public class DefaultBackgroundThreadTest {
                 processor,
                 this.metadata,
                 this.networkClient,
-                this.groupState,
+                this.memberState,
                 this.coordinatorManager,
                 this.commitManager);
     }

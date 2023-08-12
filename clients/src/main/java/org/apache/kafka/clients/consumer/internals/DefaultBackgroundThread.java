@@ -61,7 +61,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
-    private final GroupState groupState;
+    private final MemberState memberState;
     private final SubscriptionState subscriptionState;
     private boolean running;
 
@@ -78,7 +78,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
-                            final GroupState groupState,
+                            final MemberState memberState,
                             final CoordinatorRequestManager coordinatorManager,
                             final CommitRequestManager commitRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
@@ -92,7 +92,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.metadata = metadata;
         this.networkClientDelegate = networkClient;
         this.errorEventHandler = errorEventHandler;
-        this.groupState = groupState;
+        this.memberState = memberState;
         this.subscriptionState = subscriptionState;
 
         this.requestManagerRegistry = new HashMap<>();
@@ -132,7 +132,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                     networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            this.groupState = new GroupState(rebalanceConfig);
+            this.memberState = new MemberState(rebalanceConfig);
             this.requestManagerRegistry = Collections.unmodifiableMap(buildRequestManagerRegistry(logContext));
             this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry, metadata);
         } catch (final Exception e) {
@@ -143,20 +143,20 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     private Map<RequestManager.Type, Optional<RequestManager>> buildRequestManagerRegistry(final LogContext logContext) {
         Map<RequestManager.Type, Optional<RequestManager>> registry = new HashMap<>();
-        CoordinatorRequestManager coordinatorManager = groupState.groupId == null ?
+        CoordinatorRequestManager coordinatorManager = memberState.groupId == null ?
                 null :
                 new CoordinatorRequestManager(
                         time,
                         logContext,
                         config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
                         errorEventHandler,
-                        groupState.groupId);
+                        memberState.groupId);
         CommitRequestManager commitRequestManager = coordinatorManager == null ?
                 null :
                 new CommitRequestManager(time,
                         logContext, this.subscriptionState, config,
                         coordinatorManager,
-                        groupState);
+                    memberState);
         registry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
         registry.put(RequestManager.Type.COMMIT, Optional.ofNullable(commitRequestManager));
         return registry;
