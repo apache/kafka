@@ -86,7 +86,7 @@ public class ConsumerTaskTest {
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updateBeginningOffsets(offsets);
         ConsumerTask.pollIntervalMs = 10L;
-        consumerTask = new ConsumerTask(handler, partitioner, ignored -> consumer);
+        consumerTask = new ConsumerTask(handler, partitioner, consumer);
         thread = new Thread(consumerTask);
     }
 

@@ -104,11 +104,10 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         configs.putAll(overrideRemoteLogMetadataManagerProps());
         log.debug("TopicBasedRemoteLogMetadataManager configs after adding overridden properties: {}", configs);
 
-        if (remoteLogMetadataTopicPartitioner != null) {
-            topicBasedRemoteLogMetadataManager.setRlmmTopicPartitioner(remoteLogMetadataTopicPartitioner);
-        }
-
         topicBasedRemoteLogMetadataManager.configure(configs);
+        if (remoteLogMetadataTopicPartitioner != null) {
+            topicBasedRemoteLogMetadataManager.setRlmTopicPartitioner(remoteLogMetadataTopicPartitioner);
+        }
         try {
             waitUntilInitialized(60_000);
         } catch (TimeoutException e) {

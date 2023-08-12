@@ -185,6 +185,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         idToRemoteLogMetadataCache = Collections.emptyMap();
     }
 
+    @Override
     public void maybeLoadPartition(TopicIdPartition partition) {
         idToRemoteLogMetadataCache.computeIfAbsent(partition,
             topicIdPartition -> new FileBasedRemoteLogMetadataCache(topicIdPartition, partitionLogDirectory(topicIdPartition.topicPartition())));
