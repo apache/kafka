@@ -145,7 +145,7 @@ public class RemoteLogManager implements Closeable {
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderOrFollowerTasks = new ConcurrentHashMap<>();
 
     // topic ids that are received on leadership changes & on stop partitions are stored in this cache
-    private final MetadataCache metaDataCache;
+    private final MetadataCache metadataCache;
 
     private final String clusterId;
 
@@ -164,7 +164,7 @@ public class RemoteLogManager implements Closeable {
      * @param time          Time instance.
      * @param clusterId     The cluster id.
      * @param fetchLog      function to get UnifiedLog instance for a given topic.
-     * @param metaDataCache the broker's metadata cache
+     * @param metadataCache the broker's metadata cache
      */
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,
@@ -173,7 +173,7 @@ public class RemoteLogManager implements Closeable {
                             Time time,
                             Function<TopicPartition, Optional<UnifiedLog>> fetchLog,
                             BrokerTopicStats brokerTopicStats,
-                            MetadataCache metaDataCache) throws IOException {
+                            MetadataCache metadataCache) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
@@ -181,7 +181,7 @@ public class RemoteLogManager implements Closeable {
         this.time = time;
         this.fetchLog = fetchLog;
         this.brokerTopicStats = brokerTopicStats;
-        this.metaDataCache = metaDataCache;
+        this.metadataCache = metadataCache;
 
         remoteLogStorageManager = createRemoteStorageManager();
         remoteLogMetadataManager = createRemoteLogMetadataManager();
@@ -286,21 +286,12 @@ public class RemoteLogManager implements Closeable {
     }
 
     public MetadataCache metadataCache() {
-        return metaDataCache;
+        return metadataCache;
     }
 
     private Stream<Partition> filterPartitions(Set<Partition> partitions) {
         // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
         return partitions.stream().filter(partition -> partition.log().exists(UnifiedLog::remoteLogEnabled));
-    }
-
-    private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
-        Map<String, Uuid> mapping = metaDataCache.topicNamesToIds();
-        Uuid previousTopicId = mapping.put(topicIdPartition.topic(), topicIdPartition.topicId());
-        if (previousTopicId != null && previousTopicId != topicIdPartition.topicId()) {
-            LOGGER.info("Previous cached topic id {} for {} does not match updated topic id {}",
-                    previousTopicId, topicIdPartition.topicPartition(), topicIdPartition.topicId());
-        }
     }
 
     // for testing
@@ -321,18 +312,15 @@ public class RemoteLogManager implements Closeable {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
         Map<TopicIdPartition, Integer> leaderPartitionsWithLeaderEpoch = filterPartitions(partitionsBecomeLeader)
                 .collect(Collectors.toMap(
-                        partition -> new TopicIdPartition(metaDataCache.getTopicId(partition.topic()), partition.topicPartition()),
+                        partition -> new TopicIdPartition(metadataCache.getTopicId(partition.topic()), partition.topicPartition()),
                         Partition::getLeaderEpoch));
         Set<TopicIdPartition> leaderPartitions = leaderPartitionsWithLeaderEpoch.keySet();
 
         Set<TopicIdPartition> followerPartitions = filterPartitions(partitionsBecomeFollower)
-                .map(p -> new TopicIdPartition(metaDataCache.getTopicId(p.topic()), p.topicPartition())).collect(Collectors.toSet());
+                .map(p -> new TopicIdPartition(metadataCache.getTopicId(p.topic()), p.topicPartition())).collect(Collectors.toSet());
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
                     leaderPartitions, followerPartitions);
-
-            leaderPartitions.forEach(this::cacheTopicPartitionIds);
-            followerPartitions.forEach(this::cacheTopicPartitionIds);
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
@@ -344,25 +332,10 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    /**
-     * Deletes the internal topic partition info if delete flag is set as true.
-     *
-     * @param topicPartition topic partition to be stopped.
-     * @param delete         flag to indicate whether the given topic partitions to be deleted or not.
-     */
-    public void stopPartitions(TopicPartition topicPartition, boolean delete) {
-        if (delete) {
-            // Delete from internal datastructures only if it is to be deleted.
-            Map<String, Uuid> mapping = metaDataCache.topicNamesToIds();
-            Uuid topicIdPartition = mapping.remove(topicPartition.topic());
-            LOGGER.debug("Removed partition: {} from metaDataCache", topicIdPartition);
-        }
-    }
-
     public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
                                                                             int epochForOffset,
                                                                             long offset) throws RemoteStorageException {
-        Uuid topicId = metaDataCache.getTopicId(topicPartition.topic());
+        Uuid topicId = metadataCache.getTopicId(topicPartition.topic());
 
         if (topicId == null) {
             throw new KafkaException("No topic id registered for topic partition: " + topicPartition);
@@ -423,7 +396,7 @@ public class RemoteLogManager implements Closeable {
                                                                           long timestamp,
                                                                           long startingOffset,
                                                                           LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException, IOException {
-        Uuid topicId = metaDataCache.getTopicId(tp.topic());
+        Uuid topicId = metadataCache.getTopicId(tp.topic());
         if (topicId == null) {
             throw new KafkaException("Topic id does not exist for topic partition: " + tp);
         }

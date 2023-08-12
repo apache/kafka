@@ -24,7 +24,6 @@ import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -99,7 +98,6 @@ import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RE
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -163,7 +161,7 @@ public class RemoteLogManagerTest {
 
         kafka.utils.TestUtils.clearYammerMetrics();
 
-        MetadataCache mockMetaDataCache = Mockito.mock(MetadataCache.class);
+        MetadataCache mockMetadataCache = Mockito.mock(MetadataCache.class);
         Map<String, Uuid> mapping = new HashMap<>();
         mapping.put(
                 leaderTopicIdPartition.topicPartition().topic(),
@@ -173,13 +171,13 @@ public class RemoteLogManagerTest {
                 followerTopicIdPartition.topicPartition().topic(),
                 followerTopicIdPartition.topicId()
         );
-        Mockito.when(mockMetaDataCache.topicNamesToIds()).thenReturn(mapping);
+        Mockito.when(mockMetadataCache.topicNamesToIds()).thenReturn(mapping);
 
-        Mockito.when(mockMetaDataCache.getTopicId(Mockito.anyString()))
+        Mockito.when(mockMetadataCache.getTopicId(Mockito.anyString()))
                 .thenAnswer(invocation -> mapping.get(invocation.getArgument(0)));
 
         remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
-                tp -> Optional.of(mockLog), brokerTopicStats, mockMetaDataCache) {
+                tp -> Optional.of(mockLog), brokerTopicStats, mockMetadataCache) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -757,13 +755,6 @@ public class RemoteLogManagerTest {
         });
     }
 
-    private void verifyNotInCache(TopicIdPartition... topicIdPartitions) {
-        Arrays.stream(topicIdPartitions).forEach(topicIdPartition -> {
-            assertThrows(KafkaException.class, () ->
-                remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L));
-        });
-    }
-
     @Test
     void testTopicIdCacheUpdates() throws RemoteStorageException {
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
@@ -772,20 +763,12 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.remoteLogSegmentMetadata(any(TopicIdPartition.class), anyInt(), anyLong()))
             .thenReturn(Optional.empty());
         verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
-        // Load topicId cache
+
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition));
         verify(remoteLogMetadataManager, times(1))
             .onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
         verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
 
-        // Evicts from topicId cache
-        remoteLogManager.stopPartitions(leaderTopicIdPartition.topicPartition(), true);
-        verifyNotInCache(leaderTopicIdPartition);
-        verifyInCache(followerTopicIdPartition);
-
-        // Evicts from topicId cache
-        remoteLogManager.stopPartitions(followerTopicIdPartition.topicPartition(), true);
-        verifyNotInCache(leaderTopicIdPartition, followerTopicIdPartition);
     }
 
     @Test
