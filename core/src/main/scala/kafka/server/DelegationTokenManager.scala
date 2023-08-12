@@ -122,7 +122,6 @@ class DelegationTokenManager(val config: KafkaConfig,
   type CreateResponseCallback = CreateTokenResult => Unit
   type RenewResponseCallback = (Errors, Long) => Unit
   type ExpireResponseCallback = (Errors, Long) => Unit
-  type DescribeResponseCallback = (Errors, List[DelegationToken]) => Unit
 
   val secretKey = {
     val keyBytes =  if (config.tokenAuthEnabled) config.delegationTokenSecretKey.value.getBytes(StandardCharsets.UTF_8) else null

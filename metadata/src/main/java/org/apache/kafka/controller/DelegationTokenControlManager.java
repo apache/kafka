@@ -371,10 +371,10 @@ public class DelegationTokenControlManager {
     }
 
     public void replay(DelegationTokenRecord record) {
-        log.info("Replayed DelegationTokenRecord for {} " + record.tokenId());
+        log.info("Replayed DelegationTokenRecord for {}.", record.tokenId());
     }
 
     public void replay(RemoveDelegationTokenRecord record) {
-        log.info("Replayed RemoveDelegationTokenRecord for {} " + record.tokenId());
+        log.info("Replayed RemoveDelegationTokenRecord for {}.", record.tokenId());
     }
 }

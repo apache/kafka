@@ -400,10 +400,5 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       image.highestOffsetAndEpoch().offset,
       true)
   }
-
-  // Return a list of tokens TokenInformation for a list of KafkaPricipals
-//  def getDelegationTokens(requestContext: RequestContext, describeTokenRequest: DescribeDelegationTokenRequestData): List[TokenInformation] = {
-//    _currentImage.delegationTokens().describe(requestContext, describeTokenRequest).asScala.toList
-//  }
 }
 

@@ -163,9 +163,9 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
       val privilegedAdminClient = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
       try {
         val token = adminClient.createDelegationToken(createDelegationTokenOptions()).delegationToken().get()
-//        if (assert) {
-//          assertToken(token)
-//        }
+        if (assert) {
+          assertToken(token)
+        }
         val privilegedToken = privilegedAdminClient.createDelegationToken().delegationToken().get()
         //wait for tokens to reach all the brokers
         TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 2),
