@@ -59,8 +59,8 @@ public class RelaxedNullKeyRequirementJoinTest {
     @BeforeEach
     void beforeEach() {
         builder = new StreamsBuilder();
-        leftStream = builder.stream(LEFT);
-        rightStream = builder.stream(RIGHT);
+        leftStream = builder.<String, String>stream(LEFT).repartition();
+        rightStream = builder.<String, String>stream(RIGHT).repartition();
     }
 
     @AfterEach
@@ -71,7 +71,6 @@ public class RelaxedNullKeyRequirementJoinTest {
     @Test
     void testRelaxedLeftStreamStreamJoin() {
         leftStream
-            .repartition()
             .leftJoin(rightStream, JOINER, WINDOW)
             .to(OUT);
         initTopology();
@@ -82,7 +81,6 @@ public class RelaxedNullKeyRequirementJoinTest {
     @Test
     void testRelaxedLeftStreamTableJoin() {
         leftStream
-            .repartition()
             .leftJoin(rightStream.toTable(), JOINER)
             .to(OUT);
         initTopology();
@@ -94,7 +92,6 @@ public class RelaxedNullKeyRequirementJoinTest {
     void testRelaxedOuterStreamStreamJoin() {
         leftStream
             .outerJoin(rightStream, JOINER, WINDOW)
-            .repartition()
             .to(OUT);
         initTopology();
         right.pipeInput(null, "rightValue", 1);
@@ -114,6 +111,16 @@ public class RelaxedNullKeyRequirementJoinTest {
         initTopology();
         left.pipeInput(null, "leftValue", 1);
         assertEquals(Collections.singletonList(new KeyValue<>(null, "leftValue|null")), out.readKeyValuesToList());
+    }
+
+    @Test
+    void testDropNullKeyRecordsForRepartitionNodesWithNoRelaxedJoinDownstream() {
+        leftStream
+            .repartition()
+            .to(OUT);
+        initTopology();
+        left.pipeInput(null, "leftValue", 1);
+        assertEquals(Collections.<KeyValue<String, String>>emptyList(), out.readKeyValuesToList());
     }
 
     private void initTopology() {

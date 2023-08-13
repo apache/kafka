@@ -1230,6 +1230,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StreamTableJoinNode<K, V> streamTableJoinNode =
             new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null, Optional.empty());
 
+        if (leftJoin) {
+            streamTableJoinNode.labels().add(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
+        }
         builder.addGraphNode(graphNode, streamTableJoinNode);
 
         // do not have serde for joined result
@@ -1286,6 +1289,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
+        if (leftJoin) {
+            streamTableJoinNode.labels().add(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
+        }
 
         // do not have serde for joined result
         return new KStreamImpl<>(
