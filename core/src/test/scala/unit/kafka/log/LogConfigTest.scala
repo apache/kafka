@@ -105,6 +105,9 @@ class LogConfigTest {
     props.setProperty(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, "100")
     props.setProperty(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "200")
     assertThrows(classOf[Exception], () => LogConfig.validate(props))
+    assertThrows(classOf[Exception], () => LogConfig.validateValues(props))
+    assertThrows(classOf[Exception], () => LogConfig.validateDefaultValuesInBroker(props))
+    assertThrows(classOf[Exception], () => LogConfig.validateValuesInBroker(props))
   }
 
   @Test
@@ -370,10 +373,27 @@ class LogConfigTest {
     if (sysRemoteStorageEnabled) {
       val message = assertThrows(classOf[ConfigException],
         () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap))
-      print(message)
       assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
     } else {
       LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap)
+    }
+  }
+
+  @ParameterizedTest(name = "testValidateDefaultLogConfigs with sysRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testValidateDefaultLogConfigs(sysRemoteStorageEnabled: Boolean): Unit = {
+    val props = TestUtils.createDummyBrokerConfig()
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
+    props.put(KafkaConfig.LogRetentionBytesProp, "1024")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "2048")
+    val kafkaConfig = KafkaConfig.fromProps(props)
+
+    if (sysRemoteStorageEnabled) {
+      val message = assertThrows(classOf[ConfigException],
+        () => LogConfig.validateDefaultValuesInBroker(kafkaConfig.extractLogConfigMap))
+      assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
+    } else {
+      LogConfig.validateDefaultValuesInBroker(kafkaConfig.extractLogConfigMap)
     }
   }
 }

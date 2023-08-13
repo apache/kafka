@@ -458,6 +458,11 @@ public class LogConfig extends AbstractConfig {
                 throw new InvalidConfigurationException("Unknown topic config name: " + name);
     }
 
+    /**
+     * Validates the values of the given properties. Can be called by both client and server.
+     * The props passed is a subset of the topic configs and won't contain all the LogConfig properties.
+     * @param props The properties to be validated
+     */
     public static void validateValues(Map<?, ?> props) {
         long minCompactionLag = (Long) props.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
         long maxCompactionLag = (Long) props.get(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG);
@@ -468,19 +473,41 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * Validates the default values of the given properties. Should be called only by the broker.
+     * The props passed should contain all the LogConfig properties except TopicConfig#REMOTE_LOG_STORAGE_ENABLE_CONFIG
+     * @param props The properties to be validated
+     */
+    public static void validateDefaultValuesInBroker(Map<?, ?> props) {
+        validateValues(props);
+        Boolean isRemoteLogStorageSystemEnabled =
+                (Boolean) props.get(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
+        if (isRemoteLogStorageSystemEnabled) {
+            validateRemoteStorageRetentionSize(props);
+            validateRemoteStorageRetentionTime(props);
+        }
+    }
+
+    /**
+     * Validates the values of the given properties. Should be called only by the broker.
+     * The props passed should contain all the LogConfig properties.
+     * @param props The properties to be validated
+     */
     public static void validateValuesInBroker(Map<?, ?> props) {
         validateValues(props);
-        validateRemoteStorageOnlyIfSystemEnabled(props);
-        validateNoRemoteStorageForCompactedTopic(props);
-        validateRemoteStorageRetentionSize(props);
-        validateRemoteStorageRetentionTime(props);
+        Boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+        if (isRemoteLogStorageEnabled) {
+            validateRemoteStorageOnlyIfSystemEnabled(props);
+            validateNoRemoteStorageForCompactedTopic(props);
+            validateRemoteStorageRetentionSize(props);
+            validateRemoteStorageRetentionTime(props);
+        }
     }
 
     private static void validateRemoteStorageOnlyIfSystemEnabled(Map<?, ?> props) {
         Boolean isRemoteLogStorageSystemEnabled =
                 (Boolean) props.get(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
-        Boolean isRemoteStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
-        if (!isRemoteLogStorageSystemEnabled && isRemoteStorageEnabled) {
+        if (!isRemoteLogStorageSystemEnabled) {
             throw new ConfigException("Tiered Storage functionality is disabled in the broker. " +
                     "Topic cannot be configured with remote log storage.");
         }
@@ -488,17 +515,15 @@ public class LogConfig extends AbstractConfig {
 
     private static void validateNoRemoteStorageForCompactedTopic(Map<?, ?> props) {
         String cleanupPolicy = props.get(TopicConfig.CLEANUP_POLICY_CONFIG).toString().toLowerCase(Locale.getDefault());
-        Boolean isRemoteStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
-        if (isRemoteStorageEnabled && cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
+        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
             throw new ConfigException("Remote log storage is unsupported for the compacted topics");
         }
     }
 
     private static void validateRemoteStorageRetentionSize(Map<?, ?> props) {
-        Boolean isRemoteStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
         Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-        if (isRemoteStorageEnabled && retentionBytes > -1 && localRetentionBytes != -2) {
+        if (retentionBytes > -1 && localRetentionBytes != -2) {
             if (localRetentionBytes == -1) {
                 String message = String.format("Value must not be -1 as %s value is set as %d.",
                         TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
@@ -513,10 +538,9 @@ public class LogConfig extends AbstractConfig {
     }
 
     private static void validateRemoteStorageRetentionTime(Map<?, ?> props) {
-        Boolean isRemoteStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
         Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
-        if (isRemoteStorageEnabled && retentionMs != -1 && localRetentionMs != -2) {
+        if (retentionMs != -1 && localRetentionMs != -2) {
             if (localRetentionMs == -1) {
                 String message = String.format("Value must not be -1 as %s value is set as %d.",
                         TopicConfig.RETENTION_MS_CONFIG, retentionMs);
