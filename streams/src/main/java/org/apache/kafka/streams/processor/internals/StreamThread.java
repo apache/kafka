@@ -1145,7 +1145,7 @@ public class StreamThread extends Thread {
             }
 
             if (committed == -1) {
-                log.info("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
+                log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
             } else {
                 now = time.milliseconds();
                 lastCommitMs = now;

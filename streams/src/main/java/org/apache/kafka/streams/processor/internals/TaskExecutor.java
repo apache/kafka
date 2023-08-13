@@ -81,7 +81,6 @@ public class TaskExecutor {
                 executionMetadata.registerTaskError(task, t, now);
                 executionMetadata.removeTaskFromSuccessfullyProcessedBeforeClosing(lastProcessed);
                 commitSuccessfullyProcessedTasks();
-                t.printStackTrace();
                 throw t;
             }
         }
@@ -174,9 +173,7 @@ public class TaskExecutor {
      * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
      */
     void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        if (!offsetsPerTask.isEmpty()) {
-            log.info("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
-        }
+        log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
 
         final Set<TaskId> corruptedTasks = new HashSet<>();
 

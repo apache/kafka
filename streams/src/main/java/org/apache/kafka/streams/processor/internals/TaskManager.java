@@ -1835,14 +1835,10 @@ public class TaskManager {
         // we do not check any possible exceptions since none of them are fatal
         // that should cause the application to fail, and we will try delete with
         // newer offsets anyways.
-        final boolean isDone = deleteRecordsResult != null && deleteRecordsResult.all().isDone();
-        if (deleteRecordsResult != null) {
-            System.out.println("deleteRecordsResult.all().isDone() is " + (isDone ? "true" : "false"));
-        }
-        if (deleteRecordsResult == null || isDone) {
+        if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
 
             if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
-                log.info("Previous delete-records request has failed: {}. Try sending the new request now",
+                log.debug("Previous delete-records request has failed: {}. Try sending the new request now",
                           deleteRecordsResult.lowWatermarks());
             }
 
@@ -1854,9 +1850,9 @@ public class TaskManager {
             }
             if (!recordsToDelete.isEmpty()) {
                 deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
-                log.info("Sent delete-records request: {}", recordsToDelete);
+                log.trace("Sent delete-records request: {}", recordsToDelete);
             } else {
-                System.out.println("recordsToDelete is empty");
+                deleteRecordsResult = null;
             }
         }
     }
