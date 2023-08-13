@@ -460,7 +460,8 @@ public class LogConfig extends AbstractConfig {
 
     /**
      * Validates the values of the given properties. Can be called by both client and server.
-     * The props passed is a subset of the topic configs and won't contain all the LogConfig properties.
+     * The `props` supplied should contain all the LogConfig properties and the default values are extracted from the
+     * LogConfig class.
      * @param props The properties to be validated
      */
     public static void validateValues(Map<?, ?> props) {
@@ -474,8 +475,9 @@ public class LogConfig extends AbstractConfig {
     }
 
     /**
-     * Validates the default values of the given properties. Should be called only by the broker.
-     * The props passed should contain all the LogConfig properties except TopicConfig#REMOTE_LOG_STORAGE_ENABLE_CONFIG
+     * Validates the default values of the LogConfig. Should be called only by the broker.
+     * The `props` supplied should contain all the LogConfig properties except
+     * TopicConfig#REMOTE_LOG_STORAGE_ENABLE_CONFIG and the default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
     public static void validateDefaultValuesInBroker(Map<?, ?> props) {
@@ -490,7 +492,8 @@ public class LogConfig extends AbstractConfig {
 
     /**
      * Validates the values of the given properties. Should be called only by the broker.
-     * The props passed should contain all the LogConfig properties.
+     * The `props` supplied should contain all the LogConfig properties and the default values should be extracted from
+     * the KafkaConfig.
      * @param props The properties to be validated
      */
     public static void validateValuesInBroker(Map<?, ?> props) {
