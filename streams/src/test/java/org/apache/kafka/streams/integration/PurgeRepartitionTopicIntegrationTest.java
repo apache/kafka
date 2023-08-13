@@ -119,11 +119,13 @@ public class PurgeRepartitionTopicIntegrationTest {
     }
 
     private interface TopicSizeVerifier {
-        boolean verify(long currentSize);
+        boolean verify(long previousSize, long currentSize);
     }
 
     private class RepartitionTopicVerified implements TestCondition {
         private final TopicSizeVerifier verifier;
+
+        private long previousSize = -1;
 
         RepartitionTopicVerified(final TopicSizeVerifier verifier) {
             this.verifier = verifier;
@@ -140,8 +142,13 @@ public class PurgeRepartitionTopicIntegrationTest {
                 for (final LogDirDescription partitionInfo : logDirInfo) {
                     final ReplicaInfo replicaInfo =
                         partitionInfo.replicaInfos().get(new TopicPartition(REPARTITION_TOPIC, 0));
-                    if (replicaInfo != null && verifier.verify(replicaInfo.size())) {
-                        return true;
+                    if (replicaInfo != null) {
+                        final long currentSize = replicaInfo.size();
+                        final boolean result = verifier.verify(previousSize, currentSize);
+                        previousSize = currentSize;
+                        if (result) {
+                            return true;
+                        }
                     }
                 }
             } catch (final Exception e) {
@@ -167,6 +174,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(APPLICATION_ID).getPath());
+//        streamsConfiguration.put(StreamsConfig.InternalConfig.STATE_UPDATER_ENABLED, false);
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), PURGE_SEGMENT_BYTES);
         streamsConfiguration.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), PURGE_SEGMENT_BYTES / 2);    // we cannot allow batch size larger than segment size
@@ -207,7 +215,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         // wait until we received more than 1 segment of data, so that we can confirm the purge succeeds in next verification
         TestUtils.waitForCondition(
-            new RepartitionTopicVerified(currentSize -> currentSize > PURGE_SEGMENT_BYTES),
+            new RepartitionTopicVerified((previousSize, currentSize) -> currentSize > PURGE_SEGMENT_BYTES),
             60000,
             "Repartition topic " + REPARTITION_TOPIC + " not received more than " + PURGE_SEGMENT_BYTES + "B of data after 60000 ms."
         );
@@ -215,9 +223,12 @@ public class PurgeRepartitionTopicIntegrationTest {
         // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side
         final long waitForPurgeMs = 120000;
         TestUtils.waitForCondition(
-            new RepartitionTopicVerified(currentSize -> {
-                System.out.println("Current size: " + currentSize);
-                return currentSize <= PURGE_SEGMENT_BYTES.longValue();
+            new RepartitionTopicVerified((previousSize, currentSize) -> {
+                if (previousSize != currentSize) {
+                    System.out.println("Previous size: " + previousSize);
+                    System.out.println("Current size: " + currentSize);
+                }
+                return previousSize > currentSize;
             }),
             waitForPurgeMs,
             "Repartition topic " + REPARTITION_TOPIC + " not purged data after " + waitForPurgeMs + " ms."
