@@ -228,7 +228,7 @@ public class PurgeRepartitionTopicIntegrationTest {
                     System.out.println("Previous size: " + previousSize);
                     System.out.println("Current size: " + currentSize);
                 }
-                return previousSize > currentSize;
+                return currentSize <= PURGE_SEGMENT_BYTES;
             }),
             waitForPurgeMs,
             "Repartition topic " + REPARTITION_TOPIC + " not purged data after " + waitForPurgeMs + " ms."
