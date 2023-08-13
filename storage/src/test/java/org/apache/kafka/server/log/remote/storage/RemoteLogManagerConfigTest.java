@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
+
 public class RemoteLogManagerConfigTest {
 
     private static class TestConfig extends AbstractConfig {
@@ -52,6 +54,28 @@ public class RemoteLogManagerConfigTest {
         Assertions.assertEquals(expectedRemoteLogManagerConfig, remoteLogManagerConfig);
     }
 
+    @Test
+    public void testValidConfigsWithDefaultRemoteStorageManagerClass() {
+        String rsmPrefix = "__custom.rsm.";
+        String rlmmPrefix = "__custom.rlmm.";
+        Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
+        Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
+        RemoteLogManagerConfig expectedRemoteLogManagerConfig
+                = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
+                "org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager", "dummy.remote.log.metadata.class.path",
+                "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
+                rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
+
+        Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);
+        rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
+        rlmmProps.forEach((k, v) -> props.put(rlmmPrefix + k, v));
+        // Removing remote.log.metadata.manager.class.name so that default value gets picked up.
+        props.remove(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
+        TestConfig config = new TestConfig(props);
+        RemoteLogManagerConfig remoteLogManagerConfig = new RemoteLogManagerConfig(config);
+        Assertions.assertEquals(expectedRemoteLogManagerConfig, remoteLogManagerConfig);
+    }
+
     private Map<String, Object> extractProps(RemoteLogManagerConfig remoteLogManagerConfig) {
         Map<String, Object> props = new HashMap<>();
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
@@ -60,7 +84,7 @@ public class RemoteLogManagerConfigTest {
                   remoteLogManagerConfig.remoteStorageManagerClassName());
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP,
                   remoteLogManagerConfig.remoteStorageManagerClassPath());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+        props.put(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
                   remoteLogManagerConfig.remoteLogMetadataManagerClassName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
                   remoteLogManagerConfig.remoteLogMetadataManagerClassPath());
