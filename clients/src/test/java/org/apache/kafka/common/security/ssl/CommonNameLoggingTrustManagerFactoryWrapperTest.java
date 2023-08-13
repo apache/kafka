@@ -170,18 +170,16 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
                 // Cert not valid yet
                 Exception origException = assertThrows(CertificateException.class,
                         () -> cert.checkValidity(dateRecentPast));
-                Exception testException = assertThrows(CertificateException.class,
-                        () -> wrappedCert.checkValidity(dateRecentPast));
-                assertEquals(origException.getMessage(), testException.getMessage());
+                // The wrappend certificate class does not check dates at all
+                assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
             }
             // Test with (days+1) before now. Both certificates were not yet valid, thus
             // both checks
             // must throw
             Date datePast = new Date(System.currentTimeMillis() - (days + 2) * 24 * 60 * 60 * 1000);
-            Exception origException = assertThrows(CertificateException.class, () -> cert.checkValidity(datePast));
-            Exception testException = assertThrows(CertificateException.class,
-                    () -> wrappedCert.checkValidity(datePast));
-            assertEquals(origException.getMessage(), testException.getMessage());
+            assertThrows(CertificateException.class, () -> cert.checkValidity(datePast));
+            // The wrappend certificate class does not check dates at all
+            assertDoesNotThrow(() -> wrappedCert.checkValidity(datePast));
             // Test with "days+2" after now.
             // Cert is not valid anymore. The original class must throw
             Date dateFuture = new Date(System.currentTimeMillis() + (days + 2) * 24 * 60 * 60 * 1000);
@@ -258,11 +256,18 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
-            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
+            // Check client certificate first
             assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
             assertDoesNotThrow(() -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertEquals(nrOfInitialMessagges, appender.getMessages().size());
+            // Check the same client certificate again. Expect the exact same behavior as before
+            assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
+            assertDoesNotThrow(() -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+            assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+            assertEquals(nrOfInitialMessagges, appender.getMessages().size());
+            // Check server certificate (no changes here)
             assertDoesNotThrow(() -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             assertDoesNotThrow(() -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             assertEquals(nrOfInitialMessagges, appender.getMessages().size());
@@ -288,7 +293,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
-            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
             assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
             assertDoesNotThrow(() -> origTrustManager.checkClientTrusted(chainWitCa, "RSA"));
             assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(chainWitCa, "RSA"));
@@ -318,7 +323,8 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
-            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
+            // Check client certificate
             assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
             Exception origException = assertThrows(CertificateException.class,
                     () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
@@ -326,6 +332,16 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
                     () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             assertEquals(nrOfInitialMessagges, appender.getMessages().size());
+            // Check the client certificate again, expecting the exact same result
+            assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
+            origException = assertThrows(CertificateException.class,
+                    () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+            testException = assertThrows(CertificateException.class,
+                    () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+            assertEquals(origException.getMessage(), testException.getMessage());
+            assertEquals(nrOfInitialMessagges, appender.getMessages().size());
+
+            // Check server certificate
             origException = assertThrows(CertificateException.class,
                     () -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,
@@ -354,7 +370,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
 
-            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
             assertEquals(origTrustManager, testTrustManager.getOriginalTrustManager());
             // Call original method, then method of wrapped trust manager and compare result
             Exception origException = assertThrows(CertificateException.class,
@@ -397,7 +413,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
 
-            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager);
+            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
             assertEquals(origTrustManager, testTrustManager.getOriginalTrustManager());
             // Call original method, then method of wrapped trust manager and compare result
             Exception origException = assertThrows(CertificateException.class,
@@ -410,7 +426,20 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             assertEquals(nrOfInitialMessagges + 1, logMessages.size());
             assertEquals("Certificate with common name \"" + endCert.getSubjectX500Principal() +
                 "\" expired on " + endCert.getNotAfter(), logMessages.get(logMessages.size() - 1));
+            // Test the same certificate again. This time, no method must be logged as the chain is rejected based on the cache
             // Call original method, then method of wrapped trust manager and compare result
+            origException = assertThrows(CertificateException.class,
+                    () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+            testException = assertThrows(CertificateException.class,
+                    () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+            assertEquals(origException.getMessage(), testException.getMessage());
+            // Check that there is still exactly one message (and not a second one!)
+            logMessages = appender.getMessages();
+            assertEquals(nrOfInitialMessagges + 1, logMessages.size());
+            assertEquals("Certificate with common name \"" + endCert.getSubjectX500Principal() +
+                "\" expired on " + endCert.getNotAfter(), logMessages.get(logMessages.size() - 1));
+
+            // Check validation of server certificates, then method of wrapped trust manager and compare result
             origException = assertThrows(CertificateException.class,
                     () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,

@@ -24,6 +24,7 @@ import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Principal;
@@ -37,6 +38,8 @@ import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 import javax.net.ssl.TrustManager;
@@ -92,7 +95,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
             TrustManager tm = origTrustManagers[i];
             if (tm instanceof X509TrustManager) {
                 // Wrap only X509 trust managers
-                wrappedTrustManagers[i] = new CommonNameLoggingTrustManager((X509TrustManager) tm);
+                wrappedTrustManagers[i] = new CommonNameLoggingTrustManager((X509TrustManager) tm, 2000);
             } else {
                 wrappedTrustManagers[i] = tm;
             }
@@ -109,10 +112,20 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
      */
     static class CommonNameLoggingTrustManager implements X509TrustManager {
 
-        private X509TrustManager origTm;
+        final private X509TrustManager origTm;
+        final int nrOfRememberedBadCerts;
+        final private LinkedHashMap<String, String> previouslyRejectedClientCertChains;
 
-        public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager) {
+        public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager, int nrOfRememberedBadCerts) {
             this.origTm = originalTrustManager;
+            this.nrOfRememberedBadCerts = nrOfRememberedBadCerts;
+            // Restrict maximal size of the LinkedHashMap to avoid security attacks causing OOM
+            this.previouslyRejectedClientCertChains = new LinkedHashMap<String, String>() {
+                @Override
+                protected boolean removeEldestEntry(final Map.Entry<String, String> eldest) {
+                    return size() > nrOfRememberedBadCerts;
+                }
+            };
         }
 
         public X509TrustManager getOriginalTrustManager() {
@@ -123,6 +136,16 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
         public void checkClientTrusted(X509Certificate[] chain, String authType)
                 throws CertificateException {
             CertificateException origException = null;
+            String chainDigest = calcDigestForCertificateChain(chain);
+            if (chainDigest != null) {
+                String errorMessage = this.previouslyRejectedClientCertChains.get(chainDigest);
+                if (errorMessage != null) {
+                    // Reinsert the digest, to remember that this is the most recent digest we've seen
+                    addRejectedClientCertChains(chainDigest, errorMessage, true);
+                    // Then throw with the original error Message
+                    throw new CertificateException(errorMessage);
+                }
+            }
             try {
                 this.origTm.checkClientTrusted(chain, authType);
                 // If the last line did not throw, the chain is valid (including that none of the certificates is expired)
@@ -131,17 +154,46 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
                 try {
                     X509Certificate[] wrappedChain = sortChainAnWrapEndCertificate(chain);
                     this.origTm.checkClientTrusted(wrappedChain, authType);
-                    // No exception occurred this time. The certificate is invalid due to being expired, but otherwise valid.
-                    String commonName = wrappedChain[0].getSubjectX500Principal().toString();
-                    String notValidAfter = wrappedChain[0].getNotAfter().toString();
-                    log.info("Certificate with common name \"" + commonName + "\" expired on " + notValidAfter);
+                    // No exception occurred this time. The certificate is either not yet valid or already expired
+                    Date now = new Date();
+                    // Check if the certificate was valid in the past
+                    if (wrappedChain[0].getNotBefore().before(now)) {
+                        String commonName = wrappedChain[0].getSubjectX500Principal().toString();
+                        String notValidAfter = wrappedChain[0].getNotAfter().toString();
+                        log.info("Certificate with common name \"" + commonName + "\" expired on " + notValidAfter);
+                        // The end certificate is expired and thus will never become valid anymore, as long as the trust store is not changed
+                        addRejectedClientCertChains(chainDigest, origException.getMessage(), false);
+                    }
+
                 } catch (CertificateException innerException) {
                     // Ignore this exception as we throw the original one below
+                    // Even with disabled date check, this cert chain is invalid: Remember the chain and fail faster next time we see it
+                    addRejectedClientCertChains(chainDigest, origException.getMessage(), false);
                 }
             }
             if (origException != null) {
                 throw origException;
             }
+        }
+
+        private String calcDigestForCertificateChain(X509Certificate[] chain) throws CertificateEncodingException {
+            MessageDigest md;
+            try {
+                md = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                return null;
+            }
+            for (X509Certificate cert: chain) {
+                md.update(cert.getEncoded());
+            }
+            return md.toString();
+        }
+
+        private void addRejectedClientCertChains(String chainDigest, String errorMessage, boolean removeIfExisting) {
+            if (removeIfExisting) {
+                this.previouslyRejectedClientCertChains.remove(chainDigest);
+            }
+            this.previouslyRejectedClientCertChains.put(chainDigest, errorMessage);
         }
 
         @Override
@@ -261,12 +313,8 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
         @Override
         public void checkValidity(Date date)
                 throws CertificateExpiredException, CertificateNotYetValidException {
-            // Do nothing for certificates which are not valid anymore at the supplied date
-            if (this.origCertificate.getNotAfter().before(date)) {
-                return;
-            }
-            // Check validity as usual
-            this.origCertificate.checkValidity(date);
+            // We do not check validity at all. 
+            return;
         }
 
         @Override
