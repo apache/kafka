@@ -1851,8 +1851,6 @@ public class TaskManager {
             if (!recordsToDelete.isEmpty()) {
                 deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
                 log.trace("Sent delete-records request: {}", recordsToDelete);
-            } else {
-                deleteRecordsResult = null;
             }
         }
     }
