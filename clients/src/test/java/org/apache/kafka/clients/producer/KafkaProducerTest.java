@@ -546,6 +546,31 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testConstructKafkaProducerWithInterceptor() {
+        try {
+            Map<String, Object> configs = new HashMap<>();
+            configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testConstructKafkaProducerWithInterceptor");
+            configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+            List<ProducerInterceptor<String, String>> interceptors = new ArrayList<>();
+            interceptors.add(new MockProducerInterceptor());
+            KafkaProducer<String, String> producer = new KafkaProducer<>(
+                    configs, new StringSerializer(), new StringSerializer(), interceptors);
+            assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
+
+            assertNull(MockProducerInterceptor.CLUSTER_META.get());
+
+            producer.close();
+            assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
+        } finally {
+            // cleanup since we are using mutable static variables in MockProducerInterceptor
+            MockProducerInterceptor.resetCounters();
+        }
+    }
+
+    @Test
     public void testInterceptorConstructClose() {
         try {
             Properties props = new Properties();

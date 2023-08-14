@@ -668,12 +668,38 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
+        this(configs, keyDeserializer, valueDeserializer, null);
+    }
+
+    /**
+     * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
+     * <p>
+     * Valid configuration strings are documented at {@link ConsumerConfig}.
+     * <p>
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
+     *
+     * @param configs The consumer configs
+     * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
+     *            won't be called in the consumer when the deserializer is passed in directly.
+     * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
+     *            won't be called in the consumer when the deserializer is passed in directly.
+     * @param interceptors The list interceptors for consumer that implements {@link ConsumerInterceptor}.
+     */
+    public KafkaConsumer(Map<String, Object> configs,
+                         Deserializer<K> keyDeserializer,
+                         Deserializer<V> valueDeserializer,
+                         List<ConsumerInterceptor<K, V>> interceptors) {
         this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-                keyDeserializer, valueDeserializer);
+                keyDeserializer, valueDeserializer, interceptors);
+    }
+
+    KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
+        this(config, keyDeserializer, valueDeserializer, null);
     }
 
     @SuppressWarnings("unchecked")
-    KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
+    KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer,
+                  Deserializer<V> valueDeserializer, List<ConsumerInterceptor<K, V>> interceptors) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -710,6 +736,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ConsumerInterceptor.class,
                     Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
+            if (interceptors != null && !interceptors.isEmpty()) {
+                interceptorList.addAll(interceptors);
+            }
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);

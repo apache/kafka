@@ -383,6 +383,17 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void testConstructConsumerWithInterceptor() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
+        List<ConsumerInterceptor<String, String>> interceptors = new ArrayList<>();
+        interceptors.add(new MockConsumerInterceptor());
+        assertThrows(KafkaException.class,
+                () -> new KafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), interceptors));
+    }
+
+    @Test
     public void shouldIgnoreGroupInstanceIdForEmptyGroupId() {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
