@@ -17,13 +17,14 @@
 package kafka.api
 
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.common.PartitionInfo
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull, assertTrue}
-import org.junit.jupiter.api.Test
+import org.apache.kafka.clients.consumer.{ConsumerConfig, OffsetAndMetadata}
+import org.apache.kafka.common.errors.InvalidGroupIdException
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
+import org.junit.jupiter.api.{Disabled, Test}
 
 import java.time.Duration
+import scala.collection.immutable.{Map, Set}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.jdk.CollectionConverters.SeqHasAsJava
@@ -163,5 +164,80 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val anotherConsumer = createAsyncConsumer()
     anotherConsumer.assign(List(tp).asJava)
     assertEquals(numRecords, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+  }
+
+
+  @Test
+  def testConsumeFromCommittedOffsets(): Unit = {
+    val producer = createProducer()
+    val numRecords = 100
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords = numRecords, tp, startingTimestamp = startingTimestamp)
+
+    // Commit offset with first consumer
+    val consumer = createConsumerWithGroupId("group1")
+    consumer.assign(List(tp).asJava)
+    val offset = 10
+    consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(offset)))
+      .asJava)
+    assertEquals(offset, consumer.committed(Set(tp).asJava).get(tp).offset)
+    consumer.close()
+
+    // Consume from committed offsets with another consumer in same group
+    val anotherConsumer = createConsumerWithGroupId("group1")
+    assertEquals(offset, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+    anotherConsumer.assign(List(tp).asJava)
+    consumeAndVerifyRecords(consumer = anotherConsumer, numRecords - offset,
+      startingOffset = offset, startingKeyAndValueIndex = offset,
+      startingTimestamp = startingTimestamp + offset)
+  }
+
+  @Test
+  def testRetrievingCommittedOffsetsMultipleTimes(): Unit = {
+    val numRecords = 100
+    val startingTimestamp = System.currentTimeMillis()
+    val producer = createProducer()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+
+    val consumer = createAsyncConsumer()
+    consumer.assign(List(tp).asJava)
+
+    // Consume and commit offsets
+    consumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0,
+      startingTimestamp = startingTimestamp)
+    consumer.commitSync()
+
+    // Check committed offsets twice with same consumer
+    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+  }
+
+  @Disabled("requires fix in KAFKA-15327")
+  @Test
+  def testAutoCommitOnCloseWithAssign(): Unit = {
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+    val consumer = createAsyncConsumer()
+    consumer.assign(List(tp, tp2).asJava)
+
+    // should auto-commit seeked positions before closing
+    consumer.seek(tp, 300)
+    consumer.seek(tp2, 500)
+    consumer.close()
+
+    // we should see the committed offsets from another consumer
+    val anotherConsumer = createAsyncConsumer()
+    anotherConsumer.assign(List(tp, tp2).asJava)
+    assertEquals(300, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
+  }
+
+  @Test
+  def testEmptyGroupNotSupported(): Unit = {
+    // This replaces the existing testConsumingWithEmptyGroupId, given that empty group ID is not
+    // supported in the new consumer implementation
+    val consumer = createConsumerWithGroupId("")
+    consumer.assign(List(tp).asJava)
+    assertThrows(classOf[InvalidGroupIdException], () => consumer.commitSync())
   }
 }
