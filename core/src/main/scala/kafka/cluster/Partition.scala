@@ -804,6 +804,8 @@ class Partition(val topicPartition: TopicPartition,
       controllerEpoch = partitionState.controllerEpoch
 
       val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
+      // The leader should be updated before updateAssignmentAndIsr where we clear the ISR. Or it is possible to meet
+      // the under min isr condition during the makeFollower process and emits the wrong metric.
       leaderReplicaIdOpt = Option(partitionState.leader)
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
