@@ -96,11 +96,13 @@ public class EmbeddedConnectCluster {
     // we should keep the original class loader and set it back after connector stopped since the connector will change the class loader,
     // and then, the Mockito will use the unexpected class loader to generate the wrong proxy instance, which makes mock failed
     private final ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+    private final boolean ssl;
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
                                    boolean maskExitProcedures,
-                                   Map<String, String> additionalKafkaClusterClientConfigs) {
+                                   Map<String, String> additionalKafkaClusterClientConfigs,
+                                   boolean ssl) {
         this.workerProps = workerProps;
         this.connectClusterName = name;
         this.numBrokers = numBrokers;
@@ -112,6 +114,7 @@ public class EmbeddedConnectCluster {
         // leaving non-configurable for now
         this.workerNamePrefix = DEFAULT_WORKER_NAME_PREFIX;
         this.assertions = new EmbeddedConnectClusterAssertions(this);
+        this.ssl = ssl;
     }
 
     /**
@@ -265,7 +268,7 @@ public class EmbeddedConnectCluster {
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
         // use a random available port
-        workerProps.put(LISTENERS_CONFIG, "HTTP://" + REST_HOST_NAME + ":0");
+        workerProps.put(LISTENERS_CONFIG, (ssl ? "HTTPS://" : "HTTP://") + REST_HOST_NAME + ":0");
 
         String internalTopicsReplFactor = String.valueOf(numBrokers);
         putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
@@ -946,6 +949,7 @@ public class EmbeddedConnectCluster {
         private boolean maskExitProcedures = true;
 
         private Map<String, String> clientConfigs = new HashMap<>();
+        private boolean ssl;
 
         public Builder name(String name) {
             this.name = name;
@@ -994,9 +998,15 @@ public class EmbeddedConnectCluster {
             return this;
         }
 
+        /** Enable SSL for RestServer */
+        public Builder ssl() {
+            this.ssl = true;
+            return this;
+        }
+
         public EmbeddedConnectCluster build() {
             return new EmbeddedConnectCluster(name, workerProps, numWorkers, numBrokers,
-                    brokerProps, maskExitProcedures, clientConfigs);
+                    brokerProps, maskExitProcedures, clientConfigs, ssl);
         }
     }
 
