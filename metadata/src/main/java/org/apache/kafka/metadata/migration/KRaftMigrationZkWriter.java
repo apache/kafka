@@ -643,8 +643,8 @@ public class KRaftMigrationZkWriter {
     }
 
     void handleDelegationTokenDelta(DelegationTokenImage image, DelegationTokenDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
-        Set<String> updatedResources = delta.changes().keySet();
-        updatedResources.forEach(tokenId -> {
+        Set<String> updatedTokens = delta.changes().keySet();
+        updatedTokens.forEach(tokenId -> {
             DelegationTokenData tokenData = image.tokens().get(tokenId);
             if (tokenData == null) {
                 operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
@@ -668,7 +668,6 @@ public class KRaftMigrationZkWriter {
             if (!image.tokens().containsKey(tokenId)) {
                 operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
                     migrationClient.delegationTokenClient().deleteDelegationToken(tokenId, migrationState));
-
             }
         });
     }

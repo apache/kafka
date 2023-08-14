@@ -1270,7 +1270,7 @@ public final class QuorumController implements Controller {
             // periodic tasks here. At this point, all the records we generated in
             // generateRecordsAndResult have been applied, so we have the correct value for
             // metadata.version and other in-memory state.
-            maybeScheduleNextDelegationTokenExpiration();
+            maybeScheduleNextExpiredDelegationTokenSweep();
             maybeScheduleNextBalancePartitionLeaders();
             maybeScheduleNextWriteNoOpRecord();
         }
@@ -1441,26 +1441,26 @@ public final class QuorumController implements Controller {
         queue.cancelDeferred(WRITE_NO_OP_RECORD);
     }
 
-    private static final String WRITE_REMOVE_DELEGATIONTOKEN_RECORD = "writeRemoveDelegationTokenRecord";
+    private static final String SWEEP_EXPIRED_DELEGATION_TOKENS = "sweepExpiredDelegationTokens";
 
-    private void maybeScheduleNextDelegationTokenExpiration() {
+    private void maybeScheduleNextExpiredDelegationTokenSweep() {
         if (featureControl.metadataVersion().isDelegationTokenSupported() &&
             delegationTokenControlManager.isEnabled()) {
 
             ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
-                WRITE_REMOVE_DELEGATIONTOKEN_RECORD,
+                SWEEP_EXPIRED_DELEGATION_TOKENS,
                 () -> {
-                    maybeScheduleNextDelegationTokenExpiration();
+                    maybeScheduleNextExpiredDelegationTokenSweep();
 
                     return ControllerResult.of(
-                        delegationTokenControlManager.expireDelegationTokens(), null);
+                        delegationTokenControlManager.sweepExpiredDelegationTokens(), null);
                 },
                 EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME)
             );
 
             long delayNs = time.nanoseconds() + 
                 NANOSECONDS.convert(delegationTokenExpiryCheckIntervalMs, TimeUnit.MILLISECONDS);
-            queue.scheduleDeferred(WRITE_REMOVE_DELEGATIONTOKEN_RECORD,
+            queue.scheduleDeferred(SWEEP_EXPIRED_DELEGATION_TOKENS,
                 new EarliestDeadlineFunction(delayNs), event);
         }
     }

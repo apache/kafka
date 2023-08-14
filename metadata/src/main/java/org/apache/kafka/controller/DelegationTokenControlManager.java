@@ -355,14 +355,15 @@ public class DelegationTokenControlManager {
     }
 
     // Periodic call to remove expired DelegationTokens
-    public List<ApiMessageAndVersion> expireDelegationTokens() {
+    public List<ApiMessageAndVersion> sweepExpiredDelegationTokens() {
         long now = time.milliseconds();
         List<ApiMessageAndVersion> records = new ArrayList<ApiMessageAndVersion>();
 
         for (TokenInformation oldTokenInformation: tokenCache.tokens()) {
             if ((oldTokenInformation.maxTimestamp() < now) ||
                 (oldTokenInformation.expiryTimestamp() < now)) {
-                System.out.println("Token: " + oldTokenInformation.tokenId() + " is expired");
+                log.info("Delegation token expired for token: {} for owner: {}",
+                    oldTokenInformation.tokenId(), oldTokenInformation.ownerAsString());
                 records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                     setTokenId(oldTokenInformation.tokenId()), (short) 0));
             }
