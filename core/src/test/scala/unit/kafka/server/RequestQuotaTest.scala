@@ -156,7 +156,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testResponseThrottleTime(quorum: String): Unit = {
-    for (apiKey <- clientActions ++ clusterActionsWithThrottle)
+    for (apiKey <- clientActions ++ clusterActionsWithThrottleForBroker)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
     waitAndCheckResults()
@@ -190,7 +190,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testExemptRequestTime(quorum: String): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
-    val actions = clusterActions -- clusterActionsWithThrottle -- RequestQuotaTest.Envelope - ApiKeys.DESCRIBE_QUORUM
+    val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope - ApiKeys.DESCRIBE_QUORUM
     for (apiKey <- actions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
@@ -227,8 +227,9 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def clusterActionsWithThrottle: Set[ApiKeys] = {
+  private def clusterActionsWithThrottleForBroker: Set[ApiKeys] = {
     if (isKRaftTest()) {
+      // Exclude `ALLOCATE_PRODUCER_IDS`, it is enabled for kraft controller instead of broker
       Set(ApiKeys.UPDATE_FEATURES)
     } else {
       Set(ApiKeys.ALLOCATE_PRODUCER_IDS, ApiKeys.UPDATE_FEATURES)
