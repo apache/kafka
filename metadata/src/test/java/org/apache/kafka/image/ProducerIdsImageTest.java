@@ -70,7 +70,7 @@ public class ProducerIdsImageTest {
         DELTA1 = new ProducerIdsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        // next producer id must be increasing, but only replay checks for this condition (not apply)
+        // producer ids must be increasing, but delta replay does not check this (only QuorumController replay)
         IMAGE2 = new ProducerIdsImage(460);
     }
 
