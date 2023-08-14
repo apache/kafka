@@ -580,6 +580,40 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
+    @Override
+    public String toString() {
+        return "LogConfig{" +
+                "segmentSize=" + segmentSize +
+                ", segmentMs=" + segmentMs +
+                ", segmentJitterMs=" + segmentJitterMs +
+                ", maxIndexSize=" + maxIndexSize +
+                ", flushInterval=" + flushInterval +
+                ", flushMs=" + flushMs +
+                ", retentionSize=" + retentionSize +
+                ", retentionMs=" + retentionMs +
+                ", indexInterval=" + indexInterval +
+                ", fileDeleteDelayMs=" + fileDeleteDelayMs +
+                ", deleteRetentionMs=" + deleteRetentionMs +
+                ", compactionLagMs=" + compactionLagMs +
+                ", maxCompactionLagMs=" + maxCompactionLagMs +
+                ", minCleanableRatio=" + minCleanableRatio +
+                ", compact=" + compact +
+                ", delete=" + delete +
+                ", uncleanLeaderElectionEnable=" + uncleanLeaderElectionEnable +
+                ", minInSyncReplicas=" + minInSyncReplicas +
+                ", compressionType='" + compressionType + '\'' +
+                ", preallocate=" + preallocate +
+                ", messageFormatVersion=" + messageFormatVersion +
+                ", messageTimestampType=" + messageTimestampType +
+                ", messageTimestampDifferenceMaxMs=" + messageTimestampDifferenceMaxMs +
+                ", leaderReplicationThrottledReplicas=" + leaderReplicationThrottledReplicas +
+                ", followerReplicationThrottledReplicas=" + followerReplicationThrottledReplicas +
+                ", messageDownConversionEnable=" + messageDownConversionEnable +
+                ", remoteLogConfig=" + remoteLogConfig +
+                ", maxMessageSize=" + maxMessageSize +
+                '}';
+    }
+
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "topicconfigs_" + config));
     }

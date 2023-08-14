@@ -20,9 +20,11 @@ import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager,
+  RemoteLogManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
@@ -71,6 +73,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
+    verifyRemoteLogTopicConfigs(topicConfig)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -82,6 +85,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "256")
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
+    verifyRemoteLogTopicConfigs(topicConfig)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -93,6 +97,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1001")
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
+    verifyRemoteLogTopicConfigs(topicConfig)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -104,6 +109,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1025")
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
+    verifyRemoteLogTopicConfigs(topicConfig)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -156,6 +162,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
         AlterConfigOp.OpType.SET))
     )
     admin.incrementalAlterConfigs(configs).all().get()
+    verifyRemoteLogTopicConfigs(topicConfig)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -200,6 +207,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
           AlterConfigOp.OpType.SET)
     ))
     admin.incrementalAlterConfigs(configs).all().get()
+    verifyRemoteLogTopicConfigs(topicConfig)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -220,6 +228,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
           AlterConfigOp.OpType.SET)
       ))
     admin.incrementalAlterConfigs(configs).all().get()
+    verifyRemoteLogTopicConfigs(topicConfig)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -274,10 +283,43 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     }, message)
   }
 
+  private def verifyRemoteLogTopicConfigs(topicConfig: Properties): Unit = {
+    val logOpt = brokers.head.logManager.getLog(new TopicPartition(testTopicName, 0))
+    assertTrue(logOpt.isDefined)
+    val log = logOpt.get
+    TestUtils.waitUntilTrue(() => {
+      var result = true
+      if (topicConfig.containsKey(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)) {
+        result = result &&
+          topicConfig.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG).toBoolean ==
+            log.config.remoteStorageEnable()
+      }
+      if (topicConfig.containsKey(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)) {
+        result = result &&
+          topicConfig.getProperty(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG).toLong ==
+            log.config.localRetentionBytes()
+      }
+      if (topicConfig.containsKey(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG)) {
+        result = result &&
+          topicConfig.getProperty(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG).toLong == log.config.localRetentionMs()
+      }
+      if (topicConfig.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
+        result = result &&
+          topicConfig.getProperty(TopicConfig.RETENTION_MS_CONFIG).toLong == log.config.retentionMs
+      }
+      if (topicConfig.containsKey(TopicConfig.RETENTION_BYTES_CONFIG)) {
+        result = result &&
+          topicConfig.getProperty(TopicConfig.RETENTION_BYTES_CONFIG).toLong == log.config.retentionSize
+      }
+      result
+    }, s"Failed to update topic config $topicConfig, actual: ${log.config}")
+  }
+
   private def overrideProps(): Properties = {
     val props = new Properties()
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+      classOf[NoOpRemoteStorageManager].getName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
       classOf[NoOpRemoteLogMetadataManager].getName)
 
