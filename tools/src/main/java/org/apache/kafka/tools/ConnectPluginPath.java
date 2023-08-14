@@ -398,7 +398,7 @@ public class ConnectPluginPath {
                 } else {
                     config.out.println("Writing changes to plugins...");
                     workspace.commit(false);
-                    config.out.println("All plugins have accurate ServiceLoader manifests");
+                    config.out.println("All loadable plugins have accurate ServiceLoader manifests");
                 }
             } else {
                 config.out.println("No changes required.");
