@@ -204,6 +204,7 @@ public class SnapshotRegistry {
      * @param targetEpoch       The epoch of the snapshot to revert to.
      */
     public void revertToSnapshot(long targetEpoch) {
+        log.debug("Reverting to in-memory snapshot {}", targetEpoch);
         Snapshot target = getSnapshot(targetEpoch);
         Iterator<Snapshot> iterator = iterator(target);
         iterator.next();
