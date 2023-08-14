@@ -1426,12 +1426,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
       val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(localLog.logEndOffset)
 
-      // Check not to delete segments which are not yet copied to tiered storage
-      val isSegmentTieredToRemoteStorage =
-        if (remoteLogEnabled()) upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage
-        else true
-
-      isSegmentTieredToRemoteStorage &&
+      // Check not to delete segments which are not yet copied to tiered storage if remote log is enabled.
+      (!remoteLogEnabled() || (upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage)) &&
+        // We don't delete segments with offsets at or beyond the high watermark to ensure that the log start
+        // offset can never exceed it.
         highWatermark >= upperBoundOffset &&
         predicate(segment, nextSegmentOpt)
     }
@@ -1518,10 +1516,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      nextSegmentOpt.exists(_.baseOffset <= (if(remoteLogEnabled()) localLogStartOffset() else logStartOffset))
+      nextSegmentOpt.exists(_.baseOffset <= (if (remoteLogEnabled()) localLogStartOffset() else logStartOffset))
     }
 
-    deleteOldSegments(shouldDelete, StartOffsetBreach(this))
+    deleteOldSegments(shouldDelete, StartOffsetBreach(this, remoteLogEnabled()))
   }
 
   def isFuture: Boolean = localLog.isFuture
@@ -2277,8 +2275,11 @@ case class RetentionSizeBreach(log: UnifiedLog, remoteLogEnabled: Boolean) exten
   }
 }
 
-case class StartOffsetBreach(log: UnifiedLog) extends SegmentDeletionReason {
+case class StartOffsetBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
-    log.info(s"Deleting segments due to log start offset ${log.logStartOffset} breach: ${toDelete.mkString(",")}")
+    if (remoteLogEnabled)
+      log.info(s"Deleting segments due to local log start offset ${log.localLogStartOffset()} breach: ${toDelete.mkString(",")}")
+    else
+      log.info(s"Deleting segments due to log start offset ${log.logStartOffset} breach: ${toDelete.mkString(",")}")
   }
 }

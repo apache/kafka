@@ -170,6 +170,7 @@ public class RemoteLogManager implements Closeable {
      * @param clusterId The cluster id.
      * @param fetchLog  function to get UnifiedLog instance for a given topic.
      * @param updateRemoteLogStartOffset function to update the log-start-offset for a given topic partition.
+     * @param brokerTopicStats BrokerTopicStats instance to update the respective metrics.
      */
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,
@@ -954,7 +955,9 @@ public class RemoteLogManager implements Closeable {
             }
 
             // Remove the remote log segments whose segment-leader-epochs are less than the earliest-epoch known
-            // to the leader. This will remove the unreferenced segments in the remote storage.
+            // to the leader. This will remove the unreferenced segments in the remote storage. This is needed for
+            // unclean leader election scenarios as the remote storage can have epochs earlier to the current leader's
+            // earliest leader epoch.
             if (earliestEpochEntryOptional.isPresent()) {
                 EpochEntry earliestEpochEntry = earliestEpochEntryOptional.get();
                 Iterator<Integer> epochsToClean = remoteLeaderEpochs.stream().filter(x -> x < earliestEpochEntry.epoch).iterator();
