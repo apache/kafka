@@ -520,6 +520,7 @@ public class KafkaAdminClient extends AdminClient {
                 config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                 config.getInt(AdminClientConfig.SEND_BUFFER_CONFIG),
                 config.getInt(AdminClientConfig.RECEIVE_BUFFER_CONFIG),
+                // We set this to a large enough value in KAFKA-5324 so that we can overwrite per-call timeouts with a longer value than the default timeout.
                 (int) TimeUnit.HOURS.toMillis(1),
                 config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                 config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
