@@ -39,11 +39,11 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
         this.keyDe = keyDe;
         this.valueDe = valueDe;
         // Columns length + 5 column separators.
-        output += repeatString("-", 51 + 8 + 13 + 10 + (3 * 2)) + "\n";
+        output += repeatString("-", 51 + 8 + 13 + 10 + (3 * 2)) + System.lineSeparator();
     }
 
     private String row(String file, Object offset, String record, String ident) {
-        return String.format("%-51s |%8s |%13s \n", ident + file, offset.toString(), record);
+        return String.format("%-51s |%8s |%13s %n", ident + file, offset.toString(), record);
     }
 
     private String row(String file, Object offset, String record) {

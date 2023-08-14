@@ -71,8 +71,8 @@ public final class ProduceAction implements TieredStorageTestAction {
     @Override
     public void doExecute(TieredStorageTestContext context)
             throws InterruptedException, ExecutionException, TimeoutException {
-        List<LocalTieredStorage> tieredStorages = context.getTieredStorages();
-        List<BrokerLocalStorage> localStorages = context.getLocalStorages();
+        List<LocalTieredStorage> tieredStorages = context.remoteStorageManagers();
+        List<BrokerLocalStorage> localStorages = context.localStorages();
 
         List<LocalTieredStorageCondition> tieredStorageConditions = offloadedSegmentSpecs.stream()
                 .map(spec -> expectEvent(

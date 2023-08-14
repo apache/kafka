@@ -41,8 +41,8 @@ public final class ExpectTopicIdToMatchInRemoteStorageAction implements TieredSt
     @Override
     public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException {
         Uuid topicId = describeTopic(context, topic).topicId();
-        context.getTieredStorages().forEach(ts -> {
-            LocalTieredStorageSnapshot snapshot = LocalTieredStorageSnapshot.takeSnapshot(ts);
+        context.remoteStorageManagers().forEach(rsm -> {
+            LocalTieredStorageSnapshot snapshot = LocalTieredStorageSnapshot.takeSnapshot(rsm);
             List<TopicPartition> partitions = snapshot.getTopicPartitions()
                     .stream()
                     .filter(tp -> tp.topic().equals(topic))

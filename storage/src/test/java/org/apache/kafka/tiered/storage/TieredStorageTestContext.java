@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tiered.storage;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
@@ -31,7 +32,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -65,54 +65,46 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import scala.Option;
-import scala.collection.Seq;
+import scala.collection.JavaConverters;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 
-public final class TieredStorageTestContext {
+public final class TieredStorageTestContext implements AutoCloseable {
 
-    private final Seq<KafkaBroker> brokers;
-    private final Properties producerConfig;
-    private final Properties consumerConfig;
-    private final Properties adminConfig;
+    private final TieredStorageTestHarness harness;
 
-    private final Serializer<String> ser;
-    private final Deserializer<String> de;
+    private final Serializer<String> ser = Serdes.String().serializer();
+    private final Deserializer<String> de = Serdes.String().deserializer();
 
-    private final Map<String, TopicSpec> topicSpecs;
+    private final Map<String, TopicSpec> topicSpecs = new HashMap<>();
     private final TieredStorageTestReport testReport;
 
     private volatile KafkaProducer<String, String> producer;
-    private volatile KafkaConsumer<String, String> consumer;
+    private volatile Consumer<String, String> consumer;
     private volatile Admin admin;
-    private volatile List<LocalTieredStorage> tieredStorages;
+    private volatile List<LocalTieredStorage> remoteStorageManagers;
     private volatile List<BrokerLocalStorage> localStorages;
 
-    public TieredStorageTestContext(Seq<KafkaBroker> brokers,
-                                    Properties producerConfig,
-                                    Properties consumerConfig,
-                                    Properties adminConfig) {
-        this.brokers = brokers;
-        this.producerConfig = producerConfig;
-        this.consumerConfig = consumerConfig;
-        this.adminConfig = adminConfig;
-        this.ser = Serdes.String().serializer();
-        this.de = Serdes.String().deserializer();
-        this.topicSpecs = new HashMap<>();
+    public TieredStorageTestContext(TieredStorageTestHarness harness) {
+        this.harness = harness;
         this.testReport = new TieredStorageTestReport(this);
         initContext();
     }
 
+    @SuppressWarnings("deprecation")
     private void initContext() {
         // Set a producer linger of 60 seconds, in order to optimistically generate batches of
         // records with a pre-determined size.
-        producerConfig.put(LINGER_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(60)));
-        producer = new KafkaProducer<>(producerConfig, ser, ser);
-        consumer = new KafkaConsumer<>(consumerConfig, de, de);
-        admin = Admin.create(adminConfig);
+        Properties producerOverrideProps = new Properties();
+        producerOverrideProps.put(LINGER_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(60)));
+        producer = harness.createProducer(ser, ser, producerOverrideProps);
 
-        tieredStorages = TieredStorageTestHarness.getTieredStorages(brokers);
-        localStorages = TieredStorageTestHarness.getLocalStorages(brokers);
+        consumer = harness.createConsumer(de, de, new Properties(),
+                JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toList());
+        admin = harness.createAdminClient(harness.listenerName(), new Properties());
+
+        remoteStorageManagers = TieredStorageTestHarness.remoteStorageManagers(harness.brokers());
+        localStorages = TieredStorageTestHarness.localStorages(harness.brokers());
     }
 
     public void createTopic(TopicSpec spec) throws ExecutionException, InterruptedException {
@@ -234,24 +226,21 @@ public final class TieredStorageTestContext {
     }
 
     public void bounce(int brokerId) {
-        KafkaBroker broker = brokers.apply(brokerId);
         closeClients();
-        broker.shutdown();
-        broker.awaitShutdown();
+        harness.killBroker(brokerId);
+        KafkaBroker broker = harness.brokers().apply(brokerId);
         broker.startup();
         initContext();
     }
 
     public void stop(int brokerId) {
-        KafkaBroker broker = brokers.apply(brokerId);
         closeClients();
-        broker.shutdown();
-        broker.awaitShutdown();
+        harness.killBroker(brokerId);
         initContext();
     }
 
     public void start(int brokerId) {
-        KafkaBroker broker = brokers.apply(brokerId);
+        KafkaBroker broker = harness.brokers().apply(brokerId);
         closeClients();
         broker.startup();
         initContext();
@@ -268,26 +257,22 @@ public final class TieredStorageTestContext {
     }
 
     public LocalTieredStorageSnapshot takeTieredStorageSnapshot() {
-        return LocalTieredStorageSnapshot.takeSnapshot(tieredStorages.get(0));
+        return LocalTieredStorageSnapshot.takeSnapshot(remoteStorageManagers.get(0));
     }
 
-    public LocalTieredStorageHistory getTieredStorageHistory(int brokerId) {
-        return tieredStorages.get(brokerId).getHistory();
+    public LocalTieredStorageHistory tieredStorageHistory(int brokerId) {
+        return remoteStorageManagers.get(brokerId).getHistory();
     }
 
-    public List<LocalTieredStorage> getTieredStorages() {
-        return tieredStorages;
+    public List<LocalTieredStorage> remoteStorageManagers() {
+        return remoteStorageManagers;
     }
 
-    public List<BrokerLocalStorage> getLocalStorages() {
+    public List<BrokerLocalStorage> localStorages() {
         return localStorages;
     }
 
-    public Serializer<String> getSer() {
-        return ser;
-    }
-
-    public Deserializer<String> getDe() {
+    public Deserializer<String> de() {
         return de;
     }
 
@@ -296,7 +281,7 @@ public final class TieredStorageTestContext {
     }
 
     public boolean isActive(Integer brokerId) {
-        return brokers.apply(brokerId).brokerState().equals(BrokerState.RUNNING);
+        return harness.brokers().apply(brokerId).brokerState().equals(BrokerState.RUNNING);
     }
 
     public boolean isAssignedReplica(TopicPartition topicPartition, Integer replicaId)
@@ -310,7 +295,7 @@ public final class TieredStorageTestContext {
     }
 
     public Optional<UnifiedLog> log(Integer brokerId, TopicPartition partition) {
-        Option<UnifiedLog> log = brokers.apply(brokerId).logManager().getLog(partition, false);
+        Option<UnifiedLog> log = harness.brokers().apply(brokerId).logManager().getLog(partition, false);
         return log.isDefined() ? Optional.of(log.get()) : Optional.empty();
     }
 
@@ -326,9 +311,10 @@ public final class TieredStorageTestContext {
         testReport.print(output);
     }
 
+    @Override
     public void close() throws IOException {
         Utils.closeAll(producer, consumer);
-        admin.close();
+        Utils.closeQuietly(admin, "Admin client");
     }
 
     private void closeClients() {

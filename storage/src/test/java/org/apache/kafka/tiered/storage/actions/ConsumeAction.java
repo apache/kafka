@@ -73,7 +73,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
         // The latest event at the time of invocation for the interaction of type "FETCH_SEGMENT" between the
         // given broker and the second-tier storage is retrieved. It can be empty if an interaction of this
         // type has yet to happen.
-        LocalTieredStorageHistory history = context.getTieredStorageHistory(remoteFetchSpec.getSourceBrokerId());
+        LocalTieredStorageHistory history = context.tieredStorageHistory(remoteFetchSpec.getSourceBrokerId());
         Optional<LocalTieredStorageEvent> latestEventSoFar = history.latestEvent(FETCH_SEGMENT, topicPartition);
 
         // Records are consumed here

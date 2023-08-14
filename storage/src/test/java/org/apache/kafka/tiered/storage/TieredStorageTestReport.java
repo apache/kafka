@@ -33,16 +33,12 @@ public final class TieredStorageTestReport {
         this.context = context;
     }
 
-    public void addSucceeded(TieredStorageTestAction action) {
-        synchronized (this) {
-            successfulActions.add(action);
-        }
+    public synchronized void addSucceeded(TieredStorageTestAction action) {
+        successfulActions.add(action);
     }
 
-    public void addFailed(TieredStorageTestAction action) {
-        synchronized (this) {
-            failedActions.add(action);
-        }
+    public synchronized void addFailed(TieredStorageTestAction action) {
+        failedActions.add(action);
     }
 
     public void print(PrintStream output) {
@@ -67,10 +63,10 @@ public final class TieredStorageTestReport {
             }
         }
         String lts = "";
-        if (!context.getTieredStorages().isEmpty()) {
-            LocalTieredStorage tieredStorage = context.getTieredStorages().get(0);
-            lts = DumpLocalTieredStorage.dump(tieredStorage, context.getDe(), context.getDe());
+        if (!context.remoteStorageManagers().isEmpty()) {
+            LocalTieredStorage tieredStorage = context.remoteStorageManagers().get(0);
+            lts = DumpLocalTieredStorage.dump(tieredStorage, context.de(), context.de());
         }
-        output.println("Content of local tiered storage:\n\n" + lts);
+        output.printf("Content of local tiered storage:%n%n%s%n", lts);
     }
 }
