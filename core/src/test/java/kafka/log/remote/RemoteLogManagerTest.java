@@ -60,6 +60,7 @@ import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TimeIndex;
+import org.apache.kafka.storage.internals.log.TimestampOffset;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,7 +113,6 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -650,10 +650,9 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testCorruptedIndexes() throws Exception {
+    void testCorruptedTimeIndexes() throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
-        long oldSegmentEndOffset = nextSegmentStartOffset - 1;
 
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
 
@@ -682,7 +681,14 @@ public class RemoteLogManagerTest {
         File txnFile1 = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile1.createNewFile();
 
-        when(oldSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), 45L, 1));
+        File timeindexFile = TestUtils.tempFile();
+
+        //Corrupting data. Actual entries 0, but we override method with returning 1 entry
+        TimeIndex ti = spy(new TimeIndex(timeindexFile, 45L, 12));
+        when(ti.entries()).thenReturn(1);
+        when(ti.lastEntry()).thenReturn(new TimestampOffset(0L, 0L));
+
+        when(oldSegment.timeIndex()).thenReturn(ti);
         when(oldSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile1));
         when(oldSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
                 oldSegmentStartOffset, maxEntries * 8));
@@ -691,6 +697,7 @@ public class RemoteLogManagerTest {
         txnFile2.createNewFile();
 
         when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), 10000L, 1));
+        when(activeSegment.log()).thenReturn(fileRecords);
         when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile2));
         when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
                 nextSegmentStartOffset, maxEntries * 8));
@@ -703,6 +710,7 @@ public class RemoteLogManagerTest {
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
+
 
         LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
         LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
@@ -720,14 +728,14 @@ public class RemoteLogManagerTest {
         doNothing().when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
-        task.convertToLeader(2);
+        // Here CorruptIndex will be thrown and caught by copyLogSegmentsToRemote
         task.copyLogSegmentsToRemote(mockLog);
 
         // verify the remoteLogMetadataManager never add any metadata and remoteStorageManager never copy log segments
         // Since segment with index corruption should not be uploaded
-        verify(remoteLogMetadataManager, atLeastOnce()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));
-        verify(remoteStorageManager, atLeastOnce()).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
-        verify(remoteLogMetadataManager, atLeastOnce()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+        verify(remoteLogMetadataManager, never()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));
+        verify(remoteStorageManager, never()).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
     }
 
     private void verifyRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
