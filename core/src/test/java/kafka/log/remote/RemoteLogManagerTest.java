@@ -59,7 +59,6 @@ import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LazyIndex;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
-import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TimeIndex;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.test.TestUtils;
@@ -88,14 +87,19 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.Collectors;
 
-import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT;
-import static kafka.log.remote.RemoteLogManager.REMOTE_LOG_READER_METRICS_NAME_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -123,11 +127,23 @@ public class RemoteLogManagerTest {
     int brokerId = 0;
     String logDir = TestUtils.tempDirectory("kafka-").toString();
     String clusterId = "dummyId";
+    String remoteLogStorageTestProp = "remote.log.storage.test";
+    String remoteLogStorageTestVal = "storage.test";
+    String remoteLogMetadataTestProp = "remote.log.metadata.test";
+    String remoteLogMetadataTestVal = "metadata.test";
+    String remoteLogMetadataCommonClientTestProp = REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "common.client.test";
+    String remoteLogMetadataCommonClientTestVal = "common.test";
+    String remoteLogMetadataProducerTestProp = REMOTE_LOG_METADATA_PRODUCER_PREFIX + "producer.test";
+    String remoteLogMetadataProducerTestVal = "producer.test";
+    String remoteLogMetadataConsumerTestProp = REMOTE_LOG_METADATA_CONSUMER_PREFIX + "consumer.test";
+    String remoteLogMetadataConsumerTestVal = "consumer.test";
+    String remoteLogMetadataTopicPartitionsNum = "1";
 
     RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
     RemoteLogManagerConfig remoteLogManagerConfig = null;
-    BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+
+    BrokerTopicStats brokerTopicStats = null;
     RemoteLogManager remoteLogManager = null;
 
     TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
@@ -157,8 +173,10 @@ public class RemoteLogManagerTest {
     void setUp() throws Exception {
         topicIds.put(leaderTopicIdPartition.topicPartition().topic(), leaderTopicIdPartition.topicId());
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
-        Properties props = new Properties();
+        Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
+        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         remoteLogManagerConfig = createRLMConfig(props);
+        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
 
         kafka.utils.TestUtils.clearYammerMetrics();
 
@@ -247,15 +265,58 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
+        Properties props = new Properties();
+        // override common security.protocol by adding "RLMM prefix" and "remote log metadata common client prefix"
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(createRLMConfig(props), brokerId, logDir, clusterId, time, tp -> Optional.of(mockLog), brokerTopicStats) {
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
+            }
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+        }) {
+
+            String host = "localhost";
+            String port = "1234";
+            String securityProtocol = "PLAINTEXT";
+            EndPoint endPoint = new EndPoint(host, Integer.parseInt(port), new ListenerName(securityProtocol),
+                    SecurityProtocol.PLAINTEXT);
+            remoteLogManager.onEndPointCreated(endPoint);
+            remoteLogManager.startup();
+
+            ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
+            verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
+            assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
+            // should be overridden as SSL
+            assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
+            assertEquals(clusterId, capture.getValue().get("cluster.id"));
+            assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+        }
+    }
+
+
+
+    @Test
     void testStartup() {
         remoteLogManager.startup();
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteStorageManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(remoteLogStorageTestVal, capture.getValue().get(remoteLogStorageTestProp));
 
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
         assertEquals(logDir, capture.getValue().get("log.dir"));
+
+        // verify the configs starting with "remote.log.metadata", "remote.log.metadata.common.client."
+        // "remote.log.metadata.producer.", and "remote.log.metadata.consumer." are correctly passed in
+        assertEquals(remoteLogMetadataTopicPartitionsNum, capture.getValue().get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP));
+        assertEquals(remoteLogMetadataTestVal, capture.getValue().get(remoteLogMetadataTestProp));
+        assertEquals(remoteLogMetadataConsumerTestVal, capture.getValue().get(remoteLogMetadataConsumerTestProp));
+        assertEquals(remoteLogMetadataProducerTestVal, capture.getValue().get(remoteLogMetadataProducerTestProp));
+        assertEquals(remoteLogMetadataCommonClientTestVal, capture.getValue().get(remoteLogMetadataCommonClientTestProp));
     }
 
     // This test creates 2 log segments, 1st one has start offset of 0, 2nd one (and active one) has start offset of 150.
@@ -724,13 +785,15 @@ public class RemoteLogManagerTest {
     @Test
     void testGetClassLoaderAwareRemoteStorageManager() throws Exception {
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
-        RemoteLogManager remoteLogManager =
+        try (RemoteLogManager remoteLogManager =
             new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time, t -> Optional.empty(), brokerTopicStats) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }
             };
-        assertEquals(rsmManager, remoteLogManager.storageManager());
+        ) {
+            assertEquals(rsmManager, remoteLogManager.storageManager());
+        }
     }
 
     private void verifyInCache(TopicIdPartition... topicIdPartitions) {
@@ -922,11 +985,8 @@ public class RemoteLogManagerTest {
             KafkaMetricsGroup mockRlmMetricsGroup = mockMetricsGroupCtor.constructed().get(0);
             KafkaMetricsGroup mockThreadPoolMetricsGroup = mockMetricsGroupCtor.constructed().get(1);
 
-            List<String> remoteLogManagerMetricNames = Collections.singletonList(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
-            List<String> remoteStorageThreadPoolMetricNames = RemoteStorageThreadPool.METRIC_SUFFIXES
-                .stream()
-                .map(suffix -> REMOTE_LOG_READER_METRICS_NAME_PREFIX + suffix)
-                .collect(Collectors.toList());
+            List<String> remoteLogManagerMetricNames = Collections.singletonList(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
+            Set<String> remoteStorageThreadPoolMetricNames = REMOTE_STORAGE_THREAD_POOL_METRICS;
 
             verify(mockRlmMetricsGroup, times(remoteLogManagerMetricNames.size())).newGauge(anyString(), any());
             // Verify that the RemoteLogManager metrics are removed
@@ -1008,6 +1068,14 @@ public class RemoteLogManagerTest {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
+        props.put(DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + remoteLogStorageTestProp, remoteLogStorageTestVal);
+        // adding configs with "remote log metadata manager config prefix"
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionsNum);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataTestProp, remoteLogMetadataTestVal);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal);
+        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
+
         AbstractConfig config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props);
         return new RemoteLogManagerConfig(config);
     }

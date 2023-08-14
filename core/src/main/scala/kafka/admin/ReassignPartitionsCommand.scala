@@ -23,6 +23,7 @@ import kafka.server.DynamicConfig
 import kafka.utils.{CoreUtils, Exit, Json, Logging}
 import kafka.utils.Implicits._
 import kafka.utils.json.JsonValue
+import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, ConfigEntry, NewPartitionReassignment, PartitionReassignment, TopicDescription}
 import org.apache.kafka.common.config.ConfigResource
@@ -606,8 +607,8 @@ object ReassignPartitionsCommand extends Logging {
     val proposedAssignments = mutable.Map[TopicPartition, Seq[Int]]()
     groupedByTopic.forKeyValue { (topic, assignment) =>
       val (_, replicas) = assignment.head
-      val assignedReplicas = AdminUtils.
-        assignReplicasToBrokers(brokerMetadatas, assignment.size, replicas.size)
+      val assignedReplicas = CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.
+        assignReplicasToBrokers(brokerMetadatas.asJavaCollection, assignment.size, replicas.size))
       proposedAssignments ++= assignedReplicas.map { case (partition, replicas) =>
         new TopicPartition(topic, partition) -> replicas
       }
@@ -688,12 +689,12 @@ object ReassignPartitionsCommand extends Logging {
       filter(node => brokerSet.contains(node.id)).
       map {
         node => if (enableRackAwareness && node.rack != null) {
-          BrokerMetadata(node.id, Some(node.rack))
+          new BrokerMetadata(node.id, Optional.of(node.rack))
         } else {
-          BrokerMetadata(node.id, None)
+          new BrokerMetadata(node.id, Optional.empty())
         }
       }.toSeq
-    val numRackless = results.count(_.rack.isEmpty)
+    val numRackless = results.count(!_.rack.isPresent)
     if (enableRackAwareness && numRackless != 0 && numRackless != results.size) {
       throw new AdminOperationException("Not all brokers have rack information. Add " +
         "--disable-rack-aware in command line to make replica assignment without rack " +

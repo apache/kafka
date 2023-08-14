@@ -2355,6 +2355,75 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeTopicsByIds() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Valid ID
+            Uuid topicId = Uuid.randomUuid();
+            String topicName = "test-topic";
+            Node leader = env.cluster().nodes().get(0);
+            MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
+                    Errors.NONE,
+                    new TopicPartition(topicName, 0),
+                    Optional.of(leader.id()),
+                    Optional.of(10),
+                    singletonList(leader.id()),
+                    singletonList(leader.id()),
+                    singletonList(leader.id()));
+            env.kafkaClient().prepareResponse(RequestTestUtils
+                    .metadataResponse(
+                            env.cluster().nodes(),
+                            env.cluster().clusterResource().clusterId(),
+                            env.cluster().controller().id(),
+                            singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, topicName, topicId, false,
+                                    singletonList(partitionMetadata), MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED))));
+            TopicCollection.TopicIdCollection topicIds = TopicCollection.ofTopicIds(
+                    singletonList(topicId));
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(topicIds);
+                Map<Uuid, TopicDescription> allTopicIds = result.allTopicIds().get();
+                assertEquals(topicName, allTopicIds.get(topicId).name());
+            } catch (Exception e) {
+                fail("describe with valid topicId should not fail", e);
+            }
+
+            // ID not exist in brokers
+            Uuid nonExistID = Uuid.randomUuid();
+            env.kafkaClient().prepareResponse(RequestTestUtils
+                    .metadataResponse(
+                            env.cluster().nodes(),
+                            env.cluster().clusterResource().clusterId(),
+                            env.cluster().controller().id(),
+                            emptyList()));
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(
+                        TopicCollection.ofTopicIds(singletonList(nonExistID)));
+                TestUtils.assertFutureError(result.allTopicIds(), InvalidTopicException.class);
+                result.allTopicIds().get();
+                fail("describe with non-exist topic ID should throw exception");
+            } catch (Exception e) {
+                assertEquals(
+                        String.format("org.apache.kafka.common.errors.InvalidTopicException: TopicId %s not found.", nonExistID),
+                        e.getMessage());
+            }
+
+            // Invalid ID
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(
+                        TopicCollection.ofTopicIds(singletonList(Uuid.ZERO_UUID)));
+                TestUtils.assertFutureError(result.allTopicIds(), InvalidTopicException.class);
+                result.allTopicIds().get();
+                fail("describe with Uuid.ZERO_UUID should throw exception");
+            } catch (Exception e) {
+                assertEquals("The given topic id 'AAAAAAAAAAAAAAAAAAAAAA' cannot be represented in a request.",
+                        e.getCause().getMessage());
+            }
+
+        }
+    }
+
+    @Test
     public void testDescribeCluster() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
             AdminClientConfig.RETRIES_CONFIG, "2")) {
