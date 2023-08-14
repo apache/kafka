@@ -36,11 +36,12 @@ import scala.concurrent.ExecutionException
 import scala.util.Random
 
 @Tag("integration")
-class RemoteTopicCRUDTest extends IntegrationTestHarness {
+class RemoteTopicCrudTest extends IntegrationTestHarness {
 
   val numPartitions = 2
   val numReplicationFactor = 2
   var testTopicName: String = _
+  var sysRemoteStorageEnabled = true
 
   override protected def brokerCount: Int = 2
 
@@ -54,6 +55,9 @@ class RemoteTopicCRUDTest extends IntegrationTestHarness {
 
   @BeforeEach
   override def setUp(info: TestInfo): Unit = {
+    if (info.getTestMethod.get().getName.endsWith("SystemRemoteStorageIsDisabled")) {
+      sysRemoteStorageEnabled = false
+    }
     super.setUp(info)
     testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
   }
@@ -156,6 +160,30 @@ class RemoteTopicCRUDTest extends IntegrationTestHarness {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
+  def testEnableRemoteLogWhenSystemRemoteStorageIsDisabled(quorum: String): Unit = {
+    val admin = createAdminClient()
+
+    val topicConfigWithRemoteStorage = new Properties()
+    topicConfigWithRemoteStorage.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    val message = assertThrowsException(classOf[InvalidConfigurationException],
+      () => TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions,
+        numReplicationFactor, topicConfig = topicConfigWithRemoteStorage))
+    assertTrue(message.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
+
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor)
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
+      Collections.singleton(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET))
+    )
+    val errorMessage = assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get())
+    assertTrue(errorMessage.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def testUpdateTopicConfigWithValidRetentionTimeTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -248,7 +276,7 @@ class RemoteTopicCRUDTest extends IntegrationTestHarness {
 
   private def overrideProps(): Properties = {
     val props = new Properties()
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
     props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
       classOf[NoOpRemoteLogMetadataManager].getName)

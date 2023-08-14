@@ -1376,7 +1376,7 @@ object LogManager {
             keepPartitionMetadataFile: Boolean): LogManager = {
     val defaultProps = config.extractLogConfigMap
 
-    LogConfig.validateDefaultValuesInBroker(defaultProps)
+    LogConfig.validateConfiguredValuesInBroker(defaultProps)
     val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)

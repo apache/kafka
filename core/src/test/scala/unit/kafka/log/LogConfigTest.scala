@@ -106,7 +106,7 @@ class LogConfigTest {
     props.setProperty(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "200")
     assertThrows(classOf[Exception], () => LogConfig.validate(props))
     assertThrows(classOf[Exception], () => LogConfig.validateValues(props))
-    assertThrows(classOf[Exception], () => LogConfig.validateDefaultValuesInBroker(props))
+    assertThrows(classOf[Exception], () => LogConfig.validateConfiguredValuesInBroker(props))
     assertThrows(classOf[Exception], () => LogConfig.validateValuesInBroker(props))
   }
 
@@ -390,10 +390,10 @@ class LogConfigTest {
 
     if (sysRemoteStorageEnabled) {
       val message = assertThrows(classOf[ConfigException],
-        () => LogConfig.validateDefaultValuesInBroker(kafkaConfig.extractLogConfigMap))
+        () => LogConfig.validateConfiguredValuesInBroker(kafkaConfig.extractLogConfigMap))
       assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
     } else {
-      LogConfig.validateDefaultValuesInBroker(kafkaConfig.extractLogConfigMap)
+      LogConfig.validateConfiguredValuesInBroker(kafkaConfig.extractLogConfigMap)
     }
   }
 }

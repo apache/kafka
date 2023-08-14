@@ -267,7 +267,9 @@ public class LogConfig extends AbstractConfig {
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
             .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
-            .define(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, BOOLEAN,
+            // RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP is defined here to ensure that when system
+            // level remote storage functionality is disabled, topics cannot be configured to use remote storage.
+            .defineInternal(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, BOOLEAN,
                     RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE, null, MEDIUM,
                     RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC);
     }
@@ -475,12 +477,12 @@ public class LogConfig extends AbstractConfig {
     }
 
     /**
-     * Validates the default values of the LogConfig. Should be called only by the broker.
-     * The `props` supplied should contain all the LogConfig properties except
-     * TopicConfig#REMOTE_LOG_STORAGE_ENABLE_CONFIG and the default values should be extracted from the KafkaConfig.
+     * Validates the configured values of the LogConfig. Should be called only by the broker.
+     * The `props` supplied doesn't contain any topic-level configs, only broker-level configs.
+     * The default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
-    public static void validateDefaultValuesInBroker(Map<?, ?> props) {
+    public static void validateConfiguredValuesInBroker(Map<?, ?> props) {
         validateValues(props);
         Boolean isRemoteLogStorageSystemEnabled =
                 (Boolean) props.get(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
