@@ -31,7 +31,6 @@ import org.mockito.ArgumentMatchers.{any, argThat, eq => eqThat}
 import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.util.{Collection, Collections, Optional}
-import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
