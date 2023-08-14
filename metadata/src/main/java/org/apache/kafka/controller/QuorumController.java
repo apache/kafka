@@ -77,12 +77,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.errors.ControllerExceptions;
+import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
@@ -194,7 +194,6 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
-        private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
@@ -309,11 +308,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setAuthorizer(ClusterMetadataAuthorizer authorizer) {
-            this.authorizer = Optional.of(authorizer);
-            return this;
-        }
-
         public Builder setStaticConfig(Map<String, Object> staticConfig) {
             this.staticConfig = staticConfig;
             return this;
@@ -372,7 +366,6 @@ public final class QuorumController implements Controller {
                     createTopicPolicy,
                     alterConfigPolicy,
                     configurationValidator,
-                    authorizer,
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
@@ -457,44 +450,39 @@ public final class QuorumController implements Controller {
         controllerMetrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
     }
 
-    private Throwable handleEventException(String name,
-                                           OptionalLong startProcessingTimeNs,
-                                           Throwable exception) {
-        if (!startProcessingTimeNs.isPresent() &&
-                ControllerExceptions.isTimeoutException(exception)) {
-            // If the event never started, and the exception is a timeout, increment the timed
-            // out metric.
+    private Throwable handleEventException(
+        String name,
+        OptionalLong startProcessingTimeNs,
+        Throwable exception
+    ) {
+        OptionalLong deltaUs;
+        if (startProcessingTimeNs.isPresent()) {
+            long endProcessingTime = time.nanoseconds();
+            long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
+            deltaUs = OptionalLong.of(MICROSECONDS.convert(deltaNs, NANOSECONDS));
+        } else {
+            deltaUs = OptionalLong.empty();
+        }
+        EventHandlerExceptionInfo info = EventHandlerExceptionInfo.
+                fromInternal(exception, () -> latestController());
+        int epoch = curClaimEpoch;
+        if (epoch == -1) {
+            epoch = lastCommittedEpoch;
+        }
+        String failureMessage = info.failureMessage(epoch, deltaUs,
+                isActiveController(), lastCommittedOffset);
+        if (info.isTimeoutException() && (!deltaUs.isPresent())) {
             controllerMetrics.incrementOperationsTimedOut();
         }
-        Throwable externalException =
-                ControllerExceptions.toExternalException(exception, () -> latestController());
-        if (!startProcessingTimeNs.isPresent()) {
-            log.error("{}: unable to start processing because of {}. Reason: {}", name,
-                exception.getClass().getSimpleName(), exception.getMessage());
-            return externalException;
-        }
-        long endProcessingTime = time.nanoseconds();
-        long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
-        long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
-        if (ControllerExceptions.isExpected(exception)) {
-            log.info("{}: failed with {} in {} us. Reason: {}", name,
-                exception.getClass().getSimpleName(), deltaUs, exception.getMessage());
-            return externalException;
-        }
-        if (isActiveController()) {
-            nonFatalFaultHandler.handleFault(String.format("%s: failed with unexpected server " +
-                    "exception %s at epoch %d in %d us. Renouncing leadership and reverting " +
-                    "to the last committed offset %d.",
-                    name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
-                    lastCommittedOffset), exception);
-            renounce();
+        if (info.isFault()) {
+            nonFatalFaultHandler.handleFault(name + ": " + failureMessage, exception);
         } else {
-            nonFatalFaultHandler.handleFault(String.format("%s: failed with unexpected server " +
-                    "exception %s in %d us. The controller is already in standby mode.",
-                    name, exception.getClass().getSimpleName(), deltaUs),
-                    exception);
+            log.info("{}: {}", name, failureMessage);
         }
-        return externalException;
+        if (info.causesFailover() && isActiveController()) {
+            renounce();
+        }
+        return info.effectiveExternalException();
     }
 
     private long updateEventStartMetricsAndGetTime(OptionalLong eventCreatedTimeNs) {
@@ -755,22 +743,28 @@ public final class QuorumController implements Controller {
                             // Start by trying to apply the record to our in-memory state. This should always
                             // succeed; if it does not, that's a fatal error. It is important to do this before
                             // scheduling the record for Raft replication.
-                            int i = 1;
+                            int recordIndex = 0;
                             for (ApiMessageAndVersion message : records) {
+                                long recordOffset = prevEndOffset + 1 + recordIndex;
                                 try {
-                                    replay(message.message(), Optional.empty(), prevEndOffset + records.size());
+                                    replay(message.message(), Optional.empty(), recordOffset);
                                 } catch (Throwable e) {
-                                    String failureMessage = String.format("Unable to apply %s record, which was " +
-                                            "%d of %d record(s) in the batch following last write offset %d.",
-                                            message.message().getClass().getSimpleName(), i, records.size(),
-                                            prevEndOffset);
+                                    String failureMessage = String.format("Unable to apply %s " +
+                                        "record at offset %d on active controller, from the " +
+                                        "batch with baseOffset %d",
+                                        message.message().getClass().getSimpleName(),
+                                        recordOffset, prevEndOffset + 1);
                                     throw fatalFaultHandler.handleFault(failureMessage, e);
                                 }
-                                i++;
+                                recordIndex++;
                             }
-                            prevEndOffset = raftClient.scheduleAtomicAppend(controllerEpoch, records);
-                            snapshotRegistry.getOrCreateSnapshot(prevEndOffset);
-                            return prevEndOffset;
+                            long nextEndOffset = prevEndOffset + recordIndex;
+                            raftClient.scheduleAtomicAppend(controllerEpoch,
+                                OptionalLong.of(prevEndOffset + 1),
+                                records);
+                            snapshotRegistry.getOrCreateSnapshot(nextEndOffset);
+                            prevEndOffset = nextEndOffset;
+                            return nextEndOffset;
                         }
                     });
                 op.processBatchEndOffset(offset);
@@ -963,7 +957,6 @@ public final class QuorumController implements Controller {
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
-                    maybeCompleteAuthorizerInitialLoad();
                     boolean isActive = isActiveController();
                     while (reader.hasNext()) {
                         Batch<ApiMessageAndVersion> batch = reader.next();
@@ -988,18 +981,20 @@ public final class QuorumController implements Controller {
                                 log.debug("Replaying commits from the active node up to " +
                                     "offset {} and epoch {}.", offset, epoch);
                             }
-                            int i = 1;
+                            int recordIndex = 0;
                             for (ApiMessageAndVersion message : messages) {
+                                long recordOffset = batch.baseOffset() + recordIndex;
                                 try {
-                                    replay(message.message(), Optional.empty(), offset);
+                                    replay(message.message(), Optional.empty(), recordOffset);
                                 } catch (Throwable e) {
-                                    String failureMessage = String.format("Unable to apply %s record on standby " +
-                                            "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
-                                            message.message().getClass().getSimpleName(), i, messages.size(),
-                                            batch.baseOffset());
+                                    String failureMessage = String.format("Unable to apply %s " +
+                                        "record at offset %d on standby controller, from the " +
+                                        "batch with baseOffset %d",
+                                        message.message().getClass().getSimpleName(),
+                                        recordOffset, batch.baseOffset());
                                     throw fatalFaultHandler.handleFault(failureMessage, e);
                                 }
-                                i++;
+                                recordIndex++;
                             }
                         }
 
@@ -1008,13 +1003,6 @@ public final class QuorumController implements Controller {
                             epoch,
                             batch.appendTimestamp()
                         );
-
-                        if (offset >= raftClient.latestSnapshotId().map(OffsetAndEpoch::offset).orElse(0L)) {
-                            oldestNonSnapshottedTimestamp = Math.min(
-                                oldestNonSnapshottedTimestamp,
-                                batch.appendTimestamp()
-                            );
-                        }
                     }
                 } finally {
                     reader.close();
@@ -1066,7 +1054,6 @@ public final class QuorumController implements Controller {
                         reader.lastContainedLogEpoch(),
                         reader.lastContainedLogTimestamp());
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-                    authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
                 } finally {
                     reader.close();
                 }
@@ -1094,10 +1081,10 @@ public final class QuorumController implements Controller {
                         renounce();
                     }
                 } else if (newLeader.isLeader(nodeId)) {
-                    log.info("Becoming the active controller at epoch {}, committed offset {}, " +
-                        "committed epoch {}", newLeader.epoch(), lastCommittedOffset,
-                        lastCommittedEpoch);
-                    claim(newLeader.epoch());
+                    long newLastWriteOffset = raftClient.logEndOffset() - 1;
+                    log.info("Becoming the active controller at epoch {}, last write offset {}.",
+                        newLeader.epoch(), newLastWriteOffset);
+                    claim(newLeader.epoch(), newLastWriteOffset);
                 } else {
                     log.info("In the new epoch {}, the leader is {}.",
                         newLeader.epoch(), newLeaderName);
@@ -1115,32 +1102,9 @@ public final class QuorumController implements Controller {
                 if (this != metaLogListener) {
                     log.debug("Ignoring {} raft event from an old registration", name);
                 } else {
-                    try {
-                        runnable.run();
-                    } finally {
-                        maybeCompleteAuthorizerInitialLoad();
-                    }
+                    runnable.run();
                 }
             });
-        }
-    }
-
-    private void maybeCompleteAuthorizerInitialLoad() {
-        if (!needToCompleteAuthorizerLoad) return;
-        OptionalLong highWatermark = raftClient.highWatermark();
-        if (highWatermark.isPresent()) {
-            if (lastCommittedOffset + 1 >= highWatermark.getAsLong()) {
-                log.info("maybeCompleteAuthorizerInitialLoad: completing authorizer " +
-                    "initial load at last committed offset {}.", lastCommittedOffset);
-                authorizer.get().completeInitialLoad();
-                needToCompleteAuthorizerLoad = false;
-            } else {
-                log.trace("maybeCompleteAuthorizerInitialLoad: can't proceed because " +
-                    "lastCommittedOffset  = {}, but highWatermark = {}.",
-                    lastCommittedOffset, highWatermark.getAsLong());
-            }
-        } else {
-            log.trace("maybeCompleteAuthorizerInitialLoad: highWatermark not set.");
         }
     }
 
@@ -1168,7 +1132,7 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void claim(int epoch) {
+    private void claim(int epoch, long newLastWriteOffset) {
         try {
             if (curClaimEpoch != -1) {
                 throw new RuntimeException("Cannot claim leadership because we are already the " +
@@ -1176,7 +1140,7 @@ public final class QuorumController implements Controller {
             }
             curClaimEpoch = epoch;
             controllerMetrics.setActive(true);
-            updateWriteOffset(lastCommittedOffset);
+            updateWriteOffset(newLastWriteOffset);
             clusterControl.activate();
 
             // Before switching to active, create an in-memory snapshot at the last committed
@@ -1345,7 +1309,6 @@ public final class QuorumController implements Controller {
                         lastCommittedEpoch + " in snapshot registry.");
             }
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
-            authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
             updateWriteOffset(-1);
             clusterControl.deactivate();
             cancelMaybeFenceReplicas();
@@ -1518,25 +1481,24 @@ public final class QuorumController implements Controller {
      *
      * @param message           The metadata record
      * @param snapshotId        The snapshotId if this record is from a snapshot
-     * @param batchLastOffset   The offset of the last record in the log batch, or the lastContainedLogOffset
-     *                          if this record is from a snapshot, this is used along with RegisterBrokerRecord
+     * @param offset            The offset of the record
      */
-    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long batchLastOffset) {
+    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
         if (log.isTraceEnabled()) {
             if (snapshotId.isPresent()) {
                 log.trace("Replaying snapshot {} record {}",
                     Snapshots.filenameFromSnapshotId(snapshotId.get()),
                         recordRedactor.toLoggableString(message));
             } else {
-                log.trace("Replaying log record {} with batchLastOffset {}",
-                        recordRedactor.toLoggableString(message), batchLastOffset);
+                log.trace("Replaying log record {} with offset {}",
+                        recordRedactor.toLoggableString(message), offset);
             }
         }
         logReplayTracker.replay(message);
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
-                clusterControl.replay((RegisterBrokerRecord) message, batchLastOffset);
+                clusterControl.replay((RegisterBrokerRecord) message, offset);
                 break;
             case UNREGISTER_BROKER_RECORD:
                 clusterControl.replay((UnregisterBrokerRecord) message);
@@ -1576,10 +1538,10 @@ public final class QuorumController implements Controller {
                 clusterControl.replay((BrokerRegistrationChangeRecord) message);
                 break;
             case ACCESS_CONTROL_ENTRY_RECORD:
-                aclControlManager.replay((AccessControlEntryRecord) message, snapshotId);
+                aclControlManager.replay((AccessControlEntryRecord) message);
                 break;
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
-                aclControlManager.replay((RemoveAccessControlEntryRecord) message, snapshotId);
+                aclControlManager.replay((RemoveAccessControlEntryRecord) message);
                 break;
             case USER_SCRAM_CREDENTIAL_RECORD:
                 scramControlManager.replay((UserScramCredentialRecord) message);
@@ -1706,12 +1668,6 @@ public final class QuorumController implements Controller {
     private final ScramControlManager scramControlManager;
 
     /**
-     * The ClusterMetadataAuthorizer, if one is configured. Note that this will still be
-     * Optional.empty() if an Authorizer is configured that doesn't use __cluster_metadata.
-     */
-    private final Optional<ClusterMetadataAuthorizer> authorizer;
-
-    /**
      * Manages the standard ACLs in the cluster.
      * This must be accessed only by the event queue thread.
      */
@@ -1759,20 +1715,9 @@ public final class QuorumController implements Controller {
     private long lastCommittedTimestamp = -1;
 
     /**
-     * True if we need to complete the authorizer initial load.
-     * This must be accessed only by the event queue thread.
-     */
-    private boolean needToCompleteAuthorizerLoad;
-
-    /**
      * If we have called scheduleWrite, this is the last offset we got back from it.
      */
     private long writeOffset;
-
-    /**
-     * Timestamp for the oldest record that was committed but not included in a snapshot.
-     */
-    private long oldestNonSnapshottedTimestamp = Long.MAX_VALUE;
 
     /**
      * How long to delay partition leader balancing operations.
@@ -1843,7 +1788,6 @@ public final class QuorumController implements Controller {
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
         ConfigurationValidator configurationValidator,
-        Optional<ClusterMetadataAuthorizer> authorizer,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
@@ -1917,12 +1861,9 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
-        this.authorizer = authorizer;
-        authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
-            setClusterMetadataAuthorizer(authorizer).
             build();
         this.logReplayTracker = new LogReplayTracker.Builder().
             setLogContext(logContext).
@@ -1932,7 +1873,6 @@ public final class QuorumController implements Controller {
         this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
-        this.needToCompleteAuthorizerLoad = authorizer.isPresent();
         this.zkRecordConsumer = new MigrationRecordConsumer();
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
@@ -1940,8 +1880,8 @@ public final class QuorumController implements Controller {
 
         resetToEmptyState();
 
-        log.info("Creating new QuorumController with clusterId {}, authorizer {}.{}",
-                clusterId, authorizer, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
+        log.info("Creating new QuorumController with clusterId {}.{}",
+                clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
 
         this.raftClient.register(metaLogListener);
     }
@@ -2329,5 +2269,12 @@ public final class QuorumController implements Controller {
     // VisibleForTesting
     QuorumControllerMetrics controllerMetrics() {
         return controllerMetrics;
+    }
+
+    // VisibleForTesting
+    void setWriteOffset(long newWriteOffset) {
+        appendControlEvent("setWriteOffset", () -> {
+            this.writeOffset = newWriteOffset;
+        });
     }
 }

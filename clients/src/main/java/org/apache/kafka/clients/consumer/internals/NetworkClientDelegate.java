@@ -236,7 +236,12 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         @Override
         public String toString() {
-            return "UnsentRequest(builder=" + requestBuilder + ")";
+            return "UnsentRequest{" +
+                    "requestBuilder=" + requestBuilder +
+                    ", handler=" + handler +
+                    ", node=" + node +
+                    ", timer=" + timer +
+                    '}';
         }
     }
 

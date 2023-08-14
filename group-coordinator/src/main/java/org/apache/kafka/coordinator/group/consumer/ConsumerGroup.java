@@ -17,8 +17,11 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -28,6 +31,7 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -402,8 +406,8 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return An immutable Map containing the subscription metadata for all the topics whose
-     *         members are subscribed to.
+     * @return An immutable Map of subscription metadata for
+     *         each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> subscriptionMetadata() {
         return Collections.unmodifiableMap(subscribedTopicMetadata);
@@ -425,16 +429,18 @@ public class ConsumerGroup implements Group {
      * Computes the subscription metadata based on the current subscription and
      * an updated member.
      *
-     * @param oldMember     The old member.
-     * @param newMember     The new member.
-     * @param topicsImage   The topic metadata.
+     * @param oldMember     The old member of the consumer group.
+     * @param newMember     The updated member of the consumer group.
+     * @param topicsImage   The current metadata for all available topics.
+     * @param clusterImage  The current metadata for the Kafka cluster.
      *
-     * @return The new subscription metadata as an immutable Map.
+     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember,
-        TopicsImage topicsImage
+        TopicsImage topicsImage,
+        ClusterImage clusterImage
     ) {
         // Copy and update the current subscriptions.
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
@@ -442,14 +448,30 @@ public class ConsumerGroup implements Group {
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
+
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
+                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
+                topicImage.partitions().forEach((partition, partitionRegistration) -> {
+                    Set<String> racks = new HashSet<>();
+                    for (int replica : partitionRegistration.replicas) {
+                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
+                        // Only add the rack if it is available for the broker/replica.
+                        rackOptional.ifPresent(racks::add);
+                    }
+                    // If rack information is unavailable for all replicas of this partition,
+                    // no corresponding entry will be stored for it in the map.
+                    if (!racks.isEmpty())
+                        partitionRacks.put(partition, racks);
+                });
+
                 newSubscriptionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
-                    topicImage.partitions().size()
-                ));
+                    topicImage.partitions().size(),
+                    partitionRacks)
+                );
             }
         });
 
@@ -495,6 +517,30 @@ public class ConsumerGroup implements Group {
      */
     public DeadlineAndEpoch metadataRefreshDeadline() {
         return metadataRefreshDeadline;
+    }
+
+    /**
+     * Validates the OffsetCommit request.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param memberEpoch       The member epoch.
+     */
+    @Override
+    public void validateOffsetCommit(
+        String memberId,
+        String groupInstanceId,
+        int memberEpoch
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        // When the member epoch is -1, the request comes from either the admin client
+        // or a consumer which does not use the group management facility. In this case,
+        // the request can commit offsets if the group is empty.
+        if (memberEpoch < 0 && members().isEmpty()) return;
+
+        final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
+        if (memberEpoch != member.memberEpoch()) {
+            throw Errors.STALE_MEMBER_EPOCH.exception();
+        }
     }
 
     /**

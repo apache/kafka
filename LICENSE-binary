@@ -261,8 +261,8 @@ scala-reflect-2.13.11
 scala-java8-compat_2.13-1.0.2
 snappy-java-1.1.10.3
 swagger-annotations-2.2.8
-zookeeper-3.6.4
-zookeeper-jute-3.6.4
+zookeeper-3.8.2
+zookeeper-jute-3.8.2
 
 ===============================================================================
 This product bundles various third-party components under other open source

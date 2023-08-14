@@ -665,6 +665,42 @@ class MetadataCacheTest {
   }
 
   @Test
+  def testGetAliveBrokersWithBrokerFenced(): Unit = {
+    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+    val listenerName = "listener"
+    val endpoints = new BrokerEndpointCollection()
+    endpoints.add(new BrokerEndpoint().
+      setName(listenerName).
+      setHost("foo").
+      setPort(123).
+      setSecurityProtocol(0))
+    val delta = new MetadataDelta.Builder().build()
+    delta.replay(new RegisterBrokerRecord()
+      .setBrokerId(0)
+      .setFenced(false)
+      .setEndPoints(endpoints))
+    delta.replay(new RegisterBrokerRecord()
+      .setBrokerId(1)
+      .setFenced(false)
+      .setEndPoints(endpoints))
+    delta.replay(new BrokerRegistrationChangeRecord()
+      .setBrokerId(1)
+      .setFenced(1.toByte))
+
+    val metadataImage = delta.apply(MetadataProvenance.EMPTY)
+
+    metadataCache.setImage(metadataImage)
+    assertFalse(metadataCache.isBrokerFenced(0))
+    assertTrue(metadataCache.isBrokerFenced(1))
+
+    val aliveBrokers = metadataCache.getAliveBrokers().map(_.id).toSet
+    metadataImage.cluster().brokers().forEach { (brokerId, registration) =>
+      assertEquals(!registration.fenced(), aliveBrokers.contains(brokerId))
+      assertEquals(aliveBrokers.contains(brokerId), metadataCache.getAliveBrokerNode(brokerId, new ListenerName(listenerName)).isDefined)
+    }
+  }
+
+  @Test
   def testIsBrokerInControlledShutdown(): Unit = {
     val metadataCache = MetadataCache.kRaftMetadataCache(0)
 
@@ -706,7 +742,7 @@ class MetadataCacheTest {
     assertEquals(100L, metadataCache.getAliveBrokerEpoch(0).getOrElse(-1L))
     assertEquals(-1L, metadataCache.getAliveBrokerEpoch(1).getOrElse(-1L))
   }
-  
+
   @ParameterizedTest
   @MethodSource(Array("cacheProvider"))
   def testGetPartitionInfo(cache: MetadataCache): Unit = {
@@ -744,7 +780,7 @@ class MetadataCacheTest {
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
         .setListener(listenerName.value)).asJava))
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, 
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava, util.Collections.emptyMap(), false).build()
     MetadataCacheTest.updateCache(cache, updateMetadataRequest)
 

@@ -42,8 +42,12 @@ public class Graph<V extends Comparable<V>> {
             this(destination, capacity, cost, residualFlow, flow, true);
         }
 
-        public Edge(final V destination, final int capacity, final int cost, final int residualFlow, final int flow,
-            final boolean forwardEdge) {
+        public Edge(final V destination,
+                    final int capacity,
+                    final int cost,
+                    final int residualFlow,
+                    final int flow,
+                    final boolean forwardEdge) {
             Objects.requireNonNull(destination);
             if (capacity < 0) {
                 throw new IllegalArgumentException("Edge capacity cannot be negative");
@@ -72,8 +76,11 @@ public class Graph<V extends Comparable<V>> {
 
             final Graph<?>.Edge otherEdge = (Graph<?>.Edge) other;
 
-            return destination.equals(otherEdge.destination) && capacity == otherEdge.capacity
-                && cost == otherEdge.cost && residualFlow == otherEdge.residualFlow && flow == otherEdge.flow
+            return destination.equals(otherEdge.destination)
+                && capacity == otherEdge.capacity
+                && cost == otherEdge.cost
+                && residualFlow == otherEdge.residualFlow
+                && flow == otherEdge.flow
                 && forwardEdge == otherEdge.forwardEdge;
         }
 
@@ -84,8 +91,15 @@ public class Graph<V extends Comparable<V>> {
 
         @Override
         public String toString() {
-            return "{destination= " + destination + ", capacity=" + capacity + ", cost=" + cost
-                + ", residualFlow=" + residualFlow + ", flow=" + flow + ", forwardEdge=" + forwardEdge;
+            return "Edge {"
+                + "destination= " + destination
+                + ", capacity=" + capacity
+                + ", cost=" + cost
+                + ", residualFlow=" + residualFlow
+                + ", flow=" + flow
+                + ", forwardEdge=" + forwardEdge
+                + "}";
+
         }
     }
 
@@ -106,12 +120,13 @@ public class Graph<V extends Comparable<V>> {
         addEdge(u, new Edge(v, capacity, cost, capacity - flow, flow));
     }
 
-    public Set<V> nodes() {
+    public SortedSet<V> nodes() {
         return nodes;
     }
 
-    public Map<V, Edge> edges(final V node) {
-        return adjList.get(node);
+    public SortedMap<V, Edge> edges(final V node) {
+        final SortedMap<V, Edge> edge = adjList.get(node);
+        return edge == null ? new TreeMap<>() : edge;
     }
 
     public boolean isResidualGraph() {
@@ -126,12 +141,12 @@ public class Graph<V extends Comparable<V>> {
         sinkNode = node;
     }
 
-    public int totalCost() {
-        int totalCost = 0;
+    public long totalCost() {
+        long totalCost = 0;
         for (final Map.Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final SortedMap<V, Edge> edges = nodeEdges.getValue();
-            for (final Entry<V, Edge> nodeEdge : edges.entrySet()) {
-                totalCost += nodeEdge.getValue().cost * nodeEdge.getValue().flow;
+            for (final Edge nodeEdge : edges.values()) {
+                totalCost += (long) nodeEdge.cost * nodeEdge.flow;
             }
         }
         return totalCost;

@@ -62,6 +62,11 @@ public class GroupCoordinatorConfig {
     public final int offsetsTopicSegmentBytes;
 
     /**
+     * The maximum size for a metadata entry associated with an offset commit.
+     */
+    public final int offsetMetadataMaxSize;
+
+    /**
      * The generic group maximum size.
      */
     public final int genericGroupMaxSize;
@@ -93,6 +98,7 @@ public class GroupCoordinatorConfig {
         int consumerGroupMaxSize,
         List<PartitionAssignor> consumerGroupAssignors,
         int offsetsTopicSegmentBytes,
+        int offsetMetadataMaxSize,
         int genericGroupMaxSize,
         int genericGroupInitialRebalanceDelayMs,
         int genericGroupNewMemberJoinTimeoutMs,
@@ -105,6 +111,7 @@ public class GroupCoordinatorConfig {
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupAssignors = consumerGroupAssignors;
         this.offsetsTopicSegmentBytes = offsetsTopicSegmentBytes;
+        this.offsetMetadataMaxSize = offsetMetadataMaxSize;
         this.genericGroupMaxSize = genericGroupMaxSize;
         this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
         this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;

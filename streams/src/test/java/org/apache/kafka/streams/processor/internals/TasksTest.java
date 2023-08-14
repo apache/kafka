@@ -45,7 +45,10 @@ public class TasksTest {
     private final static TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
     private final static TaskId TASK_0_0 = new TaskId(0, 0);
     private final static TaskId TASK_0_1 = new TaskId(0, 1);
+    private final static TaskId TASK_0_2 = new TaskId(0, 2);
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
+    private final static TaskId TASK_1_1 = new TaskId(1, 1);
+    private final static TaskId TASK_1_2 = new TaskId(1, 2);
 
     private final Tasks tasks = new Tasks(new LogContext());
 
@@ -120,6 +123,28 @@ public class TasksTest {
 
         assertEquals(expectedInputPartitions, actualInputPartitions);
         assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+    }
+
+    @Test
+    public void shouldVerifyIfPendingTaskToRecycleExist() {
+        assertFalse(tasks.hasPendingTasksToRecycle());
+        tasks.addPendingTaskToRecycle(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
+        assertTrue(tasks.hasPendingTasksToRecycle());
+
+        tasks.addPendingTaskToRecycle(TASK_1_0, mkSet(TOPIC_PARTITION_A_1));
+        assertTrue(tasks.hasPendingTasksToRecycle());
+
+        tasks.addPendingTaskToCloseClean(TASK_0_1);
+        tasks.addPendingTaskToCloseDirty(TASK_0_2);
+        tasks.addPendingTaskToUpdateInputPartitions(TASK_1_1, mkSet(TOPIC_PARTITION_B_0));
+        tasks.addPendingActiveTaskToSuspend(TASK_1_2);
+        assertTrue(tasks.hasPendingTasksToRecycle());
+
+        tasks.removePendingTaskToRecycle(TASK_0_0);
+        assertTrue(tasks.hasPendingTasksToRecycle());
+
+        tasks.removePendingTaskToRecycle(TASK_1_0);
+        assertFalse(tasks.hasPendingTasksToRecycle());
     }
 
     @Test
