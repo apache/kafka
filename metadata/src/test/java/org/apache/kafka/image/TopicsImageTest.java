@@ -121,16 +121,20 @@ public class TopicsImageTest {
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
 
         DELTA1_RECORDS = new ArrayList<>();
+        // remove topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveTopicRecord().
             setTopicId(FOO_UUID),
             REMOVE_TOPIC_RECORD.highestSupportedVersion()));
+        // change topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new PartitionChangeRecord().
             setTopicId(BAR_UUID).
             setPartitionId(0).setLeader(1),
             PARTITION_CHANGE_RECORD.highestSupportedVersion()));
+        // add topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
             setName("baz").setTopicId(BAZ_UUID),
             TOPIC_RECORD.highestSupportedVersion()));
+        // add partition record for new topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new PartitionRecord().
             setPartitionId(0).
             setTopicId(BAZ_UUID).
@@ -141,9 +145,11 @@ public class TopicsImageTest {
             setLeader(3).
             setLeaderEpoch(2).
             setPartitionEpoch(1), PARTITION_RECORD.highestSupportedVersion()));
+        // re-add topic with different topic id
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
             setName("foo").setTopicId(FOO_UUID2),
             TOPIC_RECORD.highestSupportedVersion()));
+        // add then remove topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
             setName("bam").setTopicId(BAM_UUID),
             TOPIC_RECORD.highestSupportedVersion()));

@@ -85,10 +85,15 @@ public class ScramImageTest {
         IMAGE1 = new ScramImage(image1mechanisms);
 
         DELTA1_RECORDS = new ArrayList<>();
+        // remove all sha512 credentials
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveUserScramCredentialRecord().
+            setName("alpha").
+            setMechanism(SCRAM_SHA_512.type()), (short) 0));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveUserScramCredentialRecord().
             setName("gamma").
             setMechanism(SCRAM_SHA_512.type()), (short) 0));
         ScramCredentialData secondAlpha256Credential = randomScramCredentialData(random);
+        // add sha256 credential
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UserScramCredentialRecord().
                 setName("alpha").
                 setMechanism(SCRAM_SHA_256.type()).
@@ -96,9 +101,7 @@ public class ScramImageTest {
                 setStoredKey(secondAlpha256Credential.storedKey()).
                 setServerKey(secondAlpha256Credential.serverKey()).
                 setIterations(secondAlpha256Credential.iterations()), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveUserScramCredentialRecord().
-            setName("alpha").
-            setMechanism(SCRAM_SHA_512.type()), (short) 0));
+        // add sha512 credential re-using name
         ScramCredentialData secondAlpha512Credential = randomScramCredentialData(random);
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UserScramCredentialRecord().
             setName("alpha").

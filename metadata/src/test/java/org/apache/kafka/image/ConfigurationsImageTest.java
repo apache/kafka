@@ -62,6 +62,7 @@ public class ConfigurationsImageTest {
         IMAGE1 = new ConfigurationsImage(map1);
 
         DELTA1_RECORDS = new ArrayList<>();
+        // remove configs
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ConfigRecord().setResourceType(BROKER.id()).
             setResourceName("0").setName("foo").setValue(null),
             CONFIG_RECORD.highestSupportedVersion()));
@@ -71,9 +72,11 @@ public class ConfigurationsImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ConfigRecord().setResourceType(BROKER.id()).
             setResourceName("1").setName("foobar").setValue(null),
             CONFIG_RECORD.highestSupportedVersion()));
+        // add back config to b1
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ConfigRecord().setResourceType(BROKER.id()).
             setResourceName("1").setName("barfoo").setValue("bazfoo"),
             CONFIG_RECORD.highestSupportedVersion()));
+        // add new config to b2
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ConfigRecord().setResourceType(BROKER.id()).
             setResourceName("2").setName("foo").setValue("bar"),
             CONFIG_RECORD.highestSupportedVersion()));
