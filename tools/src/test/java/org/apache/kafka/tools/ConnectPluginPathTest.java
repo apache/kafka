@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.isolation.ClassLoaderFactory;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginScanResult;
 import org.apache.kafka.connect.runtime.isolation.PluginSource;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.ReflectionScanner;
 import org.apache.kafka.connect.runtime.isolation.ServiceLoaderScanner;
@@ -248,6 +249,65 @@ public class ConnectPluginPathTest {
         // Plugins are not migrated during a dry-run.
         assertNonMigratedPluginsStatus(table, false);
         assertBadPackaginPluginsStatus(table, false);
+    }
+
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifestsDryRunReadOnlyLocation(PluginLocationType type) {
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        assertTrue(locationA.path.toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
+    }
+
+    @Test
+    public void testSyncManifestsDryRunReadOnlyMetaInf() {
+        PluginLocationType type = PluginLocationType.CLASS_HIERARCHY;
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        String subPath = "META-INF";
+        assertTrue(locationA.path.resolve(subPath).toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
+    }
+
+    @Test
+    public void testSyncManifestsDryRunReadOnlyServices() {
+        PluginLocationType type = PluginLocationType.CLASS_HIERARCHY;
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        String subPath = "META-INF/services";
+        assertTrue(locationA.path.resolve(subPath).toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
+    }
+
+    @Test
+    public void testSyncManifestsDryRunReadOnlyManifest() {
+        PluginLocationType type = PluginLocationType.CLASS_HIERARCHY;
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        String subPath = "META-INF/services/" + PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY.superClass().getName();
+        assertTrue(locationA.path.resolve(subPath).toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
     }
 
     @ParameterizedTest

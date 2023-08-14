@@ -460,9 +460,12 @@ public class ManifestWorkspace {
         deleteDirectoryIfEmpty(dryRun, metaInfPath);
     }
 
-    private void deleteDirectoryIfEmpty(boolean dryRun, Path path) throws IOException {
+    private void deleteDirectoryIfEmpty(boolean dryRun, Path path) throws IOException, TerseException {
         if (!Files.exists(path)) {
             return;
+        }
+        if (!Files.isWritable(path)) {
+            throw new TerseException(path + " is not writable");
         }
         try (Stream<Path> list = Files.list(path)) {
             if (list.findAny().isPresent()) {

@@ -397,7 +397,11 @@ public class ConnectPluginPath {
                     config.out.println("Dry run passed: All above changes can be committed to disk if re-run with dry run disabled.");
                 } else {
                     config.out.println("Writing changes to plugins...");
-                    workspace.commit(false);
+                    try {
+                        workspace.commit(false);
+                    } catch (Throwable t) {
+                        throw new RuntimeException("Sync incomplete, plugin path may be corrupted. Clear your plugin path and retry with dry-run enabled", t);
+                    }
                     config.out.println("All loadable plugins have accurate ServiceLoader manifests");
                 }
             } else {
@@ -406,14 +410,17 @@ public class ConnectPluginPath {
         }
     }
 
-    private static void failCommand(Config config, Throwable e) {
+    private static void failCommand(Config config, Throwable e) throws TerseException {
+        if (e instanceof TerseException) {
+            throw (TerseException) e;
+        }
         if (config.command == Command.LIST) {
             throw new RuntimeException("Unexpected error occurred while listing plugins", e);
         } else if (config.command == Command.SYNC_MANIFESTS) {
             if (config.dryRun) {
                 throw new RuntimeException("Unexpected error occurred while dry-running sync", e);
             } else {
-                config.out.println("Connect plugin path now in unexpected state: Clear your plugin path and retry with dry run enabled");
+                throw new RuntimeException("Unexpected error occurred while executing sync", e);
             }
         }
     }
