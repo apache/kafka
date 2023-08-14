@@ -20,7 +20,6 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.security.InvalidKeyException
-import java.util.Base64
 
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Mac, SecretKey}
@@ -58,18 +57,6 @@ object DelegationTokenManager {
    */
   def createSecretKey(keybytes: Array[Byte]) : SecretKey = {
     new SecretKeySpec(keybytes, DefaultHmacAlgorithm)
-  }
-
-  /**
-   *
-   *
-   * @param tokenId
-   * @param secretKey
-   * @return
-   */
-  def createBase64HMAC(tokenId: String, secretKey: SecretKey) : String = {
-    val hmac = createHmac(tokenId, secretKey)
-    Base64.getEncoder.encodeToString(hmac)
   }
 
   /**

@@ -1873,12 +1873,10 @@ public final class QuorumController implements Controller {
         this.delegationTokenExpiryCheckIntervalMs = delegationTokenExpiryCheckIntervalMs;
         this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
             setLogContext(logContext).
-            setSnapshotRegistry(snapshotRegistry).
             setTokenCache(tokenCache).
             setTokenKeyString(tokenKeyString).
             setDelegationTokenMaxLifeMs(delegationTokenMaxLifeMs).
             setDelegationTokenExpiryTimeMs(delegationTokenExpiryTimeMs).
-            setDelegationTokenExpiryCheckIntervalMs(delegationTokenExpiryCheckIntervalMs).
             build();
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).

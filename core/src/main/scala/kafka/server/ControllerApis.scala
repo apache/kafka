@@ -848,11 +848,11 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    val alterRequest = request.body[CreateDelegationTokenRequest]
+    val createTokenRequest = request.body[CreateDelegationTokenRequest]
 
     val requester = request.context.principal
-    val ownerPrincipalName = alterRequest.data.ownerPrincipalName
-    val ownerPrincipalType = alterRequest.data.ownerPrincipalType
+    val ownerPrincipalName = createTokenRequest.data.ownerPrincipalName
+    val ownerPrincipalType = createTokenRequest.data.ownerPrincipalType
     val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
       request.context.principal
     } else {
@@ -871,7 +871,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       OptionalLong.empty())
 
     // Copy the response data to a new response so we can apply the request version
-    controller.createDelegationToken(context, alterRequest.data)
+    controller.createDelegationToken(context, createTokenRequest.data)
       .thenApply[Unit] { response =>
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            CreateDelegationTokenResponse.prepareResponse(
@@ -889,13 +889,13 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleRenewDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
-     val alterRequest = request.body[RenewDelegationTokenRequest]
+     val renewTokenRequest = request.body[RenewDelegationTokenRequest]
 
      val context = new ControllerRequestContext(
        request.context.header.data,
        request.context.principal,
        OptionalLong.empty())
-     controller.renewDelegationToken(context, alterRequest.data)
+     controller.renewDelegationToken(context, renewTokenRequest.data)
        .thenApply[Unit] { response =>
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            new RenewDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
@@ -903,13 +903,13 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleExpireDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
-     val alterRequest = request.body[ExpireDelegationTokenRequest]
+     val expireTokenRequest = request.body[ExpireDelegationTokenRequest]
 
      val context = new ControllerRequestContext(
        request.context.header.data,
        request.context.principal,
        OptionalLong.empty())
-     controller.expireDelegationToken(context, alterRequest.data)
+     controller.expireDelegationToken(context, expireTokenRequest.data)
        .thenApply[Unit] { response =>
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            new ExpireDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))

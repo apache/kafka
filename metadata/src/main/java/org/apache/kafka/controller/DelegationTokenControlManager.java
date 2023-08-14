@@ -35,7 +35,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.common.utils.Time;
 
 import java.nio.charset.StandardCharsets;
@@ -64,20 +63,13 @@ public class DelegationTokenControlManager {
 
     static class Builder {
         private LogContext logContext = null;
-        private SnapshotRegistry snapshotRegistry = null;
         private DelegationTokenCache tokenCache = null;
         private String secretKeyString = null;
         private long tokenDefaultMaxLifetime = 0;
         private long tokenDefaultRenewLifetime = 0;
-        private long tokenRemoverScanInterval = 0;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
-            return this;
-        }
-
-        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
-            this.snapshotRegistry = snapshotRegistry;
             return this;
         }
 
@@ -101,22 +93,14 @@ public class DelegationTokenControlManager {
             return this;
         }
 
-        Builder setDelegationTokenExpiryCheckIntervalMs(long tokenRemoverScanInterval) {
-            this.tokenRemoverScanInterval = tokenRemoverScanInterval;
-            return this;
-        }
-
         DelegationTokenControlManager build() {
             if (logContext == null) logContext = new LogContext();
-            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             return new DelegationTokenControlManager(
               logContext,
-              snapshotRegistry,
               tokenCache,
               secretKeyString,
               tokenDefaultMaxLifetime,
-              tokenDefaultRenewLifetime,
-              tokenRemoverScanInterval);
+              tokenDefaultRenewLifetime);
         }
     }
 
@@ -125,25 +109,19 @@ public class DelegationTokenControlManager {
     private final String secretKeyString;
     private final long tokenDefaultMaxLifetime;
     private final long tokenDefaultRenewLifetime;
-    private final long tokenRemoverScanInterval;
-    long tokenRemoverScanLastTime;
 
     private DelegationTokenControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry,
         DelegationTokenCache tokenCache,
         String secretKeyString,
         long tokenDefaultMaxLifetime,
-        long tokenDefaultRenewLifetime,
-        long tokenRemoverScanInterval
+        long tokenDefaultRenewLifetime
     ) {
         this.log = logContext.logger(DelegationTokenControlManager.class);
         this.tokenCache = tokenCache;
         this.secretKeyString = secretKeyString;
         this.tokenDefaultMaxLifetime = tokenDefaultMaxLifetime;
         this.tokenDefaultRenewLifetime = tokenDefaultRenewLifetime;
-        this.tokenRemoverScanInterval = tokenRemoverScanInterval;
-        this.tokenRemoverScanLastTime = time.milliseconds();
     }
 
     public static byte[] toBytes(String str) {
