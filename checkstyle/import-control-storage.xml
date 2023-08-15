@@ -114,8 +114,8 @@
         <allow pkg="org.apache.kafka.server.log.remote" />
         <allow pkg="org.apache.kafka.server.log.remote.storage" />
 
+        <allow pkg="org.apache.kafka.test" />
         <subpackage name="actions">
-            <allow pkg="org.apache.kafka.test" />
         </subpackage>
 
         <subpackage name="specs">

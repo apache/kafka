@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.getTieredStorageRecords;
+import static org.apache.kafka.tiered.storage.utils.ActionUtils.tieredStorageRecords;
 import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -129,7 +129,7 @@ public final class ProduceAction implements TieredStorageTestAction {
 
         // Take a physical snapshot of the second-tier storage, and compare the records found with
         // those of the expected log segments.
-        List<Record> tieredStorageRecords = getTieredStorageRecords(context, topicPartition);
+        List<Record> tieredStorageRecords = tieredStorageRecords(context, topicPartition);
         // Don't include the records which were stored before our records were produced.
         List<Record> discoveredRecords =
                 tieredStorageRecords.subList((int) (startOffset - beginOffset), tieredStorageRecords.size());

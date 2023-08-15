@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.getTieredStorageRecords;
+import static org.apache.kafka.tiered.storage.utils.ActionUtils.tieredStorageRecords;
 import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,7 +84,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
         // Reads all records physically found in the second-tier storage ∂for the given topic-partition.
         // The resulting sequence is sorted by records offset, as there is no guarantee on ordering from
         // the LocalTieredStorageSnapshot.
-        List<Record> tieredStorageRecords = getTieredStorageRecords(context, topicPartition);
+        List<Record> tieredStorageRecords = tieredStorageRecords(context, topicPartition);
 
         Optional<Record> firstExpectedRecordOpt = tieredStorageRecords
                 .stream()

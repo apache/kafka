@@ -53,8 +53,8 @@ public class ActionUtils {
      * @param topicPartition The topic-partition of the records.
      * @return The records found in the local tiered storage.
      */
-    public static List<Record> getTieredStorageRecords(TieredStorageTestContext context,
-                                                       TopicPartition topicPartition) {
+    public static List<Record> tieredStorageRecords(TieredStorageTestContext context,
+                                                    TopicPartition topicPartition) {
         return context.takeTieredStorageSnapshot()
                 .getFilesets(topicPartition)
                 .stream()
