@@ -40,6 +40,7 @@ import scala.collection.Seq;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -78,8 +79,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     protected int numRemoteLogMetadataPartitions = 5;
     private TieredStorageTestContext context;
-    private String storageManagerConfigPrefix = "rsm.config.";
-    private String rlmmConfigPrefix = "rlmm.config.";
+    private String testClassName = "";
 
     @SuppressWarnings("deprecation")
     @Override
@@ -130,7 +130,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         // You can override this property with a fixed path of your choice if you wish to use a non-temporary
         // directory to access its content after a test terminated.
         overridingProps.setProperty(storageConfigPrefix(STORAGE_DIR_CONFIG),
-                TestUtils.tempDirectory("kafka-remote-tier-" + this.getClass().getSimpleName()).getAbsolutePath());
+                TestUtils.tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath());
         // This configuration will remove all the remote files when close is called in remote storage manager.
         // Storage manager close is being called while the server is actively processing the socket requests,
         // so enabling this config can break the existing tests.
@@ -148,9 +148,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     @BeforeEach
     @Override
     public void setUp(TestInfo testInfo) {
-        String testClassName = testInfo.getTestClass().get().getSimpleName();
-        storageManagerConfigPrefix += testClassName + ".";
-        rlmmConfigPrefix += testClassName + ".";
+        testClassName = testInfo.getTestClass().get().getSimpleName().toLowerCase(Locale.getDefault());
         super.setUp(testInfo);
         context = new TieredStorageTestContext(this);
     }
@@ -182,11 +180,11 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     }
 
     private String storageConfigPrefix(String key) {
-        return storageManagerConfigPrefix + key;
+        return "rsm.config." + testClassName + "." + key;
     }
 
     private String metadataConfigPrefix(String key) {
-        return rlmmConfigPrefix + key;
+        return "rlmm.config." + testClassName + "." + key;
     }
 
     @SuppressWarnings("deprecation")
