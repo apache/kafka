@@ -23,8 +23,7 @@ import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager,
-  RemoteLogManagerConfig}
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
@@ -284,9 +283,9 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   private def verifyRemoteLogTopicConfigs(topicConfig: Properties): Unit = {
-    val logOpt = brokers.head.logManager.getLog(new TopicPartition(testTopicName, 0))
-    assertTrue(logOpt.isDefined)
-    val log = logOpt.get
+    val logBuffer = brokers.flatMap(_.logManager.getLog(new TopicPartition(testTopicName, 0)))
+    assertTrue(logBuffer.nonEmpty)
+    val log = logBuffer.head
     TestUtils.waitUntilTrue(() => {
       var result = true
       if (topicConfig.containsKey(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)) {
