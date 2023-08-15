@@ -77,7 +77,7 @@ public class ConnectPluginPath {
         ArgumentParser parser = parser();
         try {
             Namespace namespace = parser.parseArgs(args);
-            Config config = parseConfig(parser, namespace, out);
+            Config config = parseConfig(parser, namespace, out, err);
             runCommand(config);
             return 0;
         } catch (ArgumentParserException e) {
@@ -87,8 +87,8 @@ public class ConnectPluginPath {
             err.println(e.getMessage());
             return 2;
         } catch (Throwable e) {
-            err.println(e.getMessage());
             err.println(Utils.stackTrace(e));
+            err.println(e.getMessage());
             return 3;
         }
     }
@@ -142,7 +142,7 @@ public class ConnectPluginPath {
         return parser;
     }
 
-    private static Config parseConfig(ArgumentParser parser, Namespace namespace, PrintStream out) throws ArgumentParserException, TerseException {
+    private static Config parseConfig(ArgumentParser parser, Namespace namespace, PrintStream out, PrintStream err) throws ArgumentParserException, TerseException {
         Set<Path> locations = parseLocations(parser, namespace);
         String subcommand = namespace.getString("subcommand");
         if (subcommand == null) {
@@ -150,9 +150,9 @@ public class ConnectPluginPath {
         }
         switch (subcommand) {
             case "list":
-                return new Config(Command.LIST, locations, false, false, out);
+                return new Config(Command.LIST, locations, false, false, out, err);
             case "sync-manifests":
-                return new Config(Command.SYNC_MANIFESTS, locations, namespace.getBoolean("dry_run"), namespace.getBoolean("keep_not_found"), out);
+                return new Config(Command.SYNC_MANIFESTS, locations, namespace.getBoolean("dry_run"), namespace.getBoolean("keep_not_found"), out, err);
             default:
                 throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
         }
@@ -205,13 +205,15 @@ public class ConnectPluginPath {
         private final boolean dryRun;
         private final boolean keepNotFound;
         private final PrintStream out;
+        private final PrintStream err;
 
-        private Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out) {
+        private Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out, PrintStream err) {
             this.command = command;
             this.locations = locations;
             this.dryRun = dryRun;
             this.keepNotFound = keepNotFound;
             this.out = out;
+            this.err = err;
         }
 
         @Override
@@ -400,9 +402,10 @@ public class ConnectPluginPath {
                     try {
                         workspace.commit(false);
                     } catch (Throwable t) {
-                        throw new RuntimeException("Sync incomplete, plugin path may be corrupted. Clear your plugin path and retry with dry-run enabled", t);
+                        config.err.println(Utils.stackTrace(t));
+                        throw new TerseException("Sync incomplete due to exception; plugin path may be corrupted. Discard the contents of the plugin.path before retrying.");
                     }
-                    config.out.println("All loadable plugins have accurate ServiceLoader manifests");
+                    config.out.println("All loadable plugins have accurate ServiceLoader manifests.");
                 }
             } else {
                 config.out.println("No changes required.");
@@ -417,11 +420,8 @@ public class ConnectPluginPath {
         if (config.command == Command.LIST) {
             throw new RuntimeException("Unexpected error occurred while listing plugins", e);
         } else if (config.command == Command.SYNC_MANIFESTS) {
-            if (config.dryRun) {
-                throw new RuntimeException("Unexpected error occurred while dry-running sync", e);
-            } else {
-                throw new RuntimeException("Unexpected error occurred while executing sync", e);
-            }
+            // The real write errors are propagated as a TerseException, and don't take this branch.
+            throw new RuntimeException("Unexpected error occurred while dry-running sync", e);
         }
     }
 

@@ -173,7 +173,7 @@ public class ConnectPluginPathTest {
                                 TestPlugins.TestPlugin.BAD_PACKAGING_CO_LOCATED))
         );
         Map<String, List<String[]>> table = assertListSuccess(res);
-        assertBadPackaginPluginsStatus(table, false);
+        assertBadPackagingPluginsStatus(table, false);
     }
 
     @ParameterizedTest
@@ -220,7 +220,7 @@ public class ConnectPluginPathTest {
         ));
         // Non-migrated plugins get new manifests
         assertNonMigratedPluginsStatus(table, true);
-        assertBadPackaginPluginsStatus(table, true);
+        assertBadPackagingPluginsStatus(table, true);
     }
 
     @ParameterizedTest
@@ -248,7 +248,7 @@ public class ConnectPluginPathTest {
         ));
         // Plugins are not migrated during a dry-run.
         assertNonMigratedPluginsStatus(table, false);
-        assertBadPackaginPluginsStatus(table, false);
+        assertBadPackagingPluginsStatus(table, false);
     }
 
     @ParameterizedTest
@@ -338,7 +338,7 @@ public class ConnectPluginPathTest {
         // Non-migrated plugins get new manifests
         assertNonMigratedPluginsStatus(table, true);
         // Because --keep-not-found is specified, the bad packaging plugins keep their manifests
-        assertBadPackaginPluginsStatus(table, false);
+        assertBadPackagingPluginsStatus(table, false);
     }
 
 
@@ -354,6 +354,7 @@ public class ConnectPluginPathTest {
     }
 
     private static void assertNonMigratedPluginsStatus(Map<String, List<String[]>> table, boolean migrated) {
+        // These plugins are missing manifests that get added during the migration
         assertPluginMigrationStatus(table, true, migrated,
                 TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER,
                 TestPlugins.TestPlugin.NON_MIGRATED_HEADER_CONVERTER,
@@ -361,16 +362,16 @@ public class ConnectPluginPathTest {
                 TestPlugins.TestPlugin.NON_MIGRATED_SINK_CONNECTOR,
                 TestPlugins.TestPlugin.NON_MIGRATED_SOURCE_CONNECTOR,
                 TestPlugins.TestPlugin.NON_MIGRATED_TRANSFORMATION);
-        // This plugin is partially compatible
+        // This plugin is partially compatible, and becomes fully compatible during migration.
         assertPluginMigrationStatus(table, true, migrated ? true : null,
                 TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
     }
 
-    private static void assertBadPackaginPluginsStatus(Map<String, List<String[]>> table, boolean migrated) {
+    private static void assertBadPackagingPluginsStatus(Map<String, List<String[]>> table, boolean migrated) {
         assertPluginsAreCompatible(table,
                 TestPlugins.TestPlugin.BAD_PACKAGING_CO_LOCATED,
                 TestPlugins.TestPlugin.BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR);
-        // These plugin
+        // These plugins have manifests that get removed during the migration
         assertPluginMigrationStatus(table, false, !migrated,
                 TestPlugins.TestPlugin.BAD_PACKAGING_MISSING_SUPERCLASS,
                 TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR,
