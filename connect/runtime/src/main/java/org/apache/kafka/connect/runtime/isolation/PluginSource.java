@@ -18,13 +18,11 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.net.URL;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Objects;
 
 public class PluginSource {
 
-    public static final Path CLASSPATH = Paths.get("classpath");
     private final Path location;
     private final ClassLoader loader;
     private final URL[] urls;
@@ -48,7 +46,7 @@ public class PluginSource {
     }
 
     public boolean isolated() {
-        return location != CLASSPATH;
+        return location != null;
     }
 
     @Override
@@ -64,5 +62,9 @@ public class PluginSource {
         int result = Objects.hash(location, loader);
         result = 31 * result + Arrays.hashCode(urls);
         return result;
+    }
+
+    public String toString() {
+        return location == null ? "classpath" : location.toString();
     }
 }
