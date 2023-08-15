@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,21 +44,21 @@ public class LeaderElectionCommandErrorTest {
     @Test
     public void testPartitionWithoutTopic() {
         String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.main(
-                "--bootstrap-server", "nohost:9092",
-                "--election-type", "unclean",
-                "--all-topic-partitions",
-                "--partition", "0"
+            "--bootstrap-server", "nohost:9092",
+            "--election-type", "unclean",
+            "--all-topic-partitions",
+            "--partition", "0"
         ));
         String[] rows = out.split("\n");
-        assertEquals("Option partition is only allowed if topic is used", rows[0]);
+        assertTrue(out.startsWith("Option partition is only allowed if topic is used"));
     }
 
     @Test
     public void testMissingElectionType() {
         String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.main(
-                "--bootstrap-server", "nohost:9092",
-                "--topic", "some-topic",
-                "--partition", "0"
+            "--bootstrap-server", "nohost:9092",
+            "--topic", "some-topic",
+            "--partition", "0"
         ));
         assertTrue(out.startsWith("Missing required option(s)"));
         assertTrue(out.contains(" election-type"));
@@ -68,8 +67,8 @@ public class LeaderElectionCommandErrorTest {
     @Test
     public void testMissingTopicPartitionSelection() {
         String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.main(
-                "--bootstrap-server", "nohost:9092",
-                "--election-type", "preferred"
+            "--bootstrap-server", "nohost:9092",
+            "--election-type", "preferred"
         ));
         assertTrue(out.startsWith("One and only one of the following options is required: "));
         assertTrue(out.contains(" all-topic-partitions"));
@@ -81,9 +80,9 @@ public class LeaderElectionCommandErrorTest {
     public void testInvalidBroker() {
         Throwable e = assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(1),
-                "--bootstrap-server", "example.com:1234",
-                "--election-type", "unclean",
-                "--all-topic-partitions"
+            "--bootstrap-server", "example.com:1234",
+            "--election-type", "unclean",
+            "--all-topic-partitions"
         ));
         assertTrue(e.getCause() instanceof TimeoutException);
     }

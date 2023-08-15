@@ -108,7 +108,7 @@ public class LeaderElectionCommand {
     }
 
     private static void electLeaders(Admin client, ElectionType electionType, Optional<Set<TopicPartition>> partitions) {
-        LOG.debug(String.format("Calling AdminClient.electLeaders(%s, %s)", electionType, partitions.orElse(null)));
+        LOG.debug("Calling AdminClient.electLeaders({}, {})", electionType, partitions.orElse(null));
         Map<TopicPartition, Optional<Throwable>> electionResults;
         try {
             electionResults = client.electLeaders(electionType, partitions.orElse(null)).partitions().get();
@@ -319,7 +319,7 @@ public class LeaderElectionCommand {
             List<String> missingOptions = new ArrayList<>();
 
             if (!options.has(bootstrapServer)) {
-                missingOptions.add(bootstrapServer.options().get(0).toString());
+                missingOptions.add(bootstrapServer.options().get(0));
             }
             if (!options.has(electionType)) {
                 missingOptions.add(electionType.options().get(0));

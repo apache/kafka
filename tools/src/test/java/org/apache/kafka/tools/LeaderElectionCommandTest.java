@@ -26,7 +26,6 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
@@ -59,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 public class LeaderElectionCommandTest {
     private final ClusterInstance cluster;
-    int broker1 = 0;
     int broker2 = 1;
     int broker3 = 2;
 
@@ -85,18 +83,16 @@ public class LeaderElectionCommandTest {
 
         cluster.waitForReadyBrokers();
         Admin client = cluster.createAdminClient();
-        Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
-        partitionAssignment.put(partition, assignment);
 
-        createTopic(client, topic, partitionAssignment);
+        createTopic(client, topic, Collections.singletonMap(partition, assignment));
 
         TopicPartition topicPartition = new TopicPartition(topic, partition);
 
         TestUtils.assertLeader(client, topicPartition, broker2);
         cluster.shutdownBroker(broker3);
         TestUtils.waitForBrokersOutOfIsr(client,
-            JavaConverters.asScalaBuffer(Collections.singletonList(topicPartition)).toSet(),
-            JavaConverters.asScalaBuffer(Collections.singletonList(broker3)).toSet()
+                JavaConverters.asScala(Collections.singleton(topicPartition)).toSet(),
+                JavaConverters.asScala(Collections.singleton(broker3)).toSet()
         );
         cluster.shutdownBroker(broker2);
         TestUtils.assertNoLeader(client, topicPartition);
@@ -104,11 +100,9 @@ public class LeaderElectionCommandTest {
         TestUtils.waitForOnlineBroker(client, broker3);
 
         LeaderElectionCommand.main(
-            new String[] {
-                "--bootstrap-server", cluster.bootstrapServers(),
-                "--election-type", "unclean",
-                "--all-topic-partitions"
-            }
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--election-type", "unclean",
+            "--all-topic-partitions"
         );
 
         TestUtils.assertLeader(client, topicPartition, broker3);
@@ -121,10 +115,8 @@ public class LeaderElectionCommandTest {
         List<Integer> assignment = Arrays.asList(broker2, broker3);
 
         cluster.waitForReadyBrokers();
-        Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
-        partitionAssignment.put(partition, assignment);
         Admin client = cluster.createAdminClient();
-        createTopic(client, topic, partitionAssignment);
+        createTopic(client, topic, Collections.singletonMap(partition, assignment));
 
         TopicPartition topicPartition = new TopicPartition(topic, partition);
 
@@ -141,12 +133,10 @@ public class LeaderElectionCommandTest {
         TestUtils.waitForOnlineBroker(client, broker3);
 
         LeaderElectionCommand.main(
-            new String[] {
-                "--bootstrap-server", cluster.bootstrapServers(),
-                "--election-type", "unclean",
-                "--topic", topic,
-                "--partition", Integer.toString(partition)
-            }
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--election-type", "unclean",
+            "--topic", topic,
+            "--partition", Integer.toString(partition)
         );
 
         TestUtils.assertLeader(client, topicPartition, broker3);
@@ -182,11 +172,9 @@ public class LeaderElectionCommandTest {
         Path topicPartitionPath = tempTopicPartitionFile(Collections.singletonList(topicPartition));
 
         LeaderElectionCommand.main(
-            new String[] {
-                "--bootstrap-server", cluster.bootstrapServers(),
-                "--election-type", "unclean",
-                "--path-to-json-file", topicPartitionPath.toString()
-            }
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--election-type", "unclean",
+            "--path-to-json-file", topicPartitionPath.toString()
         );
 
         TestUtils.assertLeader(client, topicPartition, broker3);
@@ -217,11 +205,9 @@ public class LeaderElectionCommandTest {
         );
 
         LeaderElectionCommand.main(
-            new String[] {
-                "--bootstrap-server", cluster.bootstrapServers(),
-                "--election-type", "preferred",
-                "--all-topic-partitions"
-            }
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--election-type", "preferred",
+            "--all-topic-partitions"
         );
 
         TestUtils.assertLeader(client, topicPartition, broker2);
@@ -231,12 +217,11 @@ public class LeaderElectionCommandTest {
     public void testTopicDoesNotExist() {
         Throwable e =  assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(30),
-            new String[] {
-                "--bootstrap-server", cluster.bootstrapServers(),
-                "--election-type", "preferred",
-                "--topic", "unknown-topic-name",
-                "--partition", "0"
-            }));
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--election-type", "preferred",
+            "--topic", "unknown-topic-name",
+            "--partition", "0"
+        ));
         assertTrue(e.getSuppressed()[0] instanceof UnknownTopicOrPartitionException);
     }
 
@@ -250,7 +235,7 @@ public class LeaderElectionCommandTest {
 
         cluster.waitForReadyBrokers();
         Admin client = cluster.createAdminClient();
-        Map<Integer, List<Integer>> partitionAssignment = new HashMap<Integer, List<Integer>>();
+        Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
         partitionAssignment.put(partition0, assignment0);
         partitionAssignment.put(partition1, assignment1);
 
@@ -275,13 +260,10 @@ public class LeaderElectionCommandTest {
         Path topicPartitionPath = tempTopicPartitionFile(Arrays.asList(topicPartition0, topicPartition1));
         String output = ToolsTestUtils.captureStandardOut(() ->
             LeaderElectionCommand.main(
-                new String[] {
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--election-type", "preferred",
-                    "--path-to-json-file", topicPartitionPath.toString()
-                }
-            )
-        );
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--election-type", "preferred",
+                "--path-to-json-file", topicPartitionPath.toString()
+            ));
 
         Iterator<String> electionResultOutputIter = Arrays.stream(output.split("\n")).iterator();
 
@@ -295,13 +277,6 @@ public class LeaderElectionCommandTest {
         String secondLine = electionResultOutputIter.next();
         assertTrue(secondLine.contains(String.format("Valid replica already elected for partitions %s", topicPartition1)),
             String.format("Unexpected output: %s", secondLine));
-    }
-    private static Map<String, Object> createConfig(List<KafkaServer> servers) {
-        return new HashMap<String, Object>() {{
-                put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(servers));
-                put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "20000");
-                put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000");
-            }};
     }
 
     private static void createTopic(Admin admin, String topic, Map<Integer, List<Integer>> replicaAssignment) throws ExecutionException, InterruptedException {
