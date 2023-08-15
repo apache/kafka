@@ -1,0 +1,23 @@
+# The workflow to check pull requests into main.
+# This checks the source in the state as if after the merge.
+name: Branch push checks
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        java-version: [ 11, 17 ]
+        runs-on: [ ubuntu-latest ]
+    name: Build on ${{ matrix.runs-on }} with jdk ${{ matrix.java-version }}
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ matrix.java-version }}
+          distribution: temurin
+
+      - name: Build Docker image
+        run: make BRANCH=${GITHUB_REF_NAME} docker_image
