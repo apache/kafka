@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.connect.util;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.MockTime;
@@ -29,13 +25,17 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
-@RunWith(PowerMockRunner.class)
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RetryUtilTest {
 
     private final Time mockTime = new MockTime(10);

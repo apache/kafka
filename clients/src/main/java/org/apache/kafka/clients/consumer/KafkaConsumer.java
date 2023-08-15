@@ -21,7 +21,6 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -30,7 +29,6 @@ import org.apache.kafka.clients.consumer.internals.Fetch;
 import org.apache.kafka.clients.consumer.internals.FetchConfig;
 import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
-import org.apache.kafka.clients.consumer.internals.FetchMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
@@ -47,14 +45,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.KafkaMetricsContext;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
@@ -72,18 +63,29 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createConsumerInterceptors;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createConsumerNetworkClient;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createIsolationLevel;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createKeyDeserializer;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createValueDeserializer;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -562,9 +564,7 @@ import java.util.regex.Pattern;
  */
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
-    private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final long NO_CURRENT_THREAD = -1L;
-    private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     static final String DEFAULT_REASON = "rebalance enforced by user";
 
@@ -680,17 +680,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-
-            LogContext logContext;
-
-            // If group.instance.id is set, we will append it to the log context.
-            if (groupRebalanceConfig.groupInstanceId.isPresent()) {
-                logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
-                        ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
-            } else {
-                logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
-            }
-
+            LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
             boolean enableAutoCommit = config.maybeOverrideEnableAutoCommit();
             groupId.ifPresent(groupIdStr -> {
@@ -703,75 +693,32 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
-            this.metrics = buildMetrics(config, time, clientId);
+            this.metrics = createMetrics(config, time);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
-            List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
-                    ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                    ConsumerInterceptor.class,
-                    Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
+            List<ConsumerInterceptor<K, V>> interceptorList = createConsumerInterceptors(config);
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
-            if (keyDeserializer == null) {
-                this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-                this.keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
-            } else {
-                config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
-                this.keyDeserializer = keyDeserializer;
-            }
-            if (valueDeserializer == null) {
-                this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-                this.valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
-            } else {
-                config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-                this.valueDeserializer = valueDeserializer;
-            }
-            OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
-            this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+            this.keyDeserializer = createKeyDeserializer(config, keyDeserializer);
+            this.valueDeserializer = createValueDeserializer(config, valueDeserializer);
+            this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keyDeserializer,
                     this.valueDeserializer, metrics.reporters(), interceptorList);
-            this.metadata = new ConsumerMetadata(retryBackoffMs,
-                    config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
-                    !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
-                    config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
-                    subscriptions, logContext, clusterResourceListeners);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-                    config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
+            this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             this.metadata.bootstrap(addresses);
-            String metricGrpPrefix = "consumer";
 
-            FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);
-            FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry);
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            this.isolationLevel = IsolationLevel.valueOf(
-                    config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
-            int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+            FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
+            this.isolationLevel = createIsolationLevel(config);
 
             ApiVersions apiVersions = new ApiVersions();
-            NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
-                    this.metadata,
-                    clientId,
-                    100, // a fixed large enough value will suffice for max in-flight requests
-                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                    config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                    config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                    config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    time,
-                    true,
-                    apiVersions,
-                    fetchMetricsManager.throttleTimeSensor(),
-                    logContext);
-            this.client = new ConsumerNetworkClient(
+            this.client = createConsumerNetworkClient(config,
+                    metrics,
                     logContext,
-                    netClient,
-                    metadata,
+                    apiVersions,
                     time,
-                    retryBackoffMs,
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                    heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
+                    metadata,
+                    fetchMetricsManager.throttleTimeSensor(),
+                    retryBackoffMs);
 
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
@@ -791,7 +738,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         this.metadata,
                         this.subscriptions,
                         metrics,
-                        metricGrpPrefix,
+                        CONSUMER_METRIC_GROUP_PREFIX,
                         this.time,
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
@@ -799,10 +746,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
-            FetchConfig<K, V> fetchConfig = new FetchConfig<>(config,
-                    this.keyDeserializer,
-                    this.valueDeserializer,
-                    isolationLevel);
+            FetchConfig<K, V> fetchConfig = createFetchConfig(config, this.keyDeserializer, this.valueDeserializer);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
@@ -822,10 +766,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     apiVersions);
             this.topicMetadataFetcher = new TopicMetadataFetcher(logContext, client, retryBackoffMs);
 
-            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
+            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
 
             config.logUnused();
-            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
+            AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
@@ -879,18 +823,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
         this.groupId = Optional.ofNullable(groupId);
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-    }
-
-    private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
-        Map<String, String> metricsTags = Collections.singletonMap(CLIENT_ID_METRIC_TAG, clientId);
-        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
-                .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-                .tags(metricsTags);
-        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
-                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        return new Metrics(metricConfig, reporters, time, metricsContext);
     }
 
     /**
@@ -2478,7 +2410,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         Utils.closeQuietly(client, "consumer network client", firstException);
         Utils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);
         Utils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
-        AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
+        AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {

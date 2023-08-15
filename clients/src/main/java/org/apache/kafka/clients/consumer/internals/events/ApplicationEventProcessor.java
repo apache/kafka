@@ -16,16 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.RequestManager;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 public class ApplicationEventProcessor {
 
@@ -105,13 +108,20 @@ public class ApplicationEventProcessor {
 
     private boolean process(final OffsetFetchApplicationEvent event) {
         Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = event.future();
         if (!commitRequestManger.isPresent()) {
-            event.future.completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
+            future.completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
                     "CommittedRequestManager is not available. Check if group.id was set correctly"));
             return false;
         }
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.addOffsetFetchRequest(event.partitions);
+        manager.addOffsetFetchRequest(event.partitions()).whenComplete((r, e) -> {
+            if (e != null) {
+                future.completeExceptionally(e);
+                return;
+            }
+            future.complete(r);
+        });
         return true;
     }
 

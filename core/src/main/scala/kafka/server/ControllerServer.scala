@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -238,11 +238,14 @@ class ControllerServer(
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
           setZkMigrationEnabled(config.migrationEnabled)
       }
-      authorizer match {
-        case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
-        case _ => // nothing to do
-      }
       controller = controllerBuilder.build()
+
+      // If we are using a ClusterMetadataAuthorizer, requests to add or remove ACLs must go
+      // through the controller.
+      authorizer match {
+        case Some(a: ClusterMetadataAuthorizer) => a.setAclMutator(controller)
+        case _ =>
+      }
 
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
@@ -359,6 +362,14 @@ class ControllerServer(
       metadataPublishers.add(new ControllerMetadataMetricsPublisher(
         sharedServer.controllerServerMetrics,
         sharedServer.metadataPublishingFaultHandler
+      ))
+
+      // Set up the ACL publisher.
+      metadataPublishers.add(new AclPublisher(
+        config.nodeId,
+        sharedServer.metadataPublishingFaultHandler,
+        "controller",
+        authorizer
       ))
 
       // Install all metadata publishers.

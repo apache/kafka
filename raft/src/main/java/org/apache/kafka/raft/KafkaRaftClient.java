@@ -879,9 +879,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setRecords(records)
                 .setErrorCode(error.code())
                 .setLogStartOffset(log.startOffset())
-                .setHighWatermark(highWatermark
-                    .map(offsetMetadata -> offsetMetadata.offset)
-                    .orElse(-1L));
+                .setHighWatermark(
+                    highWatermark.map(offsetMetadata -> offsetMetadata.offset).orElse(-1L)
+                );
 
             partitionData.currentLeader()
                 .setLeaderEpoch(quorum.epoch())
@@ -960,8 +960,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             || fetchPartition.fetchOffset() < 0
             || fetchPartition.lastFetchedEpoch() < 0
             || fetchPartition.lastFetchedEpoch() > fetchPartition.currentLeaderEpoch()) {
-            return completedFuture(buildEmptyFetchResponse(
-                Errors.INVALID_REQUEST, Optional.empty()));
+            return completedFuture(
+                buildEmptyFetchResponse(Errors.INVALID_REQUEST, Optional.empty())
+            );
         }
 
         int replicaId = FetchRequest.replicaId(request);
@@ -971,7 +972,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         if (partitionResponse.errorCode() != Errors.NONE.code()
             || FetchResponse.recordsSize(partitionResponse) > 0
-            || request.maxWaitMs() == 0) {
+            || request.maxWaitMs() == 0
+            || isPartitionDiverged(partitionResponse)
+            || isPartitionSnapshotted(partitionResponse)) {
+            // Reply immediately if any of the following is true
+            // 1. The response contains an errror
+            // 2. There are records in the response
+            // 3. The fetching replica doesn't want to wait for the partition to contain new data
+            // 4. The fetching replica needs to truncate because the log diverged
+            // 5. The fetching replica needs to fetch a snapshot
             return completedFuture(response);
         }
 
@@ -984,11 +993,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Throwable cause = exception instanceof ExecutionException ?
                     exception.getCause() : exception;
 
-                // If the fetch timed out in purgatory, it means no new data is available,
-                // and we will complete the fetch successfully. Otherwise, if there was
-                // any other error, we need to return it.
                 Errors error = Errors.forException(cause);
-                if (error != Errors.REQUEST_TIMED_OUT) {
+                if (error == Errors.REQUEST_TIMED_OUT) {
+                    // Note that for this case the calling thread is the expiration service thread and not the
+                    // polling thread.
+                    //
+                    // If the fetch request timed out in purgatory, it means no new data is available,
+                    // just return the original fetch response.
+                    return response;
+                } else {
+                    // If there was any error other than REQUEST_TIMED_OUT, return it.
                     logger.info("Failed to handle fetch from {} at {} due to {}",
                         replicaId, fetchPartition.fetchOffset(), error);
                     return buildEmptyFetchResponse(error, Optional.empty());
@@ -999,6 +1013,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             logger.trace("Completing delayed fetch from {} starting at offset {} at {}",
                 replicaId, fetchPartition.fetchOffset(), completionTimeMs);
 
+            // It is safe to call tryCompleteFetchRequest because only the polling thread completes this
+            // future successfully. This is true because only the polling thread appends record batches to
+            // the log from maybeAppendBatches.
             return tryCompleteFetchRequest(replicaId, fetchPartition, time.milliseconds());
         });
     }
@@ -1046,6 +1063,18 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             logger.error("Caught unexpected error in fetch completion of request {}", request, e);
             return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
         }
+    }
+
+    private static boolean isPartitionDiverged(FetchResponseData.PartitionData partitionResponseData) {
+        FetchResponseData.EpochEndOffset divergingEpoch = partitionResponseData.divergingEpoch();
+
+        return divergingEpoch.epoch() != -1 || divergingEpoch.endOffset() != -1;
+    }
+
+    private static boolean isPartitionSnapshotted(FetchResponseData.PartitionData partitionResponseData) {
+        FetchResponseData.SnapshotId snapshotId = partitionResponseData.snapshotId();
+
+        return snapshotId.epoch() != -1 || snapshotId.endOffset() != -1;
     }
 
     private static OptionalInt optionalLeaderId(int leaderIdOrNil) {

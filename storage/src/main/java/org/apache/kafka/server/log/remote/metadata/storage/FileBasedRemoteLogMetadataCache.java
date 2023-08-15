@@ -77,7 +77,8 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata(RemoteLogSegmentMetadataSnapshot snapshot) {
         return new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, snapshot.segmentId()), snapshot.startOffset(),
                                             snapshot.endOffset(), snapshot.maxTimestampMs(), snapshot.brokerId(), snapshot.eventTimestampMs(),
-                                            snapshot.segmentSizeInBytes(), snapshot.state(), snapshot.segmentLeaderEpochs());
+                                            snapshot.segmentSizeInBytes(), snapshot.customMetadata(), snapshot.state(), snapshot.segmentLeaderEpochs()
+        );
     }
 
     /**

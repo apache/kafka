@@ -151,8 +151,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -482,8 +480,6 @@ public class KafkaAdminClient extends AdminClient {
         NetworkClient networkClient = null;
         Time time = Time.SYSTEM;
         String clientId = generateClientId(config);
-        ChannelBuilder channelBuilder = null;
-        Selector selector = null;
         ApiVersions apiVersions = new ApiVersions();
         LogContext logContext = createLogContext(clientId);
 
@@ -493,9 +489,7 @@ public class KafkaAdminClient extends AdminClient {
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-                    config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-                    config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
@@ -506,36 +500,22 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-            String metricGrpPrefix = "admin-client";
-            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                    metrics, time, metricGrpPrefix, channelBuilder, logContext);
-            networkClient = new NetworkClient(
-                metadataManager.updater(),
-                null,
-                selector,
+            networkClient = ClientUtils.createNetworkClient(config,
                 clientId,
-                1,
-                config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                config.getInt(AdminClientConfig.SEND_BUFFER_CONFIG),
-                config.getInt(AdminClientConfig.RECEIVE_BUFFER_CONFIG),
-                (int) TimeUnit.HOURS.toMillis(1),
-                config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                time,
-                true,
-                apiVersions,
-                null,
+                metrics,
+                "admin-client",
                 logContext,
+                apiVersions,
+                time,
+                1,
+                (int) TimeUnit.HOURS.toMillis(1),
+                metadataManager.updater(),
                 (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             closeQuietly(networkClient, "NetworkClient");
-            closeQuietly(selector, "Selector");
-            closeQuietly(channelBuilder, "ChannelBuilder");
             throw new KafkaException("Failed to create new KafkaAdminClient", exc);
         }
     }

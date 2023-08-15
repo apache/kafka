@@ -261,7 +261,7 @@ class KafkaServer(
         metrics = Server.initializeMetrics(config, time, clusterId)
 
         /* register broker metrics */
-        _brokerTopicStats = new BrokerTopicStats
+        _brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
         KafkaBroker.notifyClusterListeners(clusterId, kafkaMetricsReporters ++ metrics.reporters.asScala)
