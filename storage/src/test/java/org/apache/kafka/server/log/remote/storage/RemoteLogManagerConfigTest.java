@@ -71,7 +71,7 @@ public class RemoteLogManagerConfigTest {
                   remoteLogManagerConfig.remoteStorageManagerClassName());
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP,
                   remoteLogManagerConfig.remoteStorageManagerClassPath());
-        props.put(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
                   remoteLogManagerConfig.remoteLogMetadataManagerClassName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
                   remoteLogManagerConfig.remoteLogMetadataManagerClassPath());
