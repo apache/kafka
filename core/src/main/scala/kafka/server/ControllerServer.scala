@@ -231,7 +231,7 @@ class ControllerServer(
           setMetrics(quorumControllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
-          setConfigurationValidator(new ControllerConfigurationValidator()).
+          setConfigurationValidator(new ControllerConfigurationValidator(sharedServer.brokerConfig)).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
           setFatalFaultHandler(sharedServer.fatalQuorumControllerFaultHandler).
