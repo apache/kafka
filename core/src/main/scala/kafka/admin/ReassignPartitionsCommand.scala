@@ -57,24 +57,24 @@ object ReassignPartitionsCommand extends Logging {
   private[admin] val EarliestTopicsJsonVersion = 1
 
   // Throttles that are set at the level of an individual broker.
-  val brokerLevelLeaderThrottle =
+  private[admin] val brokerLevelLeaderThrottle =
     DynamicConfig.Broker.LeaderReplicationThrottledRateProp
-  val brokerLevelFollowerThrottle =
+  private[admin] val brokerLevelFollowerThrottle =
     DynamicConfig.Broker.FollowerReplicationThrottledRateProp
-  val brokerLevelLogDirThrottle =
+  private[admin] val brokerLevelLogDirThrottle =
     DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp
-  val brokerLevelThrottles = Seq(
+  private[admin] val brokerLevelThrottles = Seq(
     brokerLevelLeaderThrottle,
     brokerLevelFollowerThrottle,
     brokerLevelLogDirThrottle
   )
 
   // Throttles that are set at the level of an individual topic.
-  val topicLevelLeaderThrottle =
+  private[admin] val topicLevelLeaderThrottle =
     LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-  val topicLevelFollowerThrottle =
+  private[admin] val topicLevelFollowerThrottle =
     LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-  val topicLevelThrottles = Seq(
+  private[admin] val topicLevelThrottles = Seq(
     topicLevelLeaderThrottle,
     topicLevelFollowerThrottle
   )
