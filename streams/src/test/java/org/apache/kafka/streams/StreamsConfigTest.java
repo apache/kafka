@@ -1383,13 +1383,13 @@ public class StreamsConfigTest {
     @Test
     public void shouldReturnDefaultRackAwareAssignmentConfig() {
         final String strategy = streamsConfig.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
-        assertEquals("NONE", strategy);
+        assertEquals("none", strategy);
     }
 
     @Test
     public void shouldtSetMinTrafficRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
-        assertEquals("MIN_TRAFFIC", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+        assertEquals("min_traffic", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
 
     @Test
