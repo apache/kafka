@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
@@ -284,10 +283,6 @@ public class LeaderElectionCommandTest {
         List<NewTopic> newTopics = Collections.singletonList(newTopic);
         CreateTopicsResult createTopicResult = admin.createTopics(newTopics);
         createTopicResult.all().get();
-    }
-
-    private static String bootstrapServers(List<KafkaServer> servers) {
-        return TestUtils.plaintextBootstrapServers(JavaConverters.asScalaBuffer(servers));
     }
 
     private static Path tempTopicPartitionFile(List<TopicPartition> partitions) throws Exception {
