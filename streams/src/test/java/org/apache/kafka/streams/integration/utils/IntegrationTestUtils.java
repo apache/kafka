@@ -1044,8 +1044,8 @@ public class IntegrationTestUtils {
                 final long millisRemaining = expectedEnd - System.currentTimeMillis();
                 if (millisRemaining <= 0) {
                     fail(
-                        "Application did not reach a RUNNING state for all streams instances. " +
-                            "Non-running instances: " + nonRunningStreams
+                        nonRunningStreams.size() + " out of " + streamsList.size() + " Streams clients did not reach the RUNNING state. " +
+                            "Non-running Streams clients: " + nonRunningStreams
                     );
                 }
 
