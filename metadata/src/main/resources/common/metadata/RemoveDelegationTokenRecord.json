@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 23,
+  "apiKey": 26,
   "type": "metadata",
   "name": "RemoveDelegationTokenRecord",
   "validVersions": "0",
