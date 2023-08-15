@@ -72,12 +72,14 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
      * gets physically removed.
      */
     private static final Integer STORAGE_WAIT_TIMEOUT_SEC = 35;
-    private TieredStorageTestContext context;
-    protected int numRemoteLogMetadataPartitions = 5;
-
     // The default value of log cleanup interval is 30 secs, and it increases the test execution time.
     private static final Integer LOG_CLEANUP_INTERVAL_MS = 500;
     private static final Integer RLM_TASK_INTERVAL_MS = 500;
+
+    protected int numRemoteLogMetadataPartitions = 5;
+    private TieredStorageTestContext context;
+    private String storageManagerConfigPrefix = "rsm.config.";
+    private String rlmmConfigPrefix = "rlmm.config.";
 
     @SuppressWarnings("deprecation")
     @Override
@@ -146,6 +148,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     @BeforeEach
     @Override
     public void setUp(TestInfo testInfo) {
+        String testClassName = testInfo.getTestClass().get().getSimpleName();
+        storageManagerConfigPrefix += testClassName + ".";
+        rlmmConfigPrefix += testClassName + ".";
         super.setUp(testInfo);
         context = new TieredStorageTestContext(this);
     }
@@ -177,11 +182,11 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     }
 
     private String storageConfigPrefix(String key) {
-        return LocalTieredStorage.STORAGE_CONFIG_PREFIX + key;
+        return storageManagerConfigPrefix + key;
     }
 
     private String metadataConfigPrefix(String key) {
-        return "rlmm.config." + key;
+        return rlmmConfigPrefix + key;
     }
 
     @SuppressWarnings("deprecation")
