@@ -174,12 +174,14 @@ public class Metadata implements Closeable {
     /**
      * Request an update of the current cluster metadata info, permitting backoff based on the number of
      * equivalent metadata responses, which indicates that responses did not make progress and may be stale.
+     * 
      * @param resetEquivalentResponseBackoff Whether to reset backing off based on consecutive equivalent responses.
      *                                       This should be set to <i>false</i> in situations where the update is
      *                                       being requested to retry an operation, such as when the leader has
      *                                       changed. It should be set to <i>true</i> in situations where new
      *                                       metadata is being requested, such as adding a topic to a subscription.
      *                                       In situations where it's not clear, it's best to use <i>true</i>.
+     * 
      * @return The current updateVersion before the update
      */
     public synchronized int requestUpdate(final boolean resetEquivalentResponseBackoff) {
