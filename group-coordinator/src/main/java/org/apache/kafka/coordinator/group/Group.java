@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
+
 /**
  * Interface common for all groups.
  */
@@ -50,4 +52,18 @@ public interface Group {
      * @return The group id.
      */
     String groupId();
+
+    /**
+     * Validates the OffsetCommit request.
+     *
+     * @param memberId                  The member id.
+     * @param groupInstanceId           The group instance id.
+     * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
+     *                                  for consumer groups.
+     */
+    void validateOffsetCommit(
+        String memberId,
+        String groupInstanceId,
+        int generationIdOrMemberEpoch
+    ) throws KafkaException;
 }

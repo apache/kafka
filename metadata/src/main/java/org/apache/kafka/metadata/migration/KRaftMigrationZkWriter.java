@@ -93,27 +93,34 @@ public class KRaftMigrationZkWriter {
         handleAclsSnapshot(image.acls(), operationConsumer);
     }
 
-    public void handleDelta(
+    public boolean handleDelta(
         MetadataImage previousImage,
         MetadataImage image,
         MetadataDelta delta,
         KRaftMigrationOperationConsumer operationConsumer
     ) {
+        boolean updated = false;
         if (delta.topicsDelta() != null) {
             handleTopicsDelta(previousImage.topics().topicIdToNameView()::get, image.topics(), delta.topicsDelta(), operationConsumer);
+            updated = true;
         }
         if (delta.configsDelta() != null) {
             handleConfigsDelta(image.configs(), delta.configsDelta(), operationConsumer);
+            updated = true;
         }
         if ((delta.clientQuotasDelta() != null) || (delta.scramDelta() != null)) {
             handleClientQuotasDelta(image, delta, operationConsumer);
+            updated = true;
         }
         if (delta.producerIdsDelta() != null) {
             handleProducerIdDelta(delta.producerIdsDelta(), operationConsumer);
+            updated = true;
         }
         if (delta.aclsDelta() != null) {
             handleAclsDelta(image.acls(), delta.aclsDelta(), operationConsumer);
+            updated = true;
         }
+        return updated;
     }
 
     /**
@@ -291,8 +298,8 @@ public class KRaftMigrationZkWriter {
                             topicId,
                             topicsImage.getTopic(topicId).partitions(),
                             migrationState));
-                Map<Integer, PartitionRegistration> newPartitions = topicDelta.newPartitions();
-                Map<Integer, PartitionRegistration> changedPartitions = topicDelta.partitionChanges();
+                Map<Integer, PartitionRegistration> newPartitions = new HashMap<>(topicDelta.newPartitions());
+                Map<Integer, PartitionRegistration> changedPartitions = new HashMap<>(topicDelta.partitionChanges());
                 if (!newPartitions.isEmpty()) {
                     operationConsumer.accept(
                         UPDATE_PARTITION,

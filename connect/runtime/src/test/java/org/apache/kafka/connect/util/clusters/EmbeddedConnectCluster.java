@@ -57,6 +57,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.PLUGIN_DISCOVERY_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
@@ -276,6 +277,7 @@ public class EmbeddedConnectCluster {
         putIfAbsent(workerProps, STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
         putIfAbsent(workerProps, KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
         putIfAbsent(workerProps, VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
+        putIfAbsent(workerProps, PLUGIN_DISCOVERY_CONFIG, "hybrid_fail");
 
         for (int i = 0; i < numInitialWorkers; i++) {
             addWorker();
@@ -647,7 +649,8 @@ public class EmbeddedConnectCluster {
 
     /**
      * Get the offsets for a connector via the <strong><em>GET /connectors/{connector}/offsets</em></strong> endpoint
-     * @param connectorName name of the connector
+     *
+     * @param connectorName name of the connector whose offsets are to be retrieved
      * @return the connector's offsets
      */
     public ConnectorOffsets connectorOffsets(String connectorName) {
@@ -668,7 +671,8 @@ public class EmbeddedConnectCluster {
 
     /**
      * Alter a connector's offsets via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong> endpoint
-     * @param connectorName name of the connector
+     *
+     * @param connectorName name of the connector whose offsets are to be altered
      * @param offsets offsets to alter
      */
     public String alterConnectorOffsets(String connectorName, ConnectorOffsets offsets) {
@@ -686,7 +690,23 @@ public class EmbeddedConnectCluster {
             return responseToString(response);
         } else {
             throw new ConnectRestException(response.getStatus(),
-                    "Could not execute PATCH request. Error response: " + responseToString(response));
+                    "Could not alter connector offsets. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
+     * Reset a connector's offsets via the <strong><em>DELETE /connectors/{connector}/offsets</em></strong> endpoint
+     *
+     * @param connectorName name of the connector whose offsets are to be reset
+     */
+    public String resetConnectorOffsets(String connectorName) {
+        String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
+        Response response = requestDelete(url);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        } else {
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not reset connector offsets. Error response: " + responseToString(response));
         }
     }
 

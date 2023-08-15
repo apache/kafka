@@ -477,9 +477,9 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     }
 
     @Override
-    public void put(final long time,
-                    final Record<K, Change<V>> record,
-                    final ProcessorRecordContext recordContext) {
+    public boolean put(final long time,
+                       final Record<K, Change<V>> record,
+                       final ProcessorRecordContext recordContext) {
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
 
@@ -503,6 +503,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             dirtyKeys.add(serializedKey);
         }
         updateBufferMetrics();
+        return true;
     }
 
     private BufferValue getBuffered(final Bytes key) {

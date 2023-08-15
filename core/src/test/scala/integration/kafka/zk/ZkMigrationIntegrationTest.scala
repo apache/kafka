@@ -163,7 +163,10 @@ class ZkMigrationIntegrationTest {
       readyFuture.get(30, TimeUnit.SECONDS)
 
       val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       def inDualWrite(): Boolean = {
         val migrationState = kraftCluster.controllers().get(3000).migrationSupport.get.migrationDriver.migrationState().get(10, TimeUnit.SECONDS)
@@ -286,7 +289,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -358,7 +364,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -422,7 +431,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -481,7 +493,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Create new topic with AdminClient")
@@ -495,14 +510,20 @@ class ZkMigrationIntegrationTest {
       // Verify the changes made to KRaft are seen in ZK
       verifyTopicPartitionMetadata(topicName, existingPartitions, zkClient)
 
+      val newPartitionCount = 3
       log.info("Create new partitions with AdminClient")
-      admin.createPartitions(Map(topicName -> NewPartitions.increaseTo(3)).asJava).all().get(60, TimeUnit.SECONDS)
+      admin.createPartitions(Map(topicName -> NewPartitions.increaseTo(newPartitionCount)).asJava).all().get(60, TimeUnit.SECONDS)
+      val (topicDescOpt, _) = TestUtils.computeUntilTrue(topicDesc(topicName, admin))(td => {
+        td.isDefined && td.get.partitions().asScala.size == newPartitionCount
+      })
+      assertTrue(topicDescOpt.isDefined)
+      val partitions = topicDescOpt.get.partitions().asScala
+      assertEquals(newPartitionCount, partitions.size)
 
       // Verify the changes seen in Zk.
       verifyTopicPartitionMetadata(topicName, existingPartitions ++ Seq(new TopicPartition(topicName, 2)), zkClient)
     } finally {
-      zkCluster.stop()
-      kraftCluster.close()
+      shutdownInSequence(zkCluster, kraftCluster)
     }
   }
 
@@ -520,6 +541,14 @@ class ZkMigrationIntegrationTest {
             topicIdReplicaAssignment.exists(_.assignment(tp).replicas == lisr.leaderAndIsr.isr)
         }
     }, "Unable to find topic partition metadata")
+  }
+
+  def topicDesc(topic: String, admin: Admin): Option[TopicDescription] = {
+    try {
+      admin.describeTopics(util.Collections.singleton(topic)).allTopicNames().get().asScala.get(topic)
+    } catch {
+      case _: Throwable => None
+    }
   }
 
   def allocateProducerId(bootstrapServers: String): Unit = {

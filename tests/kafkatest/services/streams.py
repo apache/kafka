@@ -313,7 +313,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
             node.account.ssh(self.start_cmd(node))
             monitor.wait_until(self.expectedMessage, timeout_sec=60, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
 
-        if len(self.pids(node)) == 0:
+        if not self.pids(node):
             raise RuntimeError("No process ids recorded")
 
 

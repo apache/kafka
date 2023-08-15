@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -214,7 +214,7 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time)
+        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
 
         new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
           setTime(time).
@@ -231,18 +231,21 @@ class ControllerServer(
           setMetrics(quorumControllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
-          setConfigurationValidator(new ControllerConfigurationValidator()).
+          setConfigurationValidator(new ControllerConfigurationValidator(sharedServer.brokerConfig)).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
           setFatalFaultHandler(sharedServer.fatalQuorumControllerFaultHandler).
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
           setZkMigrationEnabled(config.migrationEnabled)
       }
-      authorizer match {
-        case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
-        case _ => // nothing to do
-      }
       controller = controllerBuilder.build()
+
+      // If we are using a ClusterMetadataAuthorizer, requests to add or remove ACLs must go
+      // through the controller.
+      authorizer match {
+        case Some(a: ClusterMetadataAuthorizer) => a.setAclMutator(controller)
+        case _ =>
+      }
 
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
@@ -256,19 +259,22 @@ class ControllerServer(
         }
         val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
-        val migrationDriver = new KRaftMigrationDriver(
-          config.nodeId,
-          controller.asInstanceOf[QuorumController].zkRecordConsumer(),
-          migrationClient,
-          propagator,
-          publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher)),
-          sharedServer.faultHandlerFactory.build(
+        val migrationDriver = KRaftMigrationDriver.newBuilder()
+          .setNodeId(config.nodeId)
+          .setZkRecordConsumer(controller.asInstanceOf[QuorumController].zkRecordConsumer())
+          .setZkMigrationClient(migrationClient)
+          .setPropagator(propagator)
+          .setInitialZkLoadHandler(publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher)))
+          .setFaultHandler(sharedServer.faultHandlerFactory.build(
             "zk migration",
             fatal = false,
             () => {}
-          ),
-          quorumFeatures
-        )
+          ))
+          .setQuorumFeatures(quorumFeatures)
+          .setConfigSchema(configSchema)
+          .setControllerMetrics(quorumControllerMetrics)
+          .setTime(time)
+          .build()
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
       }
@@ -295,32 +301,6 @@ class ControllerServer(
         config.numIoThreads,
         s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
-
-      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
-
-      /**
-       * Enable the controller endpoint(s). If we are using an authorizer which stores
-       * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
-       * accepting requests from principals included super.users right after this point,
-       * but we will not be able to process requests from non-superusers until the
-       * QuorumController declares that we have caught up to the high water mark of the
-       * metadata log. See @link{QuorumController#maybeCompleteAuthorizerInitialLoad}
-       * and KIP-801 for details.
-       */
-      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
-
-      // Block here until all the authorizer futures are complete
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
-        "all of the authorizer futures to be completed",
-        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
-
-      // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
-        "all of the SocketServer Acceptors to be started",
-        socketServerFuture, startupDeadline, time)
-
-      // register this instance for dynamic config changes to the KafkaConfig
-      config.dynamicConfig.addReconfigurables(this)
 
       // Set up the metadata features publisher.
       metadataPublishers.add(featuresPublisher)
@@ -358,10 +338,43 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler
       ))
 
+      // Set up the ACL publisher.
+      metadataPublishers.add(new AclPublisher(
+        config.nodeId,
+        sharedServer.metadataPublishingFaultHandler,
+        "controller",
+        authorizer
+      ))
+
       // Install all metadata publishers.
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the controller metadata publishers to be installed",
         sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
+
+      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
+
+      /**
+       * Enable the controller endpoint(s). If we are using an authorizer which stores
+       * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
+       * accepting requests from principals included super.users right after this point,
+       * but we will not be able to process requests from non-superusers until AclPublisher
+       * publishes metadata from the QuorumController. MetadataPublishers do not publish
+       * metadata until the controller has caught up to the high watermark.
+       */
+      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
+
+      // Block here until all the authorizer futures are complete
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the authorizer futures to be completed",
+        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
+
+      // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the SocketServer Acceptors to be started",
+        socketServerFuture, startupDeadline, time)
+
+      // register this instance for dynamic config changes to the KafkaConfig
+      config.dynamicConfig.addReconfigurables(this)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)

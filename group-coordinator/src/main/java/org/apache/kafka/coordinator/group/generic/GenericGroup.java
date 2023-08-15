@@ -17,6 +17,11 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -100,6 +105,11 @@ public class GenericGroup implements Group {
     private GenericGroupState state;
 
     /**
+     * The previous group state.
+     */
+    private GenericGroupState previousState;
+
+    /**
      * The timestamp of when the group transitioned
      * to its current state.
      */
@@ -108,22 +118,22 @@ public class GenericGroup implements Group {
     /**
      * The protocol type used for rebalance.
      */
-    private Optional<String> protocolType = Optional.empty();
+    private Optional<String> protocolType;
 
     /**
      * The protocol name used for rebalance.
      */
-    private Optional<String> protocolName = Optional.empty();
+    private Optional<String> protocolName;
 
     /**
      * The generation id.
      */
-    private int generationId = 0;
+    private int generationId;
 
     /**
      * The id of the group's leader.
      */
-    private Optional<String> leaderId = Optional.empty();
+    private Optional<String> leaderId;
 
     /**
      * The members of the group.
@@ -174,12 +184,41 @@ public class GenericGroup implements Group {
         GenericGroupState initialState,
         Time time
     ) {
+        this(
+            logContext,
+            groupId,
+            initialState,
+            time,
+            0,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(time.milliseconds())
+        );
+    }
+
+    public GenericGroup(
+        LogContext logContext,
+        String groupId,
+        GenericGroupState initialState,
+        Time time,
+        int generationId,
+        Optional<String> protocolType,
+        Optional<String> protocolName,
+        Optional<String> leaderId,
+        Optional<Long> currentStateTimestamp
+    ) {
         Objects.requireNonNull(logContext);
         this.log = logContext.logger(GenericGroup.class);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = Objects.requireNonNull(initialState);
+        this.previousState = DEAD;
         this.time = Objects.requireNonNull(time);
-        this.currentStateTimestamp = Optional.of(time.milliseconds());
+        this.generationId = generationId;
+        this.protocolType = protocolType;
+        this.protocolName = protocolName;
+        this.leaderId = leaderId;
+        this.currentStateTimestamp = currentStateTimestamp;
     }
 
     /**
@@ -234,7 +273,18 @@ public class GenericGroup implements Group {
      * @return the current group state.
      */
     public GenericGroupState currentState() {
-        return state;
+        return this.state;
+    }
+
+    public GenericGroupState previousState() {
+        return this.previousState;
+    }
+
+    /**
+     * @return true if a new member was added.
+     */
+    public boolean newMemberAdded() {
+        return this.newMemberAdded;
     }
 
     /**
@@ -296,6 +346,24 @@ public class GenericGroup implements Group {
      */
     public long currentStateTimestampOrDefault() {
         return currentStateTimestamp.orElse(-1L);
+    }
+
+    /**
+     * Sets newMemberAdded.
+     *
+     * @param value the value to set.
+     */
+    public void setNewMemberAdded(boolean value) {
+        this.newMemberAdded = value;
+    }
+
+    /**
+     * Sets subscribedTopics.
+     *
+     * @param subscribedTopics the value to set.
+     */
+    public void setSubscribedTopics(Optional<Set<String>> subscribedTopics) {
+        this.subscribedTopics = subscribedTopics;
     }
 
     /**
@@ -434,7 +502,7 @@ public class GenericGroup implements Group {
      * @param groupInstanceId  the group instance id.
      * @param oldMemberId      the old member id.
      * @param newMemberId      the new member id that will replace the old member id.
-     * @return the old member.
+     * @return the member with the new id.
      */
     public GenericGroupMember replaceStaticMember(
         String groupInstanceId,
@@ -484,7 +552,7 @@ public class GenericGroup implements Group {
         }
 
         staticMembers.put(groupInstanceId, newMemberId);
-        return removedMember;
+        return newMember;
     }
 
     /**
@@ -515,7 +583,7 @@ public class GenericGroup implements Group {
     /**
      * @return number of members that are pending join.
      */
-    public int numPending() {
+    public int numPendingJoinMembers() {
         return pendingJoinMembers.size();
     }
 
@@ -630,7 +698,7 @@ public class GenericGroup implements Group {
     }
 
     // For testing only.
-    Set<String> allDynamicMemberIds() {
+    public Set<String> allDynamicMemberIds() {
         Set<String> dynamicMemberSet = new HashSet<>(allMemberIds());
         staticMembers.values().forEach(dynamicMemberSet::remove);
         return dynamicMemberSet;
@@ -675,6 +743,84 @@ public class GenericGroup implements Group {
     }
 
     /**
+     * Validates that (1) the group instance id exists and is mapped to the member id
+     * if the group instance id is provided; and (2) the member id exists in the group.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param operation         The operation.
+     *
+     * @throws UnknownMemberIdException
+     * @throws FencedInstanceIdException
+     */
+    public void validateMember(
+        String memberId,
+        String groupInstanceId,
+        String operation
+    ) throws UnknownMemberIdException, FencedInstanceIdException {
+        if (groupInstanceId != null) {
+            String existingMemberId = staticMemberId(groupInstanceId);
+            if (existingMemberId == null) {
+                throw Errors.UNKNOWN_MEMBER_ID.exception();
+            } else if (!existingMemberId.equals(memberId)) {
+                log.info("Request memberId={} for static member with groupInstanceId={} " +
+                         "is fenced by existing memberId={} during operation {}",
+                    memberId, groupInstanceId, existingMemberId, operation);
+                throw Errors.FENCED_INSTANCE_ID.exception();
+            }
+        }
+
+        if (!hasMemberId(memberId)) {
+            throw Errors.UNKNOWN_MEMBER_ID.exception();
+        }
+    }
+
+    /**
+     * Validates the OffsetCommit request.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param generationId      The generation id.
+     */
+    @Override
+    public void validateOffsetCommit(
+        String memberId,
+        String groupInstanceId,
+        int generationId
+    ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
+        if (isInState(DEAD)) {
+            throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
+        }
+
+        if (generationId < 0 && isInState(EMPTY)) {
+            // When the generation id is -1, the request comes from either the admin client
+            // or a consumer which does not use the group management facility. In this case,
+            // the request can commit offsets if the group is empty.
+            return;
+        }
+
+        if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
+            validateMember(memberId, groupInstanceId, "offset-commit");
+
+            if (generationId != this.generationId) {
+                throw Errors.ILLEGAL_GENERATION.exception();
+            }
+        } else if (!isInState(EMPTY)) {
+            // If the request does not contain the member id and the generation id (version 0),
+            // offset commits are only accepted when the group is empty.
+            throw Errors.UNKNOWN_MEMBER_ID.exception();
+        }
+
+        if (isInState(COMPLETING_REBALANCE)) {
+            // We should not receive a commit request if the group has not completed rebalance;
+            // but since the consumer's member.id and generation is valid, it means it has received
+            // the latest group generation information from the JoinResponse.
+            // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
+            throw Errors.REBALANCE_IN_PROGRESS.exception();
+        }
+    }
+
+    /**
      * Verify the member id is up to date for static members. Return true if both conditions met:
      *   1. given member is a known static member to group
      *   2. group stored member id doesn't match with given member id
@@ -704,6 +850,7 @@ public class GenericGroup implements Group {
      */
     public void transitionTo(GenericGroupState groupState) {
         assertValidTransition(groupState);
+        previousState = state;
         state = groupState;
         currentStateTimestamp = Optional.of(time.milliseconds());
     }
@@ -782,6 +929,7 @@ public class GenericGroup implements Group {
      * protocol can be supported if it is supported by all members.
      *
      * @param member               the member to check.
+     *
      * @return a boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(GenericGroupMember member) {
@@ -797,6 +945,26 @@ public class GenericGroup implements Group {
      *
      * @param memberProtocolType  the member protocol type.
      * @param memberProtocols     the set of protocol names.
+     *
+     * @return a boolean based on the condition mentioned above.
+     */
+    public boolean supportsProtocols(
+        String memberProtocolType,
+        JoinGroupRequestProtocolCollection memberProtocols
+    ) {
+        return supportsProtocols(
+            memberProtocolType,
+            GenericGroupMember.plainProtocolSet(memberProtocols)
+        );
+    }
+
+    /**
+     * Checks whether at least one of the given protocols can be supported. A
+     * protocol can be supported if it is supported by all members.
+     *
+     * @param memberProtocolType  the member protocol type.
+     * @param memberProtocols     the set of protocol names.
+     *
      * @return a boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
@@ -838,7 +1006,7 @@ public class GenericGroup implements Group {
      *
      * @return the subscribed topics or None based on the condition above.
      */
-    Optional<Set<String>> computeSubscribedTopics() {
+    public Optional<Set<String>> computeSubscribedTopics() {
         if (!protocolType.isPresent()) {
             return Optional.empty();
         }
@@ -854,6 +1022,9 @@ public class GenericGroup implements Group {
             try {
                 Set<String> allSubscribedTopics = new HashSet<>();
                 members.values().forEach(member -> {
+                    // The consumer protocol is parsed with V0 which is the based prefix of all versions.
+                    // This way the consumer group manager does not depend on any specific existing or
+                    // future versions of the consumer protocol. VO must prefix all new versions.
                     ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
                     ConsumerProtocol.deserializeVersion(buffer);
                     allSubscribedTopics.addAll(new HashSet<>(
@@ -882,7 +1053,7 @@ public class GenericGroup implements Group {
      */
     public void updateMember(
         GenericGroupMember member,
-        List<Protocol> protocols,
+        JoinGroupRequestProtocolCollection protocols,
         int rebalanceTimeoutMs,
         int sessionTimeoutMs,
         CompletableFuture<JoinGroupResponseData> future
@@ -984,6 +1155,15 @@ public class GenericGroup implements Group {
             .setGroupId(groupId)
             .setProtocolType(protocolType.orElse(""))
             .setGroupState(state.toString());
+    }
+
+    /**
+     * @return All member assignments keyed by member id.
+     */
+    public Map<String, byte[]> groupAssignment() {
+        return allMembers().stream().collect(Collectors.toMap(
+            GenericGroupMember::memberId, GenericGroupMember::assignment
+        ));
     }
 
     /**

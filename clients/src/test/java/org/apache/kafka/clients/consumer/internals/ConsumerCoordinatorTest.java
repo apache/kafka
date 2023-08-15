@@ -458,7 +458,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testSelectRebalanceProtcol() {
+    public void testSelectRebalanceProtocol() {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
         assignors.add(new MockPartitionAssignor(Collections.singletonList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER)));
         assignors.add(new MockPartitionAssignor(Collections.singletonList(COOPERATIVE)));
@@ -2511,7 +2511,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testCommitOffsetMetadata() {
+    public void testCommitOffsetMetadataAsync() {
         subscriptions.assignFromUser(singleton(t1p));
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -2521,11 +2521,27 @@ public abstract class ConsumerCoordinatorTest {
 
         AtomicBoolean success = new AtomicBoolean(false);
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, new OffsetAndMetadata(100L, "hello"));
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(100L, "hello");
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, offsetAndMetadata);
         coordinator.commitOffsetsAsync(offsets, callback(offsets, success));
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertTrue(success.get());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
+    }
+
+    @Test
+    public void testCommitOffsetMetadataSync() {
+        subscriptions.assignFromUser(singleton(t1p));
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(100L, "hello");
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, offsetAndMetadata);
+        boolean success = coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE));
+        assertTrue(success);
     }
 
     @Test
@@ -2559,7 +2575,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(body -> {
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
             return commitRequest.data().memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
-                    commitRequest.data().generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
+                    commitRequest.data().generationIdOrMemberEpoch() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
         }, offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
 
         AtomicBoolean success = new AtomicBoolean(false);

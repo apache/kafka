@@ -30,6 +30,7 @@ import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mockConstruction, times, verify, verifyNoMoreInteractions}
 
@@ -71,11 +72,17 @@ class LogCleanerTest {
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     try {
       val logCleaner = new LogCleaner(new CleanerConfig(true),
-        logDirs = Array(TestUtils.tempDir()),
+        logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
         logs = new Pool[TopicPartition, UnifiedLog](),
         logDirFailureChannel = new LogDirFailureChannel(1),
         time = time)
 
+      val metricsToVerify = new java.util.HashMap[String, java.util.List[java.util.Map[String, String]]]()
+      logCleaner.cleanerManager.gaugeMetricNameWithTag.asScala.foreach { metricNameAndTags =>
+        val tags = new java.util.ArrayList[java.util.Map[String, String]]()
+        metricNameAndTags._2.asScala.foreach(tags.add)
+        metricsToVerify.put(metricNameAndTags._1, tags)
+      }
       // shutdown logCleaner so that metrics are removed
       logCleaner.shutdown()
 
@@ -83,11 +90,27 @@ class LogCleanerTest {
       val numMetricsRegistered = LogCleaner.MetricNames.size
       verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
       
-      // verify that each metric is removed
+      // verify that each metric in `LogCleaner` is removed
       LogCleaner.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+
+      // verify that each metric in `LogCleanerManager` is removed
+      val mockLogCleanerManagerMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
+      LogCleanerManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      metricsToVerify.asScala.foreach { metricNameAndTags =>
+        metricNameAndTags._2.asScala.foreach { tags =>
+          verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameAndTags._1), any(), ArgumentMatchers.eq(tags))
+        }
+      }
+      LogCleanerManager.GaugeMetricNameNoTag.foreach(verify(mockLogCleanerManagerMetricsGroup).removeMetric(_))
+      metricsToVerify.asScala.foreach { metricNameAndTags =>
+        metricNameAndTags._2.asScala.foreach { tags =>
+          verify(mockLogCleanerManagerMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameAndTags._1), ArgumentMatchers.eq(tags))
+        }
+      }
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
+      verifyNoMoreInteractions(mockLogCleanerManagerMetricsGroup)
     } finally {
       mockMetricsGroupCtor.close()
     }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -105,5 +106,10 @@ public class ValueToKeyTest {
 
         DataException actual = assertThrows(DataException.class, () -> xform.apply(record));
         assertEquals("Field does not exist: not_exist", actual.getMessage());
+    }
+
+    @Test
+    public void testValueToKeyVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 }
