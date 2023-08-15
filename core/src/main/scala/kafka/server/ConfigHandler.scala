@@ -70,8 +70,11 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
 
+    val remoteLogStorageEnable = topicConfig.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)
+
     if (!kafkaConfig.remoteLogManagerConfig.enableRemoteStorageSystem()
-      && topicConfig.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG) != null) {
+      && remoteLogStorageEnable != null
+      && remoteLogStorageEnable.toBoolean) {
       throw new ConfigException(s"You have to delete all topics with the property remote.storage.enable (i.e. $topic) before disabling tiered storage cluster-wide")
     }
 

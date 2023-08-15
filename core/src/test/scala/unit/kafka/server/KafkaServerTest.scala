@@ -191,7 +191,7 @@ class KafkaServerTest extends QuorumTestHarness {
     tsEnabledProps.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
       "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
 
-    val server = TestUtils.createServer(KafkaConfig.fromProps(tsEnabledProps))
+    var server = TestUtils.createServer(KafkaConfig.fromProps(tsEnabledProps))
     server.remoteLogManagerOpt match {
       case Some(_) =>
       case None => fail("RemoteLogManager should be initialized")
@@ -206,7 +206,9 @@ class KafkaServerTest extends QuorumTestHarness {
 
     val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnect).head
 
-    assertThrows(classOf[ConfigException], () => TestUtils.createServer(KafkaConfig.fromProps(tsDisabledProps)))
+    server = TestUtils.createServer(KafkaConfig.fromProps(tsDisabledProps))
+
+    server.shutdown()
   }
 
   @Test
@@ -229,7 +231,7 @@ class KafkaServerTest extends QuorumTestHarness {
   def testClusterWithoutTieredStorageFailsOnStartupIfTopicWithTieringDisabled(): Unit = {
     val serverProps = TestUtils.createBrokerConfigs(1, zkConnect).head
 
-    val server = TestUtils.createServer(KafkaConfig.fromProps(serverProps))
+    var server = TestUtils.createServer(KafkaConfig.fromProps(serverProps))
 
     val topicProps = new Properties()
     topicProps.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
@@ -238,7 +240,9 @@ class KafkaServerTest extends QuorumTestHarness {
 
     server.shutdown()
 
-    assertThrows(classOf[ConfigException], () => TestUtils.createServer(KafkaConfig.fromProps(serverProps)))
+    server = TestUtils.createServer(KafkaConfig.fromProps(serverProps))
+
+    server.shutdown()
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
