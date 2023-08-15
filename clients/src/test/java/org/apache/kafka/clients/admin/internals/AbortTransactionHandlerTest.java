@@ -38,6 +38,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -52,6 +53,10 @@ public class AbortTransactionHandlerTest {
     @Test
     public void testInvalidBuildRequestCall() {
         AbortTransactionHandler handler = new AbortTransactionHandler(abortSpec, logContext);
+
+        assertEquals(handler.apiName(), "abortTransaction");
+        assertNotNull(handler.lookupStrategy());
+
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1,
             emptySet()));
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1,
