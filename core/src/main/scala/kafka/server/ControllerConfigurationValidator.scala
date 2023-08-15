@@ -106,7 +106,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
           throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
-        LogConfig.validate(properties, kafkaConfig.extractLogConfigMap)
+        LogConfig.validate(properties, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
       case BROKER => validateBrokerName(resource.name())
       case _ => throwExceptionForUnknownResourceType(resource)
     }

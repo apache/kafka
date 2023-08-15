@@ -105,9 +105,6 @@ class LogConfigTest {
     props.setProperty(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, "100")
     props.setProperty(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "200")
     assertThrows(classOf[Exception], () => LogConfig.validate(props))
-    assertThrows(classOf[Exception], () => LogConfig.validateValues(props))
-    assertThrows(classOf[Exception], () => LogConfig.validateConfiguredValuesInBroker(props))
-    assertThrows(classOf[Exception], () => LogConfig.validateValuesInBroker(props))
   }
 
   @Test
@@ -295,7 +292,8 @@ class LogConfigTest {
 
     props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs.toString)
     props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes.toString)
-    assertThrows(classOf[ConfigException], () => LogConfig.validate(props, kafkaConfig.extractLogConfigMap))
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(props, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
   }
 
   @Test
@@ -307,14 +305,17 @@ class LogConfigTest {
     val logProps = new Properties()
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
     logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap)
+    LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
 
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    assertThrows(classOf[ConfigException], () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap))
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete,compact")
-    assertThrows(classOf[ConfigException], () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap))
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete")
-    assertThrows(classOf[ConfigException], () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap))
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
   }
 
   @ParameterizedTest(name = "testEnableRemoteLogStorage with sysRemoteStorageEnabled: {0}")
@@ -327,10 +328,10 @@ class LogConfigTest {
     val logProps = new Properties()
     logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     if (sysRemoteStorageEnabled) {
-      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap)
+      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
     } else {
       val message = assertThrows(classOf[ConfigException],
-        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap))
+        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
       assertTrue(message.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
     }
   }
@@ -350,10 +351,10 @@ class LogConfigTest {
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, "500")
     if (sysRemoteStorageEnabled) {
       val message = assertThrows(classOf[ConfigException],
-        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap))
+        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
       assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG))
     } else {
-      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap)
+      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
     }
   }
 
@@ -372,16 +373,16 @@ class LogConfigTest {
     logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, "128")
     if (sysRemoteStorageEnabled) {
       val message = assertThrows(classOf[ConfigException],
-        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap))
+        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
       assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
     } else {
-      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap)
+      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
     }
   }
 
-  @ParameterizedTest(name = "testValidateDefaultLogConfigs with sysRemoteStorageEnabled: {0}")
+  @ParameterizedTest(name = "testValidateBrokerLogConfigs with sysRemoteStorageEnabled: {0}")
   @ValueSource(booleans = Array(true, false))
-  def testValidateDefaultLogConfigs(sysRemoteStorageEnabled: Boolean): Unit = {
+  def testValidateBrokerLogConfigs(sysRemoteStorageEnabled: Boolean): Unit = {
     val props = TestUtils.createDummyBrokerConfig()
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
     props.put(KafkaConfig.LogRetentionBytesProp, "1024")
@@ -390,10 +391,10 @@ class LogConfigTest {
 
     if (sysRemoteStorageEnabled) {
       val message = assertThrows(classOf[ConfigException],
-        () => LogConfig.validateConfiguredValuesInBroker(kafkaConfig.extractLogConfigMap))
+        () => LogConfig.validateBrokerLogConfigValues(kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
       assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
     } else {
-      LogConfig.validateConfiguredValuesInBroker(kafkaConfig.extractLogConfigMap)
+      LogConfig.validateBrokerLogConfigValues(kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
     }
   }
 }

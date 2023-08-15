@@ -160,7 +160,9 @@ class AdminZkClient(zkClient: KafkaZkClient,
         partitionReplicaAssignment.keys.filter(_ >= 0).sum != sequenceSum)
         throw new InvalidReplicaAssignmentException("partitions should be a consecutive 0-based integer sequence")
 
-    LogConfig.validate(config, kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()))
+    LogConfig.validate(config,
+      kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()),
+      kafkaConfig.exists(_.isRemoteLogStorageSystemEnabled))
   }
 
   private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
@@ -476,7 +478,9 @@ class AdminZkClient(zkClient: KafkaZkClient,
     if (!zkClient.topicExists(topic))
       throw new UnknownTopicOrPartitionException(s"Topic '$topic' does not exist.")
     // remove the topic overrides
-    LogConfig.validate(configs, kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()))
+    LogConfig.validate(configs,
+      kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()),
+      kafkaConfig.exists(_.isRemoteLogStorageSystemEnabled))
   }
 
   /**

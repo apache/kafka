@@ -605,7 +605,7 @@ object TestUtils extends Logging {
                   partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
                   servers: Seq[KafkaBroker],
                   topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
-    val adminZkClient = new AdminZkClient(zkClient, None)
+    val adminZkClient = new AdminZkClient(zkClient)
     // create topic
     waitUntilTrue( () => {
       var hasSessionExpirationException = false

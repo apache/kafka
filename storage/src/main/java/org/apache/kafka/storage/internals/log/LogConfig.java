@@ -57,7 +57,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionValidator;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
 public class LogConfig extends AbstractConfig {
@@ -111,6 +110,15 @@ public class LogConfig extends AbstractConfig {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
+        }
+
+        @Override
+        public String toString() {
+            return "RemoteLogConfig{" +
+                    "remoteStorageEnable=" + remoteStorageEnable +
+                    ", localRetentionMs=" + localRetentionMs +
+                    ", localRetentionBytes=" + localRetentionBytes +
+                    '}';
         }
     }
 
@@ -266,12 +274,7 @@ public class LogConfig extends AbstractConfig {
             .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
             .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
-                TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
-            // RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP is defined here to ensure that when system
-            // level remote storage functionality is disabled, topics cannot be configured to use remote storage.
-            .defineInternal(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, BOOLEAN,
-                    RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE, null, MEDIUM,
-                    RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC);
+                TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -477,15 +480,14 @@ public class LogConfig extends AbstractConfig {
     }
 
     /**
-     * Validates the configured values of the LogConfig. Should be called only by the broker.
+     * Validates the values of the given properties. Should be called only by the broker.
      * The `props` supplied doesn't contain any topic-level configs, only broker-level configs.
      * The default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
-    public static void validateConfiguredValuesInBroker(Map<?, ?> props) {
+    public static void validateBrokerLogConfigValues(Map<?, ?> props,
+                                                     boolean isRemoteLogStorageSystemEnabled) {
         validateValues(props);
-        Boolean isRemoteLogStorageSystemEnabled =
-                (Boolean) props.get(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
         if (isRemoteLogStorageSystemEnabled) {
             validateRemoteStorageRetentionSize(props);
             validateRemoteStorageRetentionTime(props);
@@ -494,24 +496,23 @@ public class LogConfig extends AbstractConfig {
 
     /**
      * Validates the values of the given properties. Should be called only by the broker.
-     * The `props` supplied should contain all the LogConfig properties and the default values should be extracted from
-     * the KafkaConfig.
+     * The `props` supplied contains the topic-level configs,
+     * The default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
-    public static void validateValuesInBroker(Map<?, ?> props) {
+    static void validateTopicLogConfigValues(Map<?, ?> props,
+                                             boolean isRemoteLogStorageSystemEnabled) {
         validateValues(props);
-        Boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+        boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
-            validateRemoteStorageOnlyIfSystemEnabled(props);
+            validateRemoteStorageOnlyIfSystemEnabled(isRemoteLogStorageSystemEnabled);
             validateNoRemoteStorageForCompactedTopic(props);
             validateRemoteStorageRetentionSize(props);
             validateRemoteStorageRetentionTime(props);
         }
     }
 
-    private static void validateRemoteStorageOnlyIfSystemEnabled(Map<?, ?> props) {
-        Boolean isRemoteLogStorageSystemEnabled =
-                (Boolean) props.get(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
+    private static void validateRemoteStorageOnlyIfSystemEnabled(boolean isRemoteLogStorageSystemEnabled) {
         if (!isRemoteLogStorageSystemEnabled) {
             throw new ConfigException("Tiered Storage functionality is disabled in the broker. " +
                     "Topic cannot be configured with remote log storage.");
@@ -563,20 +564,21 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(props, Collections.emptyMap());
+        validate(props, Collections.emptyMap(), false);
     }
 
     public static void validate(Properties props,
-                                Map<String, Object> defaultConfigs) {
+                                Map<?, ?> configuredProps,
+                                boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);
-        if (defaultConfigs == null || defaultConfigs.isEmpty()) {
+        if (configuredProps == null || configuredProps.isEmpty()) {
             Map<?, ?> valueMaps = CONFIG.parse(props);
             validateValues(valueMaps);
         } else {
-            Map<Object, Object> configWithBrokerDefaults = new HashMap<>(defaultConfigs);
-            configWithBrokerDefaults.putAll(props);
-            Map<?, ?> valueMaps = CONFIG.parse(configWithBrokerDefaults);
-            validateValuesInBroker(valueMaps);
+            Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
+            combinedConfigs.putAll(props);
+            Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
+            validateTopicLogConfigValues(valueMaps, isRemoteLogStorageSystemEnabled);
         }
     }
 
