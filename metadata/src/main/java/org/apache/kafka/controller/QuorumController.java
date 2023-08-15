@@ -917,7 +917,7 @@ public final class QuorumController implements Controller {
             }
         }
         @Override
-        public void beginMigration() {
+        public CompletableFuture<?> beginMigration() {
             log.info("Starting ZK Migration");
             ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
                 "Begin ZK Migration Transaction",
@@ -926,6 +926,7 @@ public final class QuorumController implements Controller {
                         new BeginTransactionRecord().setName("ZK Migration"), (short) 0))
                 ), eventFlags);
             queue.append(batchEvent);
+            return batchEvent.future;
         }
 
         @Override
@@ -954,7 +955,7 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void abortMigration() {
+        public CompletableFuture<?> abortMigration() {
             fatalFaultHandler.handleFault("Aborting the ZK migration");
             ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
                 "Abort ZK Migration Transaction",
@@ -963,6 +964,7 @@ public final class QuorumController implements Controller {
                         new AbortTransactionRecord(), (short) 0))
                 ), eventFlags);
             queue.append(batchEvent);
+            return batchEvent.future;
         }
     }
 
@@ -990,7 +992,7 @@ public final class QuorumController implements Controller {
                             deferredUnstableEventQueue.completeUpTo(offsetControl.lastCommittedOffset());
 
                             // The active controller can delete up to the current committed offset.
-                            snapshotRegistry.deleteSnapshotsUpTo(offset);
+                            snapshotRegistry.deleteSnapshotsUpTo(offsetControl.lastStableOffset());
                         } else {
                             // If the controller is a standby, replay the records that were
                             // created by the active controller.

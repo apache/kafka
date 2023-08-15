@@ -139,9 +139,9 @@ public class MetadataBatchLoader {
                 LogDeltaManifest manifest = LogDeltaManifest.newBuilder()
                     .provenance(provenance)
                     .leaderAndEpoch(leaderAndEpochSupplier.get())
-                    .numBatches(numBatches) // This will be zero if we haven't read a whole batch yet
+                    .numBatches(numBatches) // This will be zero if we have not yet read a batch
                     .elapsedNs(totalBatchElapsedNs)
-                    .numBytes(numBytes)     // This will be zero if we haven't read a whole batch yet
+                    .numBytes(numBytes)     // This will be zero if we have not yet read a batch
                     .build();
                 if (log.isDebugEnabled()) {
                     log.debug("handleCommit: Generated a metadata delta between {} and {} from {} batch(es) in {} us.",

@@ -422,8 +422,10 @@ public class MetadataBatchLoaderTest {
         batchLoader.resetToImage(MetadataImage.EMPTY);
         batchLoader.loadBatch(Batch.data(
             16, 2, 0, 10, TXN_BEGIN_SINGLETON));
+        assertEquals(0, updater.updates);
         batchLoader.loadBatch(Batch.data(
             17, 3, 0, 30, TOPIC_NO_TXN_BATCH));
+        assertEquals(0, updater.updates);
         if (abortTxn) {
             batchLoader.loadBatch(Batch.data(
                 20, 4, 0, 10, TXN_ABORT_SINGLETON));
@@ -431,6 +433,7 @@ public class MetadataBatchLoaderTest {
             batchLoader.loadBatch(Batch.data(
                 20, 4, 0, 10, TXN_END_SINGLETON));
         }
+        assertEquals(0, updater.updates);
         batchLoader.maybeFlushBatches();
 
         // Regardless of end/abort, we should publish an updated MetadataProvenance and manifest

@@ -627,7 +627,15 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             Set<Integer> brokersInMetadata = new HashSet<>();
             log.info("Starting ZK migration");
             MigrationManifest.Builder manifestBuilder = MigrationManifest.newBuilder(time);
-            zkRecordConsumer.beginMigration();
+            try {
+                FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, "",
+                    "the metadata layer to begin the migration transaction",
+                    zkRecordConsumer.beginMigration(),
+                    Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
+            } catch (Throwable t) {
+                log.error("Could not start the migration", t);
+                super.handleException(t);
+            }
             try {
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
