@@ -119,7 +119,6 @@ class DelegationTokenManager(val config: KafkaConfig,
 
   val tokenMaxLifetime: Long = config.delegationTokenMaxLifeMs
   val defaultTokenRenewTime: Long = config.delegationTokenExpiryTimeMs
-  val tokenRemoverScanInterval: Long = config.delegationTokenExpiryCheckIntervalMs
 
   def startup(): Unit = {
     if (config.tokenAuthEnabled) {
