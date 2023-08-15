@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
+import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
@@ -65,6 +66,7 @@ public class DelegationTokenImageTest {
         Map<String, DelegationTokenData> image1 = new HashMap<>();
         image1.put("somerandomuuid1", randomDelegationTokenData("somerandomuuid1", 100));
         image1.put("somerandomuuid2", randomDelegationTokenData("somerandomuuid2", 100));
+        image1.put("somerandomuuid3", randomDelegationTokenData("somerandomuuid3", 100));
         IMAGE1 = new DelegationTokenImage(image1);
 
         DELTA1_RECORDS = new ArrayList<>();
@@ -75,6 +77,8 @@ public class DelegationTokenImageTest {
             setMaxTimestamp(1000).
             setExpirationTimestamp(200).
             setTokenId("somerandomuuid1"), (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
+            setTokenId("somerandomuuid3"), (short) 0));
 
         DELTA1 = new DelegationTokenDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);

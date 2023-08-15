@@ -103,6 +103,7 @@ public class MetadataImageTest {
         records.addAll(ProducerIdsImageTest.DELTA1_RECORDS);
         records.addAll(AclsImageTest.DELTA1_RECORDS);
         records.addAll(ScramImageTest.DELTA1_RECORDS);
+        records.addAll(DelegationTokenImageTest.DELTA1_RECORDS);
         testToImage(IMAGE2, records);
     }
 
