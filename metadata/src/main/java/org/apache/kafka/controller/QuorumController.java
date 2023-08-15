@@ -983,7 +983,9 @@ public final class QuorumController implements Controller {
                             // so we don't need to do it here.
                             log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
 
-                            // Complete any events in the purgatory that were waiting for this offset.
+                            // Advance the committed and stable offsets then complete any pending purgatory
+                            // items that were waiting for these offsets.
+                            offsetControl.handleCommitBatch(batch);
                             deferredEventQueue.completeUpTo(offsetControl.lastStableOffset());
                             deferredUnstableEventQueue.completeUpTo(offsetControl.lastCommittedOffset());
 
@@ -1011,8 +1013,8 @@ public final class QuorumController implements Controller {
                                 }
                                 recordIndex++;
                             }
+                            offsetControl.handleCommitBatch(batch);
                         }
-                        offsetControl.handleCommitBatch(batch);
                     }
                 } finally {
                     reader.close();
