@@ -136,11 +136,6 @@ public final class ConsumerUtils {
         return new FetchConfig<>(config, deserializers, isolationLevel);
     }
 
-    public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config) {
-        Deserializers<K, V> deserializers = new Deserializers<>(config);
-        return createFetchConfig(config, deserializers);
-    }
-
     @SuppressWarnings("unchecked")
     public static <K, V> List<ConsumerInterceptor<K, V>> getConfiguredConsumerInterceptors(ConsumerConfig config) {
         return (List<ConsumerInterceptor<K, V>>) ClientUtils.getConfiguredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
