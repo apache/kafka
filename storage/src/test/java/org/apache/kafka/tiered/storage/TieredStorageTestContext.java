@@ -41,7 +41,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
@@ -72,10 +71,8 @@ import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 public final class TieredStorageTestContext implements AutoCloseable {
 
     private final TieredStorageTestHarness harness;
-
     private final Serializer<String> ser = Serdes.String().serializer();
     private final Deserializer<String> de = Serdes.String().deserializer();
-
     private final Map<String, TopicSpec> topicSpecs = new HashMap<>();
     private final TieredStorageTestReport testReport;
 
@@ -117,6 +114,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
         }
         newTopic.configs(spec.getProperties());
         admin.createTopics(Collections.singletonList(newTopic)).all().get();
+        TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.getTopicName(), spec.getPartitionCount());
         synchronized (this) {
             topicSpecs.put(spec.getTopicName(), spec);
         }
@@ -136,6 +134,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
         }
         Map<String, NewPartitions> partitionsMap = Collections.singletonMap(spec.getTopicName(), newPartitions);
         admin.createPartitions(partitionsMap).all().get();
+        TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.getTopicName(), spec.getPartitionCount());
     }
 
     public void updateTopicConfig(String topic,
@@ -169,8 +168,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
         admin.incrementalAlterConfigs(configsMap, alterOptions).all().get(30, TimeUnit.SECONDS);
     }
 
-    public void deleteTopic(String topic) throws ExecutionException, InterruptedException, TimeoutException {
-        admin.deleteTopics(Collections.singletonList(topic)).all().get(60, TimeUnit.SECONDS);
+    public void deleteTopic(String topic) {
+        TestUtils.deleteTopicWithAdmin(admin, topic, harness.brokers());
     }
 
     /**
@@ -228,8 +227,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     public void bounce(int brokerId) {
         closeClients();
         harness.killBroker(brokerId);
-        KafkaBroker broker = harness.brokers().apply(brokerId);
-        broker.startup();
+        harness.startBroker(brokerId);
         initContext();
     }
 
@@ -240,9 +238,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void start(int brokerId) {
-        KafkaBroker broker = harness.brokers().apply(brokerId);
         closeClients();
-        broker.startup();
+        harness.startBroker(brokerId);
         initContext();
     }
 
@@ -257,7 +254,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public LocalTieredStorageSnapshot takeTieredStorageSnapshot() {
-        return LocalTieredStorageSnapshot.takeSnapshot(remoteStorageManagers.get(0));
+        int aliveBrokerId = harness.aliveBrokers().head().config().brokerId();
+        return LocalTieredStorageSnapshot.takeSnapshot(remoteStorageManagers.get(aliveBrokerId));
     }
 
     public LocalTieredStorageHistory tieredStorageHistory(int brokerId) {
@@ -281,7 +279,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public boolean isActive(Integer brokerId) {
-        return harness.brokers().apply(brokerId).brokerState().equals(BrokerState.RUNNING);
+        return harness.aliveBrokers().exists(b -> b.config().brokerId() == brokerId);
     }
 
     public boolean isAssignedReplica(TopicPartition topicPartition, Integer replicaId)

@@ -158,7 +158,5 @@ public final class ProduceAction implements TieredStorageTestAction {
                                 List<ProducerRecord<String, String>> producerRecords,
                                 TopicPartition topicPartition) {
         assertThat(discoveredRecords, correspondTo(producerRecords, topicPartition, serde, serde));
-//        assertEquals(spec.getBaseOffset(), discoveredRecords.get(0).offset(),
-//                "Base offset of segment mismatch");
     }
 }

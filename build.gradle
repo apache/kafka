@@ -1722,8 +1722,6 @@ project(':storage') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':metadata')
-    testImplementation project(':metadata').sourceSets.test.output
     testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
