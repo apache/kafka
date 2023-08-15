@@ -44,10 +44,9 @@ public class RemoteLogManagerConfigTest {
         Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
         Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
         String remoteLogMetadataManagerClass = useDefaultRemoteLogMetadataManagerClass ? DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME : "dummy.remote.log.metadata.class";
-        System.out.println(remoteLogMetadataManagerClass);
         RemoteLogManagerConfig expectedRemoteLogManagerConfig
                 = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
-                remoteLogMetadataManagerClass, "dummy.remote.log.metadata.class.path",
+                                             remoteLogMetadataManagerClass, "dummy.remote.log.metadata.class.path",
                                              "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
                                              rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
 
