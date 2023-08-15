@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
@@ -87,7 +88,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     }
 
     public Properties overridingProps() {
-        Assertions.assertTrue(STORAGE_WAIT_TIMEOUT_SEC > RLM_TASK_INTERVAL_MS,
+        Assertions.assertTrue(STORAGE_WAIT_TIMEOUT_SEC > TimeUnit.MILLISECONDS.toSeconds(RLM_TASK_INTERVAL_MS),
                 "STORAGE_WAIT_TIMEOUT_SEC should be greater than RLM_TASK_INTERVAL_MS");
 
         Properties overridingProps = new Properties();
