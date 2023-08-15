@@ -56,7 +56,15 @@ public class MirrorClientConfig extends AbstractConfig {
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         DefaultReplicationPolicy.SEPARATOR_DEFAULT;
-    
+    public static final String INTERNAL_TOPIC_SEPARATOR_ENABLED =  "replication.policy.internal.topic.separator.enabled";
+    public static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC =
+            "Whether to use replication.policy.separator to control the names of topics used for checkpoints and offset syncs. " +
+                    "By default, custom separators are used in these topic names; however, if upgrading MirrorMaker 2 from older versions " +
+                    "that did not allow for these topic names to be customized, it may be necessary to set this property to 'false' in order " +
+                    "to continue using the same names for those topics.";
+    public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT =
+        DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
+
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
     public static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     public static final String PRODUCER_CLIENT_PREFIX = "producer.";
@@ -127,6 +135,12 @@ public class MirrorClientConfig extends AbstractConfig {
             REPLICATION_POLICY_SEPARATOR_DEFAULT,
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_SEPARATOR_DOC)
+        .define(
+            INTERNAL_TOPIC_SEPARATOR_ENABLED,
+            ConfigDef.Type.BOOLEAN,
+            INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
+            ConfigDef.Importance.LOW,
+            INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
                 CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
