@@ -98,6 +98,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
+import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -126,6 +127,7 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.brokerFeatures;
+import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeat;
@@ -133,6 +135,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1443,5 +1446,63 @@ public class QuorumControllerTest {
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
                 featureControlManager)
         );
+    }
+
+    private final static List<ApiMessageAndVersion> ZK_MIGRATION_RECORDS =
+        Collections.unmodifiableList(Arrays.asList(
+            new ApiMessageAndVersion(new TopicRecord().
+                setName("spam").
+                setTopicId(Uuid.fromString("qvRJLpDYRHmgEi8_TPBYTQ")),
+                (short) 0),
+            new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
+                setTopicId(Uuid.fromString("qvRJLpDYRHmgEi8_TPBYTQ")).setReplicas(Arrays.asList(0, 1, 2)).
+                setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).setLeader(0).setLeaderEpoch(0).
+                setPartitionEpoch(0), (short) 0),
+            new ApiMessageAndVersion(new PartitionRecord().setPartitionId(1).
+                setTopicId(Uuid.fromString("qvRJLpDYRHmgEi8_TPBYTQ")).setReplicas(Arrays.asList(1, 2, 0)).
+                setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).setLeader(1).setLeaderEpoch(0).
+                setPartitionEpoch(0), (short) 0)
+            ));
+    @Test
+    public void testFailoverDuringMigrationTransaction() throws Exception {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build();
+        ) {
+            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"));
+            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+            QuorumController active = controlEnv.activeController(true);
+            ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
+            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
+            migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
+            forceRenounce(active);
+
+            // Ensure next controller doesn't see the topic from partial migration
+            QuorumController newActive = controlEnv.activeController(true);
+            CompletableFuture<Map<String, ResultOrError<Uuid>>> results =
+                newActive.findTopicIds(ANONYMOUS_CONTEXT, Collections.singleton("spam"));
+            assertEquals(
+                Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                results.get(30, TimeUnit.SECONDS).get("spam").error().error());
+
+            assertEquals(ZkMigrationState.PRE_MIGRATION, newActive.appendReadEvent("read migration state", OptionalLong.empty(),
+                () -> newActive.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
+
+            // Ensure the migration can happen on new active controller
+            migrationConsumer = newActive.zkRecordConsumer();
+            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
+            migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
+            migrationConsumer.completeMigration().get(30, TimeUnit.SECONDS);
+
+            results = newActive.findTopicIds(ANONYMOUS_CONTEXT, Collections.singleton("spam"));
+            assertTrue(results.get(30, TimeUnit.SECONDS).get("spam").isResult());
+
+            assertEquals(ZkMigrationState.MIGRATION, newActive.appendReadEvent("read migration state", OptionalLong.empty(),
+                () -> newActive.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
+
+        }
     }
 }

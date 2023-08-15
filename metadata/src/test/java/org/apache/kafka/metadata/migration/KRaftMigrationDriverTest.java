@@ -140,8 +140,8 @@ public class KRaftMigrationDriverTest {
 
     static class NoOpRecordConsumer implements ZkRecordConsumer {
         @Override
-        public void beginMigration() {
-
+        public CompletableFuture<?> beginMigration() {
+            return CompletableFuture.completedFuture(null);
         }
 
         @Override
@@ -155,8 +155,8 @@ public class KRaftMigrationDriverTest {
         }
 
         @Override
-        public void abortMigration() {
-
+        public CompletableFuture<?> abortMigration() {
+            return CompletableFuture.completedFuture(null);
         }
     }
 
@@ -650,8 +650,9 @@ public class KRaftMigrationDriverTest {
         AtomicInteger migrationBeginCalls = new AtomicInteger(0);
         NoOpRecordConsumer recordConsumer = new NoOpRecordConsumer() {
             @Override
-            public void beginMigration() {
+            public CompletableFuture<?> beginMigration() {
                 migrationBeginCalls.incrementAndGet();
+                return CompletableFuture.completedFuture(null);
             }
         };
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
