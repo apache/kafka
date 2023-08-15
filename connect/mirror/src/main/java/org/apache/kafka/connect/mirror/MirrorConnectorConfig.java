@@ -135,6 +135,11 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String CONSUMER_POLL_TIMEOUT_MILLIS_DOC = "Timeout when polling source cluster.";
     public static final long CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT = 1000L;
 
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED =  MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED;
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC;
+    public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT =
+        DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
+
     public static final String ADMIN_TASK_TIMEOUT_MILLIS = "admin.timeout.ms";
     private static final String ADMIN_TASK_TIMEOUT_MILLIS_DOC = "Timeout for administrative tasks, e.g. detecting new topics.";
     public static final long ADMIN_TASK_TIMEOUT_MILLIS_DEFAULT = 60000L;
@@ -667,6 +672,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     REPLICATION_POLICY_SEPARATOR_DEFAULT,
                     ConfigDef.Importance.LOW,
                     REPLICATION_POLICY_SEPARATOR_DOC)
+            .define(
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
             .define(
                     REPLICATION_FACTOR,
                     ConfigDef.Type.INT,
