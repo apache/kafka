@@ -500,8 +500,8 @@ public class LogConfig extends AbstractConfig {
      * The default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
-    static void validateTopicLogConfigValues(Map<?, ?> props,
-                                             boolean isRemoteLogStorageSystemEnabled) {
+    private static void validateTopicLogConfigValues(Map<?, ?> props,
+                                                     boolean isRemoteLogStorageSystemEnabled) {
         validateValues(props);
         boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
