@@ -48,8 +48,10 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
             separatorPattern = Pattern.compile(Pattern.quote(separator));
 
             if (props.containsKey(INTERNAL_TOPIC_SEPARATOR_ENABLED_CONFIG)) {
-                log.info("Disabling custom topic separator for internal topics; will use '.' instead of '{}'", separator);
                 isInternalTopicSeparatorEnabled = Boolean.parseBoolean(props.get(INTERNAL_TOPIC_SEPARATOR_ENABLED_CONFIG).toString());
+                if (!isInternalTopicSeparatorEnabled) {
+                    log.warn("Disabling custom topic separator for internal topics; will use '.' instead of '{}'", separator);
+                }
             }
         }
     }
