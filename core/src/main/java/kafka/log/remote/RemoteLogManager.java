@@ -927,8 +927,10 @@ public class RemoteLogManager implements Closeable {
             NavigableMap<Integer, Long> epochWithOffsets = leaderEpochCache.epochWithOffsets();
             Optional<EpochEntry> earliestEpochEntryOptional = leaderEpochCache.earliestEntry();
 
+            long logStartOffset = log.logStartOffset();
+            long logEndOffset = log.logEndOffset();
             Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(log.config().retentionSize,
-                    log.onlyLocalLogSegmentsSize(), log.logEndOffset(), epochWithOffsets);
+                    log.onlyLocalLogSegmentsSize(), logEndOffset, epochWithOffsets);
             Optional<RetentionTimeData> retentionTimeData = buildRetentionTimeData(log.config().retentionMs);
 
             RemoteLogRetentionHandler remoteLogRetentionHandler = new RemoteLogRetentionHandler(retentionSizeData, retentionTimeData);
@@ -945,11 +947,11 @@ public class RemoteLogManager implements Closeable {
                     RemoteLogSegmentMetadata metadata = segmentsIterator.next();
 
                     // check whether the segment contains the required epoch range with in the current leader epoch lineage.
-                    if (isRemoteSegmentWithinLeaderEpochs(metadata, log.logEndOffset(), epochWithOffsets)) {
+                    if (isRemoteSegmentWithinLeaderEpochs(metadata, logEndOffset, epochWithOffsets)) {
                         isSegmentDeleted =
                                 remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
                                         remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata) ||
-                                        remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(metadata, log.logStartOffset());
+                                        remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(metadata, logStartOffset);
                     }
                 }
             }
@@ -990,6 +992,7 @@ public class RemoteLogManager implements Closeable {
                                                                    NavigableMap<Integer, Long> epochEntries) throws RemoteStorageException {
             if (retentionSize > -1) {
                 long remoteLogSizeBytes = 0L;
+                Set<RemoteLogSegmentId> visitedSegmentIds = new HashSet<>();
                 for (Integer epoch : epochEntries.navigableKeySet()) {
                     // remoteLogSize(topicIdPartition, epochEntry.epoch) may not be completely accurate as the remote
                     // log size may be computed for all the segments but not for segments with in the current
@@ -998,8 +1001,10 @@ public class RemoteLogManager implements Closeable {
                     Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
                     while (segmentsIterator.hasNext()) {
                         RemoteLogSegmentMetadata segmentMetadata = segmentsIterator.next();
-                        if (isRemoteSegmentWithinLeaderEpochs(segmentMetadata, logEndOffset, epochEntries)) {
+                        RemoteLogSegmentId segmentId = segmentMetadata.remoteLogSegmentId();
+                        if (!visitedSegmentIds.contains(segmentId) && isRemoteSegmentWithinLeaderEpochs(segmentMetadata, logEndOffset, epochEntries)) {
                             remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
+                            visitedSegmentIds.add(segmentId);
                         }
                     }
                 }
@@ -1422,13 +1427,17 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    private static class RetentionSizeData {
+    // Visible for testing
+    public static class RetentionSizeData {
         private final long retentionSize;
         private final long remainingBreachedSize;
 
         public RetentionSizeData(long retentionSize, long remainingBreachedSize) {
-            if (retentionSize < remainingBreachedSize) {
-                throw new IllegalArgumentException("retentionSize must be greater than remainingBreachedSize");
+            if (retentionSize < 0)
+                throw new IllegalArgumentException("retentionSize should be non negative, but it is " + retentionSize);
+
+            if (remainingBreachedSize <= 0) {
+                throw new IllegalArgumentException("remainingBreachedSize should be more than zero, but it is " + remainingBreachedSize);
             }
 
             this.retentionSize = retentionSize;
@@ -1436,14 +1445,18 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    private static class RetentionTimeData {
+    // Visible for testing
+    public static class RetentionTimeData {
 
         private final long retentionMs;
         private final long cleanupUntilMs;
 
         public RetentionTimeData(long retentionMs, long cleanupUntilMs) {
+            if (retentionMs < 0)
+                throw new IllegalArgumentException("retentionMs should be non negative, but it is " + retentionMs);
+
             if (retentionMs < cleanupUntilMs) {
-                throw new IllegalArgumentException("retentionMs must be greater than cleanupUntilMs");
+                throw new IllegalArgumentException("retentionMs [" + retentionMs + "] must be greater than cleanupUntilMs [" + cleanupUntilMs + "]");
             }
 
             this.retentionMs = retentionMs;

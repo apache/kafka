@@ -93,6 +93,7 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
@@ -1065,14 +1066,6 @@ public class RemoteLogManagerTest {
                     put(1, 15L);
                 }}), logEndOffset, leaderEpochToStartOffset));
 
-        // Test whether a remote segment's epochs/offsets(single) are within the range of leader epochs
-        assertTrue(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
-                15,
-                19,
-                new TreeMap<Integer, Long>() {{
-                    put(1, 15L);
-                }}), logEndOffset, leaderEpochToStartOffset));
-
         // Test whether a remote segment's start offset is same as the offset of the respective leader epoch entry.
         assertTrue(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 0,
@@ -1195,6 +1188,35 @@ public class RemoteLogManagerTest {
                 );
         List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testRemoteSizeData() {
+        Supplier<RemoteLogManager.RetentionSizeData>[] invalidRetentionSizeData =
+            new Supplier[]{
+                () -> new RemoteLogManager.RetentionSizeData(10, 0),
+                () -> new RemoteLogManager.RetentionSizeData(10, -1),
+                () -> new RemoteLogManager.RetentionSizeData(-1, 10),
+                () -> new RemoteLogManager.RetentionSizeData(-1, -1),
+                () -> new RemoteLogManager.RetentionSizeData(-1, 0)
+            };
+
+        for (Supplier<RemoteLogManager.RetentionSizeData> invalidRetentionSizeDataEntry : invalidRetentionSizeData) {
+            assertThrows(IllegalArgumentException.class, invalidRetentionSizeDataEntry::get);
+        }
+    }
+
+    @Test
+    public void testRemoteSizeTime() {
+        Supplier<RemoteLogManager.RetentionTimeData>[] invalidRetentionTimeData =
+            new Supplier[] {
+                () -> new RemoteLogManager.RetentionTimeData(-1, 10),
+                () -> new RemoteLogManager.RetentionTimeData(1000, 10),
+            };
+
+        for (Supplier<RemoteLogManager.RetentionTimeData> invalidRetentionTimeDataEntry : invalidRetentionTimeData) {
+            assertThrows(IllegalArgumentException.class, invalidRetentionTimeDataEntry::get);
+        }
     }
 
     @Test

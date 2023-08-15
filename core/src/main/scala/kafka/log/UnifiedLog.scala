@@ -151,6 +151,18 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   @volatile private var highestOffsetInRemoteStorage: Long = -1L
 
   locally {
+    def updateLocalLogStartOffset(offset: Long): Unit = {
+      _localLogStartOffset = offset
+
+      if (highWatermark < offset) {
+        updateHighWatermark(offset)
+      }
+
+      if (this.recoveryPoint < offset) {
+        localLog.updateRecoveryPoint(offset)
+      }
+    }
+
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
     updateLocalLogStartOffset(math.max(logStartOffset, localLog.segments.firstSegmentBaseOffset.getOrElse(0L)))
@@ -164,18 +176,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def setLogOffsetsListener(listener: LogOffsetsListener): Unit = {
     logOffsetsListener = listener
-  }
-
-  private def updateLocalLogStartOffset(offset: Long): Unit = {
-    _localLogStartOffset = offset
-
-    if (highWatermark < offset) {
-      updateHighWatermark(offset)
-    }
-
-    if (this.recoveryPoint < offset) {
-      localLog.updateRecoveryPoint(offset)
-    }
   }
 
   def updateLogStartOffsetFromRemoteTier(remoteLogStartOffset: Long): Unit = {
@@ -1495,7 +1495,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       startMs - segment.largestTimestamp > retentionMs
     }
 
-    deleteOldSegments(shouldDelete, RetentionMsBreach(this))
+    deleteOldSegments(shouldDelete, RetentionMsBreach(this, remoteLogEnabled()))
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
@@ -2246,17 +2246,25 @@ object LogMetricNames {
   }
 }
 
-case class RetentionMsBreach(log: UnifiedLog) extends SegmentDeletionReason {
+case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     val retentionMs = UnifiedLog.localRetentionMs(log.config)
     toDelete.foreach { segment =>
       segment.largestRecordTimestamp match {
         case Some(_) =>
-          log.info(s"Deleting segment $segment due to retention time ${retentionMs}ms breach based on the largest " +
-            s"record timestamp in the segment")
+          if (remoteLogEnabled)
+            log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
+              s"record timestamp in the segment")
+          else
+            log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the largest " +
+              s"record timestamp in the segment")
         case None =>
-          log.info(s"Deleting segment $segment due to retention time ${retentionMs}ms breach based on the " +
-            s"last modified time of the segment")
+          if (remoteLogEnabled)
+            log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
+              s"last modified time of the segment")
+          else
+            log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the " +
+              s"last modified time of the segment")
       }
     }
   }
