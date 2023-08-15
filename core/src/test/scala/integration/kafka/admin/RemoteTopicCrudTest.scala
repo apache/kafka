@@ -283,35 +283,38 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   private def verifyRemoteLogTopicConfigs(topicConfig: Properties): Unit = {
-    val logBuffer = brokers.flatMap(_.logManager.getLog(new TopicPartition(testTopicName, 0)))
-    assertTrue(logBuffer.nonEmpty)
-    val log = logBuffer.head
     TestUtils.waitUntilTrue(() => {
-      var result = true
-      if (topicConfig.containsKey(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)) {
-        result = result &&
-          topicConfig.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG).toBoolean ==
-            log.config.remoteStorageEnable()
-      }
-      if (topicConfig.containsKey(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)) {
-        result = result &&
-          topicConfig.getProperty(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG).toLong ==
-            log.config.localRetentionBytes()
-      }
-      if (topicConfig.containsKey(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG)) {
-        result = result &&
-          topicConfig.getProperty(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG).toLong == log.config.localRetentionMs()
-      }
-      if (topicConfig.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
-        result = result &&
-          topicConfig.getProperty(TopicConfig.RETENTION_MS_CONFIG).toLong == log.config.retentionMs
-      }
-      if (topicConfig.containsKey(TopicConfig.RETENTION_BYTES_CONFIG)) {
-        result = result &&
-          topicConfig.getProperty(TopicConfig.RETENTION_BYTES_CONFIG).toLong == log.config.retentionSize
+      val logBuffer = brokers.flatMap(_.logManager.getLog(new TopicPartition(testTopicName, 0)))
+      var result = logBuffer.nonEmpty
+      if (result) {
+        if (topicConfig.containsKey(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG).toBoolean ==
+              logBuffer.head.config.remoteStorageEnable()
+        }
+        if (topicConfig.containsKey(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG).toLong ==
+              logBuffer.head.config.localRetentionBytes()
+        }
+        if (topicConfig.containsKey(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG).toLong ==
+              logBuffer.head.config.localRetentionMs()
+        }
+        if (topicConfig.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.RETENTION_MS_CONFIG).toLong ==
+              logBuffer.head.config.retentionMs
+        }
+        if (topicConfig.containsKey(TopicConfig.RETENTION_BYTES_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.RETENTION_BYTES_CONFIG).toLong ==
+              logBuffer.head.config.retentionSize
+        }
       }
       result
-    }, s"Failed to update topic config $topicConfig, actual: ${log.config}")
+    }, s"Failed to update topic config $topicConfig")
   }
 
   private def overrideProps(): Properties = {
