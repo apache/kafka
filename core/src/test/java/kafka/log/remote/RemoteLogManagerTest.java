@@ -686,6 +686,7 @@ public class RemoteLogManagerTest {
         //Corrupting data. Actual entries 0, but we override method with returning 1 entry
         TimeIndex ti = spy(new TimeIndex(timeindexFile, 45L, 12));
         when(ti.entries()).thenReturn(1);
+        // One or checks to detect index being corrupted is checking offset < baseOffset, BaseOffset is 45, offset => 0
         when(ti.lastEntry()).thenReturn(new TimestampOffset(0L, 0L));
 
         when(oldSegment.timeIndex()).thenReturn(ti);
