@@ -138,6 +138,7 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.COMPLETES_IN_TRANSACTION;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
 
@@ -623,7 +624,14 @@ public final class QuorumController implements Controller {
          * even though the cluster really does have metadata. Very few operations should
          * use this flag.
          */
-        RUNS_IN_PREMIGRATION
+        RUNS_IN_PREMIGRATION,
+
+        /**
+         * This flag signifies that an event will be completed even if it is part of an unfinished transaction.
+         * This is needed for metadata transactions so that external callers can add records to a transaction
+         * and still use the returned future.
+         */
+        COMPLETES_IN_TRANSACTION
     }
 
     interface ControllerWriteOperation<T> {
@@ -766,7 +774,11 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
-                deferredEventQueue.add(resultAndOffset.offset(), this);
+                if (flags.contains(COMPLETES_IN_TRANSACTION)) {
+                    deferredUnstableEventQueue.add(resultAndOffset.offset(), this);
+                } else {
+                    deferredEventQueue.add(resultAndOffset.offset(), this);
+                }
             }
         }
 
@@ -785,6 +797,7 @@ public final class QuorumController implements Controller {
                     handleEventException(name, startProcessingTimeNs, exception));
             }
         }
+
 
         @Override
         public String toString() {
@@ -882,6 +895,10 @@ public final class QuorumController implements Controller {
     }
 
     class MigrationRecordConsumer implements ZkRecordConsumer {
+        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(
+            RUNS_IN_PREMIGRATION, COMPLETES_IN_TRANSACTION
+        );
+
         private volatile OffsetAndEpoch highestMigrationRecordOffset;
 
         class MigrationWriteOperation implements ControllerWriteOperation<Void> {
@@ -892,7 +909,7 @@ public final class QuorumController implements Controller {
             }
             @Override
             public ControllerResult<Void> generateRecordsAndResult() {
-                return ControllerResult.atomicOf(batch, null);
+                return ControllerResult.of(batch, null);
             }
 
             public void processBatchEndOffset(long offset) {
@@ -902,18 +919,20 @@ public final class QuorumController implements Controller {
         @Override
         public void beginMigration() {
             log.info("Starting ZK Migration");
-            // TODO use KIP-868 transaction
+            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
+                "Begin ZK Migration Transaction",
+                new MigrationWriteOperation(Collections.singletonList(
+                    new ApiMessageAndVersion(
+                        new BeginTransactionRecord().setName("ZK Migration"), (short) 0))
+                ), eventFlags);
+            queue.append(batchEvent);
         }
 
         @Override
         public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
-            if (queue.size() > 100) { // TODO configure this
-                CompletableFuture<Void> future = new CompletableFuture<>();
-                future.completeExceptionally(new NotControllerException("Cannot accept migration record batch. Controller queue is too large"));
-                return future;
-            }
-            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>("ZK Migration Batch",
-                new MigrationWriteOperation(recordBatch), EnumSet.of(RUNS_IN_PREMIGRATION));
+            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
+                "ZK Migration Batch",
+                new MigrationWriteOperation(recordBatch), eventFlags);
             queue.append(batchEvent);
             return batchEvent.future;
         }
@@ -921,11 +940,15 @@ public final class QuorumController implements Controller {
         @Override
         public CompletableFuture<OffsetAndEpoch> completeMigration() {
             log.info("Completing ZK Migration");
-            // TODO use KIP-868 transaction
-            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Complete ZK Migration",
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
+                "Complete ZK Migration",
                 new MigrationWriteOperation(
-                    Collections.singletonList(ZkMigrationState.MIGRATION.toRecord())),
-                EnumSet.of(RUNS_IN_PREMIGRATION));
+                    Arrays.asList(
+                        ZkMigrationState.MIGRATION.toRecord(),
+                        new ApiMessageAndVersion(
+                            new EndTransactionRecord(), (short) 0)
+                    )),
+                    eventFlags);
             queue.append(event);
             return event.future.thenApply(__ -> highestMigrationRecordOffset);
         }
@@ -933,7 +956,13 @@ public final class QuorumController implements Controller {
         @Override
         public void abortMigration() {
             fatalFaultHandler.handleFault("Aborting the ZK migration");
-            // TODO use KIP-868 transaction
+            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
+                "Abort ZK Migration Transaction",
+                new MigrationWriteOperation(Collections.singletonList(
+                    new ApiMessageAndVersion(
+                        new AbortTransactionRecord(), (short) 0))
+                ), eventFlags);
+            queue.append(batchEvent);
         }
     }
 
@@ -955,7 +984,8 @@ public final class QuorumController implements Controller {
                             log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
 
                             // Complete any events in the purgatory that were waiting for this offset.
-                            deferredEventQueue.completeUpTo(offset);
+                            deferredEventQueue.completeUpTo(offsetControl.lastStableOffset());
+                            deferredUnstableEventQueue.completeUpTo(offsetControl.lastCommittedOffset());
 
                             // The active controller can delete up to the current committed offset.
                             snapshotRegistry.deleteSnapshotsUpTo(offset);
@@ -1125,6 +1155,7 @@ public final class QuorumController implements Controller {
     public static List<ApiMessageAndVersion> generateActivationRecords(
         Logger log,
         boolean isLogEmpty,
+        boolean inTransaction,
         boolean zkMigrationEnabled,
         BootstrapMetadata bootstrapMetadata,
         FeatureControlManager featureControl
@@ -1200,6 +1231,16 @@ public final class QuorumController implements Controller {
                     throw new RuntimeException("Should not have ZK migrations enabled on a cluster running metadata.version " + featureControl.metadataVersion());
                 }
             }
+
+            if (inTransaction) {
+                if (!featureControl.metadataVersion().isMetadataTransactionSupported()) {
+                    throw new RuntimeException("Detected in-progress transaction, but the metadata.version " + featureControl.metadataVersion() +
+                        " does not support transactions. Cannot continue.");
+                } else {
+                    log.warn("Detected in-progress transaction during controller activation. Aborting this transaction.");
+                    records.add(new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0));
+                }
+            }
         }
         return records;
     }
@@ -1210,6 +1251,7 @@ public final class QuorumController implements Controller {
             try {
                 List<ApiMessageAndVersion> records = generateActivationRecords(log,
                     logReplayTracker.empty(),
+                    offsetControl.inTransaction(),
                     zkMigrationEnabled,
                     bootstrapMetadata,
                     featureControl);
@@ -1240,6 +1282,8 @@ public final class QuorumController implements Controller {
             raftClient.resign(curClaimEpoch);
             curClaimEpoch = -1;
             deferredEventQueue.failAll(ControllerExceptions.
+                    newWrongControllerException(OptionalInt.empty()));
+            deferredUnstableEventQueue.failAll(ControllerExceptions.
                     newWrongControllerException(OptionalInt.empty()));
             offsetControl.deactivate();
             clusterControl.deactivate();
@@ -1549,9 +1593,16 @@ public final class QuorumController implements Controller {
 
     /**
      * The deferred event queue which holds deferred operations which are waiting for the metadata
-     * log's high water mark to advance.  This must be accessed only by the event queue thread.
+     * log's stable offset to advance. This must be accessed only by the event queue thread.
      */
     private final DeferredEventQueue deferredEventQueue;
+
+    /**
+     * The deferred event queue which holds deferred operations which are waiting for the metadata
+     * log's committed offset to advance. This must be accessed only by the event queue thread and
+     * can contain records which are part of an incomplete transaction.
+     */
+    private final DeferredEventQueue deferredUnstableEventQueue;
 
     /**
      * Manages read and write offsets, and in-memory snapshots.
@@ -1720,6 +1771,7 @@ public final class QuorumController implements Controller {
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.deferredEventQueue = new DeferredEventQueue(logContext);
+        this.deferredUnstableEventQueue = new DeferredEventQueue(logContext);
         this.offsetControl = new OffsetControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).

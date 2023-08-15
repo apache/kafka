@@ -45,6 +45,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.metadata.AbortTransactionRecord;
+import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
@@ -99,6 +101,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -219,7 +222,7 @@ public class QuorumControllerTest {
             new ResultOrError<>(Collections.emptyMap())),
             controller.describeConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(4L));
+        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(6L));
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE), future1.get());
     }
 
@@ -1289,6 +1292,7 @@ public class QuorumControllerTest {
         List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
             log,
             !stateInLog.isPresent(),
+            false,
             zkMigrationEnabled,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
             featureControlManager);
@@ -1387,5 +1391,57 @@ public class QuorumControllerTest {
                 () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
             assertThrows(FaultHandlerException.class, controlEnv::close);
         }
+    }
+
+    @Test
+    public void testActivationRecordsPartialTransaction() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
+            .setSnapshotRegistry(snapshotRegistry)
+            .setMetadataVersion(MetadataVersion.IBP_3_6_IV1)
+            .build();
+
+        OffsetControlManager offsetControlManager = new OffsetControlManager.Builder().build();
+        offsetControlManager.replay(new BeginTransactionRecord(), 10);
+        offsetControlManager.handleCommitBatch(Batch.data(20, 1, 1L, 0,
+            Collections.singletonList(new ApiMessageAndVersion(new BeginTransactionRecord(), (short) 0))));
+
+        List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
+            log,
+            false,
+            offsetControlManager.inTransaction(),
+            false,
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
+            featureControlManager);
+
+        offsetControlManager.replay(
+            RecordTestUtils.recordAtIndexAs(AbortTransactionRecord.class, records, 0).get(),
+            21
+        );
+        assertFalse(offsetControlManager.inTransaction());
+    }
+
+    @Test
+    public void testActivationRecordsPartialTransactionNoSupport() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
+            .setSnapshotRegistry(snapshotRegistry)
+            .setMetadataVersion(MetadataVersion.IBP_3_6_IV0)
+            .build();
+
+        OffsetControlManager offsetControlManager = new OffsetControlManager.Builder().build();
+        offsetControlManager.replay(new BeginTransactionRecord(), 10);
+        offsetControlManager.handleCommitBatch(Batch.data(20, 1, 1L, 0,
+            Collections.singletonList(new ApiMessageAndVersion(new BeginTransactionRecord(), (short) 0))));
+
+        assertThrows(RuntimeException.class, () ->
+            QuorumController.generateActivationRecords(
+                log,
+                false,
+                offsetControlManager.inTransaction(),
+                false,
+                BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
+                featureControlManager)
+        );
     }
 }
