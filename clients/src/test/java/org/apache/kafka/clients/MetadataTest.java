@@ -111,7 +111,7 @@ public class MetadataTest {
         assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
 
         // Metadata update requested explicitly
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         // Update requested so metadataExpireMs should no longer take effect.
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
 
@@ -159,7 +159,7 @@ public class MetadataTest {
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), upperBoundBackoffMs - lowerBoundBackoffMs);
 
         // Even though metadata update requested explicitly, still respects backoff.
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), upperBoundBackoffMs - lowerBoundBackoffMs);
 
         // refreshBackoffMs elapsed.
@@ -607,7 +607,7 @@ public class MetadataTest {
     public void testRequestVersion() {
         Time time = new MockTime();
 
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.update(versionAndBuilder.requestVersion,
                 RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), false, time.milliseconds());
@@ -646,7 +646,7 @@ public class MetadataTest {
         assertFalse(metadata.updateRequested());
 
         // Request a metadata update. This must force a full metadata update request.
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         assertFalse(versionAndBuilder.isPartialUpdate);
         metadata.update(versionAndBuilder.requestVersion,
@@ -662,7 +662,7 @@ public class MetadataTest {
         assertFalse(metadata.updateRequested());
 
         // Request both types of metadata updates. This should always perform a full update.
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         metadata.requestUpdateForNewTopics();
         versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         assertFalse(versionAndBuilder.isPartialUpdate);

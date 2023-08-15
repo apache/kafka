@@ -712,7 +712,7 @@ public class NetworkClientTest {
 
         awaitReady(client, node1);
 
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         time.sleep(refreshBackoffMs);
 
         client.poll(0, time.milliseconds());

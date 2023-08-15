@@ -65,7 +65,7 @@ public class ProducerMetadataTest {
 
         metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.emptySet()), false, time);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "Still no updated needed due to backoff");
         time += (long) (refreshBackoffMs * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
         assertEquals(0, metadata.timeToNextUpdate(time), "Update needed now that backoff time expired");
@@ -94,7 +94,7 @@ public class ProducerMetadataTest {
         long time = 0;
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "Still no updated needed due to backoff");
         time += (long) (refreshBackoffMs * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
         assertEquals(0, metadata.timeToNextUpdate(time), "Update needed now that backoff time expired");
@@ -112,12 +112,12 @@ public class ProducerMetadataTest {
         long time = 0;
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed");
-        metadata.requestUpdate(true);
+        metadata.requestUpdate(false);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "Still no update needed due to backoff");
         time += (long) (refreshBackoffMs * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed after equivalent metadata response");
-        metadata.requestUpdate(true);
+        metadata.requestUpdate(false);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "Still no update needed due to backoff");
         assertTrue(metadata.timeToNextUpdate(time + refreshBackoffMs) > 0, "Still no updated needed due to exponential backoff");
         time += (long) (refreshBackoffMs * CommonClientConfigs.RETRY_BACKOFF_EXP_BASE * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
@@ -145,7 +145,7 @@ public class ProducerMetadataTest {
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         // first try with a max wait time of 0 and ensure that this returns back without waiting forever
         try {
-            metadata.awaitUpdate(metadata.requestUpdate(false), 0);
+            metadata.awaitUpdate(metadata.requestUpdate(true), 0);
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
             // expected
@@ -153,7 +153,7 @@ public class ProducerMetadataTest {
         // now try with a higher timeout value once
         final long twoSecondWait = 2000;
         try {
-            metadata.awaitUpdate(metadata.requestUpdate(false), twoSecondWait);
+            metadata.awaitUpdate(metadata.requestUpdate(true), twoSecondWait);
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
             // expected
@@ -324,7 +324,7 @@ public class ProducerMetadataTest {
         Thread thread = new Thread(() -> {
             try {
                 while (metadata.fetch().partitionsForTopic(topic).isEmpty())
-                    metadata.awaitUpdate(metadata.requestUpdate(true), maxWaitMs);
+                    metadata.awaitUpdate(metadata.requestUpdate(false), maxWaitMs);
             } catch (Exception e) {
                 backgroundError.set(e);
             }

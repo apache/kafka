@@ -77,7 +77,7 @@ public class ProducerMetadata extends Metadata {
         if (newTopics.contains(topic)) {
             return requestUpdateForNewTopics();
         } else {
-            return requestUpdate(true);
+            return requestUpdate(false);
         }
     }
 

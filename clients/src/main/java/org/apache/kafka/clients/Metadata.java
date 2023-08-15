@@ -109,7 +109,7 @@ public class Metadata implements Closeable {
         this.updateVersion = 0;
         this.needFullUpdate = false;
         this.needPartialUpdate = false;
-        this.equivalentResponseCount = 0L;
+        this.equivalentResponseCount = 0;
         this.clusterResourceListeners = clusterResourceListeners;
         this.isClosed = false;
         this.lastSeenLeaderEpochs = new HashMap<>();
@@ -142,15 +142,14 @@ public class Metadata implements Closeable {
         long backoffForAttempts = Math.max(this.lastRefreshMs +
                 this.refreshBackoff.backoff(this.attempts > 0 ? this.attempts - 1 : 0) - nowMs, 0);
 
-        // Periodic updates based on expiration are not backed off based on equivalent responses
-        long backoffForEquivalentResponseCount;
+        // Periodic updates based on expiration resets the equivalent response count so exponential backoff is not used
         if (Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0) == 0) {
-            backoffForEquivalentResponseCount = 0;
-        } else {
-            // Calculate the backoff for equivalent responses which acts when metadata responses are not making progress
-            backoffForEquivalentResponseCount = Math.max(this.lastRefreshMs +
-                    (this.equivalentResponseCount > 0 ? this.refreshBackoff.backoff(this.equivalentResponseCount - 1) : 0) - nowMs, 0);
+            this.equivalentResponseCount = 0;
         }
+
+        // Calculate the backoff for equivalent responses which acts when metadata responses are not making progress
+        long backoffForEquivalentResponseCount = Math.max(this.lastRefreshMs +
+                (this.equivalentResponseCount > 0 ? this.refreshBackoff.backoff(this.equivalentResponseCount - 1) : 0) - nowMs, 0);
 
         return Math.max(backoffForAttempts, backoffForEquivalentResponseCount);
     }
@@ -175,17 +174,17 @@ public class Metadata implements Closeable {
     /**
      * Request an update of the current cluster metadata info, permitting backoff based on the number of
      * equivalent metadata responses, which indicates that responses did not make progress and may be stale.
-     * @param permitBackoffOnEquivalentResponses Whether to permit backoff when consecutive responses are equivalent.
-     *                                           This should be set to <i>true</i> in situations where the update is
-     *                                           being requested to retry an operation, such as when the leader has
-     *                                           changed. It should be set to <i>false</i> in situations where new
-     *                                           metadata is being requested, such as adding a topic to a subscription.
-     *                                           In situations where it's not clear, it's best to use <i>false</i>.
+     * @param resetEquivalentResponseBackoff Whether to reset backing off based on consecutive equivalent responses.
+     *                                       This should be set to <i>false</i> in situations where the update is
+     *                                       being requested to retry an operation, such as when the leader has
+     *                                       changed. It should be set to <i>true</i> in situations where new
+     *                                       metadata is being requested, such as adding a topic to a subscription.
+     *                                       In situations where it's not clear, it's best to use <i>true</i>.
      * @return The current updateVersion before the update
      */
-    public synchronized int requestUpdate(final boolean permitBackoffOnEquivalentResponses) {
+    public synchronized int requestUpdate(final boolean resetEquivalentResponseBackoff) {
         this.needFullUpdate = true;
-        if (!permitBackoffOnEquivalentResponses) {
+        if (resetEquivalentResponseBackoff) {
             this.equivalentResponseCount = 0;
         }
         return this.updateVersion;
@@ -200,7 +199,7 @@ public class Metadata implements Closeable {
         // Override the timestamp of last refresh to let immediate update.
         this.lastRefreshMs = 0;
         this.needPartialUpdate = true;
-        this.equivalentResponseCount = 0L;
+        this.equivalentResponseCount = 0;
         this.requestVersion++;
         return this.updateVersion;
     }
@@ -327,6 +326,8 @@ public class Metadata implements Closeable {
             this.needFullUpdate = false;
             this.lastSuccessfulRefreshMs = nowMs;
         }
+        // If we subsequently find that the metadata response is not equivalent to the metadata already known,
+        // this count is reset to 0 in updateLatestMetadata()
         this.equivalentResponseCount++;
 
         String previousClusterId = cache.clusterResource().clusterId();
@@ -411,13 +412,13 @@ public class Metadata implements Closeable {
                     if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
                                 partitionMetadata.topicPartition, partitionMetadata.error);
-                        requestUpdate(true);
+                        requestUpdate(false);
                     }
                 }
             } else {
                 if (metadata.error().exception() instanceof InvalidMetadataException) {
                     log.debug("Requesting metadata update for topic {} due to error {}", topicName, metadata.error());
-                    requestUpdate(true);
+                    requestUpdate(false);
                 }
 
                 if (metadata.error() == Errors.INVALID_TOPIC_EXCEPTION)
@@ -556,7 +557,7 @@ public class Metadata implements Closeable {
     public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
         this.attempts++;
-        this.equivalentResponseCount = 0L;
+        this.equivalentResponseCount = 0;
     }
 
     /**

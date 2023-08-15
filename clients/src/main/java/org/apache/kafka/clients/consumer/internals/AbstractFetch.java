@@ -144,7 +144,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
             if (!handler.handleResponse(response, requestVersion)) {
                 if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
-                    metadata.requestUpdate(true);
+                    metadata.requestUpdate(false);
                 }
 
                 return;
@@ -451,7 +451,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
             if (!leaderOpt.isPresent()) {
                 log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
-                metadata.requestUpdate(true);
+                metadata.requestUpdate(false);
                 continue;
             }
 
@@ -785,7 +785,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     }
 
     private void requestMetadataUpdate(final TopicPartition topicPartition) {
-        metadata.requestUpdate(true);
+        metadata.requestUpdate(false);
         subscriptions.clearPreferredReadReplica(topicPartition);
     }
 }

@@ -226,7 +226,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
-        this.metadata.requestUpdate(false);
+        this.metadata.requestUpdate(true);
     }
 
     // package private for testing
@@ -550,7 +550,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // refresh metadata before re-joining the group as long as the refresh backoff time has
                     // passed.
                     if (this.metadata.timeToAllowUpdate(timer.currentTimeMs()) == 0) {
-                        this.metadata.requestUpdate(false);
+                        this.metadata.requestUpdate(true);
                     }
 
                     if (!client.ensureFreshMetadata(timer)) {

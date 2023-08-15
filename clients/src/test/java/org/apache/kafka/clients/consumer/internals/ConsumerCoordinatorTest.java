@@ -1284,7 +1284,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
         // rebalance again.
-        metadata.requestUpdate(false);
+        metadata.requestUpdate(true);
         consumerClient.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.rejoinNeededOrPending());
     }
@@ -1331,7 +1331,7 @@ public abstract class ConsumerCoordinatorTest {
 
             // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
             // rebalance again.
-            metadata.requestUpdate(false);
+            metadata.requestUpdate(true);
             consumerClient.poll(time.timer(Long.MAX_VALUE));
             assertFalse(coordinator.rejoinNeededOrPending());
         }
