@@ -290,7 +290,7 @@ class OffsetFetcherUtils {
             final ListOffsetResult result) {
         if (!result.partitionsToRetry.isEmpty()) {
             subscriptionState.requestFailed(result.partitionsToRetry, time.milliseconds() + retryBackoffMs);
-            metadata.requestUpdate();
+            metadata.requestUpdate(true);
         }
 
         for (Map.Entry<TopicPartition, ListOffsetData> fetchedOffset : result.fetchedOffsets.entrySet()) {
@@ -308,7 +308,7 @@ class OffsetFetcherUtils {
             final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> resetTimestamps,
             final RuntimeException error) {
         subscriptionState.requestFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
 
         if (!(error instanceof RetriableException) && !cachedListOffsetsException.compareAndSet(null,
                 error))

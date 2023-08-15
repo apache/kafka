@@ -71,7 +71,7 @@ class BrokerLifecycleManagerTest {
     val config = new KafkaConfig(properties)
     val time = new MockTime(1, 1)
     val highestMetadataOffset = new AtomicLong(0)
-    val metadata = new Metadata(1000, 1000, new LogContext(), new ClusterResourceListeners())
+    val metadata = new Metadata(1000, 1000, 1000, new LogContext(), new ClusterResourceListeners())
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = new SimpleControllerNodeProvider()
     val nodeApiVersions = NodeApiVersions.create(Seq(BROKER_REGISTRATION, BROKER_HEARTBEAT).map {

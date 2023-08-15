@@ -2400,7 +2400,7 @@ public class KafkaConsumerTest {
     }
 
     private ConsumerMetadata createMetadata(SubscriptionState subscription) {
-        return new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
+        return new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
                                     subscription, new LogContext(), new ClusterResourceListeners());
     }
 
@@ -2625,6 +2625,7 @@ public class KafkaConsumerTest {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
+        long retryBackoffMaxMs = 1000;
         int minBytes = 1;
         int maxBytes = Integer.MAX_VALUE;
         int maxWaitMs = 500;
@@ -2654,6 +2655,7 @@ public class KafkaConsumerTest {
                 groupId,
                 groupInstanceId,
                 retryBackoffMs,
+                retryBackoffMaxMs,
                 true);
             consumerCoordinator = new ConsumerCoordinator(rebalanceConfig,
                 loggerFactory,
@@ -2699,7 +2701,10 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 isolationLevel,
                 new ApiVersions());
-        TopicMetadataFetcher topicMetadataFetcher = new TopicMetadataFetcher(loggerFactory, consumerClient, requestTimeoutMs);
+        TopicMetadataFetcher topicMetadataFetcher = new TopicMetadataFetcher(loggerFactory,
+                consumerClient,
+                retryBackoffMs,
+                retryBackoffMaxMs);
 
         return new KafkaConsumer<>(
                 loggerFactory,
@@ -2717,6 +2722,7 @@ public class KafkaConsumerTest {
                 subscription,
                 metadata,
                 retryBackoffMs,
+                retryBackoffMaxMs,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 assignors,
