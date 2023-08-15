@@ -229,20 +229,10 @@ public class GetOffsetShell {
         if (options.hasTopicPartitionsOpt()) {
             topicPartitionFilter = createTopicPartitionFilterWithPatternList(options.topicPartitionsOpt());
         } else {
-            topicPartitionFilter = createTopicPartitionFilterWithTopicAndPartitionPattern(
-                    options.hasTopicOpt() ? options.topicOpt() : null,
-                    options.partitionsOpt()
-            );
+            topicPartitionFilter = createTopicPartitionFilterWithTopicAndPartitionPattern(options.topicOpt(), options.partitionsOpt());
         }
 
-        Properties config;
-
-        if (options.hasCommandConfigOpt()) {
-            config = Utils.loadProps(options.commandConfigOpt());
-        } else {
-            config = new Properties();
-        }
-
+        Properties config = options.hasCommandConfigOpt() ? Utils.loadProps(options.commandConfigOpt()) : new Properties();
         config.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
         config.setProperty(AdminClientConfig.CLIENT_ID_CONFIG, clientId);
 
@@ -264,11 +254,13 @@ public class GetOffsetShell {
 
                 try {
                     partitionInfo = listOffsetsResult.partitionResult(partition).get();
-                } catch (KafkaException e) {
-                    System.err.println("Skip getting offsets for topic-partition " + partition.toString() + " due to error: " + e.getMessage());
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof KafkaException) {
+                        System.err.println("Skip getting offsets for topic-partition " + partition.toString() + " due to error: " + e.getMessage());
+                    } else {
+                        throw e;
+                    }
 
-                    continue;
-                } catch (InterruptedException | ExecutionException ignored) {
                     continue;
                 }
 
