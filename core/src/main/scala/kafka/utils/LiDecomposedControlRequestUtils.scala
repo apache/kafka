@@ -44,7 +44,7 @@ object LiDecomposedControlRequestUtils {
     val stopReplicaRequests = if (stopReplicaRequestVersion == 3) {
       extractStopReplicaRequestWithUngroupedPartitions(request, brokerEpoch, stopReplicaRequestVersion)
     } else {
-      List(extractStopReplicaRequestWithTopicStates(request, stopReplicaRequestVersion))
+      extractStopReplicaRequestWithTopicStates(request, stopReplicaRequestVersion)
     }
 
     LiDecomposedControlRequest(leaderAndIsrRequest, updateMetadataRequest, stopReplicaRequests)
@@ -118,7 +118,11 @@ object LiDecomposedControlRequestUtils {
     }
   }
 
-  private def extractStopReplicaRequestWithTopicStates(request: LiCombinedControlRequest, stopReplicaRequestVersion: Short): StopReplicaRequest = {
+  private def extractStopReplicaRequestWithTopicStates(request: LiCombinedControlRequest, stopReplicaRequestVersion: Short): List[StopReplicaRequest] = {
+    if (request.stopReplicaTopicStates().isEmpty) {
+      return List.empty
+    }
+
     // for StopReplicaRequests versions 4+, the deletePartitions flag on the top level is not used
     val defaultDeletePartitions = false
     val stopReplicaTopicStates = new util.ArrayList[StopReplicaTopicState]()
@@ -137,9 +141,9 @@ object LiDecomposedControlRequestUtils {
         .setPartitionStates(partitionStates))
     }
     }
-    new StopReplicaRequest.Builder(stopReplicaRequestVersion, request.controllerId(), request.controllerEpoch(),
+    List(new StopReplicaRequest.Builder(stopReplicaRequestVersion, request.controllerId(), request.controllerEpoch(),
       request.brokerEpoch(),
-      request.maxBrokerEpoch(), defaultDeletePartitions, stopReplicaTopicStates).build()
+      request.maxBrokerEpoch(), defaultDeletePartitions, stopReplicaTopicStates).build())
   }
 
   // extractStopReplicaRequestWithUngroupedPartitions could possible return two StopReplicaRequests
