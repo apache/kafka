@@ -528,7 +528,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(tasksToBeCreated, Collections.emptyMap());
 
-        Mockito.verify(tasks).addPendingTaskToInit(createdTasks);
+        Mockito.verify(tasks).addPendingTasksToInit(createdTasks);
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
 
@@ -550,7 +550,7 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(tasks).addPendingTaskToInit(createdTasks);
+        Mockito.verify(tasks).addPendingTasksToInit(createdTasks);
     }
 
     @Test
@@ -753,7 +753,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(task00, task01));
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
@@ -773,7 +773,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(task00, task01));
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
         final LockException lockException = new LockException("Where are my keys??");
         doThrow(lockException)
             .when(task00).initializeIfNeeded();
@@ -783,7 +783,7 @@ public class TaskManagerTest {
 
         Mockito.verify(task00).initializeIfNeeded();
         Mockito.verify(task01).initializeIfNeeded();
-        Mockito.verify(tasks).addPendingTaskToInit(Collections.singleton(task00));
+        Mockito.verify(tasks).addPendingTasksToInit(Collections.singleton(task00));
         Mockito.verify(stateUpdater).add(task01);
     }
 
@@ -1482,7 +1482,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId02Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks, true);
-        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(statefulTask0, statefulTask1, statefulTask2));
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(statefulTask0, statefulTask1, statefulTask2));
         doThrow(new TaskCorruptedException(Collections.singleton(statefulTask0.id))).when(statefulTask0).initializeIfNeeded();
         doThrow(new TaskCorruptedException(Collections.singleton(statefulTask1.id))).when(statefulTask1).initializeIfNeeded();
 
@@ -2038,8 +2038,8 @@ public class TaskManagerTest {
         standbyTaskOrder.verify(corruptedStandbyTask).revive();
         Mockito.verify(tasks).removeTask(corruptedActiveTask);
         Mockito.verify(tasks).removeTask(corruptedStandbyTask);
-        Mockito.verify(tasks).addPendingTaskToInit(mkSet(corruptedActiveTask));
-        Mockito.verify(tasks).addPendingTaskToInit(mkSet(corruptedStandbyTask));
+        Mockito.verify(tasks).addPendingTasksToInit(mkSet(corruptedActiveTask));
+        Mockito.verify(tasks).addPendingTasksToInit(mkSet(corruptedStandbyTask));
     }
 
     @Test
