@@ -32,7 +32,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -89,7 +88,7 @@ public final class ConsumerUtils {
 
     public static LogContext createLogContext(ConsumerConfig config, GroupRebalanceConfig groupRebalanceConfig) {
         Optional<String> groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
-        String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
 
         // If group.instance.id is set, we will append it to the log context.
         if (groupRebalanceConfig.groupInstanceId.isPresent()) {
@@ -137,10 +136,9 @@ public final class ConsumerUtils {
         return new FetchConfig<>(config, deserializers, isolationLevel);
     }
 
-    public static FetchConfig<String, String> createFetchConfig(ConsumerConfig config) {
-        Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-        IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
-        return new FetchConfig<>(config, deserializers, isolationLevel);
+    public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config) {
+        Deserializers<K, V> deserializers = new Deserializers<>(config);
+        return createFetchConfig(config, deserializers);
     }
 
     @SuppressWarnings("unchecked")
