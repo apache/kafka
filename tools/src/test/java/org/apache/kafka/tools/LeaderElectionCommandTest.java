@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.server.KafkaConfig;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
@@ -67,11 +66,11 @@ public class LeaderElectionCommandTest {
     @BeforeEach
     void setup(ClusterConfig clusterConfig) {
         TestUtils.verifyNoUnexpectedThreads("@BeforeEach");
-        clusterConfig.serverProperties().put(KafkaConfig.AutoLeaderRebalanceEnableProp(), "false");
-        clusterConfig.serverProperties().put(KafkaConfig.ControlledShutdownEnableProp(), "true");
-        clusterConfig.serverProperties().put(KafkaConfig.ControlledShutdownMaxRetriesProp(), "1");
-        clusterConfig.serverProperties().put(KafkaConfig.ControlledShutdownRetryBackoffMsProp(), "1000");
-        clusterConfig.serverProperties().put(KafkaConfig.OffsetsTopicReplicationFactorProp(), "2");
+        clusterConfig.serverProperties().put("auto.leader.rebalance.enable", "false");
+        clusterConfig.serverProperties().put("controlled.shutdown.enable", "true");
+        clusterConfig.serverProperties().put("controlled.shutdown.max.retries", "1");
+        clusterConfig.serverProperties().put("controlled.shutdown.retry.backoff.ms", "1000");
+        clusterConfig.serverProperties().put("offsets.topic.replication.factor", "2");
     }
 
     @ClusterTest
