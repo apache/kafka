@@ -23,17 +23,37 @@
   // Version 2 adds the support for new error code PRODUCER_FENCED.
   //
   // Version 3 enables flexible versions.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds VerifyOnly field to check if partitions are already in transaction and adds support to batch multiple transactions.
+  // Versions 3 and below will be exclusively used by clients and versions 4 and above will be used by brokers.
+  "latestVersionUnstable": false,
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
-    { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
-      "about": "The transactional id corresponding to the transaction."},
-    { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
+    { "name": "Transactions", "type": "[]AddPartitionsToTxnTransaction", "versions":  "4+",
+      "about": "List of transactions to add partitions to.", "fields": [
+      { "name": "TransactionalId", "type": "string", "versions": "4+", "mapKey": true, "entityType": "transactionalId",
+        "about": "The transactional id corresponding to the transaction." },
+      { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",
+        "about": "Current producer id in use by the transactional id." },
+      { "name": "ProducerEpoch", "type": "int16", "versions": "4+",
+        "about": "Current epoch associated with the producer id." },
+      { "name": "VerifyOnly", "type": "bool", "versions": "4+", "default": false,
+        "about": "Boolean to signify if we want to check if the partition is in the transaction rather than add it." },
+      { "name": "Topics", "type": "[]AddPartitionsToTxnTopic", "versions": "4+",
+        "about": "The partitions to add to the transaction." }
+    ]},
+    { "name": "V3AndBelowTransactionalId", "type": "string", "versions": "0-3", "entityType": "transactionalId",
+      "about": "The transactional id corresponding to the transaction." },
+    { "name": "V3AndBelowProducerId", "type": "int64", "versions": "0-3", "entityType": "producerId",
       "about": "Current producer id in use by the transactional id." },
-    { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
+    { "name": "V3AndBelowProducerEpoch", "type": "int16", "versions": "0-3",
       "about": "Current epoch associated with the producer id." },
-    { "name": "Topics", "type": "[]AddPartitionsToTxnTopic", "versions": "0+",
-      "about": "The partitions to add to the transaction.", "fields": [
+    { "name": "V3AndBelowTopics", "type": "[]AddPartitionsToTxnTopic", "versions": "0-3",
+      "about": "The partitions to add to the transaction." }
+  ],
+  "commonStructs": [
+    { "name": "AddPartitionsToTxnTopic", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The name of the topic." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",

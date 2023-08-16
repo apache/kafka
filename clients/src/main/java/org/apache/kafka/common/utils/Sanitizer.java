@@ -50,9 +50,8 @@ public class Sanitizer {
      * using URL-encoding.
      */
     public static String sanitize(String name) {
-        String encoded = "";
         try {
-            encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name());
+            String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name());
             StringBuilder builder = new StringBuilder();
             for (int i = 0; i < encoded.length(); i++) {
                 char c = encoded.charAt(i);

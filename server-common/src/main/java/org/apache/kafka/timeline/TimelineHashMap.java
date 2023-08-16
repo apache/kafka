@@ -189,26 +189,26 @@ public class TimelineHashMap<K, V>
             this.epoch = epoch;
         }
 
-        public final int size() {
+        public int size() {
             return TimelineHashMap.this.size(epoch);
         }
 
-        public final void clear() {
+        public void clear() {
             if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             TimelineHashMap.this.clear();
         }
 
-        public final Iterator<K> iterator() {
+        public Iterator<K> iterator() {
             return new KeyIterator(epoch);
         }
 
-        public final boolean contains(Object o) {
+        public boolean contains(Object o) {
             return TimelineHashMap.this.containsKey(o, epoch);
         }
 
-        public final boolean remove(Object o) {
+        public boolean remove(Object o) {
             if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
@@ -256,22 +256,22 @@ public class TimelineHashMap<K, V>
             this.epoch = epoch;
         }
 
-        public final int size() {
+        public int size() {
             return TimelineHashMap.this.size(epoch);
         }
 
-        public final void clear() {
+        public void clear() {
             if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             TimelineHashMap.this.clear();
         }
 
-        public final Iterator<V> iterator() {
+        public Iterator<V> iterator() {
             return new ValueIterator(epoch);
         }
 
-        public final boolean contains(Object o) {
+        public boolean contains(Object o) {
             return TimelineHashMap.this.containsKey(o, epoch);
         }
     }
@@ -316,26 +316,26 @@ public class TimelineHashMap<K, V>
             this.epoch = epoch;
         }
 
-        public final int size() {
+        public int size() {
             return TimelineHashMap.this.size(epoch);
         }
 
-        public final void clear() {
+        public void clear() {
             if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             TimelineHashMap.this.clear();
         }
 
-        public final Iterator<Map.Entry<K, V>> iterator() {
+        public Iterator<Map.Entry<K, V>> iterator() {
             return new EntryIterator(epoch);
         }
 
-        public final boolean contains(Object o) {
+        public boolean contains(Object o) {
             return snapshottableGet(o, epoch) != null;
         }
 
-        public final boolean remove(Object o) {
+        public boolean remove(Object o) {
             if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }

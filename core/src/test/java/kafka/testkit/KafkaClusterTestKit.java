@@ -45,6 +45,7 @@ import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import scala.Option;
 import scala.collection.JavaConverters;
 
@@ -155,6 +156,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, String> props = new HashMap<>(configProps);
+            props.put(KafkaConfig$.MODULE$.ServerMaxStartupTimeMsProp(),
+                    Long.toString(TimeUnit.MINUTES.toMillis(10)));
             props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
             props.put(KafkaConfig$.MODULE$.NodeIdProp(),
                     Integer.toString(node.id()));
@@ -215,19 +218,15 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 baseDirectory = TestUtils.tempDirectory();
                 nodes = nodes.copyWithAbsolutePaths(baseDirectory.getAbsolutePath());
                 executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
-                    ThreadUtils.createThreadFactory("KafkaClusterTestKit%d", false));
+                    ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
                 for (ControllerNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
                         fromVersion(nodes.bootstrapMetadataVersion(), "testkit");
-                    String threadNamePrefix = (nodes.brokerNodes().containsKey(node.id())) ?
-                            String.format("colocated%d", node.id()) :
-                            String.format("controller%d", node.id());
                     SharedServer sharedServer = new SharedServer(createNodeConfig(node),
                             MetaProperties.apply(nodes.clusterId().toString(), node.id()),
                             Time.SYSTEM,
                             new Metrics(),
-                            Option.apply(threadNamePrefix),
                             connectFutureManager.future,
                             faultHandlerFactory);
                     ControllerServer controller = null;
@@ -238,7 +237,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 bootstrapMetadata);
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        Utils.swallow(log, "sharedServer.stopForController", () -> sharedServer.stopForController());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
                         if (controller != null) controller.shutdown();
                         throw e;
                     }
@@ -258,7 +257,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             MetaProperties.apply(nodes.clusterId().toString(), id),
                             Time.SYSTEM,
                             new Metrics(),
-                            Option.apply(String.format("broker%d_", id)),
                             connectFutureManager.future,
                             faultHandlerFactory));
                     BrokerServer broker = null;
@@ -268,7 +266,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq());
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        Utils.swallow(log, "sharedServer.stopForBroker", () -> sharedServer.stopForBroker());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
                         if (broker != null) broker.shutdown();
                         throw e;
                     }
@@ -301,7 +299,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
 
         private String listeners(int node) {
-            if (nodes.isCoResidentNode(node)) {
+            if (nodes.isCombined(node)) {
                 return "EXTERNAL://localhost:0,CONTROLLER://localhost:0";
             }
             if (nodes.controllerNodes().containsKey(node)) {
@@ -311,7 +309,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
 
         private String roles(int node) {
-            if (nodes.isCoResidentNode(node)) {
+            if (nodes.isCombined(node)) {
                 return "broker,controller";
             }
             if (nodes.controllerNodes().containsKey(node)) {

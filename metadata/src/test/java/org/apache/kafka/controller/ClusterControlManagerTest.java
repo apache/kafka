@@ -34,12 +34,12 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
-import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
@@ -84,11 +84,10 @@ public class ClusterControlManagerTest {
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
-        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.isUnfenced(0));
 
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(1);
         brokerRecord.endPoints().add(new BrokerEndpoint().
@@ -102,8 +101,8 @@ public class ClusterControlManagerTest {
             () -> clusterControl.checkBrokerEpoch(1, 101));
         assertThrows(StaleBrokerEpochException.class,
             () -> clusterControl.checkBrokerEpoch(2, 100));
-        assertFalse(clusterControl.unfenced(0));
-        assertFalse(clusterControl.unfenced(1));
+        assertFalse(clusterControl.isUnfenced(0));
+        assertFalse(clusterControl.isUnfenced(1));
 
         if (metadataVersion.isLessThan(IBP_3_3_IV2)) {
             UnfenceBrokerRecord unfenceBrokerRecord =
@@ -114,8 +113,8 @@ public class ClusterControlManagerTest {
                     new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced(BrokerRegistrationFencingChange.UNFENCE.value());
             clusterControl.replay(changeRecord);
         }
-        assertFalse(clusterControl.unfenced(0));
-        assertTrue(clusterControl.unfenced(1));
+        assertFalse(clusterControl.isUnfenced(0));
+        assertTrue(clusterControl.isUnfenced(1));
 
         if (metadataVersion.isLessThan(IBP_3_3_IV2)) {
             FenceBrokerRecord fenceBrokerRecord =
@@ -126,8 +125,8 @@ public class ClusterControlManagerTest {
                     new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced(BrokerRegistrationFencingChange.FENCE.value());
             clusterControl.replay(changeRecord);
         }
-        assertFalse(clusterControl.unfenced(0));
-        assertFalse(clusterControl.unfenced(1));
+        assertFalse(clusterControl.isUnfenced(0));
+        assertFalse(clusterControl.isUnfenced(1));
     }
 
     @Test
@@ -147,11 +146,10 @@ public class ClusterControlManagerTest {
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
 
-        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.isUnfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
 
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
@@ -167,20 +165,20 @@ public class ClusterControlManagerTest {
             setHost("example.com"));
         clusterControl.replay(brokerRecord, 100L);
 
-        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.isUnfenced(0));
         assertTrue(clusterControl.inControlledShutdown(0));
 
         brokerRecord.setInControlledShutdown(false);
         clusterControl.replay(brokerRecord, 100L);
 
-        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.isUnfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
         assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
 
         brokerRecord.setFenced(false);
         clusterControl.replay(brokerRecord, 100L);
 
-        assertTrue(clusterControl.unfenced(0));
+        assertTrue(clusterControl.isUnfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
     }
 
@@ -201,11 +199,10 @@ public class ClusterControlManagerTest {
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
 
-        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.isUnfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
 
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
@@ -220,7 +217,7 @@ public class ClusterControlManagerTest {
             setHost("example.com"));
         clusterControl.replay(brokerRecord, 100L);
 
-        assertTrue(clusterControl.unfenced(0));
+        assertTrue(clusterControl.isUnfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
 
         BrokerRegistrationChangeRecord registrationChangeRecord = new BrokerRegistrationChangeRecord()
@@ -229,7 +226,7 @@ public class ClusterControlManagerTest {
             .setInControlledShutdown(BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value());
         clusterControl.replay(registrationChangeRecord);
 
-        assertTrue(clusterControl.unfenced(0));
+        assertTrue(clusterControl.isUnfenced(0));
         assertTrue(clusterControl.inControlledShutdown(0));
 
         registrationChangeRecord = new BrokerRegistrationChangeRecord()
@@ -238,7 +235,7 @@ public class ClusterControlManagerTest {
             .setFenced(BrokerRegistrationFencingChange.UNFENCE.value());
         clusterControl.replay(registrationChangeRecord);
 
-        assertTrue(clusterControl.unfenced(0));
+        assertTrue(clusterControl.isUnfenced(0));
         assertTrue(clusterControl.inControlledShutdown(0));
     }
 
@@ -257,7 +254,6 @@ public class ClusterControlManagerTest {
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
@@ -287,7 +283,6 @@ public class ClusterControlManagerTest {
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
@@ -343,7 +338,6 @@ public class ClusterControlManagerTest {
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
@@ -378,7 +372,6 @@ public class ClusterControlManagerTest {
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
@@ -397,7 +390,7 @@ public class ClusterControlManagerTest {
             clusterControl.heartbeatManager().touch(i, false, 0);
         }
         for (int i = 0; i < numUsableBrokers; i++) {
-            assertTrue(clusterControl.unfenced(i),
+            assertTrue(clusterControl.isUnfenced(i),
                 String.format("broker %d was not unfenced.", i));
         }
         for (int i = 0; i < 100; i++) {
@@ -418,7 +411,7 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_3_IV2", "IBP_3_3_IV3"})
-    public void testIterator(MetadataVersion metadataVersion) throws Exception {
+    public void testRegistrationsToRecords(MetadataVersion metadataVersion) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
@@ -432,11 +425,10 @@ public class ClusterControlManagerTest {
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
-        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.isUnfenced(0));
         for (int i = 0; i < 3; i++) {
             RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(i).setRack(null);
@@ -460,8 +452,12 @@ public class ClusterControlManagerTest {
                     IN_CONTROLLED_SHUTDOWN.value());
         clusterControl.replay(registrationChangeRecord);
         short expectedVersion = metadataVersion.registerBrokerRecordVersion();
-        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+
+        ImageWriterOptions options = new ImageWriterOptions.Builder().
+                setMetadataVersion(metadataVersion).
+                setLossHandler(__ -> { }).
+                build();
+        assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(0).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
@@ -469,26 +465,27 @@ public class ClusterControlManagerTest {
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
                 setInControlledShutdown(metadataVersion.isInControlledShutdownStateSupported()).
-                setFenced(false), expectedVersion)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setFenced(false), expectedVersion),
+            clusterControl.brokerRegistrations().get(0).toRecord(options));
+        assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(1).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                         setPort((short) 9093).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                setFenced(false), expectedVersion)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setFenced(false), expectedVersion),
+            clusterControl.brokerRegistrations().get(1).toRecord(options));
+        assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(2).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                         setPort((short) 9094).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                setFenced(true), expectedVersion))),
-                clusterControl.iterator(Long.MAX_VALUE));
+                        setFenced(true), expectedVersion),
+            clusterControl.brokerRegistrations().get(2).toRecord(options));
     }
-
 
     @Test
     public void testRegistrationWithUnsupportedMetadataVersion() {
@@ -506,7 +503,6 @@ public class ClusterControlManagerTest {
                 setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
                 setTime(new MockTime(0, 0, 0)).
                 setSnapshotRegistry(snapshotRegistry).
-                setControllerMetrics(new MockControllerMetrics()).
                 setFeatureControlManager(featureControl).
                 build();
         clusterControl.activate();

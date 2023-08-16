@@ -43,6 +43,9 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
 
     private static final Logger log = LoggerFactory.getLogger(MonitorableSinkConnector.class);
 
+    // Boolean valued configuration that determines whether MonitorableSinkConnector::alterOffsets should return true or false
+    public static final String ALTER_OFFSETS_RESULT = "alter.offsets.result";
+
     private String connectorName;
     private Map<String, String> commonConfigs;
     private ConnectorHandle connectorHandle;
@@ -82,6 +85,11 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
     @Override
     public ConfigDef config() {
         return new ConfigDef();
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<TopicPartition, Long> offsets) {
+        return Boolean.parseBoolean(connectorConfig.get(ALTER_OFFSETS_RESULT));
     }
 
     public static class MonitorableSinkTask extends SinkTask {

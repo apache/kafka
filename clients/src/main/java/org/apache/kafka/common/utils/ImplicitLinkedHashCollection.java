@@ -320,7 +320,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @param key               The element to match.
      * @return                  The match index, or INVALID_INDEX if no match was found.
      */
-    final private int findIndexOfEqualElement(Object key) {
+    private int findIndexOfEqualElement(Object key) {
         if (key == null || size == 0) {
             return INVALID_INDEX;
         }

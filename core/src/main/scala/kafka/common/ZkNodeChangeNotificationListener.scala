@@ -20,10 +20,11 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.utils.{Logging, ShutdownableThread}
+import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, StateChangeHandlers}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection.Seq
 import scala.util.{Failure, Try}
@@ -142,7 +143,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
   /* get the change number from a change notification znode */
   private def changeNumber(name: String): Long = name.substring(seqNodePrefix.length).toLong
 
-  class ChangeEventProcessThread(name: String) extends ShutdownableThread(name = name) {
+  class ChangeEventProcessThread(name: String) extends ShutdownableThread(name) {
     override def doWork(): Unit = queue.take().process()
   }
 

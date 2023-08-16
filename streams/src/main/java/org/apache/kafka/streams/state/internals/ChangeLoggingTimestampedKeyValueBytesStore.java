@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
+
+import java.util.List;
 
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.timestamp;
@@ -29,12 +32,29 @@ public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKey
     }
 
     @Override
-    void log(final Bytes key,
-             final byte[] valueAndTimestamp) {
-        if (valueAndTimestamp != null) {
-            context.logChange(name(), key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp), wrapped().getPosition());
-        } else {
-            context.logChange(name(), key, null, context.timestamp(), wrapped().getPosition());
+    public void put(final Bytes key,
+                    final byte[] valueAndTimestamp) {
+        wrapped().put(key, valueAndTimestamp);
+        log(key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? context.timestamp() : timestamp(valueAndTimestamp));
+    }
+
+    @Override
+    public byte[] putIfAbsent(final Bytes key,
+                              final byte[] valueAndTimestamp) {
+        final byte[] previous = wrapped().putIfAbsent(key, valueAndTimestamp);
+        if (previous == null) {
+            // then it was absent
+            log(key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? context.timestamp() : timestamp(valueAndTimestamp));
+        }
+        return previous;
+    }
+
+    @Override
+    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        wrapped().putAll(entries);
+        for (final KeyValue<Bytes, byte[]> entry : entries) {
+            final byte[] valueAndTimestamp = entry.value;
+            log(entry.key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? context.timestamp() : timestamp(valueAndTimestamp));
         }
     }
 }

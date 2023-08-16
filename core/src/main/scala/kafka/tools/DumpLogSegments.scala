@@ -33,6 +33,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -45,7 +47,7 @@ object DumpLogSegments {
 
   def main(args: Array[String]): Unit = {
     val opts = new DumpLogSegmentsOptions(args)
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
+    CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
     opts.checkArgs()
 
     val misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]]()
@@ -66,7 +68,7 @@ object DumpLogSegments {
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case UnifiedLog.TimeIndexFileSuffix =>
           dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors)
-        case UnifiedLog.ProducerSnapshotFileSuffix =>
+        case LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX =>
           dumpProducerIdSnapshot(file)
         case UnifiedLog.TxnIndexFileSuffix =>
           dumpTxnIndex(file)
@@ -94,7 +96,7 @@ object DumpLogSegments {
 
   private def dumpTxnIndex(file: File): Unit = {
     val index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)
-    for (abortedTxn <- index.allAbortedTxns) {
+    for (abortedTxn <- index.allAbortedTxns.asScala) {
       println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
         s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
     }
@@ -102,11 +104,11 @@ object DumpLogSegments {
 
   private def dumpProducerIdSnapshot(file: File): Unit = {
     try {
-      ProducerStateManager.readSnapshot(file).foreach { entry =>
+      ProducerStateManager.readSnapshot(file).forEach { entry =>
         print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
           s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
           s"lastTimestamp: ${entry.lastTimestamp} ")
-        entry.batchMetadata.headOption.foreach { metadata =>
+        entry.batchMetadata.asScala.headOption.foreach { metadata =>
           print(s"firstSequence: ${metadata.firstSeq} lastSequence: ${metadata.lastSeq} " +
             s"lastOffset: ${metadata.lastOffset} offsetDelta: ${metadata.offsetDelta} timestamp: ${metadata.timestamp}")
         }
@@ -128,7 +130,7 @@ object DumpLogSegments {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
-    val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
+    val index = new OffsetIndex(file, startOffset, -1, false)
 
     if (index.entries == 0) {
       println(s"$file is empty.")
@@ -170,8 +172,8 @@ object DumpLogSegments {
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.IndexFileSuffix)
-    val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
-    val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
+    val index = new OffsetIndex(indexFile, startOffset, -1, false)
+    val timeIndex = new TimeIndex(file, startOffset, -1, false)
 
     try {
       //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
@@ -300,10 +302,10 @@ object DumpLogSegments {
                     val endTxnMarker = EndTransactionMarker.deserialize(record)
                     print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
                   case ControlRecordType.SNAPSHOT_HEADER =>
-                    val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(record)
+                    val header = ControlRecordUtils.deserializeSnapshotHeaderRecord(record)
                     print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, header.version())}")
                   case ControlRecordType.SNAPSHOT_FOOTER =>
-                    val footer = ControlRecordUtils.deserializedSnapshotFooterRecord(record)
+                    val footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record)
                     print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")

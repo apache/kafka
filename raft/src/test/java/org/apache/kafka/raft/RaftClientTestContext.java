@@ -81,6 +81,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class RaftClientTestContext {
@@ -185,6 +186,14 @@ public final class RaftClientTestContext {
                 records
             );
             log.appendAsLeader(batch, epoch);
+            // Need to flush the log to update the last flushed offset. This is always correct
+            // because append operation was done in the Builder which represent the state of the
+            // log before the replica starts.
+            log.flush(false);
+
+            // Reset the value of this method since "flush" before the replica start should not
+            // count when checking for flushes by the KRaft client.
+            log.flushedSinceLastChecked();
             return this;
         }
 
@@ -376,9 +385,7 @@ public final class RaftClientTestContext {
         return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
     }
 
-    void expectAndGrantVotes(
-        int epoch
-    ) throws Exception {
+    void expectAndGrantVotes(int epoch) throws Exception {
         pollUntilRequest();
 
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch,
@@ -397,9 +404,7 @@ public final class RaftClientTestContext {
         return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
-    private void expectBeginEpoch(
-        int epoch
-    ) throws Exception {
+    private void expectBeginEpoch(int epoch) throws Exception {
         pollUntilRequest();
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
             BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localIdOrThrow());
@@ -654,10 +659,9 @@ public final class RaftClientTestContext {
         List<RaftRequest.Outbound> sentMessages = channel.drainSendQueue();
         assertEquals(1, sentMessages.size());
 
-        // TODO: Use more specific type
-        RaftMessage raftMessage = sentMessages.get(0);
-        assertFetchRequestData(raftMessage, epoch, fetchOffset, lastFetchedEpoch);
-        return raftMessage.correlationId();
+        RaftRequest.Outbound raftRequest = sentMessages.get(0);
+        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch);
+        return raftRequest.correlationId();
     }
 
     FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
@@ -955,13 +959,15 @@ public final class RaftClientTestContext {
     }
 
     void assertFetchRequestData(
-        RaftMessage message,
+        RaftRequest.Outbound message,
         int epoch,
         long fetchOffset,
         int lastFetchedEpoch
     ) {
         assertTrue(
-            message.data() instanceof FetchRequestData, "Unexpected request type " + message.data());
+            message.data() instanceof FetchRequestData,
+            "unexpected request type " + message.data()
+        );
         FetchRequestData request = (FetchRequestData) message.data();
         assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
@@ -974,7 +980,22 @@ public final class RaftClientTestContext {
         assertEquals(epoch, fetchPartition.currentLeaderEpoch());
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
-        assertEquals(localId.orElse(-1), request.replicaId());
+        assertEquals(localId.orElse(-1), request.replicaState().replicaId());
+
+        // Assert that voters have flushed up to the fetch offset
+        if (localId.isPresent() && voters.contains(localId.getAsInt())) {
+            assertEquals(
+                log.firstUnflushedOffset(),
+                fetchOffset,
+                String.format(
+                    "expected voters have the fetch offset (%s) be the same as the unflushed offset (%s)",
+                    log.firstUnflushedOffset(),
+                    fetchOffset
+                )
+            );
+        } else {
+            assertFalse(log.flushedSinceLastChecked(), "KRaft client should not explicitly flush when it is an observer");
+        }
     }
 
     FetchRequestData fetchRequest(
@@ -1011,7 +1032,7 @@ public final class RaftClientTestContext {
         return request
             .setMaxWaitMs(maxWaitTimeMs)
             .setClusterId(clusterId)
-            .setReplicaId(replicaId);
+            .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(replicaId));
     }
 
     FetchResponseData fetchResponse(
@@ -1195,7 +1216,7 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<String> reader) {
+        public void handleLoadSnapshot(SnapshotReader<String> reader) {
             snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
             commits.clear();
             savedBatches.clear();

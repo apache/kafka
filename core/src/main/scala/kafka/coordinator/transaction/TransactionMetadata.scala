@@ -382,7 +382,10 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     if (newProducerId < 0)
       throw new IllegalArgumentException(s"Illegal new producer id $newProducerId")
 
-    if (newEpoch < 0)
+    // The epoch is initialized to NO_PRODUCER_EPOCH when the TransactionMetadata
+    // is created for the first time and it could stay like this until transitioning
+    // to Dead.
+    if (newState != Dead && newEpoch < 0)
       throw new IllegalArgumentException(s"Illegal new producer epoch $newEpoch")
 
     // check that the new state transition is valid and update the pending state if necessary

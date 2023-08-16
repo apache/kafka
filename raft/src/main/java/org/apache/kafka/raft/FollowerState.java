@@ -105,26 +105,41 @@ public class FollowerState implements EpochState {
         fetchTimer.reset(timeoutMs);
     }
 
-    public boolean updateHighWatermark(OptionalLong highWatermark) {
-        if (!highWatermark.isPresent() && this.highWatermark.isPresent())
-            throw new IllegalArgumentException("Attempt to overwrite current high watermark " + this.highWatermark +
-                " with unknown value");
-
-        if (this.highWatermark.isPresent()) {
-            long previousHighWatermark = this.highWatermark.get().offset;
-            long updatedHighWatermark = highWatermark.getAsLong();
-
-            if (updatedHighWatermark < 0)
-                throw new IllegalArgumentException("Illegal negative high watermark update");
-            if (previousHighWatermark > updatedHighWatermark)
-                throw new IllegalArgumentException("Non-monotonic update of high watermark attempted");
-            if (previousHighWatermark == updatedHighWatermark)
-                return false;
+    public boolean updateHighWatermark(OptionalLong newHighWatermark) {
+        if (!newHighWatermark.isPresent() && highWatermark.isPresent()) {
+            throw new IllegalArgumentException(
+                String.format("Attempt to overwrite current high watermark %s with unknown value", highWatermark)
+            );
         }
 
-        this.highWatermark = highWatermark.isPresent() ?
-            Optional.of(new LogOffsetMetadata(highWatermark.getAsLong())) :
+        if (highWatermark.isPresent()) {
+            long previousHighWatermark = highWatermark.get().offset;
+            long updatedHighWatermark = newHighWatermark.getAsLong();
+
+            if (updatedHighWatermark < 0) {
+                throw new IllegalArgumentException(
+                    String.format("Illegal negative (%s) high watermark update", updatedHighWatermark)
+                );
+            } else if (previousHighWatermark > updatedHighWatermark) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Non-monotonic update of high watermark from %s to %s",
+                        previousHighWatermark,
+                        updatedHighWatermark
+                    )
+                );
+            } else if (previousHighWatermark == updatedHighWatermark) {
+                return false;
+            }
+        }
+
+        Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
+        highWatermark = newHighWatermark.isPresent() ?
+            Optional.of(new LogOffsetMetadata(newHighWatermark.getAsLong())) :
             Optional.empty();
+
+        logHighWatermarkUpdate(oldHighWatermark, highWatermark);
+
         return true;
     }
 
@@ -167,6 +182,28 @@ public class FollowerState implements EpochState {
     public void close() {
         if (fetchingSnapshot.isPresent()) {
             fetchingSnapshot.get().close();
+        }
+    }
+
+    private void logHighWatermarkUpdate(
+        Optional<LogOffsetMetadata> oldHighWatermark,
+        Optional<LogOffsetMetadata> newHighWatermark
+    ) {
+        if (!oldHighWatermark.equals(newHighWatermark)) {
+            if (oldHighWatermark.isPresent()) {
+                log.trace(
+                    "High watermark set to {} from {} for epoch {}",
+                    newHighWatermark,
+                    oldHighWatermark.get(),
+                    epoch
+                );
+            } else {
+                log.info(
+                    "High watermark set to {} for the first time for epoch {}",
+                    newHighWatermark,
+                    epoch
+                );
+            }
         }
     }
 }

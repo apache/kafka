@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import javax.crypto.Mac;
-import javax.ws.rs.core.HttpHeaders;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -26,17 +23,19 @@ import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.NotAssignedException;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
-import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.Callback;
@@ -52,16 +51,15 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Stubber;
 
 import javax.ws.rs.BadRequestException;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
-
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,11 +68,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -153,15 +150,15 @@ public class ConnectorsResourceTest {
     private ConnectorsResource connectorsResource;
     private UriInfo forward;
     @Mock
-    private WorkerConfig workerConfig;
-    @Mock
     private RestClient restClient;
+    @Mock
+    private RestServerConfig serverConfig;
 
     @Before
     public void setUp() throws NoSuchMethodException {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(true);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
         forward = mock(UriInfo.class);
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
         queryParams.putSingle("forward", "true");
@@ -404,7 +401,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackResult(cb, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
             .when(herder).connectorInfo(eq(CONNECTOR_NAME), cb.capture());
 
-        ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME);
         assertEquals(new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE),
             connInfo);
     }
@@ -414,7 +411,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Map<String, String>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, CONNECTOR_CONFIG).when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
-        Map<String, String> connConfig = connectorsResource.getConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        Map<String, String> connConfig = connectorsResource.getConnectorConfig(CONNECTOR_NAME);
         assertEquals(CONNECTOR_CONFIG, connConfig);
     }
 
@@ -424,7 +421,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackException(cb, new NotFoundException("not found"))
             .when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
-        assertThrows(NotFoundException.class, () -> connectorsResource.getConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+        assertThrows(NotFoundException.class, () -> connectorsResource.getConnectorConfig(CONNECTOR_NAME));
     }
 
     @Test
@@ -451,9 +448,9 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb2 = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb2, expectedTasksConnector2).when(herder).tasksConfig(eq(CONNECTOR2_NAME), cb2.capture());
 
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME);
         assertEquals(expectedTasksConnector, tasksConfig);
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME, NULL_HEADERS, FORWARD);
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME);
         assertEquals(expectedTasksConnector2, tasksConfig2);
     }
 
@@ -464,7 +461,7 @@ public class ConnectorsResourceTest {
             .when(herder).tasksConfig(eq(CONNECTOR_NAME), cb.capture());
 
         assertThrows(NotFoundException.class, () ->
-            connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+            connectorsResource.getTasksConfig(CONNECTOR_NAME));
     }
 
     @Test
@@ -552,7 +549,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<List<TaskInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, TASK_INFOS).when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
 
-        List<TaskInfo> taskInfos = connectorsResource.getTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        List<TaskInfo> taskInfos = connectorsResource.getTaskConfigs(CONNECTOR_NAME);
         assertEquals(TASK_INFOS, taskInfos);
     }
 
@@ -562,67 +559,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackException(cb, new NotFoundException("connector not found"))
             .when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
 
-        assertThrows(NotFoundException.class, () -> connectorsResource.getTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
-    }
-
-    @Test
-    public void testPutConnectorTaskConfigsNoInternalRequestSignature() throws Throwable {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb, null).when(herder).putTaskConfigs(
-            eq(CONNECTOR_NAME),
-            eq(TASK_CONFIGS),
-            cb.capture(),
-            any()
-        );
-
-        connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(TASK_CONFIGS));
-    }
-
-    @Test
-    public void testPutConnectorTaskConfigsWithInternalRequestSignature() throws Throwable {
-        final String signatureAlgorithm = "HmacSHA256";
-        final String encodedSignature = "Kv1/OSsxzdVIwvZ4e30avyRIVrngDfhzVUm/kAZEKc4=";
-
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        final ArgumentCaptor<InternalRequestSignature> signatureCapture = ArgumentCaptor.forClass(InternalRequestSignature.class);
-        expectAndCallbackResult(cb, null).when(herder).putTaskConfigs(
-            eq(CONNECTOR_NAME),
-            eq(TASK_CONFIGS),
-            cb.capture(),
-            signatureCapture.capture()
-        );
-
-        HttpHeaders headers = mock(HttpHeaders.class);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER))
-            .thenReturn(signatureAlgorithm);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_HEADER))
-            .thenReturn(encodedSignature);
-
-        connectorsResource.putTaskConfigs(CONNECTOR_NAME, headers, FORWARD, serializeAsBytes(TASK_CONFIGS));
-
-        InternalRequestSignature expectedSignature = new InternalRequestSignature(
-            serializeAsBytes(TASK_CONFIGS),
-            Mac.getInstance(signatureAlgorithm),
-            Base64.getDecoder().decode(encodedSignature)
-        );
-        assertEquals(
-            expectedSignature,
-            signatureCapture.getValue()
-        );
-    }
-
-    @Test
-    public void testPutConnectorTaskConfigsConnectorNotFound() {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackException(cb, new NotFoundException("not found")).when(herder).putTaskConfigs(
-            eq(CONNECTOR_NAME),
-            eq(TASK_CONFIGS),
-            cb.capture(),
-            any()
-        );
-
-        assertThrows(NotFoundException.class, () -> connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS,
-            FORWARD, serializeAsBytes(TASK_CONFIGS)));
+        assertThrows(NotFoundException.class, () -> connectorsResource.getTaskConfigs(CONNECTOR_NAME));
     }
 
     @Test
@@ -681,55 +618,6 @@ public class ConnectorsResourceTest {
         assertEquals(CONNECTOR_NAME, ((ConnectorStateInfo) response.getEntity()).name());
         assertEquals(state.state(), ((ConnectorStateInfo) response.getEntity()).connector().state());
         assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
-    }
-
-    @Test
-    public void testFenceZombiesNoInternalRequestSignature() throws Throwable {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb, null)
-            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), isNull());
-
-        connectorsResource.fenceZombies(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(null));
-    }
-
-    @Test
-    public void testFenceZombiesWithInternalRequestSignature() throws Throwable {
-        final String signatureAlgorithm = "HmacSHA256";
-        final String encodedSignature = "Kv1/OSsxzdVIwvZ4e30avyRIVrngDfhzVUm/kAZEKc4=";
-
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        final ArgumentCaptor<InternalRequestSignature> signatureCapture = ArgumentCaptor.forClass(InternalRequestSignature.class);
-        expectAndCallbackResult(cb, null)
-            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), signatureCapture.capture());
-
-        HttpHeaders headers = mock(HttpHeaders.class);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER))
-            .thenReturn(signatureAlgorithm);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_HEADER))
-            .thenReturn(encodedSignature);
-
-        connectorsResource.fenceZombies(CONNECTOR_NAME, headers, FORWARD, serializeAsBytes(null));
-
-        InternalRequestSignature expectedSignature = new InternalRequestSignature(
-                serializeAsBytes(null),
-                Mac.getInstance(signatureAlgorithm),
-                Base64.getDecoder().decode(encodedSignature)
-        );
-        assertEquals(
-                expectedSignature,
-                signatureCapture.getValue()
-        );
-    }
-
-    @Test
-    public void testFenceZombiesConnectorNotFound() throws Throwable {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-
-        expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), any());
-
-        assertThrows(NotFoundException.class,
-                () -> connectorsResource.fenceZombies(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(null)));
     }
 
     @Test
@@ -806,9 +694,9 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testConnectorActiveTopicsWithTopicTrackingDisabled() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(false);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(false);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(false);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(false);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
@@ -817,10 +705,10 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testResetConnectorActiveTopicsWithTopicTrackingDisabled() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(false);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(false);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
@@ -829,10 +717,10 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testResetConnectorActiveTopicsWithTopicTrackingEnabled() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(false);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(true);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(false);
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
@@ -841,11 +729,11 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testConnectorActiveTopics() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(true);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         when(herder.connectorActiveTopics(CONNECTOR_NAME))
             .thenReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
@@ -858,7 +746,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testResetConnectorActiveTopics() {
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Response response = connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers);
         verify(herder).resetConnectorActiveTopics(CONNECTOR_NAME);
@@ -875,6 +763,111 @@ public class ConnectorsResourceTest {
         ConnectRestException e = assertThrows(ConnectRestException.class, () ->
             connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
         assertTrue(e.getMessage().contains("no known leader URL"));
+    }
+
+    @Test
+    public void testGetOffsetsConnectorNotFound() {
+        final ArgumentCaptor<Callback<ConnectorOffsets>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackException(cb, new NotFoundException("Connector not found"))
+                .when(herder).connectorOffsets(anyString(), cb.capture());
+
+        assertThrows(NotFoundException.class, () -> connectorsResource.getOffsets("unknown-connector"));
+    }
+
+    @Test
+    public void testGetOffsets() throws Throwable {
+        final ArgumentCaptor<Callback<ConnectorOffsets>> cb = ArgumentCaptor.forClass(Callback.class);
+        ConnectorOffsets offsets = new ConnectorOffsets(Arrays.asList(
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"))
+        ));
+        expectAndCallbackResult(cb, offsets).when(herder).connectorOffsets(eq(CONNECTOR_NAME), cb.capture());
+
+        assertEquals(offsets, connectorsResource.getOffsets(CONNECTOR_NAME));
+    }
+
+    @Test
+    public void testAlterOffsetsEmptyOffsets() {
+        assertThrows(BadRequestException.class, () -> connectorsResource.alterConnectorOffsets(
+                false, NULL_HEADERS, CONNECTOR_NAME, new ConnectorOffsets(Collections.emptyList())));
+    }
+
+    @Test
+    public void testAlterOffsetsNotLeader() throws Throwable {
+        Map<String, ?> partition = new HashMap<>();
+        Map<String, ?> offset = new HashMap<>();
+        ConnectorOffset connectorOffset = new ConnectorOffset(partition, offset);
+        ConnectorOffsets body = new ConnectorOffsets(Collections.singletonList(connectorOffset));
+
+        final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackNotLeaderException(cb).when(herder).alterConnectorOffsets(eq(CONNECTOR_NAME), eq(body.toMap()), cb.capture());
+
+        when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/offsets?forward=true"), eq("PATCH"), isNull(), eq(body), any()))
+                .thenReturn(new RestClient.HttpResponse<>(200, new HashMap<>(), new Message("")));
+        connectorsResource.alterConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME, body);
+    }
+
+    @Test
+    public void testAlterOffsetsConnectorNotFound() {
+        Map<String, ?> partition = new HashMap<>();
+        Map<String, ?> offset = new HashMap<>();
+        ConnectorOffset connectorOffset = new ConnectorOffset(partition, offset);
+        ConnectorOffsets body = new ConnectorOffsets(Collections.singletonList(connectorOffset));
+        final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackException(cb, new NotFoundException("Connector not found"))
+                .when(herder).alterConnectorOffsets(eq(CONNECTOR_NAME), eq(body.toMap()), cb.capture());
+
+        assertThrows(NotFoundException.class, () -> connectorsResource.alterConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME, body));
+    }
+
+    @Test
+    public void testAlterOffsets() throws Throwable {
+        Map<String, ?> partition = Collections.singletonMap("partitionKey", "partitionValue");
+        Map<String, ?> offset = Collections.singletonMap("offsetKey", "offsetValue");
+        ConnectorOffset connectorOffset = new ConnectorOffset(partition, offset);
+        ConnectorOffsets body = new ConnectorOffsets(Collections.singletonList(connectorOffset));
+
+        final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
+        Message msg = new Message("The offsets for this connector have been altered successfully");
+        doAnswer(invocation -> {
+            cb.getValue().onCompletion(null, msg);
+            return null;
+        }).when(herder).alterConnectorOffsets(eq(CONNECTOR_NAME), eq(body.toMap()), cb.capture());
+        Response response = connectorsResource.alterConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME, body);
+        assertEquals(200, response.getStatus());
+        assertEquals(msg, response.getEntity());
+    }
+
+    @Test
+    public void testResetOffsetsNotLeader() throws Throwable {
+        final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackNotLeaderException(cb).when(herder).resetConnectorOffsets(eq(CONNECTOR_NAME), cb.capture());
+
+        when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/offsets?forward=true"), eq("DELETE"), isNull(), isNull(), any()))
+                .thenReturn(new RestClient.HttpResponse<>(200, new HashMap<>(), new Message("")));
+        connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME);
+    }
+
+    @Test
+    public void testResetOffsetsConnectorNotFound() {
+        final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackException(cb, new NotFoundException("Connector not found"))
+                .when(herder).resetConnectorOffsets(eq(CONNECTOR_NAME), cb.capture());
+
+        assertThrows(NotFoundException.class, () -> connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME));
+    }
+
+    @Test
+    public void testResetOffsets() throws Throwable {
+        final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
+        Message msg = new Message("The offsets for this connector have been reset successfully");
+        doAnswer(invocation -> {
+            cb.getValue().onCompletion(null, msg);
+            return null;
+        }).when(herder).resetConnectorOffsets(eq(CONNECTOR_NAME), cb.capture());
+        Response response = connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME);
+        assertEquals(200, response.getStatus());
+        assertEquals(msg, response.getEntity());
     }
 
     private <T> byte[] serializeAsBytes(final T value) throws IOException {

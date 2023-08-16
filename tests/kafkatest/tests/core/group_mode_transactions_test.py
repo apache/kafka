@@ -99,12 +99,12 @@ class GroupModeTransactionsTest(Test):
                 self.kafka.stop_node(node, clean_shutdown = False)
                 gracePeriodSecs = 5
                 if self.zk:
-                    wait_until(lambda: len(self.kafka.pids(node)) == 0 and not self.kafka.is_registered(node),
+                    wait_until(lambda: not self.kafka.pids(node) and not self.kafka.is_registered(node),
                                timeout_sec=self.kafka.zk_session_timeout + gracePeriodSecs,
                                err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(node.account))
                 else:
                     brokerSessionTimeoutSecs = 18
-                    wait_until(lambda: len(self.kafka.pids(node)) == 0,
+                    wait_until(lambda: not self.kafka.pids(node),
                                timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
                                err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(node.account))
                     time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)

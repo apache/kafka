@@ -44,11 +44,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_VALIDATOR;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_VALIDATOR;
 
+/**
+ * Provides configuration for Kafka Connect workers running in distributed mode.
+ */
 public class DistributedConfig extends WorkerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DistributedConfig.class);
@@ -209,7 +212,7 @@ public class DistributedConfig extends WorkerConfig {
         + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
     private Crypto crypto;
 
-    private enum ExactlyOnceSourceSupport {
+    public enum ExactlyOnceSourceSupport {
         DISABLED(false),
         PREPARING(true),
         ENABLED(true);
@@ -232,9 +235,12 @@ public class DistributedConfig extends WorkerConfig {
 
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG = "exactly.once.source.support";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DOC = "Whether to enable exactly-once support for source connectors in the cluster "
-            + "by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones. ";
-            // TODO: https://issues.apache.org/jira/browse/KAFKA-13709
-            //       + "See the exactly-once source support documentation at [add docs link here] for more information on this feature.";
+            + "by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones.\n"
+            + "To enable exactly-once source support on a new cluster, set this property to '" + ExactlyOnceSourceSupport.ENABLED + "'. "
+            + "To enable support on an existing cluster, first set to '" + ExactlyOnceSourceSupport.PREPARING + "' on every worker in the cluster, "
+            + "then set to '" + ExactlyOnceSourceSupport.ENABLED + "'. A rolling upgrade may be used for both changes. "
+            + "For more information on this feature, see the "
+            + "<a href=\"https://kafka.apache.org/documentation.html#connect_exactlyoncesource\">exactly-once source support documentation</a>.";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT = ExactlyOnceSourceSupport.DISABLED.toString();
 
     private static Object defaultKeyGenerationAlgorithm(Crypto crypto) {
@@ -314,7 +320,7 @@ public class DistributedConfig extends WorkerConfig {
             .define(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
                     ConfigDef.Type.STRING,
                     EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT,
-                    ConfigDef.CaseInsensitiveValidString.in(enumOptions(ExactlyOnceSourceSupport.class)),
+                    in(enumOptions(ExactlyOnceSourceSupport.class)),
                     ConfigDef.Importance.HIGH,
                     EXACTLY_ONCE_SOURCE_SUPPORT_DOC)
             .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
@@ -331,13 +337,13 @@ public class DistributedConfig extends WorkerConfig {
             .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     128 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     32 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.RECEIVE_BUFFER_DOC)
             .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
@@ -503,7 +509,7 @@ public class DistributedConfig extends WorkerConfig {
     private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;
 
     @Override
-    public Integer getRebalanceTimeout() {
+    public Integer rebalanceTimeout() {
         return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
     }
 

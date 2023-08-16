@@ -86,7 +86,8 @@ class LeaderElectionTest extends QuorumTestHarness {
     // kill the server hosting the preferred replica/initial leader
     servers.head.shutdown()
     // check if leader moves to the other server
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader1))
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
+      oldLeaderOpt = Some(leader1), ignoreNoLeader = true)
     val leaderEpoch2 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     assertEquals(1, leader2, "Leader must move to broker 1")
     // new leaderEpoch will be leaderEpoch1+2, one increment during ReplicaStateMachine.startup()-> handleStateChanges
@@ -138,9 +139,14 @@ class LeaderElectionTest extends QuorumTestHarness {
     val controllerContext = new ControllerContext
     controllerContext.setLiveBrokers(brokerAndEpochs)
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-    controllerChannelManager.startup()
+    val controllerChannelManager = new ControllerChannelManager(
+      () => controllerContext.epoch,
+      controllerConfig,
+      Time.SYSTEM,
+      metrics,
+      new StateChangeLogger(controllerId, inControllerContext = true, None)
+    )
+    controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
     try {
       val staleControllerEpoch = 0
       val partitionStates = Seq(

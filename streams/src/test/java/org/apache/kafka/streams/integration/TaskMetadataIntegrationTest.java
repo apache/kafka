@@ -43,7 +43,6 @@ import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -64,7 +63,7 @@ public class TaskMetadataIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyList(), 0L, 0L);
 
     @BeforeClass
     public static void startCluster() throws IOException {
@@ -75,7 +74,6 @@ public class TaskMetadataIntegrationTest {
     public static void closeCluster() {
         CLUSTER.stop();
     }
-    public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @Rule
     public TestName testName = new TestName();
@@ -119,7 +117,7 @@ public class TaskMetadataIntegrationTest {
     @Test
     public void shouldReportCorrectCommittedOffsetInformation() {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), DEFAULT_DURATION);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
             assertThat(taskMetadata.committedOffsets().size(), equalTo(1));
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
@@ -145,7 +143,7 @@ public class TaskMetadataIntegrationTest {
     @Test
     public void shouldReportCorrectEndOffsetInformation() {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), DEFAULT_DURATION);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
             assertThat(taskMetadata.endOffsets().size(), equalTo(1));
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);

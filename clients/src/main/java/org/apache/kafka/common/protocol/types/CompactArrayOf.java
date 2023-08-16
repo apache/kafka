@@ -119,7 +119,7 @@ public class CompactArrayOf extends DocumentedType {
                 type.validate(obj);
             return array;
         } catch (ClassCastException e) {
-            throw new SchemaException("Not an Object[].");
+            throw new SchemaException("Not an Object[]. Found class " + item.getClass().getSimpleName());
         }
     }
 

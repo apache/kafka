@@ -60,7 +60,7 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         self.logger.info("Starting process on " + str(node.account))
         node.account.ssh(self.start_cmd(node))
 
-        if len(self.pids(node)) == 0:
+        if not self.pids(node):
             raise RuntimeError("No process ids recorded")
 
     def await_command(self, command):
@@ -87,7 +87,7 @@ class StreamsRelationalSmokeTest(KafkaTest):
     @cluster(num_nodes=8)
     @matrix(crash=[False, True],
             processing_guarantee=['exactly_once', 'exactly_once_v2'],
-            metadata_quorum=[quorum.remote_kraft])
+            metadata_quorum=[quorum.isolated_kraft])
     def test_streams(self, crash, processing_guarantee, metadata_quorum):
         driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored")
 

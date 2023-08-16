@@ -216,7 +216,7 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldPrintHelpTextIfHelpArg(): Unit = {
     val args: Array[String]= Array("--help")
-    // note, this is not actually a failed case, it's just we share the same `printUsageAndDie` method when wrong arg received
+    // note, this is not actually a failed case, it's just we share the same `printUsageAndExit` method when wrong arg received
     shouldFailWith(ReassignPartitionsCommand.helpText, args)
   }
 

@@ -19,13 +19,12 @@ package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
-
 import joptsimple.OptionException
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
+import kafka.utils.{CoreUtils, Exit, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -38,7 +37,10 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.jdk.CollectionConverters._
@@ -73,7 +75,11 @@ class TestRaftServer(
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
+    val apiVersionManager = new SimpleApiVersionManager(
+      ListenerType.CONTROLLER,
+      true,
+      false,
+      () => Features.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val metaProperties = MetaProperties(
@@ -91,6 +97,7 @@ class TestRaftServer(
       metrics,
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+      new ProcessTerminatingFaultHandler.Builder().build()
     )
 
     workloadGenerator = new RaftWorkloadGenerator(
@@ -145,7 +152,7 @@ class TestRaftServer(
     time: Time,
     recordsPerSec: Int,
     recordSize: Int
-  ) extends ShutdownableThread(name = "raft-workload-generator")
+  ) extends ShutdownableThread("raft-workload-generator")
     with RaftClient.Listener[Array[Byte]] {
 
     sealed trait RaftEvent
@@ -178,7 +185,7 @@ class TestRaftServer(
       eventQueue.offer(HandleCommit(reader))
     }
 
-    override def handleSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
+    override def handleLoadSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleSnapshot(reader))
     }
 
@@ -434,7 +441,7 @@ object TestRaftServer extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = new TestRaftServerOptions(args)
     try {
-      CommandLineUtils.printHelpAndExitIfNeeded(opts,
+      CommandLineUtils.maybePrintHelpOrVersion(opts,
         "Standalone raft server for performance testing")
 
       val configFile = opts.options.valueOf(opts.configOpt)
@@ -459,7 +466,7 @@ object TestRaftServer extends Logging {
       Exit.exit(0)
     } catch {
       case e: OptionException =>
-        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
+        CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage)
       case e: Throwable =>
         fatal("Exiting raft server due to fatal exception", e)
         Exit.exit(1)

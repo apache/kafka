@@ -229,7 +229,7 @@ public class MeteredSessionStoreTest {
             STORE_LEVEL_GROUP,
             THREAD_ID_TAG_KEY,
             threadId,
-            taskId.toString(),
+            taskId,
             STORE_TYPE,
             STORE_NAME
         )));

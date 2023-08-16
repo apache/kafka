@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -189,6 +190,11 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public boolean commitNeeded() {
         throw new UnsupportedOperationException("This task is read-only");
     }
@@ -200,7 +206,7 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
-        throw new UnsupportedOperationException("This task is read-only");
+        return task.changelogOffsets();
     }
 
     @Override

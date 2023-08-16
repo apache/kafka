@@ -37,8 +37,15 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         /**
          * Construct a new builder which allows any supported version
          */
+        public Builder(ApiKeys apiKey, boolean enableUnstableLastVersion) {
+            this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion(enableUnstableLastVersion));
+        }
+
+        /**
+         * Construct a new builder which allows any supported and released version
+         */
         public Builder(ApiKeys apiKey) {
-            this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
+            this(apiKey, false);
         }
 
         /**
@@ -303,6 +310,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return ListTransactionsRequest.parse(buffer, apiVersion);
             case ALLOCATE_PRODUCER_IDS:
                 return AllocateProducerIdsRequest.parse(buffer, apiVersion);
+            case CONSUMER_GROUP_HEARTBEAT:
+                return ConsumerGroupHeartbeatRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

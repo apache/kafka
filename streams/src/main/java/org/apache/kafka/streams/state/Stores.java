@@ -24,12 +24,14 @@ import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplie
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
-import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
 import java.time.Duration;
@@ -81,8 +83,10 @@ public final class Stores {
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
      * <p>
      * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
-     * If you want to create a {@link TimestampedKeyValueStore} you should use
-     * {@link #persistentTimestampedKeyValueStore(String)} to create a store supplier instead.
+     * If you want to create a {@link TimestampedKeyValueStore} or {@link VersionedKeyValueStore}
+     * you should use {@link #persistentTimestampedKeyValueStore(String)} or
+     * {@link #persistentVersionedKeyValueStore(String, Duration)}, respectively,
+     * to create a store supplier instead.
      *
      * @param name  name of the store (cannot be {@code null})
      * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
@@ -90,7 +94,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name, false);
+        return new RocksDBKeyValueBytesStoreSupplier(name, false);
     }
 
     /**
@@ -98,8 +102,10 @@ public final class Stores {
      * <p>
      * This store supplier can be passed into a
      * {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
-     * If you want to create a {@link KeyValueStore} you should use
-     * {@link #persistentKeyValueStore(String)} to create a store supplier instead.
+     * If you want to create a {@link KeyValueStore} or a {@link VersionedKeyValueStore}
+     * you should use {@link #persistentKeyValueStore(String)} or
+     * {@link #persistentVersionedKeyValueStore(String, Duration)}, respectively,
+     * to create a store supplier instead.
      *
      * @param name  name of the store (cannot be {@code null})
      * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
@@ -107,7 +113,83 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name, true);
+        return new RocksDBKeyValueBytesStoreSupplier(name, true);
+    }
+
+    /**
+     * Create a persistent versioned key-value store {@link VersionedBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #versionedKeyValueStoreBuilder(VersionedBytesStoreSupplier, Serde, Serde)}.
+     * <p>
+     * Note that it is not safe to change the value of {@code historyRetention} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
+     *
+     * @param name             name of the store (cannot be {@code null})
+     * @param historyRetention length of time that old record versions are available for query
+     *                         (cannot be negative). If a timestamp bound provided to
+     *                         {@link VersionedKeyValueStore#get(Object, long)} is older than this
+     *                         specified history retention, then the get operation will not return data.
+     *                         This parameter also determines the "grace period" after which
+     *                         out-of-order writes will no longer be accepted.
+     * @return an instance of {@link VersionedBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code historyRetention} can't be represented as {@code long milliseconds}
+     */
+    public static VersionedBytesStoreSupplier persistentVersionedKeyValueStore(final String name,
+                                                                               final Duration historyRetention) {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String hrMsgPrefix = prepareMillisCheckFailMsgPrefix(historyRetention, "historyRetention");
+        final long historyRetentionMs = validateMillisecondDuration(historyRetention, hrMsgPrefix);
+        if (historyRetentionMs < 0L) {
+            throw new IllegalArgumentException("historyRetention cannot be negative");
+        }
+        return new RocksDbVersionedKeyValueBytesStoreSupplier(name, historyRetentionMs);
+    }
+
+    /**
+     * Create a persistent versioned key-value store {@link VersionedBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #versionedKeyValueStoreBuilder(VersionedBytesStoreSupplier, Serde, Serde)}.
+     * <p>
+     * Note that it is not safe to change the value of {@code segmentInterval} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store otherwise.
+     *
+     * @param name             name of the store (cannot be {@code null})
+     * @param historyRetention length of time that old record versions are available for query
+     *                         (cannot be negative). If a timestamp bound provided to
+     *                         {@link VersionedKeyValueStore#get(Object, long)} is older than this
+     *                         specified history retention, then the get operation will not return data.
+     *                         This parameter also determines the "grace period" after which
+     *                         out-of-order writes will no longer be accepted.
+     * @param segmentInterval  size of segments for storing old record versions (must be positive). Old record versions
+     *                         for the same key in a single segment are stored (updated and accessed) together.
+     *                         The only impact of this parameter is performance. If segments are large
+     *                         and a workload results in many record versions for the same key being collected
+     *                         in a single segment, performance may degrade as a result. On the other hand,
+     *                         historical reads (which access older segments) and out-of-order writes may
+     *                         slow down if there are too many segments.
+     * @return an instance of {@link VersionedBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code historyRetention} or {@code segmentInterval} can't be represented as {@code long milliseconds}
+     */
+    public static VersionedBytesStoreSupplier persistentVersionedKeyValueStore(final String name,
+                                                                               final Duration historyRetention,
+                                                                               final Duration segmentInterval) {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String hrMsgPrefix = prepareMillisCheckFailMsgPrefix(historyRetention, "historyRetention");
+        final long historyRetentionMs = validateMillisecondDuration(historyRetention, hrMsgPrefix);
+        if (historyRetentionMs < 0L) {
+            throw new IllegalArgumentException("historyRetention cannot be negative");
+        }
+        final String siMsgPrefix = prepareMillisCheckFailMsgPrefix(segmentInterval, "segmentInterval");
+        final long segmentIntervalMs = validateMillisecondDuration(segmentInterval, siMsgPrefix);
+        if (segmentIntervalMs < 1L) {
+            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
+        }
+        return new RocksDbVersionedKeyValueBytesStoreSupplier(name, historyRetentionMs, segmentIntervalMs);
     }
 
     /**
@@ -166,6 +248,11 @@ public final class Stores {
      * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
      * If you want to create a {@link TimestampedWindowStore} you should use
      * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
      *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
@@ -193,6 +280,11 @@ public final class Stores {
      * {@link #timestampedWindowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
      * If you want to create a {@link WindowStore} you should use
      * {@link #persistentWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
      *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
@@ -307,6 +399,11 @@ public final class Stores {
 
     /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
      *
      * @param name              name of the store (cannot be {@code null})
      * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
@@ -329,7 +426,7 @@ public final class Stores {
      * Create an in-memory {@link SessionBytesStoreSupplier}.
      *
      * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
      *                          (note that the retention period must be at least as long enough to
      *                          contain the inactivity gap of the session and the entire grace period.)
      * @return an instance of a {@link  SessionBytesStoreSupplier}
@@ -386,6 +483,24 @@ public final class Stores {
                                                                                                       final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new TimestampedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link VersionedKeyValueStore}.
+     *
+     * @param supplier   a {@link VersionedBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde   the key serde to use
+     * @param valueSerde the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                   it is treated as a deletion
+     * @param <K>        key type
+     * @param <V>        value type
+     * @return an instance of a {@link StoreBuilder} that can build a {@link VersionedKeyValueStore}
+     */
+    public static <K, V> StoreBuilder<VersionedKeyValueStore<K, V>> versionedKeyValueStoreBuilder(final VersionedBytesStoreSupplier supplier,
+                                                                                                  final Serde<K> keySerde,
+                                                                                                  final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new VersionedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**

@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.utils.Exit;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
 public class ToolsTestUtils {
-
     public static String captureStandardOut(Runnable runnable) {
         return captureStandardStream(false, runnable);
     }
@@ -45,7 +46,29 @@ public class ToolsTestUtils {
                 System.setErr(currentStream);
             else
                 System.setOut(currentStream);
+
+            tempStream.close();
         }
     }
 
+    public static class MockExitProcedure implements Exit.Procedure {
+        private boolean hasExited = false;
+        private int statusCode;
+
+        @Override
+        public void execute(int statusCode, String message) {
+            if (!this.hasExited) {
+                this.hasExited = true;
+                this.statusCode = statusCode;
+            }
+        }
+
+        public boolean hasExited() {
+            return hasExited;
+        }
+
+        public int statusCode() {
+            return statusCode;
+        }
+    }
 }

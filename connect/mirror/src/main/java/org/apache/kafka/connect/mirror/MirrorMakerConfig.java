@@ -31,6 +31,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -41,14 +42,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 /** Top-level config describing replication flows between multiple Kafka clusters.
- *
+ *  <p>
  *  Supports cluster-level properties of the form cluster.x.y.z, and replication-level
  *  properties of the form source->target.x.y.z.
  *  e.g.
  *
+ * <pre>
  *      clusters = A, B, C
  *      A.bootstrap.servers = aaa:9092
  *      A.security.protocol = SSL
@@ -56,7 +58,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  *      A->B.enabled = true
  *      A->B.producer.client.id = "A-B-producer"
  *      --->%---
- *
+ * </pre>
  */
 public class MirrorMakerConfig extends AbstractConfig {
 
@@ -80,16 +82,27 @@ public class MirrorMakerConfig extends AbstractConfig {
     static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
     static final String SOURCE_PREFIX = "source.";
     static final String TARGET_PREFIX = "target.";
+    static final String ENABLE_INTERNAL_REST_CONFIG = "dedicated.mode.enable.internal.rest";
+    private static final String ENABLE_INTERNAL_REST_DOC =
+            "Whether to bring up an internal-only REST server that allows multi-node clusters to operate correctly.";
 
     private final Plugins plugins;
-   
-    public MirrorMakerConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, true);
+
+    private final Map<String, String> rawProperties;
+
+    public MirrorMakerConfig(Map<String, String> props) {
+        super(config(), props, true);
         plugins = new Plugins(originalsStrings());
+
+        rawProperties = new HashMap<>(props);
     }
 
     public Set<String> clusters() {
         return new HashSet<>(getList(CLUSTERS_CONFIG));
+    }
+
+    public boolean enableInternalRest() {
+        return getBoolean(ENABLE_INTERNAL_REST_CONFIG);
     }
 
     public List<SourceAndTarget> clusterPairs() {
@@ -138,7 +151,6 @@ public class MirrorMakerConfig extends AbstractConfig {
     // loads properties of the form cluster.x.y.z
     Map<String, String> clusterProps(String cluster) {
         Map<String, String> props = new HashMap<>();
-        Map<String, String> strings = originalsStrings();
 
         props.putAll(stringsWithPrefixStripped(cluster + "."));
 
@@ -152,7 +164,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         }
 
         for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
-            String v = strings.get(k);
+            String v = rawProperties.get(k);
             if (v != null) {
                 props.putIfAbsent("producer." + k, v);
                 props.putIfAbsent("consumer." + k, v);
@@ -168,7 +180,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     public Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
-      
+
         // Accept common top-level configs that are otherwise ignored by MM2.
         // N.B. all other worker properties should be configured for specific herders,
         // e.g. primary->backup.client.id
@@ -181,12 +193,13 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix("task"));
         props.putAll(stringsWithPrefix("worker"));
         props.putAll(stringsWithPrefix("replication.policy"));
- 
+
         // transform any expression like ${provider:path:key}, since the worker doesn't do so
         props = transform(props);
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
 
         // fill in reasonable defaults
+        props.putIfAbsent(CommonClientConfigs.CLIENT_ID_CONFIG, sourceAndTarget.toString());
         props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
         props.putIfAbsent(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
                 + sourceAndTarget.source() + ".internal");
@@ -218,7 +231,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     public Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         Map<String, String> props = new HashMap<>();
 
-        props.putAll(originalsStrings());
+        props.putAll(rawProperties);
         props.keySet().retainAll(allConfigNames());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
@@ -271,30 +284,31 @@ public class MirrorMakerConfig extends AbstractConfig {
         providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
         return transformed;
     }
- 
-    protected static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
-            .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
-            // security support
-            .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                Type.STRING,
-                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                in(Utils.enumOptions(SecurityProtocol.class)),
-                Importance.MEDIUM,
-                CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .withClientSslSupport()
-            .withClientSaslSupport();
+
+    protected static ConfigDef config() {
+        ConfigDef result = new ConfigDef()
+                .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
+                .define(ENABLE_INTERNAL_REST_CONFIG, Type.BOOLEAN, false, Importance.HIGH, ENABLE_INTERNAL_REST_DOC)
+                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
+                // security support
+                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                        Type.STRING,
+                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                        in(Utils.enumOptions(SecurityProtocol.class)),
+                        Importance.MEDIUM,
+                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .withClientSslSupport()
+                .withClientSaslSupport();
+        RestServerConfig.addInternalConfig(result);
+        return result;
+    }
 
     private Map<String, String> stringsWithPrefixStripped(String prefix) {
-        return originalsStrings().entrySet().stream()
-            .filter(x -> x.getKey().startsWith(prefix))
-            .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), Entry::getValue));
+        return Utils.entriesWithPrefix(rawProperties, prefix);
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
-        Map<String, String> strings = originalsStrings();
-        strings.keySet().removeIf(x -> !x.startsWith(prefix));
-        return strings;
+        return Utils.entriesWithPrefix(rawProperties, prefix, false);
     }
 
     static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {

@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import kafka.message.{CompressionCodec, NoCompressionCodec}
+import org.apache.kafka.common.record.CompressionType
 
 /**
  * Configuration settings for in-built offset management
@@ -48,7 +48,7 @@ case class OffsetConfig(maxMetadataSize: Int = OffsetConfig.DefaultMaxMetadataSi
                         offsetsTopicNumPartitions: Int = OffsetConfig.DefaultOffsetsTopicNumPartitions,
                         offsetsTopicSegmentBytes: Int = OffsetConfig.DefaultOffsetsTopicSegmentBytes,
                         offsetsTopicReplicationFactor: Short = OffsetConfig.DefaultOffsetsTopicReplicationFactor,
-                        offsetsTopicCompressionCodec: CompressionCodec = OffsetConfig.DefaultOffsetsTopicCompressionCodec,
+                        offsetsTopicCompressionType: CompressionType = OffsetConfig.DefaultOffsetsTopicCompressionType,
                         offsetCommitTimeoutMs: Int = OffsetConfig.DefaultOffsetCommitTimeoutMs,
                         offsetCommitRequiredAcks: Short = OffsetConfig.DefaultOffsetCommitRequiredAcks)
 
@@ -60,7 +60,7 @@ object OffsetConfig {
   val DefaultOffsetsTopicNumPartitions = 50
   val DefaultOffsetsTopicSegmentBytes = 100*1024*1024
   val DefaultOffsetsTopicReplicationFactor = 3.toShort
-  val DefaultOffsetsTopicCompressionCodec = NoCompressionCodec
+  val DefaultOffsetsTopicCompressionType = CompressionType.NONE
   val DefaultOffsetCommitTimeoutMs = 5000
   val DefaultOffsetCommitRequiredAcks = (-1).toShort
 }

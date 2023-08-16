@@ -6,6 +6,7 @@ build/
 build_eclipse/
 out/
 .gradle/
+.vscode/
 lib_managed/
 src_managed/
 project/boot/
@@ -56,3 +57,5 @@ jmh-benchmarks/src/main/generated
 **/.jqwik-database
 **/src/generated
 **/src/generated-test
+
+storage/kafka-tiered-storage/

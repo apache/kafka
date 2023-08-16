@@ -18,13 +18,13 @@
 package kafka.server
 
 import java.{lang, util}
-import java.util.{Map => JMap, Properties}
+import java.util.{Properties, Map => JMap}
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicReference
 import kafka.controller.KafkaController
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.utils.{KafkaScheduler, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -33,6 +33,10 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -106,7 +110,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
     Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
 
-    val currentDefaultLogConfig = new AtomicReference(LogConfig())
+    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
     Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
     Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
       .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
@@ -151,7 +155,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.kafkaScheduler).thenReturn(schedulerMock)
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicThreadPool(serverMock))
+    config.dynamicConfig.addBrokerReconfigurable(new BrokerDynamicThreadPool(serverMock))
     config.dynamicConfig.addReconfigurable(acceptorMock)
 
     val props = new Properties()
@@ -182,7 +186,7 @@ class DynamicBrokerConfigTest {
     props.put(KafkaConfig.BackgroundThreadsProp, "6")
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(6, config.backgroundThreads)
-    Mockito.verify(schedulerMock).resizeThreadPool(newSize = 6)
+    Mockito.verify(schedulerMock).resizeThreadPool(6)
 
     Mockito.verifyNoMoreInteractions(
       handlerPoolMock,
@@ -443,6 +447,32 @@ class DynamicBrokerConfigTest {
     assertThrows(classOf[ConfigException], () => dynamicListenerConfig.validateReconfiguration(KafkaConfig(props)))
   }
 
+  class TestAuthorizer extends Authorizer with Reconfigurable {
+    @volatile var superUsers = ""
+
+    override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = Map.empty.asJava
+
+    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = null
+
+    override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = null
+
+    override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = null
+
+    override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
+
+    override def close(): Unit = {}
+
+    override def configure(configs: util.Map[String, _]): Unit = {}
+
+    override def reconfigurableConfigs(): util.Set[String] = Set("super.users").asJava
+
+    override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
+
+    override def reconfigure(configs: util.Map[String, _]): Unit = {
+      superUsers = configs.get("super.users").toString
+    }
+  }
+
   @Test
   def testAuthorizerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
@@ -450,30 +480,116 @@ class DynamicBrokerConfigTest {
     oldConfig.dynamicConfig.initialize(None)
 
     val kafkaServer: KafkaServer = mock(classOf[kafka.server.KafkaServer])
-
-    class TestAuthorizer extends Authorizer with Reconfigurable {
-      @volatile var superUsers = ""
-      override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = Map.empty.asJava
-      override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = null
-      override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = null
-      override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = null
-      override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
-      override def close(): Unit = {}
-      override def configure(configs: util.Map[String, _]): Unit = {}
-      override def reconfigurableConfigs(): util.Set[String] = Set("super.users").asJava
-      override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
-      override def reconfigure(configs: util.Map[String, _]): Unit = {
-        superUsers = configs.get("super.users").toString
-      }
-    }
+    when(kafkaServer.config).thenReturn(oldConfig)
+    when(kafkaServer.kafkaYammerMetrics).thenReturn(KafkaYammerMetrics.INSTANCE)
+    val metrics: Metrics = mock(classOf[Metrics])
+    when(kafkaServer.metrics).thenReturn(metrics)
+    val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
+    when(quotaManagers.clientQuotaCallback).thenReturn(None)
+    when(kafkaServer.quotaManagers).thenReturn(quotaManagers)
+    val socketServer: SocketServer = mock(classOf[SocketServer])
+    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
+    when(kafkaServer.socketServer).thenReturn(socketServer)
+    val logManager: LogManager = mock(classOf[LogManager])
+    val producerStateManagerConfig: ProducerStateManagerConfig = mock(classOf[ProducerStateManagerConfig])
+    when(logManager.producerStateManagerConfig).thenReturn(producerStateManagerConfig)
+    when(kafkaServer.logManager).thenReturn(logManager)
 
     val authorizer = new TestAuthorizer
-    when(kafkaServer.config).thenReturn(oldConfig)
     when(kafkaServer.authorizer).thenReturn(Some(authorizer))
-    // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
-    assertThrows(classOf[Throwable], () => kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer))
+
+    kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer)
     props.put("super.users", "User:admin")
     kafkaServer.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals("User:admin", authorizer.superUsers)
+  }
+
+  private def createCombinedControllerConfig(
+    nodeId: Int,
+    port: Int
+  ): Properties = {
+    val retval = TestUtils.createBrokerConfig(nodeId,
+      zkConnect = null,
+      enableControlledShutdown = true,
+      enableDeleteTopic = true,
+      port)
+    retval.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    retval.put(KafkaConfig.ListenersProp, s"${retval.get(KafkaConfig.ListenersProp)},CONTROLLER://localhost:0")
+    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval
+  }
+
+  @Test
+  def testCombinedControllerAuthorizerConfig(): Unit = {
+    val props = createCombinedControllerConfig(0, 9092)
+    val oldConfig = KafkaConfig.fromProps(props)
+    oldConfig.dynamicConfig.initialize(None)
+
+    val controllerServer: ControllerServer = mock(classOf[kafka.server.ControllerServer])
+    when(controllerServer.config).thenReturn(oldConfig)
+    when(controllerServer.kafkaYammerMetrics).thenReturn(KafkaYammerMetrics.INSTANCE)
+    val metrics: Metrics = mock(classOf[Metrics])
+    when(controllerServer.metrics).thenReturn(metrics)
+    val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
+    when(quotaManagers.clientQuotaCallback).thenReturn(None)
+    when(controllerServer.quotaManagers).thenReturn(quotaManagers)
+    val socketServer: SocketServer = mock(classOf[SocketServer])
+    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
+    when(controllerServer.socketServer).thenReturn(socketServer)
+
+    val authorizer = new TestAuthorizer
+    when(controllerServer.authorizer).thenReturn(Some(authorizer))
+
+    controllerServer.config.dynamicConfig.addReconfigurables(controllerServer)
+    props.put("super.users", "User:admin")
+    controllerServer.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals("User:admin", authorizer.superUsers)
+  }
+
+  private def createIsolatedControllerConfig(
+    nodeId: Int,
+    port: Int
+  ): Properties = {
+    val retval = TestUtils.createBrokerConfig(nodeId,
+      zkConnect = null,
+      enableControlledShutdown = true,
+      enableDeleteTopic = true,
+      port
+    )
+    retval.put(KafkaConfig.ProcessRolesProp, "controller")
+    retval.remove(KafkaConfig.AdvertisedListenersProp)
+
+    retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    retval.put(KafkaConfig.ListenersProp, "CONTROLLER://localhost:0")
+    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval
+  }
+
+  @Test
+  def testIsolatedControllerAuthorizerConfig(): Unit = {
+    val props = createIsolatedControllerConfig(0, port = 9092)
+    val oldConfig = KafkaConfig.fromProps(props)
+    oldConfig.dynamicConfig.initialize(None)
+
+    val controllerServer: ControllerServer = mock(classOf[kafka.server.ControllerServer])
+    when(controllerServer.config).thenReturn(oldConfig)
+    when(controllerServer.kafkaYammerMetrics).thenReturn(KafkaYammerMetrics.INSTANCE)
+    val metrics: Metrics = mock(classOf[Metrics])
+    when(controllerServer.metrics).thenReturn(metrics)
+    val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
+    when(quotaManagers.clientQuotaCallback).thenReturn(None)
+    when(controllerServer.quotaManagers).thenReturn(quotaManagers)
+    val socketServer: SocketServer = mock(classOf[SocketServer])
+    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
+    when(controllerServer.socketServer).thenReturn(socketServer)
+
+    val authorizer = new TestAuthorizer
+    when(controllerServer.authorizer).thenReturn(Some(authorizer))
+
+    controllerServer.config.dynamicConfig.addReconfigurables(controllerServer)
+    props.put("super.users", "User:admin")
+    controllerServer.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals("User:admin", authorizer.superUsers)
   }
 
@@ -494,7 +610,9 @@ class DynamicBrokerConfigTest {
     val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
     when(zkClient.getEntityConfigs(anyString(), anyString())).thenReturn(new java.util.Properties())
 
-    val oldConfig =  KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
+    val initialProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
+    initialProps.remove(KafkaConfig.BackgroundThreadsProp)
+    val oldConfig =  KafkaConfig.fromProps(initialProps)
     val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
     dynamicBrokerConfig.initialize(Some(zkClient))
     dynamicBrokerConfig.addBrokerReconfigurable(new TestDynamicThreadPool)
@@ -512,7 +630,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.initialize(None)
 
     assertEquals(Defaults.MaxConnections, config.maxConnections)
-    assertEquals(Defaults.MessageMaxBytes, config.messageMaxBytes)
+    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
 
     var newProps = new Properties()
     newProps.put(KafkaConfig.MaxConnectionsProp, "9999")
@@ -586,6 +704,109 @@ class DynamicBrokerConfigTest {
     assertTrue(m.currentReporters.isEmpty)
   }
 
+  @Test
+  def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.MetadataLogSegmentMinBytesProp, "1024")
+    val config = new KafkaConfig(props)
+    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+    config.updateCurrentConfig(new KafkaConfig(props))
+    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionMsConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "2592000000")
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2160000000")
+    // update default config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(2160000000L, config.logLocalRetentionMs)
+
+    // update per broker config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2150000000")
+    config.dynamicConfig.updateBrokerConfig(0, newProps)
+    assertEquals(2150000000L, config.logLocalRetentionMs)
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionSizeConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.LogRetentionBytesProp, "4294967296")
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967295")
+    // update default config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(4294967295L, config.logLocalRetentionBytes)
+
+    // update per broker config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967294")
+    config.dynamicConfig.updateBrokerConfig(0, newProps)
+    assertEquals(4294967294L, config.logLocalRetentionBytes)
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionSkipsOnInvalidConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
+    val config = KafkaConfig(props)
+    config.dynamicConfig.initialize(None)
+
+    // Check for invalid localRetentionMs < -2
+    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP -> "-3"))
+    // Check for invalid localRetentionBytes < -2
+    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP -> "-3"))
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionThrowsOnIncorrectConfig(): Unit = {
+    // Check for incorrect case of logLocalRetentionMs > retentionMs
+    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, 2, 100)
+    // Check for incorrect case of logLocalRetentionBytes > retentionBytes
+    verifyIncorrectLogLocalRetentionProps(500L, 1000L, 200, 100)
+    // Check for incorrect case of logLocalRetentionMs (-1 viz unlimited) > retentionMs,
+    verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
+    // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
+    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
+  }
+
+  def verifyIncorrectLogLocalRetentionProps(logLocalRetentionMs: Long,
+                                            retentionMs: Long,
+                                            logLocalRetentionBytes: Long,
+                                            retentionBytes: Long): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, retentionMs.toString)
+    props.put(KafkaConfig.LogRetentionBytesProp, retentionBytes.toString)
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes.toString)
+    // validate default config
+    assertThrows(classOf[ConfigException], () =>  config.dynamicConfig.validate(newProps, perBrokerConfig = false))
+    // validate per broker config
+    assertThrows(classOf[ConfigException], () =>  config.dynamicConfig.validate(newProps, perBrokerConfig = true))
+  }
 }
 
 class TestDynamicThreadPool() extends BrokerReconfigurable {

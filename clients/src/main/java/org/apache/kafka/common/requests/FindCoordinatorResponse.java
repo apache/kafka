@@ -29,6 +29,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 
 public class FindCoordinatorResponse extends AbstractResponse {
@@ -48,6 +50,22 @@ public class FindCoordinatorResponse extends AbstractResponse {
     public FindCoordinatorResponse(FindCoordinatorResponseData data) {
         super(ApiKeys.FIND_COORDINATOR);
         this.data = data;
+    }
+
+    public Optional<Coordinator> coordinatorByKey(String key) {
+        Objects.requireNonNull(key);
+        if (this.data.coordinators().isEmpty()) {
+            // version <= 3
+            return Optional.of(new Coordinator()
+                    .setErrorCode(data.errorCode())
+                    .setErrorMessage(data.errorMessage())
+                    .setHost(data.host())
+                    .setPort(data.port())
+                    .setNodeId(data.nodeId())
+                    .setKey(key));
+        }
+        // version >= 4
+        return data.coordinators().stream().filter(c -> c.key().equals(key)).findFirst();
     }
 
     @Override

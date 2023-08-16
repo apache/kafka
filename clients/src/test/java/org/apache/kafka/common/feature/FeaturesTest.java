@@ -100,7 +100,7 @@ public class FeaturesTest {
     }
 
     @Test
-    public void testSuppportedFeaturesFromMapFailureWithInvalidMissingMaxVersion() {
+    public void testSupportedFeaturesFromMapFailureWithInvalidMissingMaxVersion() {
         // This is invalid because 'max_version' key is missing.
         Map<String, Map<String, Short>> invalidFeatures = mkMap(
             mkEntry("feature_1", mkMap(mkEntry("min_version", (short) 1))));

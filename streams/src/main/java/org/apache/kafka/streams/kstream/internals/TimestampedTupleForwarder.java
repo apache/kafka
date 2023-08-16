@@ -58,7 +58,7 @@ class TimestampedTupleForwarder<K, V> {
             if (sendOldValues) {
                 context.forward(record);
             } else {
-                context.forward(record.withValue(new Change<>(record.value().newValue, null)));
+                context.forward(record.withValue(new Change<>(record.value().newValue, null, record.value().isLatest)));
             }
         }
     }

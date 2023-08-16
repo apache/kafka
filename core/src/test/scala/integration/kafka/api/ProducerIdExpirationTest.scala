@@ -25,7 +25,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin,AlterConfigOp, ConfigEntry, ProducerState}
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
@@ -47,7 +47,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   val configResource = new ConfigResource(ConfigResource.Type.BROKER, "")
 
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
-  var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  var consumer: Consumer[Array[Byte], Array[Byte]] = _
   var admin: Admin = _
 
   override def generateConfigs: Seq[KafkaConfig] = {
@@ -183,7 +183,11 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     )
 
     // Update the expiration time to a low value again.
-    admin.incrementalAlterConfigs(producerIdExpirationConfig("100"))
+    admin.incrementalAlterConfigs(producerIdExpirationConfig("100")).all().get()
+
+    // restart a broker to ensure that dynamic config changes are picked up on restart
+    killBroker(0)
+    restartDeadBrokers()
 
     brokers.foreach(broker => TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100, "Configuration was not updated."))
 
@@ -232,9 +236,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "500")
+    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "5000")
     serverProps.put(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, "500")
-    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "2000")
+    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "10000")
     serverProps.put(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp, "500")
     serverProps
   }

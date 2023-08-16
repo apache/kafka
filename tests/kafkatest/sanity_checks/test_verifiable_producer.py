@@ -92,7 +92,7 @@ class TestVerifiableProducer(Test):
         # Easy fix is to decrease throughput= above, the good fix is to make the producer
         # not terminate until explicitly killed in this case.
         if node.version <= LATEST_0_8_2:
-            assert is_version(node, [node.version.vstring, DEV_BRANCH.vstring], logger=self.logger)
+            assert is_version(node, [node.version.vstring, LATEST_0_9.vstring], logger=self.logger)
         else:
             assert is_version(node, [node.version.vstring], logger=self.logger)
 
@@ -101,11 +101,11 @@ class TestVerifiableProducer(Test):
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
     @cluster(num_nodes=4)
-    @matrix(inter_broker_security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=[quorum.remote_kraft])
+    @matrix(inter_broker_security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=[quorum.isolated_kraft])
     @matrix(inter_broker_security_protocol=['SASL_SSL'], inter_broker_sasl_mechanism=['PLAIN', 'GSSAPI'],
-            metadata_quorum=[quorum.remote_kraft])
+            metadata_quorum=[quorum.isolated_kraft])
     def test_multiple_kraft_security_protocols(
-            self, inter_broker_security_protocol, inter_broker_sasl_mechanism='GSSAPI', metadata_quorum=quorum.remote_kraft):
+            self, inter_broker_security_protocol, inter_broker_sasl_mechanism='GSSAPI', metadata_quorum=quorum.isolated_kraft):
         """
         Test for remote KRaft cases that we can start VerifiableProducer on the current branch snapshot version, and
         verify that we can produce a small number of messages.  The inter-controller and broker-to-controller
@@ -144,7 +144,7 @@ class TestVerifiableProducer(Test):
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
     @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.remote_kraft)
+    @parametrize(metadata_quorum=quorum.isolated_kraft)
     def test_multiple_kraft_sasl_mechanisms(self, metadata_quorum):
         """
         Test for remote KRaft cases that we can start VerifiableProducer on the current branch snapshot version, and

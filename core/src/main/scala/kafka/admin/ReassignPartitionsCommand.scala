@@ -19,19 +19,20 @@ package kafka.admin
 import java.util
 import java.util.Optional
 import java.util.concurrent.ExecutionException
-
-import kafka.common.AdminCommandFailedException
-import kafka.log.LogConfig
 import kafka.server.DynamicConfig
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Json, Logging}
+import kafka.utils.{CoreUtils, Exit, Json, Logging}
 import kafka.utils.Implicits._
 import kafka.utils.json.JsonValue
+import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, ConfigEntry, NewPartitionReassignment, PartitionReassignment, TopicDescription}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
@@ -70,9 +71,9 @@ object ReassignPartitionsCommand extends Logging {
 
   // Throttles that are set at the level of an individual topic.
   private[admin] val topicLevelLeaderThrottle =
-    LogConfig.LeaderReplicationThrottledReplicasProp
+    LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG
   private[admin] val topicLevelFollowerThrottle =
-    LogConfig.FollowerReplicationThrottledReplicasProp
+    LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
   private[admin] val topicLevelThrottles = Seq(
     topicLevelLeaderThrottle,
     topicLevelFollowerThrottle
@@ -606,8 +607,8 @@ object ReassignPartitionsCommand extends Logging {
     val proposedAssignments = mutable.Map[TopicPartition, Seq[Int]]()
     groupedByTopic.forKeyValue { (topic, assignment) =>
       val (_, replicas) = assignment.head
-      val assignedReplicas = AdminUtils.
-        assignReplicasToBrokers(brokerMetadatas, assignment.size, replicas.size)
+      val assignedReplicas = CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.
+        assignReplicasToBrokers(brokerMetadatas.asJavaCollection, assignment.size, replicas.size))
       proposedAssignments ++= assignedReplicas.map { case (partition, replicas) =>
         new TopicPartition(topic, partition) -> replicas
       }
@@ -688,12 +689,12 @@ object ReassignPartitionsCommand extends Logging {
       filter(node => brokerSet.contains(node.id)).
       map {
         node => if (enableRackAwareness && node.rack != null) {
-          BrokerMetadata(node.id, Some(node.rack))
+          new BrokerMetadata(node.id, Optional.of(node.rack))
         } else {
-          BrokerMetadata(node.id, None)
+          new BrokerMetadata(node.id, Optional.empty())
         }
       }.toSeq
-    val numRackless = results.count(_.rack.isEmpty)
+    val numRackless = results.count(!_.rack.isPresent)
     if (enableRackAwareness && numRackless != 0 && numRackless != results.size) {
       throw new AdminOperationException("Not all brokers have rack information. Add " +
         "--disable-rack-aware in command line to make replica assignment without rack " +
@@ -1331,20 +1332,20 @@ object ReassignPartitionsCommand extends Logging {
   def validateAndParseArgs(args: Array[String]): ReassignPartitionsCommandOptions = {
     val opts = new ReassignPartitionsCommandOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, helpText)
+    CommandLineUtils.maybePrintHelpOrVersion(opts, helpText)
 
     // Determine which action we should perform.
     val validActions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt,
                            opts.cancelOpt, opts.listOpt)
     val allActions = validActions.filter(opts.options.has _)
     if (allActions.size != 1) {
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: %s".format(
+      CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: %s".format(
         validActions.map("--" + _.options().get(0)).mkString(", ")))
     }
     val action = allActions.head
 
     if (!opts.options.has(opts.bootstrapServerOpt))
-      CommandLineUtils.printUsageAndDie(opts.parser, "Please specify --bootstrap-server")
+      CommandLineUtils.printUsageAndExit(opts.parser, "Please specify --bootstrap-server")
 
     // Make sure that we have all the required arguments for our action.
     val requiredArgs = Map(
@@ -1401,7 +1402,7 @@ object ReassignPartitionsCommand extends Logging {
       if (!opt.equals(action) &&
         !requiredArgs(action).contains(opt) &&
         !permittedArgs(action).contains(opt)) {
-        CommandLineUtils.printUsageAndDie(opts.parser,
+        CommandLineUtils.printUsageAndExit(opts.parser,
           """Option "%s" can't be used with action "%s"""".format(opt, action))
       }
     })

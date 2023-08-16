@@ -18,17 +18,14 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
-import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import kafka.log.LogConfig
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
@@ -50,6 +47,8 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
@@ -70,7 +69,7 @@ object ZkAdminManager {
 class ZkAdminManager(val config: KafkaConfig,
                      val metrics: Metrics,
                      val metadataCache: MetadataCache,
-                     val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                     val zkClient: KafkaZkClient) extends Logging {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
@@ -127,7 +126,7 @@ class ZkAdminManager(val config: KafkaConfig,
                                               configs: Properties,
                                               assignments: Map[Int, Seq[Int]]): Unit = {
     metadataAndConfigs.get(topicName).foreach { result =>
-      val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), configs)
+      val logConfig = LogConfig.fromProps(config.extractLogConfigMap, configs)
       val createEntry = configHelper.createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
       val topicConfigs = configHelper.allConfigs(logConfig).map { case (k, v) =>
         val entry = createEntry(k, v)
@@ -185,8 +184,8 @@ class ZkAdminManager(val config: KafkaConfig,
           defaultReplicationFactor else topic.replicationFactor
 
         val assignments = if (topic.assignments.isEmpty) {
-          AdminUtils.assignReplicasToBrokers(
-            brokers, resolvedNumPartitions, resolvedReplicationFactor)
+          CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(
+            brokers.asJavaCollection, resolvedNumPartitions, resolvedReplicationFactor))
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
@@ -510,7 +509,7 @@ class ZkAdminManager(val config: KafkaConfig,
               throw new InvalidRequestException("Default topic resources are not allowed.")
             }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
-            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys.asScala)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
@@ -743,14 +742,14 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
-      val (path, configType, configKeys) = parseAndSanitizeQuotaEntity(entity) match {
-        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
-        case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
-        case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
+      val (path, configType, configKeys, isUserClientId) = parseAndSanitizeQuotaEntity(entity) match {
+        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys, true)
+        case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys, false)
+        case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys, false)
         case (None, None, Some(ip)) =>
           if (!DynamicConfig.Ip.isValidIpEntity(ip))
             throw new InvalidRequestException(s"$ip is not a valid IP or resolvable host.")
-          (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys)
+          (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys, false)
         case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
           s"IP entity should not be used with user/client ID entity.")
         case _ => throw new InvalidRequestException("Invalid client quota entity")
@@ -783,7 +782,7 @@ class ZkAdminManager(val config: KafkaConfig,
         }
       }
       if (!validateOnly)
-        adminZkClient.changeConfigs(configType, path, props)
+        adminZkClient.changeConfigs(configType, path, props, isUserClientId)
     }
     entries.map { entry =>
       val apiError = try {
@@ -849,7 +848,7 @@ class ZkAdminManager(val config: KafkaConfig,
     try {
       if (describingAllUsers)
         adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
-          case (user, properties) => addToResultsIfHasScramCredential(user, properties) }
+          case (user, properties) => addToResultsIfHasScramCredential(Sanitizer.desanitize(user), properties) }
       else {
         // describing specific users
         val illegalUsers = users.get.filter(_.isEmpty).toSet

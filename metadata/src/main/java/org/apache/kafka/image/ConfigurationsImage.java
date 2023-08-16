@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.image.node.ConfigurationsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 
@@ -26,7 +27,6 @@ import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 
 /**
@@ -48,7 +48,7 @@ public final class ConfigurationsImage {
         return data.isEmpty();
     }
 
-    Map<ConfigResource, ConfigurationImage> resourceData() {
+    public Map<ConfigResource, ConfigurationImage> resourceData() {
         return data;
     }
 
@@ -58,6 +58,19 @@ public final class ConfigurationsImage {
             return configurationImage.toProperties();
         } else {
             return new Properties();
+        }
+    }
+
+    /**
+     * Return the underlying config data for a given resource as an immutable map. This does not apply
+     * configuration overrides or include entity defaults for the resource type.
+     */
+    public Map<String, String> configMapForResource(ConfigResource configResource) {
+        ConfigurationImage configurationImage = data.get(configResource);
+        if (configurationImage != null) {
+            return configurationImage.toMap();
+        } else {
+            return Collections.emptyMap();
         }
     }
 
@@ -83,8 +96,6 @@ public final class ConfigurationsImage {
 
     @Override
     public String toString() {
-        return "ConfigurationsImage(data=" + data.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new ConfigurationsImageNode(this).stringify();
     }
 }

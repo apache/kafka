@@ -37,7 +37,7 @@ import java.util.Map;
  * It does support handling nulls. When converting from bytes to Kafka Connect format, the converter will always return the specified
  * schema.
  * <p>
- * This implementation currently does nothing with the topic names or header names.
+ * This implementation currently does nothing with the topic names or header keys.
  */
 abstract class NumberConverter<T extends Number> implements Converter, HeaderConverter {
 

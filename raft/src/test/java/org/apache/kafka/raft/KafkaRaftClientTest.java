@@ -25,8 +25,10 @@ import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -35,11 +37,16 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -73,6 +80,7 @@ public class KafkaRaftClientTest {
         int localId = 0;
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId)).build();
         context.assertElectedLeader(1, localId);
+        assertEquals(context.log.endOffset().offset, context.client.logEndOffset());
     }
 
     @Test
@@ -350,7 +358,8 @@ public class KafkaRaftClientTest {
         for (int i = 0; i < size; i++)
             batchToLarge.add("a");
 
-        assertThrows(RecordBatchTooLargeException.class, () -> context.client.scheduleAtomicAppend(epoch, batchToLarge));
+        assertThrows(RecordBatchTooLargeException.class,
+                () -> context.client.scheduleAtomicAppend(epoch, OptionalLong.empty(), batchToLarge));
     }
 
     @Test
@@ -616,7 +625,7 @@ public class KafkaRaftClientTest {
 
         // Leader change record appended
         assertEquals(1L, context.log.endOffset().offset);
-        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
@@ -656,7 +665,7 @@ public class KafkaRaftClientTest {
 
         // Leader change record appended
         assertEquals(1L, context.log.endOffset().offset);
-        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
@@ -1198,6 +1207,36 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testLeaderImmediatelySendsDivergingEpoch() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(5)
+            .appendToLog(1, Arrays.asList("a", "b", "c"))
+            .appendToLog(3, Arrays.asList("d", "e", "f"))
+            .appendToLog(5, Arrays.asList("g", "h", "i"))
+            .build();
+
+        // Start off as the leader
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Send a fetch request for an end offset and epoch which has diverged
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 6, 2, 500));
+        context.client.poll();
+
+        // Expect that the leader replies immediately with a diverging epoch
+        FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(1, partitionResponse.divergingEpoch().epoch());
+        assertEquals(3, partitionResponse.divergingEpoch().endOffset());
+    }
+
+    @Test
     public void testCandidateIgnoreVoteRequestOnSameEpoch() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
@@ -1434,6 +1473,33 @@ public class KafkaRaftClientTest {
             epoch, otherNodeId, 0L, 0, -1));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
+    }
+
+    // This test mainly focuses on whether the leader state is correctly updated under different fetch version.
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+    public void testLeaderStateUpdateWithDifferentFetchRequestVersions(short version) throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // First poll has no high watermark advance.
+        context.client.poll();
+        assertEquals(OptionalLong.empty(), context.client.highWatermark());
+        assertEquals(1L, context.log.endOffset().offset);
+
+        // Now we will advance the high watermark with a follower fetch request.
+        FetchRequestData fetchRequestData = context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0);
+        FetchRequestData request = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
+        assertEquals((version < 15) ? 1 : -1, fetchRequestData.replicaId());
+        assertEquals((version < 15) ? -1 : 1, fetchRequestData.replicaState().replicaId());
+        context.deliverRequest(request);
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(OptionalLong.of(1L), context.client.highWatermark());
     }
 
     @Test
@@ -2156,7 +2222,7 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
-        assertEquals(2L, context.log.lastFlushedOffset());
+        assertEquals(2L, context.log.firstUnflushedOffset());
     }
 
     @Test
@@ -2339,6 +2405,7 @@ public class KafkaRaftClientTest {
         // Poll again to complete truncation
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.firstUnflushedOffset());
 
         // Now we should be fetching
         context.client.poll();
@@ -2823,4 +2890,31 @@ public class KafkaRaftClientTest {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAppendWithRequiredBaseOffset(boolean correctOffset) throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .build();
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        int epoch = context.currentEpoch();
+
+        if (correctOffset) {
+            assertEquals(1L, context.client.scheduleAtomicAppend(epoch,
+                OptionalLong.of(1),
+                singletonList("a")));
+            context.deliverRequest(context.beginEpochRequest(epoch + 1, otherNodeId));
+            context.pollUntilResponse();
+        } else {
+            assertThrows(UnexpectedBaseOffsetException.class, () -> {
+                context.client.scheduleAtomicAppend(epoch,
+                    OptionalLong.of(2),
+                    singletonList("a"));
+            });
+        }
+    }
 }

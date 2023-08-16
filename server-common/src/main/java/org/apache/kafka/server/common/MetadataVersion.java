@@ -99,7 +99,7 @@ public enum MetadataVersion {
     IBP_2_1_IV2(-1, "2.1", "IV2"),
 
     // Introduced broker generation (KIP-380), and
-    // LeaderAdnIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
+    // LeaderAndIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
     IBP_2_2_IV0(-1, "2.2", "IV0"),
 
     // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)
@@ -165,7 +165,19 @@ public enum MetadataVersion {
 
     // Adds ZK to KRaft migration support (KIP-866). This includes ZkMigrationRecord, a new version of RegisterBrokerRecord,
     // and updates to a handful of RPCs.
-    IBP_3_4_IV0(8, "3.4", "IV0", true);
+    IBP_3_4_IV0(8, "3.4", "IV0", true),
+
+    // Support for tiered storage (KIP-405)
+    IBP_3_5_IV0(9, "3.5", "IV0", false),
+
+    // Adds replica epoch to Fetch request (KIP-903).
+    IBP_3_5_IV1(10, "3.5", "IV1", false),
+
+    // Support for SCRAM
+    IBP_3_5_IV2(11, "3.5", "IV2", true),
+
+    // Remove leader epoch bump when KRaft controller shrinks the ISR (KAFKA-15021)
+    IBP_3_6_IV0(12, "3.6", "IV0", false);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";
@@ -243,6 +255,18 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_3_IV1);
     }
 
+    public boolean isApiForwardingEnabled() {
+        return this.isAtLeast(IBP_3_4_IV0);
+    }
+
+    public boolean isScramSupported() {
+        return this.isAtLeast(IBP_3_5_IV2);
+    }
+
+    public boolean isLeaderEpochBumpRequiredOnIsrShrink() {
+        return !this.isAtLeast(IBP_3_6_IV0);
+    }
+
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
     }
@@ -265,8 +289,15 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_3_IV3);
     }
 
+    public boolean isMigrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
+    }
+
     public short registerBrokerRecordVersion() {
-        if (isInControlledShutdownStateSupported()) {
+        if (isMigrationSupported()) {
+            // new isMigrationZkBroker field
+            return (short) 2;
+        } else if (isInControlledShutdownStateSupported()) {
             return (short) 1;
         } else {
             return (short) 0;
@@ -274,7 +305,11 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_1_IV0)) {
+        if (this.isAtLeast(IBP_3_5_IV1)) {
+            return 15;
+        } else if (this.isAtLeast(IBP_3_5_IV0)) {
+            return 14;
+        } else if (this.isAtLeast(IBP_3_1_IV0)) {
             return 13;
         } else if (this.isAtLeast(IBP_2_7_IV1)) {
             return 12;
@@ -316,7 +351,9 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_3_0_IV1)) {
+        if (this.isAtLeast(IBP_3_5_IV0)) {
+            return 8;
+        } else if (this.isAtLeast(IBP_3_0_IV1)) {
             return 7;
         } else if (this.isAtLeast(IBP_2_8_IV0)) {
             return 6;
@@ -332,6 +369,32 @@ public enum MetadataVersion {
             return 1;
         } else {
             return 0;
+        }
+    }
+
+    public short groupMetadataValueVersion() {
+        if (this.isLessThan(IBP_0_10_1_IV0)) {
+            return 0;
+        } else if (this.isLessThan(IBP_2_1_IV0)) {
+            return 1;
+        } else if (this.isLessThan(IBP_2_3_IV0)) {
+            return 2;
+        } else {
+            // Serialize with the highest supported non-flexible version
+            // until a tagged field is introduced or the version is bumped.
+            return 3;
+        }
+    }
+
+    public short offsetCommitValueVersion(boolean expireTimestampMs) {
+        if (isLessThan(MetadataVersion.IBP_2_1_IV0) || expireTimestampMs) {
+            return 1;
+        } else if (isLessThan(MetadataVersion.IBP_2_1_IV1)) {
+            return 2;
+        } else {
+            // Serialize with the highest supported non-flexible version
+            // until a tagged field is introduced or the version is bumped.
+            return  3;
         }
     }
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.record;
 
+import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.RequestLocal;
 import org.apache.kafka.common.header.Header;
@@ -26,13 +27,16 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.storage.internals.log.LogValidator;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Random;
 import java.util.stream.IntStream;
 
@@ -75,7 +79,8 @@ public abstract class BaseRecordBatchBenchmark {
     // Used by measureVariableBatchSize
     ByteBuffer[] batchBuffers;
     RequestLocal requestLocal;
-    final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(
+        new BrokerTopicStats(Optional.empty()).allTopicsStats());
 
     @Setup
     public void init() {
@@ -98,6 +103,12 @@ public abstract class BaseRecordBatchBenchmark {
             int size = random.nextInt(maxBatchSize) + 1;
             batchBuffers[i] = createBatch(size);
         }
+    }
+
+    @TearDown
+    public void cleanUp() {
+        if (requestLocal != null)
+            requestLocal.close();
     }
 
     private static Header[] createHeaders() {

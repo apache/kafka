@@ -20,10 +20,10 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayList;
@@ -92,7 +92,7 @@ public class MetricsTest {
     @Test
     public void testMetricName() {
         MetricName n1 = metrics.metricName("name", "group", "description", "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<String, String>();
+        Map<String, String> tags = new HashMap<>();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricName("name", "group", "description", tags);
@@ -107,7 +107,7 @@ public class MetricsTest {
     }
 
     @Test
-    public void testSimpleStats() throws Exception {
+    public void testSimpleStats() {
         verifyStats(m -> (double) m.metricValue());
     }
 
@@ -121,8 +121,8 @@ public class MetricsTest {
         s.add(metrics.metricName("test.min", "grp1"), new Min());
         s.add(new Meter(TimeUnit.SECONDS, metrics.metricName("test.rate", "grp1"),
                 metrics.metricName("test.total", "grp1")));
-        s.add(new Meter(TimeUnit.SECONDS, new WindowedCount(), metrics.metricName("test.occurences", "grp1"),
-                metrics.metricName("test.occurences.total", "grp1")));
+        s.add(new Meter(TimeUnit.SECONDS, new WindowedCount(), metrics.metricName("test.occurrences", "grp1"),
+                metrics.metricName("test.occurrences.total", "grp1")));
         s.add(metrics.metricName("test.count", "grp1"), new WindowedCount());
         s.add(new Percentiles(100, -100, 100, BucketSizing.CONSTANT,
                              new Percentile(metrics.metricName("test.median", "grp1"), 50.0),
@@ -140,7 +140,7 @@ public class MetricsTest {
         }
         // prior to any time passing
         double elapsedSecs = (config.timeWindowMs() * (config.samples() - 1)) / 1000.0;
-        assertEquals(count / elapsedSecs, metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.occurences", "grp1"))), EPS,
+        assertEquals(count / elapsedSecs, metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.occurrences", "grp1"))), EPS,
             String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs));
 
         // pretend 2 seconds passed...
@@ -158,7 +158,7 @@ public class MetricsTest {
             "Min(0...9) = 0");
         assertEquals(sum / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.rate", "grp1"))), EPS,
             "Rate(0...9) = 1.40625");
-        assertEquals(count / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.occurences", "grp1"))), EPS,
+        assertEquals(count / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.occurrences", "grp1"))), EPS,
             String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs));
         assertEquals(count, metricValueFunc.apply(metrics.metric(metrics.metricName("test.count", "grp1"))), EPS,
             "Count(0...9) = 10");
@@ -451,11 +451,11 @@ public class MetricsTest {
         final Quota quota1 = Quota.upperBound(10.5);
         final Quota quota2 = Quota.lowerBound(10.5);
 
-        assertFalse(quota1.equals(quota2), "Quota with different upper values shouldn't be equal");
+        assertNotEquals(quota1, quota2, "Quota with different upper values shouldn't be equal");
 
         final Quota quota3 = Quota.lowerBound(10.5);
 
-        assertTrue(quota2.equals(quota3), "Quota with same upper and bound values should be equal");
+        assertEquals(quota2, quota3, "Quota with same upper and bound values should be equal");
     }
 
     @Test
@@ -582,7 +582,7 @@ public class MetricsTest {
     }
 
     @Test
-    public void testRateWindowing() throws Exception {
+    public void testRateWindowing() {
         // Use the default time window. Set 3 samples
         MetricConfig cfg = new MetricConfig().samples(3);
         Sensor s = metrics.sensor("test.sensor", cfg);
@@ -700,7 +700,7 @@ public class MetricsTest {
     @Test
     public void testMetricInstances() {
         MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<String, String>();
+        Map<String, String> tags = new HashMap<>();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
@@ -752,7 +752,7 @@ public class MetricsTest {
      * in errors or deadlock.
      */
     @Test
-    public void testConcurrentReadUpdate() throws Exception {
+    public void testConcurrentReadUpdate() {
         final Random random = new Random();
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
         metrics = new Metrics(new MockTime(10));
@@ -784,7 +784,7 @@ public class MetricsTest {
      * that synchronizes on every reporter method doesn't result in errors or deadlock.
      */
     @Test
-    public void testConcurrentReadUpdateReport() throws Exception {
+    public void testConcurrentReadUpdateReport() {
 
         class LockingReporter implements MetricsReporter {
             Map<MetricName, KafkaMetric> activeMetrics = new HashMap<>();

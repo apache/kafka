@@ -29,7 +29,7 @@ public class ConfigValue {
     private boolean visible;
 
     public ConfigValue(String name) {
-        this(name, null, new ArrayList<>(), new ArrayList<String>());
+        this(name, null, new ArrayList<>(), new ArrayList<>());
     }
 
     public ConfigValue(String name, Object value, List<Object> recommendedValues, List<String> errorMessages) {
@@ -95,18 +95,12 @@ public class ConfigValue {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[")
-            .append(name)
-            .append(",")
-            .append(value)
-            .append(",")
-            .append(recommendedValues)
-            .append(",")
-            .append(errorMessages)
-            .append(",")
-            .append(visible)
-            .append("]");
-        return sb.toString();
+        return "[" +
+                name + "," +
+                value + "," +
+                recommendedValues + "," +
+                errorMessages + "," +
+                visible +
+                "]";
     }
 }

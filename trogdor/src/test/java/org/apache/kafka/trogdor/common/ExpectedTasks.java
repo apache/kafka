@@ -203,4 +203,4 @@ public class ExpectedTasks {
         }, "Timed out waiting for expected workers " + JsonUtil.toJsonString(expected));
         return this;
     }
-};
+}

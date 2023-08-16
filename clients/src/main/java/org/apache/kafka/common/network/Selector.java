@@ -479,7 +479,7 @@ public class Selector implements Selectable, AutoCloseable {
 
             // Poll from channels where the underlying socket has more data
             pollSelectionKeys(readyKeys, false, endSelect);
-            // Clear all selected keys so that they are included in the ready count for the next select
+            // Clear all selected keys so that they are excluded from the ready count for the next select
             readyKeys.clear();
 
             pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);

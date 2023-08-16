@@ -59,7 +59,7 @@ class ZkAdminManagerTest {
     assertEquals(1, oneProp.size)
     assertEquals(1234.0, oneProp("foo"))
 
-    // This is probably not desired, but kept for compatability with existing usages
+    // This is probably not desired, but kept for compatibility with existing usages
     val emptyKey = ZkAdminManager.clientQuotaPropsToDoubleMap(Map("" -> "-42.1"))
     assertEquals(1, emptyKey.size)
     assertEquals(-42.1, emptyKey(""))

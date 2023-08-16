@@ -176,7 +176,7 @@ public class WorkerGroupMember {
 
     /**
      * Get the member ID of this worker in the group of workers.
-     *
+     * <p>
      * This ID is the unique member ID automatically generated.
      *
      * @return the member ID

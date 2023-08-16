@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.rest.util;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.junit.Assert;
 import org.junit.Test;
@@ -31,17 +28,6 @@ import java.util.Map;
 
 @SuppressWarnings("deprecation")
 public class SSLUtilsTest {
-    private static final Map<String, String> DEFAULT_CONFIG = new HashMap<>();
-    static {
-        // The WorkerConfig base class has some required settings without defaults
-        DEFAULT_CONFIG.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
-        DEFAULT_CONFIG.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "config-topic");
-        DEFAULT_CONFIG.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        DEFAULT_CONFIG.put(DistributedConfig.GROUP_ID_CONFIG, "connect-test-group");
-        DEFAULT_CONFIG.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_CONFIG.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_CONFIG.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
-    }
 
     @Test
     public void testGetOrDefault() {
@@ -58,7 +44,7 @@ public class SSLUtilsTest {
 
     @Test
     public void testCreateServerSideSslContextFactory() {
-        Map<String, String> configMap = new HashMap<>(DEFAULT_CONFIG);
+        Map<String, String> configMap = new HashMap<>();
         configMap.put("ssl.keystore.location", "/path/to/keystore");
         configMap.put("ssl.keystore.password", "123456");
         configMap.put("ssl.key.password", "123456");
@@ -76,7 +62,7 @@ public class SSLUtilsTest {
         configMap.put("ssl.keymanager.algorithm", "SunX509");
         configMap.put("ssl.trustmanager.algorithm", "PKIX");
 
-        DistributedConfig config = new DistributedConfig(configMap);
+        RestServerConfig config = RestServerConfig.forPublic(null, configMap);
         SslContextFactory ssl = SSLUtils.createServerSideSslContextFactory(config);
 
         Assert.assertEquals("file:///path/to/keystore", ssl.getKeyStorePath());
@@ -96,7 +82,7 @@ public class SSLUtilsTest {
 
     @Test
     public void testCreateClientSideSslContextFactory() {
-        Map<String, String> configMap = new HashMap<>(DEFAULT_CONFIG);
+        Map<String, String> configMap = new HashMap<>();
         configMap.put("ssl.keystore.location", "/path/to/keystore");
         configMap.put("ssl.keystore.password", "123456");
         configMap.put("ssl.key.password", "123456");
@@ -114,7 +100,7 @@ public class SSLUtilsTest {
         configMap.put("ssl.keymanager.algorithm", "SunX509");
         configMap.put("ssl.trustmanager.algorithm", "PKIX");
 
-        DistributedConfig config = new DistributedConfig(configMap);
+        RestServerConfig config = RestServerConfig.forPublic(null, configMap);
         SslContextFactory ssl = SSLUtils.createClientSideSslContextFactory(config);
 
         Assert.assertEquals("file:///path/to/keystore", ssl.getKeyStorePath());
@@ -134,10 +120,7 @@ public class SSLUtilsTest {
 
     @Test
     public void testCreateServerSideSslContextFactoryDefaultValues() {
-        Map<String, String> configMap = new HashMap<>(DEFAULT_CONFIG);
-        configMap.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, "/tmp/offset/file");
-        configMap.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        configMap.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        Map<String, String> configMap = new HashMap<>();
         configMap.put("ssl.keystore.location", "/path/to/keystore");
         configMap.put("ssl.keystore.password", "123456");
         configMap.put("ssl.key.password", "123456");
@@ -147,7 +130,7 @@ public class SSLUtilsTest {
         configMap.put("ssl.cipher.suites", "SSL_RSA_WITH_RC4_128_SHA,SSL_RSA_WITH_RC4_128_MD5");
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
 
-        DistributedConfig config = new DistributedConfig(configMap);
+        RestServerConfig config = RestServerConfig.forPublic(null, configMap);
         SslContextFactory ssl = SSLUtils.createServerSideSslContextFactory(config);
 
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());
@@ -162,10 +145,7 @@ public class SSLUtilsTest {
 
     @Test
     public void testCreateClientSideSslContextFactoryDefaultValues() {
-        Map<String, String> configMap = new HashMap<>(DEFAULT_CONFIG);
-        configMap.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, "/tmp/offset/file");
-        configMap.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        configMap.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        Map<String, String> configMap = new HashMap<>();
         configMap.put("ssl.keystore.location", "/path/to/keystore");
         configMap.put("ssl.keystore.password", "123456");
         configMap.put("ssl.key.password", "123456");
@@ -175,7 +155,7 @@ public class SSLUtilsTest {
         configMap.put("ssl.cipher.suites", "SSL_RSA_WITH_RC4_128_SHA,SSL_RSA_WITH_RC4_128_MD5");
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
 
-        DistributedConfig config = new DistributedConfig(configMap);
+        RestServerConfig config = RestServerConfig.forPublic(null, configMap);
         SslContextFactory ssl = SSLUtils.createClientSideSslContextFactory(config);
 
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());

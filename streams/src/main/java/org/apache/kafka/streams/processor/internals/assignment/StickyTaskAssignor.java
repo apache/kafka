@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.common.utils.Utils.diff;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_TRAFFIC_COST;
+
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -36,11 +43,18 @@ import java.util.UUID;
 public class StickyTaskAssignor implements TaskAssignor {
 
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
+
+    // For stateful tasks, by default we want to maintain stickiness. So we have higher non_overlap_cost
+    private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 1;
+    private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 10;
+
     private Map<UUID, ClientState> clients;
     private Set<TaskId> allTaskIds;
-    private Set<TaskId> standbyTaskIds;
+    private Set<TaskId> statefulTaskIds;
     private final Map<TaskId, UUID> previousActiveTaskAssignment = new HashMap<>();
     private final Map<TaskId, Set<UUID>> previousStandbyTaskAssignment = new HashMap<>();
+    private RackAwareTaskAssignor rackAwareTaskAssignor; // nullable if passed from FallbackPriorTaskAssignor
+    private AssignmentConfigs configs;
     private TaskPairs taskPairs;
 
     private final boolean mustPreserveActiveTaskAssignment;
@@ -57,22 +71,59 @@ public class StickyTaskAssignor implements TaskAssignor {
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
+                          final RackAwareTaskAssignor rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;
-        this.standbyTaskIds = statefulTaskIds;
+        this.statefulTaskIds = statefulTaskIds;
+        this.rackAwareTaskAssignor = rackAwareTaskAssignor;
+        this.configs = configs;
 
         final int maxPairs = allTaskIds.size() * (allTaskIds.size() - 1) / 2;
         taskPairs = new TaskPairs(maxPairs);
         mapPreviousTaskAssignment(clients);
 
         assignActive();
+        optimizeActive();
         assignStandby(configs.numStandbyReplicas);
+        optimizeStandby();
         return false;
     }
 
+    private void optimizeStandby() {
+        if (configs.numStandbyReplicas > 0 && rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+            final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
+                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
+            final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
+                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+            final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
+
+            rackAwareTaskAssignor.optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, (s, d, t, c) -> true);
+        }
+    }
+
+    private void optimizeActive() {
+        if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+            final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
+                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
+            final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
+                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+
+            final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
+            final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
+
+            rackAwareTaskAssignor.optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
+
+            final TreeSet<TaskId> statelessTasks = (TreeSet<TaskId>) diff(TreeSet::new, allTaskIds, statefulTasks);
+            if (!statelessTasks.isEmpty()) {
+                rackAwareTaskAssignor.optimizeActiveTasks(statelessTasks, clientStates,
+                    STATELESS_TRAFFIC_COST, STATELESS_NON_OVERLAP_COST);
+            }
+        }
+    }
+
     private void assignStandby(final int numStandbyReplicas) {
-        for (final TaskId taskId : standbyTaskIds) {
+        for (final TaskId taskId : statefulTaskIds) {
             for (int i = 0; i < numStandbyReplicas; i++) {
                 final Set<UUID> ids = findClientsWithoutAssignedTask(taskId);
                 if (ids.isEmpty()) {
@@ -91,6 +142,10 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private void assignActive() {
         final int totalCapacity = sumCapacity(clients.values());
+        if (totalCapacity == 0) {
+            throw new IllegalStateException("`totalCapacity` should never be zero.");
+        }
+
         final int tasksPerThread = allTaskIds.size() / totalCapacity;
         final Set<TaskId> assigned = new HashSet<>();
 

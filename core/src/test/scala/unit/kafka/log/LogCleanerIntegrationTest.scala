@@ -18,13 +18,12 @@
 package kafka.log
 
 import java.io.PrintWriter
-
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -34,7 +33,7 @@ import scala.jdk.CollectionConverters._
 /**
   * This is an integration test that tests the fully integrated log cleaner
   */
-class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
+class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
   val codec: CompressionType = CompressionType.LZ4
 
@@ -51,7 +50,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val largeMessageKey = 20
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backOffMs = 100)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backoffMs = 100)
 
     def breakPartitionLog(tp: TopicPartition): Unit = {
       val log = cleaner.logs.get(tp)
@@ -134,7 +133,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val minCleanableDirtyRatio = 1.0F
 
     cleaner = makeCleaner(partitions = topicPartitions,
-      backOffMs = cleanerBackOffMs,
+      backoffMs = cleanerBackOffMs,
       minCompactionLagMs = minCompactionLagMs,
       segmentSize = segmentSize,
       maxCompactionLagMs= maxCompactionLagMs,
@@ -217,7 +216,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   @Test
   def testIsThreadFailed(): Unit = {
     val metricName = "DeadThreadCount"
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backoffMs = 100)
     cleaner.startup()
     assertEquals(0, cleaner.deadThreadCount)
     // we simulate the unexpected error with an interrupt

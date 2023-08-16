@@ -51,11 +51,13 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
         this.otherJoinSideNodeName = otherJoinSideNodeName;
     }
 
-    ProcessorParameters<K, V1, ?, ?> thisProcessorParameters() {
+    // VisibleForTesting
+    public ProcessorParameters<K, V1, ?, ?> thisProcessorParameters() {
         return joinThisProcessorParameters;
     }
 
-    ProcessorParameters<K, V2, ?, ?> otherProcessorParameters() {
+    // VisibleForTesting
+    public ProcessorParameters<K, V2, ?, ?> otherProcessorParameters() {
         return joinOtherProcessorParameters;
     }
 

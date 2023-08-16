@@ -17,10 +17,11 @@
 
 package kafka.server
 
-import java.util
+import java.{lang, util}
 import java.util.{Collections, OptionalLong}
 import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
+import java.util.function.Consumer
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -99,6 +100,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -174,8 +176,10 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleDeleteTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
       request.context.apiVersion,
@@ -183,7 +187,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.handle[Unit] { (results, exception) =>
-      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
         if (exception != null) {
           deleteTopicsRequest.getErrorResponse(throttleTimeMs, exception)
         } else {
@@ -273,10 +277,10 @@ class ControllerApis(val requestChannel: RequestChannel,
           idToName.put(id, nameOrError.result())
         }
       }
-      // Get the list of deletable topics (those we can delete) and the list of describeable
+      // Get the list of deletable topics (those we can delete) and the list of describable
       // topics.
       val topicsToAuthenticate = toAuthenticate.asScala
-      val (describeable, deletable) = if (hasClusterAuth) {
+      val (describable, deletable) = if (hasClusterAuth) {
         (topicsToAuthenticate.toSet, topicsToAuthenticate.toSet)
       } else {
         (getDescribableTopics(topicsToAuthenticate), getDeletableTopics(topicsToAuthenticate))
@@ -289,7 +293,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         val id = entry.getKey
         val name = entry.getValue
         if (!deletable.contains(name)) {
-          if (describeable.contains(name)) {
+          if (describable.contains(name)) {
             appendResponse(name, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
           } else {
             appendResponse(null, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
@@ -301,7 +305,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       // If so, create an error response for it. Otherwise, add it to the idToName map.
       controller.findTopicIds(context, providedNames).thenCompose { topicIds =>
         topicIds.forEach { (name, idOrError) =>
-          if (!describeable.contains(name)) {
+          if (!describable.contains(name)) {
             appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
           } else if (idOrError.isError) {
             appendResponse(name, ZERO_UUID, idOrError.error)
@@ -338,8 +342,10 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleCreateTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = createTopics(context,
         createTopicsRequest.data,
         authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
@@ -347,7 +353,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
             names, logIfDenied = false)(identity))
     future.handle[Unit] { (result, exception) =>
-      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
         if (exception != null) {
           createTopicsRequest.getErrorResponse(throttleTimeMs, exception)
         } else {
@@ -355,6 +361,12 @@ class ControllerApis(val requestChannel: RequestChannel,
           new CreateTopicsResponse(result)
         }
       })
+    }
+  }
+
+  private def controllerMutationQuotaRecorderFor(controllerMutationQuota: ControllerMutationQuota) = {
+    new Consumer[lang.Integer]() {
+      override def accept(permits: lang.Integer): Unit = controllerMutationQuota.record(permits.doubleValue())
     }
   }
 
@@ -376,7 +388,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
     }
 
-    /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+    /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
      * allowed to create it as a regular topic.
      */
     if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
@@ -419,23 +431,23 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    // Note that broker returns its full list of supported ApiKeys and versions regardless of current
+    // Note that controller returns its full list of supported ApiKeys and versions regardless of current
     // authentication state (e.g., before SASL authentication on an SASL listener, do note that no
     // Kafka protocol requests may take place on an SSL listener before the SSL handshake is finished).
-    // If this is considered to leak information about the broker version a workaround is to use SSL
+    // If this is considered to leak information about the controller version a workaround is to use SSL
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
-    def createResponseCallback(requestThrottleMs: Int): ApiVersionsResponse = {
-      val apiVersionRequest = request.body[ApiVersionsRequest]
-      if (apiVersionRequest.hasUnsupportedRequestVersion) {
-        apiVersionRequest.getErrorResponse(requestThrottleMs, UNSUPPORTED_VERSION.exception)
-      } else if (!apiVersionRequest.isValid) {
-        apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception)
-      } else {
-        apiVersionManager.apiVersionResponse(requestThrottleMs)
-      }
+    val apiVersionRequest = request.body[ApiVersionsRequest]
+    if (apiVersionRequest.hasUnsupportedRequestVersion) {
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, UNSUPPORTED_VERSION.exception))
+    } else if (!apiVersionRequest.isValid) {
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception))
+    } else {
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs))
     }
-    requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
     CompletableFuture.completedFuture[Unit](())
   }
 
@@ -747,8 +759,10 @@ class ControllerApis(val requestChannel: RequestChannel,
       authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
     }
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = createPartitions(context,
       createPartitionsRequest.data(),
       filterAlterAuthorizedTopics)
@@ -756,7 +770,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.handleError(request, exception)
       } else {
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, requestThrottleMs => {
           val responseData = new CreatePartitionsResponseData().
             setResults(responses).
             setThrottleTimeMs(requestThrottleMs)
@@ -813,6 +827,18 @@ class ControllerApis(val requestChannel: RequestChannel,
       .thenApply[Unit] { response =>
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AlterPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+  }
+
+  def handleAlterUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val alterRequest = request.body[AlterUserScramCredentialsRequest]
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+    controller.alterUserScramCredentials(context, alterRequest.data)
+      .thenApply[Unit] { response =>
+         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+           new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
   }
 

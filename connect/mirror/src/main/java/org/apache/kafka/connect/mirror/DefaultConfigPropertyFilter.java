@@ -30,6 +30,10 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     
     public static final String CONFIG_PROPERTIES_EXCLUDE_CONFIG = "config.properties.exclude";
     public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG = "config.properties.blacklist";
+    public static final String USE_DEFAULTS_FROM = "use.defaults.from";
+    private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults (source or target) to use "
+                                                        + "when syncing topic configurations that have default values.";
+    private static final String USE_DEFAULTS_FROM_DEFAULT = "target";
 
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "List of topic configuration properties and/or regexes "
                                                                 + "that should not be replicated.";
@@ -40,15 +44,13 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
                                                                    + "unclean\\.leader\\.election\\.enable, "
                                                                    + "min\\.insync\\.replicas";
     private Pattern excludePattern = MirrorUtils.compilePatternList(CONFIG_PROPERTIES_EXCLUDE_DEFAULT);
+    private String useDefaultsFrom = USE_DEFAULTS_FROM_DEFAULT;
 
     @Override
     public void configure(Map<String, ?> props) {
         ConfigPropertyFilterConfig config = new ConfigPropertyFilterConfig(props);
         excludePattern = config.excludePattern();
-    }
-
-    @Override
-    public void close() {
+        useDefaultsFrom = config.useDefaultsFrom();
     }
 
     private boolean excluded(String prop) {
@@ -58,6 +60,11 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     @Override
     public boolean shouldReplicateConfigProperty(String prop) {
         return !excluded(prop);
+    }
+
+    @Override
+    public boolean shouldReplicateSourceDefault(String prop) {
+        return useDefaultsFrom.equals("source");
     }
 
     static class ConfigPropertyFilterConfig extends AbstractConfig {
@@ -72,7 +79,13 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
                     Type.LIST,
                     null,
                     Importance.HIGH,
-                    "Deprecated. Use " + CONFIG_PROPERTIES_EXCLUDE_CONFIG + " instead.");
+                    "Deprecated. Use " + CONFIG_PROPERTIES_EXCLUDE_CONFIG + " instead.")
+            .define(USE_DEFAULTS_FROM,
+                    Type.STRING,
+                    USE_DEFAULTS_FROM_DEFAULT,
+                    Importance.MEDIUM,
+                    USE_DEFAULTS_FROM_DOC);
+
 
         ConfigPropertyFilterConfig(Map<String, ?> props) {
             super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
@@ -81,6 +94,10 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
 
         Pattern excludePattern() {
             return MirrorUtils.compilePatternList(getList(CONFIG_PROPERTIES_EXCLUDE_CONFIG));
+        }
+
+        String useDefaultsFrom() {
+            return getString(USE_DEFAULTS_FROM);
         }
     }
 }

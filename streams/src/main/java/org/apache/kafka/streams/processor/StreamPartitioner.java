@@ -24,7 +24,7 @@ import java.util.Set;
 
 /**
  * Determine how records are distributed among the partitions in a Kafka topic. If not specified, the underlying producer's
- * {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used to determine the partition.
+ * default partitioning strategy will be used to determine the partition.
  * <p>
  * Kafka topics are divided into one or more <i>partitions</i>. Since each partition must fit on the servers that host it, so
  * using multiple partitions allows the topic to scale beyond a size that will fit on a single machine. Partitions also enable you

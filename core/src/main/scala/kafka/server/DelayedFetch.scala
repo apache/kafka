@@ -18,15 +18,16 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-
-import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData, LogOffsetMetadata}
 
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
@@ -75,14 +76,14 @@ class DelayedFetch(
         val fetchOffset = fetchStatus.startOffsetMetadata
         val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
         try {
-          if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
+          if (fetchOffset != LogOffsetMetadata.UNKNOWN_OFFSET_METADATA) {
             val partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition)
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, params.fetchOnlyLeader)
 
             val endOffset = params.isolation match {
-              case FetchLogEnd => offsetSnapshot.logEndOffset
-              case FetchHighWatermark => offsetSnapshot.highWatermark
-              case FetchTxnCommitted => offsetSnapshot.lastStableOffset
+              case FetchIsolation.LOG_END => offsetSnapshot.logEndOffset
+              case FetchIsolation.HIGH_WATERMARK => offsetSnapshot.highWatermark
+              case FetchIsolation.TXN_COMMITTED => offsetSnapshot.lastStableOffset
             }
 
             // Go directly to the check for Case G if the message offsets are the same. If the log segment
@@ -162,7 +163,7 @@ class DelayedFetch(
       tp -> status.fetchInfo
     }
 
-    val logReadResults = replicaManager.readFromLocalLog(
+    val logReadResults = replicaManager.readFromLog(
       params,
       fetchInfos,
       quota,
@@ -180,9 +181,10 @@ class DelayedFetch(
   }
 }
 
-object DelayedFetchMetrics extends KafkaMetricsGroup {
+object DelayedFetchMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedFetchMetrics.getClass)
   private val FetcherTypeKey = "fetcherType"
-  val followerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "follower"))
-  val consumerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "consumer"))
+  val followerExpiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "follower").asJava)
+  val consumerExpiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "consumer").asJava)
 }
 

@@ -312,7 +312,13 @@ public class SslFactory implements Reconfigurable, Closeable {
             for (int i = 0; i < newEntries.size(); i++) {
                 CertificateEntries newEntry = newEntries.get(i);
                 CertificateEntries oldEntry = oldEntries.get(i);
-                if (!Objects.equals(newEntry.subjectPrincipal, oldEntry.subjectPrincipal)) {
+                Principal newPrincipal = newEntry.subjectPrincipal;
+                Principal oldPrincipal = oldEntry.subjectPrincipal;
+                // Compare principal objects to compare canonical names (e.g. to ignore leading/trailing whitespaces).
+                // Canonical names may differ if the tags of a field changes from one with a printable string representation
+                // to one without or vice-versa due to optional conversion to hex representation based on the tag. So we
+                // also compare Principal.getName which compares the RFC2253 name. If either matches, allow dynamic update.
+                if (!Objects.equals(newPrincipal, oldPrincipal) && !newPrincipal.getName().equalsIgnoreCase(oldPrincipal.getName())) {
                     throw new ConfigException(String.format("Keystore DistinguishedName does not match: " +
                         " existing={alias=%s, DN=%s}, new={alias=%s, DN=%s}",
                         oldEntry.alias, oldEntry.subjectPrincipal, newEntry.alias, newEntry.subjectPrincipal));

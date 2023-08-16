@@ -22,13 +22,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Context passed to SinkTasks, allowing them to access utilities in the Kafka Connect runtime.
+ * Context passed to {@link SinkTask}s, allowing them to access utilities in the Kafka Connect runtime.
  */
 public interface SinkTaskContext {
 
     /**
-     * Get the Task configuration.  This is the latest configuration and may differ from that passed on startup.
-     *
+     * Get the Task configuration. This is the latest configuration and may differ from that passed on startup.
+     * <p>
      * For example, this method can be used to obtain the latest configuration if an external secret has changed,
      * and the configuration is using variable references such as those compatible with
      * {@link org.apache.kafka.common.config.ConfigTransformer}.
@@ -40,7 +40,7 @@ public interface SinkTaskContext {
      * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
      * offsets in HDFS to provide exactly once delivery. When the SinkTask is started or a rebalance occurs, the task
      * would reload offsets from HDFS and use this method to reset the consumer to those offsets.
-     *
+     * <p>
      * SinkTasks that do not manage their own offsets do not need to use this method.
      *
      * @param offsets map of offsets for topic partitions
@@ -48,11 +48,11 @@ public interface SinkTaskContext {
     void offset(Map<TopicPartition, Long> offsets);
 
     /**
-     * Reset the consumer offsets for the given topic partition. SinkTasks should use if they manage offsets
+     * Reset the consumer offsets for the given topic partition. SinkTasks should use this if they manage offsets
      * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
      * offsets in HDFS to provide exactly once delivery. When the topic partition is recovered the task
      * would reload offsets from HDFS and use this method to reset the consumer to the offset.
-     *
+     * <p>
      * SinkTasks that do not manage their own offsets do not need to use this method.
      *
      * @param tp the topic partition to reset offset.
@@ -63,8 +63,8 @@ public interface SinkTaskContext {
     /**
      * Set the timeout in milliseconds. SinkTasks should use this to indicate that they need to retry certain
      * operations after the timeout. SinkTasks may have certain operations on external systems that may need
-     * to retry in case of failures. For example, append a record to an HDFS file may fail due to temporary network
-     * issues. SinkTasks use this method to set how long to wait before retrying.
+     * to be retried in case of failures. For example, appending a record to an HDFS file may fail due to temporary
+     * network issues. SinkTasks can use this method to set how long to wait before retrying.
      * @param timeoutMs the backoff timeout in milliseconds.
      */
     void timeout(long timeoutMs);
@@ -90,7 +90,7 @@ public interface SinkTaskContext {
     /**
      * Request an offset commit. Sink tasks can use this to minimize the potential for redelivery
      * by requesting an offset commit as soon as they flush data to the destination system.
-     *
+     * <p>
      * It is only a hint to the runtime and no timing guarantee should be assumed.
      */
     void requestCommit();
@@ -101,11 +101,11 @@ public interface SinkTaskContext {
      * the sink task will receive a {@link java.util.concurrent.Future} that the task can optionally use to wait until
      * the failed record and exception have been written to Kafka. Note that the result of
      * this method may be null if this connector has not been configured to use a reporter.
-     *
-     * <p>This method was added in Apache Kafka 2.6. Sink tasks that use this method but want to
+     * <p>
+     * This method was added in Apache Kafka 2.6. Sink tasks that use this method but want to
      * maintain backward compatibility so they can also be deployed to older Connect runtimes
      * should guard the call to this method with a try-catch block, since calling this method will result in a
-     * {@link NoSuchMethodException} or {@link NoClassDefFoundError} when the sink connector is deployed to
+     * {@link NoSuchMethodError} or {@link NoClassDefFoundError} when the sink connector is deployed to
      * Connect runtimes older than Kafka 2.6. For example:
      * <pre>
      *     ErrantRecordReporter reporter;

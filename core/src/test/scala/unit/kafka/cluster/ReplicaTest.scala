@@ -17,9 +17,9 @@
 package kafka.cluster
 
 import kafka.log.UnifiedLog
-import kafka.server.LogOffsetMetadata
-import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -45,7 +45,8 @@ class ReplicaTest {
     logEndOffset: Long,
     lastCaughtUpTimeMs: Long,
     lastFetchLeaderLogEndOffset: Long,
-    lastFetchTimeMs: Long
+    lastFetchTimeMs: Long,
+    brokerEpoch: Option[Long] = Option[Long](1L)
   ): Unit = {
     val replicaState = replica.stateSnapshot
     assertEquals(logStartOffset, replicaState.logStartOffset,
@@ -58,6 +59,8 @@ class ReplicaTest {
       "Unexpected Last Fetch Leader Log End Offset")
     assertEquals(lastFetchTimeMs, replicaState.lastFetchTimeMs,
       "Unexpected Last Fetch Time")
+    assertEquals(brokerEpoch, replicaState.brokerEpoch,
+      "Broker Epoch Mismatch")
   }
 
   def assertReplicaStateDoesNotChange(
@@ -83,10 +86,11 @@ class ReplicaTest {
   ): Long = {
     val currentTimeMs = time.milliseconds()
     replica.updateFetchState(
-      followerFetchOffsetMetadata = LogOffsetMetadata(followerFetchOffset),
+      followerFetchOffsetMetadata = new LogOffsetMetadata(followerFetchOffset),
       followerStartOffset = followerStartOffset,
       followerFetchTimeMs = currentTimeMs,
-      leaderEndOffset = leaderEndOffset
+      leaderEndOffset = leaderEndOffset,
+      brokerEpoch = 1L
     )
     currentTimeMs
   }
@@ -123,7 +127,8 @@ class ReplicaTest {
       logEndOffset = UnifiedLog.UnknownOffset,
       lastCaughtUpTimeMs = 0L,
       lastFetchLeaderLogEndOffset = 0L,
-      lastFetchTimeMs = 0L
+      lastFetchTimeMs = 0L,
+      brokerEpoch = Option.empty
     )
   }
 
@@ -237,7 +242,8 @@ class ReplicaTest {
       logEndOffset = UnifiedLog.UnknownOffset,
       lastCaughtUpTimeMs = resetTimeMs1,
       lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
-      lastFetchTimeMs = 0L
+      lastFetchTimeMs = 0L,
+      brokerEpoch = Option.empty
     )
   }
 
@@ -260,7 +266,8 @@ class ReplicaTest {
       logEndOffset = UnifiedLog.UnknownOffset,
       lastCaughtUpTimeMs = 0L,
       lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
-      lastFetchTimeMs = 0L
+      lastFetchTimeMs = 0L,
+      brokerEpoch = Option.empty
     )
   }
 

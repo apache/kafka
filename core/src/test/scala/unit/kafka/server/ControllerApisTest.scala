@@ -21,7 +21,7 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.test.MockController
-import kafka.utils.{MockTime, NotNothing}
+import kafka.utils.NotNothing
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -46,11 +46,12 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -70,6 +71,27 @@ import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class ControllerApisTest {
+  object MockControllerMutationQuota {
+    val errorMessage = "quota exceeded in test"
+    var throttleTimeMs = 1000
+  }
+
+  case class MockControllerMutationQuota(quota: Int) extends ControllerMutationQuota {
+    var permitsRecorded = 0.0
+
+    override def isExceeded: Boolean = permitsRecorded > quota
+
+    override def record(permits: Double): Unit = {
+      if (permits >= 0) {
+        permitsRecorded += permits
+        if (isExceeded)
+          throw new ThrottlingQuotaExceededException(throttleTime, MockControllerMutationQuota.errorMessage)
+      }
+    }
+
+    override def throttleTime: Int = if (isExceeded) MockControllerMutationQuota.throttleTimeMs else 0
+  }
+
   private val nodeId = 1
   private val brokerRack = "Rack1"
   private val clientID = "Client1"
@@ -78,15 +100,38 @@ class ControllerApisTest {
   private val time = new MockTime
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
-  private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
+  private val neverThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
+  when(neverThrottlingClientControllerQuotaManager.newQuotaFor(
+    any(classOf[RequestChannel.Request]),
+    any(classOf[Short])
+  )).thenReturn(
+    MockControllerMutationQuota(Integer.MAX_VALUE) // never throttles
+  )
+  private val alwaysThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
+  when(alwaysThrottlingClientControllerQuotaManager.newQuotaFor(
+    any(classOf[RequestChannel.Request]),
+    any(classOf[Short])
+  )).thenReturn(
+    MockControllerMutationQuota(0) // always throttles
+  )
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
 
-  private val quotas = QuotaManagers(
+  private val quotasNeverThrottleControllerMutations = QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
     clientRequestQuotaManager,
-    clientControllerQuotaManager,
+    neverThrottlingClientControllerQuotaManager,
+    replicaQuotaManager,
+    replicaQuotaManager,
+    replicaQuotaManager,
+    None)
+
+  private val quotasAlwaysThrottleControllerMutations = QuotaManagers(
+    clientQuotaManager,
+    clientQuotaManager,
+    clientRequestQuotaManager,
+    alwaysThrottlingClientControllerQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
@@ -94,7 +139,8 @@ class ControllerApisTest {
 
   private def createControllerApis(authorizer: Option[Authorizer],
                                    controller: Controller,
-                                   props: Properties = new Properties()): ControllerApis = {
+                                   props: Properties = new Properties(),
+                                   throttle: Boolean = false): ControllerApis = {
     props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
@@ -102,14 +148,18 @@ class ControllerApisTest {
     new ControllerApis(
       requestChannel,
       authorizer,
-      quotas,
+      if (throttle) quotasAlwaysThrottleControllerMutations else quotasNeverThrottleControllerMutations,
       time,
       controller,
       raftManager,
       new KafkaConfig(props),
       MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
       Seq.empty,
-      new SimpleApiVersionManager(ListenerType.CONTROLLER)
+      new SimpleApiVersionManager(
+        ListenerType.CONTROLLER,
+        true,
+        false,
+        () => Features.fromKRaftVersion(MetadataVersion.latest()))
     )
   }
 
@@ -562,6 +612,34 @@ class ControllerApisTest {
       _ => Set("baz")).get().topics().asScala.toSet)
   }
 
+  @ParameterizedTest(name = "testCreateTopicsMutationQuota with throttle: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testCreateTopicsMutationQuota(throttle: Boolean): Unit = {
+    val controller = new MockController.Builder().build()
+    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    val topicName = "foo"
+    val requestData = new CreateTopicsRequestData().setTopics(new CreatableTopicCollection(
+      util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)).iterator()))
+    val request = new CreateTopicsRequest.Builder(requestData).build()
+    val expectedResponseDataUnthrottled = Set(new CreatableTopicResult().setName(topicName).
+        setErrorCode(NONE.code()).
+        setTopicId(new Uuid(0L, 1L)).
+        setNumPartitions(1).
+        setReplicationFactor(1).
+        setTopicConfigErrorCode(NONE.code()))
+    val expectedResponseDataThrottled = Set(new CreatableTopicResult().setName(topicName).
+      setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+      setErrorMessage(THROTTLING_QUOTA_EXCEEDED.message()))
+    val response = handleRequest[CreateTopicsResponse](request, controllerApis)
+    if (throttle) {
+      assertEquals(expectedResponseDataThrottled, response.data.topics().asScala.toSet)
+      assertEquals(MockControllerMutationQuota.throttleTimeMs, response.throttleTimeMs())
+    } else {
+      assertEquals(expectedResponseDataUnthrottled, response.data.topics().asScala.toSet)
+      assertEquals(0, response.throttleTimeMs())
+    }
+  }
+
   @Test
   def testDeleteTopicsByName(): Unit = {
     val fooId = Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")
@@ -831,6 +909,32 @@ class ControllerApisTest {
     assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), results.find(_.name == "bar").map(result => Errors.forCode(result.errorCode)))
   }
 
+  @ParameterizedTest(name = "testCreatePartitionsMutationQuota with throttle: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testCreatePartitionsMutationQuota(throttle: Boolean): Unit = {
+    val topicName = "foo"
+    val controller = new MockController.Builder()
+      .newInitialTopic(topicName, Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"), 1)
+      .build()
+    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    val requestData = new CreatePartitionsRequestData()
+    requestData.topics().add(new CreatePartitionsTopic().setName(topicName).setAssignments(null).setCount(2))
+    val request = new CreatePartitionsRequest.Builder(requestData).build()
+    val expectedResponseDataUnthrottled = Set(new CreatePartitionsTopicResult().setName(topicName).
+      setErrorCode(NONE.code()))
+    val expectedResponseDataThrottled = Set(new CreatePartitionsTopicResult().setName(topicName).
+      setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+      setErrorMessage(THROTTLING_QUOTA_EXCEEDED.message()))
+    val response = handleRequest[CreatePartitionsResponse](request, controllerApis)
+    if (throttle) {
+      assertEquals(expectedResponseDataThrottled, response.data.results().asScala.toSet)
+      assertEquals(MockControllerMutationQuota.throttleTimeMs, response.throttleTimeMs())
+    } else {
+      assertEquals(expectedResponseDataUnthrottled, response.data.results().asScala.toSet)
+      assertEquals(0, response.throttleTimeMs())
+    }
+  }
+
   @Test
   def testElectLeadersAuthorization(): Unit = {
     val authorizer = mock(classOf[Authorizer])
@@ -916,6 +1020,35 @@ class ControllerApisTest {
     val response = handleRequest[DeleteTopicsResponse](request, controllerApis)
     val topicIdResponse = response.data.responses.asScala.find(_.topicId == topicId).get
     assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(topicIdResponse.errorCode))
+  }
+
+  @ParameterizedTest(name = "testDeleteTopicsMutationQuota with throttle: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testDeleteTopicsMutationQuota(throttle: Boolean): Unit = {
+    val topicId = Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")
+    val topicName = "foo"
+    val controller = new MockController.Builder()
+      .newInitialTopic(topicName, topicId, 1)
+      .build()
+    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    val requestData = new DeleteTopicsRequestData().setTopics(singletonList(
+      new DeleteTopicState().setTopicId(topicId)))
+    val request = new DeleteTopicsRequest.Builder(requestData).build()
+    val expectedResponseDataUnthrottled = Set(new DeletableTopicResult().setName(topicName).
+      setTopicId(topicId).
+      setErrorCode(NONE.code()))
+    val expectedResponseDataThrottled = Set(new DeletableTopicResult().setName(topicName).
+      setTopicId(topicId).
+      setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+      setErrorMessage(THROTTLING_QUOTA_EXCEEDED.message()))
+    val response = handleRequest[DeleteTopicsResponse](request, controllerApis)
+    if (throttle) {
+      assertEquals(expectedResponseDataThrottled, response.data.responses().asScala.toSet)
+      assertEquals(MockControllerMutationQuota.throttleTimeMs, response.throttleTimeMs())
+    } else {
+      assertEquals(expectedResponseDataUnthrottled, response.data.responses().asScala.toSet)
+      assertEquals(0, response.throttleTimeMs())
+    }
   }
 
   @Test
@@ -1007,6 +1140,7 @@ class ControllerApisTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    quotas.shutdown()
+    quotasNeverThrottleControllerMutations.shutdown()
+    quotasAlwaysThrottleControllerMutations.shutdown()
   }
 }

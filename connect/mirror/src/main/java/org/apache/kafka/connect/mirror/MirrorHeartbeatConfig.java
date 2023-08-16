@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
 
 import java.time.Duration;
 import java.util.Map;
@@ -41,10 +40,6 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
         super(CONNECTOR_CONFIG_DEF, props);
     }
 
-    String connectorName() {
-        return getString(ConnectorConfig.NAME_CONFIG);
-    }
-
     String heartbeatsTopic() {
         return replicationPolicy().heartbeatsTopic();
     }
@@ -62,27 +57,31 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
         return getShort(HEARTBEATS_TOPIC_REPLICATION_FACTOR);
     }
 
-    protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(BASE_CONNECTOR_CONFIG_DEF)
-            .define(
+    private static ConfigDef defineHeartbeatConfig(ConfigDef baseConfig) {
+        return baseConfig
+                .define(
                     EMIT_HEARTBEATS_ENABLED,
                     ConfigDef.Type.BOOLEAN,
                     EMIT_HEARTBEATS_ENABLED_DEFAULT,
                     ConfigDef.Importance.LOW,
                     EMIT_HEARTBEATS_ENABLED_DOC)
-            .define(
+                .define(
                     EMIT_HEARTBEATS_INTERVAL_SECONDS,
                     ConfigDef.Type.LONG,
                     EMIT_HEARTBEATS_INTERVAL_SECONDS_DEFAULT,
                     ConfigDef.Importance.LOW,
                     EMIT_HEARTBEATS_INTERVAL_SECONDS_DOC)
-            .define(
+                .define(
                     HEARTBEATS_TOPIC_REPLICATION_FACTOR,
                     ConfigDef.Type.SHORT,
                     HEARTBEATS_TOPIC_REPLICATION_FACTOR_DEFAULT,
                     ConfigDef.Importance.LOW,
                     HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC);
+    }
+
+    protected final static ConfigDef CONNECTOR_CONFIG_DEF = defineHeartbeatConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
 
     public static void main(String[] args) {
-        System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_heartbeat_" + config));
+        System.out.println(defineHeartbeatConfig(new ConfigDef()).toHtml(4, config -> "mirror_heartbeat_" + config));
     }
 }

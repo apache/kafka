@@ -17,13 +17,14 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.image.node.ClusterImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.stream.Collectors;
+
 
 /**
  * Represents the cluster in the metadata image.
@@ -51,6 +52,10 @@ public final class ClusterImage {
         return brokers.get(nodeId);
     }
 
+    public boolean containsBroker(int brokerId) {
+        return brokers.containsKey(brokerId);
+    }
+
     public void write(ImageWriter writer, ImageWriterOptions options) {
         for (BrokerRegistration broker : brokers.values()) {
             writer.write(broker.toRecord(options));
@@ -71,7 +76,6 @@ public final class ClusterImage {
 
     @Override
     public String toString() {
-        return brokers.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", "));
+        return new ClusterImageNode(this).stringify();
     }
 }

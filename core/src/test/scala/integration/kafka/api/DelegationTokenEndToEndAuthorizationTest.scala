@@ -56,8 +56,8 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   def configureTokenAclsBeforeServersStart(): Unit = { }
 
-  override def configureSecurityBeforeServersStart(): Unit = {
-    super.configureSecurityBeforeServersStart()
+  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
+    super.configureSecurityBeforeServersStart(testInfo)
     configureTokenAclsBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker admin credentials before starting brokers

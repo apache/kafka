@@ -31,8 +31,8 @@
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
-    { "name": "KRaftControllerId", "type": "int32", "versions": "4+", "entityType": "brokerId", "default": "-1",
-      "about": "The KRaft controller id, used during migration. See KIP-866" },
+    { "name": "isKRaftController", "type": "bool", "versions": "4+", "default": "false",
+      "about": "If KRaft controller id is used during migration. See KIP-866" },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "1+", "default": "-1", "ignorable": true,

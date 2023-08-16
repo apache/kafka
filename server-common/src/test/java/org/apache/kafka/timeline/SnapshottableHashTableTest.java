@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -108,11 +110,37 @@ public class SnapshottableHashTableTest {
         set.add("bar");
         registry.getOrCreateSnapshot(200);
         set.add("baz");
+
+        // The deltatable of epoch 200 is null, it should not throw exception while reverting (deltatable merge)
         registry.revertToSnapshot(100);
         assertTrue(set.isEmpty());
         set.add("foo");
         registry.getOrCreateSnapshot(300);
+        // After reverting to epoch 100, "bar" is not existed anymore
         set.remove("bar");
+        // No deltatable merging is needed because nothing change in snapshot epoch 300
+        registry.revertToSnapshot(100);
+        assertTrue(set.isEmpty());
+
+        set.add("qux");
+        registry.getOrCreateSnapshot(400);
+        assertEquals(1, set.size());
+        set.add("fred");
+        set.add("thud");
+        registry.getOrCreateSnapshot(500);
+        assertEquals(3, set.size());
+
+        // remove the value in epoch 101(after epoch 100), it'll create an entry in deltatable in the snapshot of epoch 500 for the deleted value in epoch 101
+        set.remove("qux");
+        assertEquals(2, set.size());
+        // When reverting to snapshot of epoch 400, we'll merge the deltatable in epoch 500 with the one in epoch 400.
+        // The deltatable in epoch 500 has an entry created above, but the deltatable in epoch 400 is null.
+        // It should not throw exception while reverting (deltatable merge)
+        registry.revertToSnapshot(400);
+        // After reverting, the deltatable in epoch 500 should merge to the current epoch
+        assertEquals(1, set.size());
+
+        // When reverting to epoch 100, the deltatable in epoch 400 won't be merged because the entry change is epoch 101(after epoch 100)
         registry.revertToSnapshot(100);
         assertTrue(set.isEmpty());
     }
@@ -122,14 +150,14 @@ public class SnapshottableHashTableTest {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         SnapshottableHashTable<TestElement> table =
             new SnapshottableHashTable<>(registry, 1);
-        assertTrue(null == table.snapshottableAddOrReplace(E_1B));
+        assertNull(table.snapshottableAddOrReplace(E_1B));
         assertEquals(1, table.snapshottableSize(Long.MAX_VALUE));
         registry.getOrCreateSnapshot(0);
-        assertTrue(E_1B == table.snapshottableAddOrReplace(E_1A));
-        assertTrue(E_1B == table.snapshottableGet(E_1A, 0));
-        assertTrue(E_1A == table.snapshottableGet(E_1A, Long.MAX_VALUE));
-        assertEquals(null, table.snapshottableAddOrReplace(E_2A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_3A));
+        assertSame(E_1B, table.snapshottableAddOrReplace(E_1A));
+        assertSame(E_1B, table.snapshottableGet(E_1A, 0));
+        assertSame(E_1A, table.snapshottableGet(E_1A, Long.MAX_VALUE));
+        assertNull(table.snapshottableAddOrReplace(E_2A));
+        assertNull(table.snapshottableAddOrReplace(E_3A));
         assertEquals(3, table.snapshottableSize(Long.MAX_VALUE));
         assertEquals(1, table.snapshottableSize(0));
         registry.getOrCreateSnapshot(1);
@@ -160,7 +188,7 @@ public class SnapshottableHashTableTest {
         assertIteratorYields(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
         assertEquals(E_1B, table.snapshottableRemove(E_1B));
         assertIteratorYields(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
-        assertEquals(null, table.snapshottableRemove(E_1A));
+        assertNull(table.snapshottableRemove(E_1A));
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE), E_2A, E_3A);
         assertEquals(E_2A, table.snapshottableRemove(E_2A));
         assertEquals(E_3A, table.snapshottableRemove(E_3A));
@@ -172,7 +200,7 @@ public class SnapshottableHashTableTest {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         SnapshottableHashTable<TestElement> table =
             new SnapshottableHashTable<>(registry, 1);
-        assertEquals(null, table.snapshottableAddOrReplace(E_1A));
+        assertNull(table.snapshottableAddOrReplace(E_1A));
         registry.getOrCreateSnapshot(0);
         Iterator<TestElement> iter = table.snapshottableIterator(0);
         assertTrue(table.snapshottableAddUnlessPresent(E_2A));
@@ -185,11 +213,11 @@ public class SnapshottableHashTableTest {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         SnapshottableHashTable<TestElement> table =
             new SnapshottableHashTable<>(registry, 1);
-        assertEquals(null, table.snapshottableAddOrReplace(E_1A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_2A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_3A));
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        assertNull(table.snapshottableAddOrReplace(E_2A));
+        assertNull(table.snapshottableAddOrReplace(E_3A));
         assertEquals(E_1A, table.snapshottableRemove(E_1A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_1B));
+        assertNull(table.snapshottableAddOrReplace(E_1B));
         registry.getOrCreateSnapshot(0);
         Iterator<TestElement> iter = table.snapshottableIterator(0);
         List<TestElement> iterElements = new ArrayList<>();
@@ -208,9 +236,9 @@ public class SnapshottableHashTableTest {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         SnapshottableHashTable<TestElement> table =
             new SnapshottableHashTable<>(registry, 1);
-        assertEquals(null, table.snapshottableAddOrReplace(E_1A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_2A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_3A));
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        assertNull(table.snapshottableAddOrReplace(E_2A));
+        assertNull(table.snapshottableAddOrReplace(E_3A));
         registry.getOrCreateSnapshot(0);
         assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
         assertEquals(E_3A, table.snapshottableAddOrReplace(E_3B));
@@ -232,9 +260,9 @@ public class SnapshottableHashTableTest {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         SnapshottableHashTable<TestElement> table =
             new SnapshottableHashTable<>(registry, 1);
-        assertEquals(null, table.snapshottableAddOrReplace(E_1A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_2A));
-        assertEquals(null, table.snapshottableAddOrReplace(E_3A));
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        assertNull(table.snapshottableAddOrReplace(E_2A));
+        assertNull(table.snapshottableAddOrReplace(E_3A));
         registry.getOrCreateSnapshot(0);
         assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
         assertEquals(E_3A, table.snapshottableAddOrReplace(E_3B));
@@ -247,11 +275,26 @@ public class SnapshottableHashTableTest {
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE));
     }
 
+    @Test
+    public void testIteratorAtOlderEpoch() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+                new SnapshottableHashTable<>(registry, 4);
+        assertNull(table.snapshottableAddOrReplace(E_3B));
+        registry.getOrCreateSnapshot(0);
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        registry.getOrCreateSnapshot(1);
+        assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
+        registry.getOrCreateSnapshot(2);
+        assertEquals(E_1B, table.snapshottableRemove(E_1B));
+        assertIteratorYields(table.snapshottableIterator(1), E_3B, E_1A);
+    }
+
     /**
      * Assert that the given iterator contains the given elements, in any order.
      * We compare using reference equality here, rather than object equality.
      */
-    private static void assertIteratorYields(Iterator<? extends Object> iter,
+    private static void assertIteratorYields(Iterator<?> iter,
                                              Object... expected) {
         IdentityHashMap<Object, Boolean> remaining = new IdentityHashMap<>();
         for (Object object : expected) {

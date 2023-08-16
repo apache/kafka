@@ -670,7 +670,7 @@ public class Metrics implements Closeable {
         
         if (!runtimeTagKeys.equals(templateTagKeys)) {
             throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
-                    + "Runtime = " + runtimeTagKeys.toString() + " Template = " + templateTagKeys.toString());
+                    + "Runtime = " + runtimeTagKeys + " Template = " + templateTagKeys.toString());
         }
                 
         return this.metricName(template.name(), template.group(), template.description(), tags);

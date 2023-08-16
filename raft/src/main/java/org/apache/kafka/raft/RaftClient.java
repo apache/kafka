@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
@@ -36,10 +37,10 @@ public interface RaftClient<T> extends AutoCloseable {
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
-         * {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}
+         * {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, OptionalLong, List)}
          * and this callback. The Raft implementation is free to batch together the records
          * from multiple append calls provided that batch boundaries are respected. Records
-         * specified through {@link #scheduleAtomicAppend(int, List)} are guaranteed to be a
+         * specified through {@link #scheduleAtomicAppend(int, OptionalLong, List)} are guaranteed to be a
          * subset of a batch provided by the {@link BatchReader}. Records specified through
          * {@link #scheduleAppend(int, List)} are guaranteed to be in the same order but
          * they can map to any number of batches provided by the {@link BatchReader}.
@@ -58,7 +59,7 @@ public interface RaftClient<T> extends AutoCloseable {
          *
          * @param reader snapshot reader instance which must be iterated and closed
          */
-        void handleSnapshot(SnapshotReader<T> reader);
+        void handleLoadSnapshot(SnapshotReader<T> reader);
 
         /**
          * Called on any change to leadership. This includes both when a leader is elected and
@@ -66,7 +67,7 @@ public interface RaftClient<T> extends AutoCloseable {
          *
          * If this node is the leader, then the notification of leadership will be delayed until
          * the implementation of this interface has caught up to the high-watermark through calls to
-         * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         * {@link #handleLoadSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
          * this case the leader may or may not be known for the current epoch.
@@ -105,7 +106,7 @@ public interface RaftClient<T> extends AutoCloseable {
     /**
      * Unregisters a listener.
      *
-     * To distinguish from events that happend before the call to {@code unregister} and a future
+     * To distinguish from events that happened before the call to {@code unregister} and a future
      * call to {@code register}, different {@code Listener} instances must be used.
      *
      * If the {@code Listener} provided was never registered then the unregistration is ignored. 
@@ -115,7 +116,7 @@ public interface RaftClient<T> extends AutoCloseable {
     void unregister(Listener<T> listener);
 
     /**
-     * Returns the current high water mark, or OptionalLong.empty if it is not known.
+     * Returns the current high watermark, or OptionalLong.empty if it is not known.
      */
     OptionalLong highWatermark();
 
@@ -171,7 +172,11 @@ public interface RaftClient<T> extends AutoCloseable {
      * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
      *
+     * If the current base offset does not match the supplied required base offset,
+     * then this method will throw {@link UnexpectedBaseOffsetException}.
+     *
      * @param epoch the current leader epoch
+     * @param requiredBaseOffset if this is set, it is the offset we must use as the base offset.
      * @param records the list of records to append
      * @return the expected offset of the last record if append succeed
      * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
@@ -179,8 +184,9 @@ public interface RaftClient<T> extends AutoCloseable {
      *         committed
      * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
      * @throws BufferAllocationException we failed to allocate memory for the records
+     * @throws UnexpectedBaseOffsetException the requested base offset could not be obtained.
      */
-    long scheduleAtomicAppend(int epoch, List<T> records);
+    long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records);
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively
@@ -216,28 +222,37 @@ public interface RaftClient<T> extends AutoCloseable {
     /**
      * Create a writable snapshot file for a committed offset and epoch.
      *
-     * The RaftClient assumes that the snapshot returned will contain the records up to and
-     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
-     * how to use this object. If a snapshot already exists then returns an
-     * {@link Optional#empty()}.
+     * The RaftClient assumes that the snapshot returned will contain the records up to, but not
+     * including the committed offset and epoch. If no records have been committed, it is possible
+     * to generate an empty snapshot using 0 for both the offset and epoch.
      *
-     * @param committedEpoch the epoch of the committed offset
-     * @param committedOffset the last committed offset that will be included in the snapshot
+     * See {@link SnapshotWriter} for details on how to use this object. If a snapshot already
+     * exists then returns an {@link Optional#empty()}.
+     *
+     * @param snapshotId The ID of the new snapshot, which includes the (exclusive) last committed offset
+     *                   and the last committed epoch.
      * @param lastContainedLogTime The append time of the highest record contained in this snapshot
-     * @return a writable snapshot if it doesn't already exists
+     * @return a writable snapshot if it doesn't already exist
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
-
+    Optional<SnapshotWriter<T>> createSnapshot(OffsetAndEpoch snapshotId, long lastContainedLogTime);
 
     /**
-     * The snapshot id for the lastest snapshot.
+     * The snapshot id for the latest snapshot.
      *
-     * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exists, returns an
+     * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exist, returns an
      * {@link Optional#empty()}.
      *
-     * @return the id of the latest snaphost, if it exists
+     * @return the id of the latest snapshot, if it exists
      */
     Optional<OffsetAndEpoch> latestSnapshotId();
+
+    /**
+     * Returns the current end of the log. This method is thread-safe.
+     *
+     * @return the log end offset, which is one greater than the offset of the last record written,
+     * or 0 if there have not been any records written.
+     */
+    long logEndOffset();
 }

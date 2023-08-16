@@ -25,8 +25,11 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class TaskMetrics {
@@ -51,6 +54,21 @@ public class TaskMetrics {
         RATE_DESCRIPTION_PREFIX + PUNCTUATE_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
     private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PUNCTUATE_DESCRIPTION;
     private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PUNCTUATE_DESCRIPTION;
+
+    private static final String RESTORE = "restore";
+    private static final String RESTORE_DESCRIPTION = "records restored";
+    private static final String RESTORE_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + RESTORE_DESCRIPTION;
+    private static final String RESTORE_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + RESTORE_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
+    private static final String UPDATE = "update";
+    private static final String UPDATE_DESCRIPTION = "records updated";
+    private static final String UPDATE_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + UPDATE_DESCRIPTION;
+    private static final String UPDATE_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + UPDATE_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
+    private static final String REMAINING_RECORDS = "-remaining-records";
+    private static final String REMAINING_RECORDS_DESCRIPTION = TOTAL_DESCRIPTION + "records remaining to be restored";
 
     private static final String ENFORCED_PROCESSING = "enforced-processing";
     private static final String ENFORCED_PROCESSING_TOTAL_DESCRIPTION =
@@ -117,6 +135,15 @@ public class TaskMetrics {
         return sensor;
     }
 
+    public static Sensor restoreRemainingRecordsSensor(final String threadId,
+                                                       final String taskId,
+                                                       final StreamsMetricsImpl streamsMetrics) {
+        final String name = RESTORE + REMAINING_RECORDS + TOTAL_SUFFIX;
+        final Map<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.INFO);
+        addSumMetricToSensor(sensor, TASK_LEVEL_GROUP, tags, name, false, REMAINING_RECORDS_DESCRIPTION);
+        return sensor;
+    }
 
     public static Sensor activeProcessRatioSensor(final String threadId,
                                                   final String taskId,
@@ -180,6 +207,38 @@ public class TaskMetrics {
         );
     }
 
+    public static Sensor restoreSensor(final String threadId,
+                                       final String taskId,
+                                       final StreamsMetricsImpl streamsMetrics,
+                                       final Sensor... parentSensor) {
+        return invocationRateAndTotalSensor(
+            threadId,
+            taskId,
+            RESTORE,
+            RESTORE_RATE_DESCRIPTION,
+            RESTORE_TOTAL_DESCRIPTION,
+            Sensor.RecordingLevel.DEBUG,
+            streamsMetrics,
+            parentSensor
+        );
+    }
+
+    public static Sensor updateSensor(final String threadId,
+                                      final String taskId,
+                                      final StreamsMetricsImpl streamsMetrics,
+                                      final Sensor... parentSensor) {
+        return invocationRateAndTotalSensor(
+            threadId,
+            taskId,
+            UPDATE,
+            UPDATE_RATE_DESCRIPTION,
+            UPDATE_TOTAL_DESCRIPTION,
+            Sensor.RecordingLevel.DEBUG,
+            streamsMetrics,
+            parentSensor
+        );
+    }
+
     public static Sensor enforcedProcessingSensor(final String threadId,
                                                   final String taskId,
                                                   final StreamsMetricsImpl streamsMetrics,
@@ -213,7 +272,7 @@ public class TaskMetrics {
     public static Sensor droppedRecordsSensor(final String threadId,
                                               final String taskId,
                                               final StreamsMetricsImpl streamsMetrics) {
-        return invocationRateAndCountSensor(
+        return invocationRateAndTotalSensor(
             threadId,
             taskId,
             DROPPED_RECORDS,
@@ -226,39 +285,56 @@ public class TaskMetrics {
 
     private static Sensor invocationRateAndCountSensor(final String threadId,
                                                        final String taskId,
-                                                       final String metricName,
+                                                       final String operation,
                                                        final String descriptionOfRate,
                                                        final String descriptionOfCount,
                                                        final RecordingLevel recordingLevel,
                                                        final StreamsMetricsImpl streamsMetrics,
                                                        final Sensor... parentSensors) {
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, metricName, recordingLevel, parentSensors);
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel, parentSensors);
         addInvocationRateAndCountToSensor(
             sensor,
             TASK_LEVEL_GROUP,
             streamsMetrics.taskLevelTagMap(threadId, taskId),
-            metricName,
+            operation,
             descriptionOfRate,
             descriptionOfCount
         );
         return sensor;
     }
 
+    private static Sensor invocationRateAndTotalSensor(final String threadId,
+                                                       final String taskId,
+                                                       final String operation,
+                                                       final String descriptionOfRate,
+                                                       final String descriptionOfTotal,
+                                                       final RecordingLevel recordingLevel,
+                                                       final StreamsMetricsImpl streamsMetrics,
+                                                       final Sensor... parentSensors) {
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel, parentSensors);
+        final Map<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
+
+        addInvocationRateToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, descriptionOfRate);
+        addSumMetricToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, true, descriptionOfTotal);
+        return sensor;
+    }
+
     private static Sensor avgAndMaxSensor(final String threadId,
                                           final String taskId,
-                                          final String metricName,
+                                          final String gaugeName,
                                           final String descriptionOfAvg,
                                           final String descriptionOfMax,
                                           final RecordingLevel recordingLevel,
                                           final StreamsMetricsImpl streamsMetrics,
                                           final Sensor... parentSensors) {
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, metricName, recordingLevel, parentSensors);
+        // use latency name as sensor suffix and metric name prefix
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, gaugeName, recordingLevel, parentSensors);
         final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, taskId);
         addAvgAndMaxToSensor(
             sensor,
             TASK_LEVEL_GROUP,
             tagMap,
-            metricName,
+            gaugeName,
             descriptionOfAvg,
             descriptionOfMax
         );
@@ -267,7 +343,7 @@ public class TaskMetrics {
 
     private static Sensor invocationRateAndCountAndAvgAndMaxLatencySensor(final String threadId,
                                                                           final String taskId,
-                                                                          final String metricName,
+                                                                          final String operation,
                                                                           final String descriptionOfRate,
                                                                           final String descriptionOfCount,
                                                                           final String descriptionOfAvg,
@@ -275,13 +351,14 @@ public class TaskMetrics {
                                                                           final RecordingLevel recordingLevel,
                                                                           final StreamsMetricsImpl streamsMetrics,
                                                                           final Sensor... parentSensors) {
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, metricName, recordingLevel, parentSensors);
+        // use operation name as sensor suffix and metric name prefix
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel, parentSensors);
         final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, taskId);
         addAvgAndMaxToSensor(
             sensor,
             TASK_LEVEL_GROUP,
             tagMap,
-            metricName + LATENCY_SUFFIX,
+            operation + LATENCY_SUFFIX,
             descriptionOfAvg,
             descriptionOfMax
         );
@@ -289,7 +366,7 @@ public class TaskMetrics {
             sensor,
             TASK_LEVEL_GROUP,
             tagMap,
-            metricName,
+            operation,
             descriptionOfRate,
             descriptionOfCount
         );

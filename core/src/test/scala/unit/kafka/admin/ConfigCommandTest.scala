@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.Broker
 import kafka.server.{ConfigEntityName, ConfigType}
-import kafka.utils.{Exit, Logging}
+import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.Node
@@ -31,7 +31,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
@@ -787,9 +786,9 @@ class ConfigCommandTest extends Logging {
 
   def doShouldAlterTopicConfig(file: Boolean): Unit = {
     var filePath = ""
-    val addedConfigs = Seq("delete.retention.ms=1000000", "min.insync.replicas=2")
+    val addedConfigs = Map("delete.retention.ms" -> "1000000", "min.insync.replicas" -> "2")
     if (file) {
-      val file = TestUtils.tempFile(addedConfigs.mkString("\n"))
+      val file = TestUtils.tempPropertiesFile(addedConfigs)
       filePath = file.getPath
     }
 
@@ -799,7 +798,7 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "topics",
       "--alter",
       if (file) "--add-config-file" else "--add-config",
-      if (file) filePath else addedConfigs.mkString(","),
+      if (file) filePath else addedConfigs.map{case (k, v) => k + "=" + v}.mkString(","),
       "--delete-config", "unclean.leader.election.enable"))
     var alteredConfigs = false
 
@@ -1354,7 +1353,7 @@ class ConfigCommandTest extends Logging {
       override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
         credentials.getOrElse(entityName, new Properties())
       }
-      override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configChange: Properties): Unit = {
+      override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configChange: Properties, isUserClientId: Boolean = false): Unit = {
         assertEquals(user, sanitizedEntityName)
         assertEquals(mechanisms, configChange.keySet().asScala)
         for (mechanism <- mechanisms) {
@@ -1581,7 +1580,7 @@ class ConfigCommandTest extends Logging {
     override def changeBrokerConfig(brokerIds: Seq[Int], configs: Properties): Unit = {}
     override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
     override def changeClientIdConfig(clientId: String, configs: Properties): Unit = {}
-    override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties): Unit = {}
+    override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {}
     override def changeTopicConfig(topic: String, configs: Properties): Unit = {}
   }
 

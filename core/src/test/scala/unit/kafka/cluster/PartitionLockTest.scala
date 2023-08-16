@@ -24,10 +24,10 @@ import kafka.api.LeaderAndIsr
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.TopicIdPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
@@ -35,6 +35,9 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -74,7 +77,7 @@ class PartitionLockTest extends Logging {
     val logConfig = new LogConfig(new Properties)
     val configRepository = MockConfigRepository.forTopic(topicPartition.topic, createLogProperties(Map.empty))
     logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
-      CleanerConfig(enableCleaner = false), mockTime)
+      new CleanerConfig(false), mockTime)
     partition = setupPartitionWithMocks(logManager)
   }
 
@@ -111,7 +114,7 @@ class PartitionLockTest extends Logging {
 
   /**
    * Verifies concurrent produce and replica fetch log read result update with ISR updates. This
-   * can result in delays in processing produce and replica fetch requets since write lock is obtained,
+   * can result in delays in processing produce and replica fetch requests since write lock is obtained,
    * but it should complete without any failures.
    */
   @Test
@@ -269,6 +272,7 @@ class PartitionLockTest extends Logging {
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => 1L,
       mockTime,
       isrChangeListener,
       delayedOperations,
@@ -294,7 +298,7 @@ class PartitionLockTest extends Logging {
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeout = 5 * 60 * 1000
-        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
+        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
@@ -354,9 +358,9 @@ class PartitionLockTest extends Logging {
 
   private def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }
     logProps
   }
@@ -369,7 +373,7 @@ class PartitionLockTest extends Logging {
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
-      partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+      partition.appendRecordsToLeader(batch, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     }
   }
 
@@ -385,14 +389,15 @@ class PartitionLockTest extends Logging {
     val maxBytes = 1
 
     while (fetchOffset < numRecords) {
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = followerId,
-        maxWaitMs = 0,
-        minBytes = 1,
-        maxBytes = maxBytes,
-        isolation = FetchLogEnd,
-        clientMetadata = None
+      val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
+        followerId,
+        1,
+        0L,
+        1,
+        maxBytes,
+        FetchIsolation.LOG_END,
+        Optional.empty()
       )
 
       val fetchPartitionData = new FetchRequest.PartitionData(
@@ -413,7 +418,7 @@ class PartitionLockTest extends Logging {
         updateFetchState = true
       )
 
-      assertTrue(logReadInfo.divergingEpoch.isEmpty)
+      assertTrue(!logReadInfo.divergingEpoch.isPresent)
 
       val batches = logReadInfo.fetchedData.records.batches.asScala
       if (batches.nonEmpty) {
@@ -444,8 +449,8 @@ class PartitionLockTest extends Logging {
     keepPartitionMetadataFile = true) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                interBrokerProtocolVersion: MetadataVersion, requestLocal: RequestLocal): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal)
+                                interBrokerProtocolVersion: MetadataVersion, requestLocal: RequestLocal, verificationGuard: Object): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal, verificationGuard)
       appendSemaphore.acquire()
       appendInfo
     }

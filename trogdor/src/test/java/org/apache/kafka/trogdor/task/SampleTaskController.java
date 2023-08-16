@@ -26,4 +26,4 @@ public class SampleTaskController implements TaskController {
     public Set<String> targetNodes(Topology topology) {
         return Topology.Util.agentNodeNames(topology);
     }
-};
+}

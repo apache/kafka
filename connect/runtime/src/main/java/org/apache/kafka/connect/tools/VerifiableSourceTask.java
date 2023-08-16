@@ -20,7 +20,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.tools.ThroughputThrottler;
+import org.apache.kafka.common.utils.ThroughputThrottler;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -41,7 +41,7 @@ import java.util.stream.Stream;
  * messages have been sent. Each message is also assigned a unique, increasing seqno that is passed to Kafka Connect; when
  * tasks are started on new nodes, this seqno is used to resume where the task previously left off, allowing for
  * testing of distributed Kafka Connect.
- *
+ * <p>
  * If logging is left enabled, log output on stdout can be easily ignored by checking whether a given line is valid JSON.
  */
 public class VerifiableSourceTask extends SourceTask {

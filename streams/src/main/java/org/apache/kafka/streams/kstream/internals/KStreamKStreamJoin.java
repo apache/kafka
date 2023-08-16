@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
+import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTrackerSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -57,7 +58,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private final Optional<String> outerJoinWindowName;
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner;
 
-    private final TimeTracker sharedTimeTracker;
+    private final TimeTrackerSupplier sharedTimeTrackerSupplier;
 
     KStreamKStreamJoin(final boolean isLeftSide,
                        final String otherWindowName,
@@ -65,7 +66,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
-                       final TimeTracker sharedTimeTracker) {
+                       final TimeTrackerSupplier sharedTimeTrackerSupplier) {
         this.isLeftSide = isLeftSide;
         this.otherWindowName = otherWindowName;
         if (isLeftSide) {
@@ -82,7 +83,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         this.joiner = joiner;
         this.outer = outer;
         this.outerJoinWindowName = outerJoinWindowName;
-        this.sharedTimeTracker = sharedTimeTracker;
+        this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
     }
 
     @Override
@@ -95,6 +96,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         private Sensor droppedRecordsSensor;
         private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> outerJoinStore = Optional.empty();
         private InternalProcessorContext<K, VOut> internalProcessorContext;
+        private TimeTracker sharedTimeTracker;
 
         @Override
         public void init(final ProcessorContext<K, VOut> context) {
@@ -104,6 +106,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
+            sharedTimeTracker = sharedTimeTrackerSupplier.get(context.taskId());
 
             if (enableSpuriousResultFix) {
                 outerJoinStore = outerJoinWindowName.map(context::getStateStore);
@@ -124,7 +127,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
                 return;
             }
-
             boolean needOuterJoin = outer;
 
             final long inputRecordTimestamp = record.timestamp();
@@ -163,7 +165,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     // problem:
                     //
                     // Say we have a window size of 5 seconds
-                    //  1. A non-joined record wth time T10 is seen in the left-topic (maxLeftStreamTime: 10)
+                    //  1. A non-joined record with time T10 is seen in the left-topic (maxLeftStreamTime: 10)
                     //     The record is not processed yet, and is added to the outer-join store
                     //  2. A non-joined record with time T2 is seen in the right-topic (maxRightStreamTime: 2)
                     //     The record is not processed yet, and is added to the outer-join store
@@ -205,9 +207,10 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             if (internalProcessorContext.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
                 return;
             }
-            if (sharedTimeTracker.nextTimeToEmit == 0) {
-                sharedTimeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
-            }
+
+            // Ensure `nextTimeToEmit` is synced with `currentSystemTimeMs`, if we dont set it everytime,
+            // they can get out of sync during a clock drift
+            sharedTimeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
             sharedTimeTracker.advanceNextTimeToEmit();
 
             // reset to MAX_VALUE in case the store is empty
@@ -261,6 +264,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     store.put(prevKey, null);
                 }
             }
+        }
+
+        @Override
+        public void close() {
+            sharedTimeTrackerSupplier.remove(context().taskId());
         }
     }
 }
