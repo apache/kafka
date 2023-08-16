@@ -43,8 +43,8 @@ public class ActivationRecordsGenerator {
         if (transactionStartOffset != -1L) {
             // In-flight bootstrap transaction
             if (!metadataVersion.isMetadataTransactionSupported()) {
-                throw new RuntimeException("Detected partial bootstrap records transaction at " + transactionStartOffset +
-                    ", but the metadata.version " + metadataVersion +
+                throw new RuntimeException("Detected partial bootstrap records transaction at " +
+                    transactionStartOffset + ", but the metadata.version " + metadataVersion +
                     " does not support transactions. Cannot continue.");
             } else {
                 log.warn("Detected partial bootstrap records transaction at " + transactionStartOffset +
@@ -72,8 +72,8 @@ public class ActivationRecordsGenerator {
 
         if (metadataVersion.isMigrationSupported()) {
             if (zkMigrationEnabled) {
-                log.info("Putting the controller into pre-migration mode. No metadata updates will be allowed until " +
-                    "the ZK metadata has been migrated");
+                log.info("Putting the controller into pre-migration mode. No metadata updates will be allowed " +
+                    "until the ZK metadata has been migrated");
                 records.add(ZkMigrationState.PRE_MIGRATION.toRecord());
             } else {
                 log.debug("Setting the ZK migration state to NONE since this is a de-novo KRaft cluster.");
@@ -116,7 +116,8 @@ public class ActivationRecordsGenerator {
                     // Since this is the default state there may or may not be an actual NONE in the log. Regardless,
                     // it will eventually be persisted in a snapshot, so we don't need to explicitly write it here.
                     if (zkMigrationEnabled) {
-                        throw new RuntimeException("Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
+                        throw new RuntimeException("Should not have ZK migrations enabled on a cluster that was " +
+                            "created in KRaft mode.");
                     }
                     break;
                 case PRE_MIGRATION:
@@ -131,13 +132,14 @@ public class ActivationRecordsGenerator {
                             "'zookeeper.metadata.migration.enable' set to 'false'.");
                         records.add(ZkMigrationState.POST_MIGRATION.toRecord());
                     } else {
-                        log.info("Staying in the ZK migration since 'zookeeper.metadata.migration.enable' is still 'true'.");
+                        log.info("Staying in the ZK migration since 'zookeeper.metadata.migration.enable' is still " +
+                            "'true'.");
                     }
                     break;
                 case POST_MIGRATION:
                     if (zkMigrationEnabled) {
-                        log.info("Ignoring 'zookeeper.metadata.migration.enable' value of 'true' since the ZK migration" +
-                            "has been completed.");
+                        log.info("Ignoring 'zookeeper.metadata.migration.enable' value of 'true' since the ZK " +
+                            "migration has been completed.");
                     }
                     break;
                 default:
@@ -145,7 +147,8 @@ public class ActivationRecordsGenerator {
             }
         } else {
             if (zkMigrationEnabled) {
-                throw new RuntimeException("Should not have ZK migrations enabled on a cluster running metadata.version " + featureControl.metadataVersion());
+                throw new RuntimeException("Should not have ZK migrations enabled on a cluster running " +
+                    "metadata.version " + featureControl.metadataVersion());
             }
         }
 
