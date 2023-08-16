@@ -29,6 +29,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -121,6 +122,12 @@ public class ConfigDef {
                 defaultValues.put(key.name, key.defaultValue);
         }
         return defaultValues;
+    }
+
+    public ConfigDef addDefinition(ConfigDef toAdd) {
+        Objects.requireNonNull(toAdd, "Additional ConfigDef may not be null");
+        toAdd.configKeys().values().forEach(this::define);
+        return this;
     }
 
     public ConfigDef define(ConfigKey key) {
