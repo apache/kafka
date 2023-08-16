@@ -138,6 +138,13 @@ def update_version_py(file_name, version):
     latest_version = last_line[-1].strip()
     second_last_line = file_data[-2].split(" ")
     new_version_split = "V_%s" % version.replace(".", "_")
+
+    # if the version is same, do nothing
+    if latest_version == new_version_split:
+        print("Same version was provided, no change made to version.py")
+        return
+    
+    # if major version is same, make under the same header 3.x else create a new header
     if latest_version[:-2] == new_version_split[:-2]:
         second_last_line[0] = new_version_split
         if second_last_line[2].startswith("KafkaVersion"):
