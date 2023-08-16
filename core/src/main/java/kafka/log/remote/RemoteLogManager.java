@@ -1129,18 +1129,24 @@ public class RemoteLogManager implements Closeable {
      */
     // Visible for testing
     public static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
-        NavigableMap<Integer, Long> refinedLeaderEpochs = new TreeMap<>();
+        List<Integer> duplicatedEpochs = new ArrayList<>();
         Map.Entry<Integer, Long> previousEntry = null;
         for (Map.Entry<Integer, Long> entry : leaderEpochs.entrySet()) {
-            refinedLeaderEpochs.put(entry.getKey(), entry.getValue());
-
             if (previousEntry != null && previousEntry.getValue().equals(entry.getValue())) {
-                refinedLeaderEpochs.remove(previousEntry.getKey());
+                duplicatedEpochs.add(previousEntry.getKey());
             }
             previousEntry = entry;
         }
 
-        return refinedLeaderEpochs;
+        if (duplicatedEpochs.isEmpty()) {
+            return leaderEpochs;
+        }
+
+        TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>(leaderEpochs);
+        for (Integer duplicatedEpoch : duplicatedEpochs) {
+            filteredLeaderEpochs.remove(duplicatedEpoch);
+        }
+        return filteredLeaderEpochs;
     }
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {

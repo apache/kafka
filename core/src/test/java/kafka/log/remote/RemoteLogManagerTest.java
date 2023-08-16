@@ -1035,26 +1035,24 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testBuildRefinedLeaderEpochMap() {
-        TreeMap<Integer, Long> leaderEpochToStartOffset = new TreeMap<Integer, Long>() {{
-                put(0, 0L);
-                put(1, 10L);
-                put(2, 20L);
-                put(3, 30L);
-                put(4, 40L);
-                put(5, 60L);
-                put(6, 60L);
-                put(7, 70L);
-            }};
+        TreeMap<Integer, Long> leaderEpochToStartOffset = new TreeMap<>();
+        leaderEpochToStartOffset.put(0, 0L);
+        leaderEpochToStartOffset.put(1, 10L);
+        leaderEpochToStartOffset.put(2, 20L);
+        leaderEpochToStartOffset.put(3, 30L);
+        leaderEpochToStartOffset.put(4, 40L);
+        leaderEpochToStartOffset.put(5, 60L);
+        leaderEpochToStartOffset.put(6, 60L);
+        leaderEpochToStartOffset.put(7, 70L);
 
-        TreeMap<Integer, Long> expectedLeaderEpochs = new TreeMap<Integer, Long>() {{
-                put(0, 0L);
-                put(1, 10L);
-                put(2, 20L);
-                put(3, 30L);
-                put(4, 40L);
-                put(6, 60L);
-                put(7, 70L);
-            }};
+        TreeMap<Integer, Long> expectedLeaderEpochs = new TreeMap<>();
+        expectedLeaderEpochs.put(0, 0L);
+        expectedLeaderEpochs.put(1, 10L);
+        expectedLeaderEpochs.put(2, 20L);
+        expectedLeaderEpochs.put(3, 30L);
+        expectedLeaderEpochs.put(4, 40L);
+        expectedLeaderEpochs.put(6, 60L);
+        expectedLeaderEpochs.put(7, 70L);
 
         NavigableMap<Integer, Long> refinedLeaderEpochMap = RemoteLogManager.buildFilteredLeaderEpochMap(leaderEpochToStartOffset);
         assertEquals(expectedLeaderEpochs, refinedLeaderEpochMap);
@@ -1065,106 +1063,111 @@ public class RemoteLogManagerTest {
         // Test whether a remote segment is within the leader epochs
         final long logEndOffset = 90L;
 
-        TreeMap<Integer, Long> leaderEpochToStartOffset = new TreeMap<Integer, Long>() {{
-                put(0, 0L);
-                put(1, 10L);
-                put(2, 20L);
-                put(3, 30L);
-                put(4, 40L);
-                put(5, 50L);
-                put(7, 70L);
-            }};
+        TreeMap<Integer, Long> leaderEpochToStartOffset = new TreeMap<>();
+        leaderEpochToStartOffset.put(0, 0L);
+        leaderEpochToStartOffset.put(1, 10L);
+        leaderEpochToStartOffset.put(2, 20L);
+        leaderEpochToStartOffset.put(3, 30L);
+        leaderEpochToStartOffset.put(4, 40L);
+        leaderEpochToStartOffset.put(5, 50L);
+        leaderEpochToStartOffset.put(7, 70L);
 
         // Test whether a remote segment's epochs/offsets(multiple) are within the range of leader epochs
+        TreeMap<Integer, Long> segmentEpochs1 = new TreeMap<>();
+        segmentEpochs1.put(1, 15L);
+        segmentEpochs1.put(2, 20L);
+        segmentEpochs1.put(3, 30L);
+
         assertTrue(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 15,
                 35,
-                new TreeMap<Integer, Long>() {{
-                    put(1, 15L);
-                    put(2, 20L);
-                    put(3, 30L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs1), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether a remote segment's epochs/offsets(single) are within the range of leader epochs
+        TreeMap<Integer, Long> segmentEpochs2 = new TreeMap<>();
+        segmentEpochs2.put(1, 15L);
         assertTrue(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 15,
                 19,
-                new TreeMap<Integer, Long>() {{
-                    put(1, 15L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs2), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether a remote segment's start offset is same as the offset of the respective leader epoch entry.
+        TreeMap<Integer, Long> segmentEpochs3 = new TreeMap<>();
+        segmentEpochs3.put(0, 0L); // same as leader epoch's start offset
         assertTrue(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 0,
                 5,
-                new TreeMap<Integer, Long>() {{
-                    put(0, 0L); // same as leader epoch's start offset
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs3), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether a remote segment's start offset is same as the offset of the respective leader epoch entry.
+        TreeMap<Integer, Long> segmentEpochs4 = new TreeMap<>();
+        segmentEpochs4.put(7, 70L); // same as leader epoch's start offset
         assertTrue(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 70,
                 75,
-                new TreeMap<Integer, Long>() {{
-                    put(7, 70L); // same as leader epoch's start offset
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs4), logEndOffset, leaderEpochToStartOffset));
 
 
         // Test whether a remote segment's end offset is same as the end offset of the respective leader epoch entry.
+        TreeMap<Integer, Long> segmentEpochs5 = new TreeMap<>();
+        segmentEpochs5.put(1, 15L);
+        segmentEpochs5.put(2, 20L);
+
         assertTrue(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 15,
                 29, // same as end offset for epoch 2 in leaderEpochToStartOffset
-                new TreeMap<Integer, Long>() {{
-                    put(1, 15L);
-                    put(2, 20L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs5), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether any of the epoch's is not with in the leader epoch chain.
+        TreeMap<Integer, Long> segmentEpochs6 = new TreeMap<Integer, Long>();
+        segmentEpochs6.put(5, 55L);
+        segmentEpochs6.put(6, 60L); // epoch 6 exists here but it is missing in leaderEpochToStartOffset
+        segmentEpochs6.put(7, 70L);
+
         assertFalse(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 55,
                 85,
-                new TreeMap<Integer, Long>() {{
-                    put(5, 55L);
-                    put(6, 60L); // epoch 6 exists here but it is missing in leaderEpochToStartOffset
-                    put(7, 70L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs6), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether an epoch existing in remote segment does not exist in leader epoch chain.
+        TreeMap<Integer, Long> segmentEpochs7 = new TreeMap<>();
+        segmentEpochs7.put(1, 15L);
+        segmentEpochs7.put(2, 20L); // epoch 3 is missing here which exists in leaderEpochToStartOffset
+        segmentEpochs7.put(4, 40L);
+
         assertFalse(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 15,
                 45,
-                new TreeMap<Integer, Long>() {{
-                    put(1, 15L);
-                    put(2, 20L); // epoch 3 is missing here which exists in leaderEpochToStartOffset
-                    put(4, 40L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs7), logEndOffset, leaderEpochToStartOffset));
 
         // Test a remote segment having larger end offset than the log end offset
+        TreeMap<Integer, Long> segmentEpochs8 = new TreeMap<>();
+        segmentEpochs8.put(1, 15L);
+        segmentEpochs8.put(2, 20L);
+
         assertFalse(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 15,
                 95, // larger than log end offset
-                new TreeMap<Integer, Long>() {{
-                    put(1, 15L);
-                    put(2, 20L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs8), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether a segment's first offset is earlier to the respective epoch's start offset
+        TreeMap<Integer, Long> segmentEpochs9 = new TreeMap<>();
+        segmentEpochs9.put(1, 5L);
+        segmentEpochs9.put(2, 20L);
+
         assertFalse(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 5, // earlier to epoch 1's start offset
                 25,
-                new TreeMap<Integer, Long>() {{
-                    put(1, 5L);
-                    put(2, 20L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs9), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether a segment's last offset is more than the respective epoch's end offset
+        TreeMap<Integer, Long> segmentEpochs10 = new TreeMap<>();
+        segmentEpochs10.put(1, 15L);
+        segmentEpochs10.put(2, 20L);
         assertFalse(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 15,
                 35, // more than epoch 2's end offset
-                new TreeMap<Integer, Long>() {{
-                    put(1, 15L);
-                    put(2, 20L);
-                }}), logEndOffset, leaderEpochToStartOffset));
+                segmentEpochs10), logEndOffset, leaderEpochToStartOffset));
     }
 
     @Test
