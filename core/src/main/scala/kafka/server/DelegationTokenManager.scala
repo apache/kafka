@@ -121,19 +121,11 @@ class DelegationTokenManager(val config: KafkaConfig,
   val defaultTokenRenewTime: Long = config.delegationTokenExpiryTimeMs
 
   def startup(): Unit = {
-    if (config.tokenAuthEnabled) {
-      loadCache()
-    }
+      // Nothing to do. Overridden for Zk case
   }
 
   def shutdown(): Unit = {
-    if (config.tokenAuthEnabled) {
-        // Nothing to do
-    }
-  }
-
-  private def loadCache(): Unit = {
-      // Nothing to load.
+      // Nothing to do. Overridden for Zk case
   }
 
   /**
