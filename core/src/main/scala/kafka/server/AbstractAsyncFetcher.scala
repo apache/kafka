@@ -88,7 +88,8 @@ abstract class AbstractAsyncFetcher(name: String,
                                      failedPartitions: FailedPartitions,
                                      fetchBackOffMs: Int = 0,
                                      val brokerTopicStats: BrokerTopicStats,  //BrokerTopicStats's lifecycle managed by ReplicaManager
-                                     fetcherEventBus: FetcherEventBus) extends FetcherEventProcessor with Logging {
+                                     fetcherEventBus: FetcherEventBus,
+                                     replicaMaxLagMs: Long) extends FetcherEventProcessor with Logging {
 
   type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -166,8 +167,19 @@ abstract class AbstractAsyncFetcher(name: String,
         trace(s"There are no active partitions. Back off for $fetchBackOffMs ms before sending a fetch request")
         true
       case Some(ReplicaFetch(sessionPartitions, fetchRequest)) =>
-        processFetchRequest(sessionPartitions, fetchRequest)
+        processFetchRequestAndMaybeLog(sessionPartitions, fetchRequest)
     }
+  }
+
+  private def processFetchRequestAndMaybeLog(sessionPartitions: util.Map[TopicPartition, FetchRequest.PartitionData],
+    fetchRequest: FetchRequest.Builder): Boolean = {
+    val startTime = System.currentTimeMillis()
+    val result = processFetchRequest(sessionPartitions, fetchRequest)
+    val processFetchRequestTotalTime = System.currentTimeMillis() - startTime
+    if (processFetchRequestTotalTime >= replicaMaxLagMs) {
+      warn(s"Process fetch request took $processFetchRequestTotalTime ms. Fetch request: $fetchRequest")
+    }
+    result
   }
 
   // deal with partitions with errors, potentially due to leadership changes

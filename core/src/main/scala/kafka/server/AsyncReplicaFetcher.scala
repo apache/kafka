@@ -66,7 +66,8 @@ class AsyncReplicaFetcher(name: String,
                                 failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 replicaMgr.brokerTopicStats,
-                                fetcherEventBus = fetcherEventBus) {
+                                fetcherEventBus = fetcherEventBus,
+                                replicaMaxLagMs = brokerConfig.replicaLagTimeMaxMs) {
 
   private val replicaId = brokerConfig.brokerId
   private val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
