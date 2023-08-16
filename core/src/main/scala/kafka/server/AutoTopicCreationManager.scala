@@ -20,7 +20,6 @@ package kafka.server
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-
 import kafka.controller.KafkaController
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
@@ -33,6 +32,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.coordinator.group.GroupCoordinator
 
 import scala.collection.{Map, Seq, Set, mutable}
@@ -43,7 +43,8 @@ trait AutoTopicCreationManager {
   def createTopics(
     topicNames: Set[String],
     controllerMutationQuota: ControllerMutationQuota,
-    metadataRequestContext: Option[RequestContext]
+    metadataRequestContext: Option[RequestContext],
+    principal: KafkaPrincipal
   ): Seq[MetadataResponseTopic]
 }
 
@@ -91,7 +92,8 @@ class DefaultAutoTopicCreationManager(
   override def createTopics(
     topics: Set[String],
     controllerMutationQuota: ControllerMutationQuota,
-    metadataRequestContext: Option[RequestContext]
+    metadataRequestContext: Option[RequestContext],
+    principal: KafkaPrincipal
   ): Seq[MetadataResponseTopic] = {
     val (creatableTopics, uncreatableTopicResponses) = filterCreatableTopics(topics)
 
@@ -100,7 +102,7 @@ class DefaultAutoTopicCreationManager(
     } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
       sendCreateTopicRequest(creatableTopics, metadataRequestContext)
     } else {
-      createTopicsInZk(creatableTopics, controllerMutationQuota)
+      createTopicsInZk(creatableTopics, principal, controllerMutationQuota)
     }
 
     uncreatableTopicResponses ++ creatableTopicResponses
@@ -108,6 +110,7 @@ class DefaultAutoTopicCreationManager(
 
   private def createTopicsInZk(
     creatableTopics: Map[String, CreatableTopic],
+    principal: KafkaPrincipal,
     controllerMutationQuota: ControllerMutationQuota
   ): Seq[MetadataResponseTopic] = {
     val topicErrors = new AtomicReference[Map[String, ApiError]]()
@@ -116,6 +119,7 @@ class DefaultAutoTopicCreationManager(
       // and we want to get the response error immediately.
       adminManager.get.createTopics(
         timeout = 0,
+        principal = principal,
         validateOnly = false,
         creatableTopics,
         Map.empty,

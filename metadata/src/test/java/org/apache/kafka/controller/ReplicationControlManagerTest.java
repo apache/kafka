@@ -738,14 +738,14 @@ public class ReplicationControlManagerTest {
     @Test
     public void testCreateTopicsWithPolicy() throws Exception {
         MockCreateTopicPolicy createTopicPolicy = new MockCreateTopicPolicy(asList(
-            new CreateTopicPolicy.RequestMetadata("foo", 2, (short) 2,
+            new CreateTopicPolicy.RequestMetadata("foo", null, 2, (short) 2,
                 null, Collections.emptyMap()),
-            new CreateTopicPolicy.RequestMetadata("bar", 3, (short) 2,
+            new CreateTopicPolicy.RequestMetadata("bar", null, 3, (short) 2,
                 null, Collections.emptyMap()),
-            new CreateTopicPolicy.RequestMetadata("baz", null, null,
+            new CreateTopicPolicy.RequestMetadata("baz", null, null, null,
                 Collections.singletonMap(0, asList(2, 1, 0)),
                 Collections.singletonMap(SEGMENT_BYTES_CONFIG, "12300000")),
-            new CreateTopicPolicy.RequestMetadata("quux", null, null,
+            new CreateTopicPolicy.RequestMetadata("quux", null, null, null,
                 Collections.singletonMap(0, asList(2, 1, 0)), Collections.emptyMap())));
         ReplicationControlTestContext ctx =
             new ReplicationControlTestContext(Optional.of(createTopicPolicy));

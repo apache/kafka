@@ -656,7 +656,7 @@ public class ReplicationControlManager {
                 newParts.entrySet().forEach(e -> assignments.put(e.getKey(),
                     Replicas.toList(e.getValue().replicas)));
                 return new CreateTopicPolicy.RequestMetadata(
-                    topic.name(), null, null, assignments, creationConfigs);
+                    topic.name(), context.principal(), null, null, assignments, creationConfigs);
             });
             if (error.isFailure()) return error;
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
@@ -706,7 +706,7 @@ public class ReplicationControlManager {
                         " time(s): " + e.getMessage());
             }
             ApiError error = maybeCheckCreateTopicPolicy(() -> new CreateTopicPolicy.RequestMetadata(
-                topic.name(), numPartitions, replicationFactor, null, creationConfigs));
+                topic.name(), context.principal(), numPartitions, replicationFactor, null, creationConfigs));
             if (error.isFailure()) return error;
         }
         int numPartitions = newParts.size();

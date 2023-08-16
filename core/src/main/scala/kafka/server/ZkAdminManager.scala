@@ -98,6 +98,7 @@ class ZkAdminManager(val config: KafkaConfig,
   }
 
   private def validateTopicCreatePolicy(topic: CreatableTopic,
+                                        principal: KafkaPrincipal,
                                         resolvedNumPartitions: Int,
                                         resolvedReplicationFactor: Short,
                                         assignments: Map[Int, Seq[Int]]): Unit = {
@@ -116,7 +117,7 @@ class ZkAdminManager(val config: KafkaConfig,
       }
       val javaConfigs = new java.util.HashMap[String, String]
       topic.configs.forEach(config => javaConfigs.put(config.name, config.value))
-      policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
+      policy.validate(new RequestMetadata(topic.name, principal, numPartitions, replicationFactor,
         javaAssignments, javaConfigs))
     }
   }
@@ -155,6 +156,7 @@ class ZkAdminManager(val config: KafkaConfig,
     * The callback function will be triggered either when timeout, error or the topics are created.
     */
   def createTopics(timeout: Int,
+                   principal: KafkaPrincipal,
                    validateOnly: Boolean,
                    toCreate: Map[String, CreatableTopic],
                    includeConfigsAndMetadata: Map[String, CreatableTopicResult],
@@ -200,7 +202,7 @@ class ZkAdminManager(val config: KafkaConfig,
         val configs = new Properties()
         topic.configs.forEach(entry => configs.setProperty(entry.name, entry.value))
         adminZkClient.validateTopicCreate(topic.name, assignments, configs)
-        validateTopicCreatePolicy(topic, resolvedNumPartitions, resolvedReplicationFactor, assignments)
+        validateTopicCreatePolicy(topic, principal, resolvedNumPartitions, resolvedReplicationFactor, assignments)
 
         // For responses with DescribeConfigs permission, populate metadata and configs. It is
         // safe to populate it before creating the topic because the values are unset if the
@@ -493,7 +495,7 @@ class ZkAdminManager(val config: KafkaConfig,
   private def validateConfigPolicy(resource: ConfigResource, configEntriesMap: Map[String, String], principal: KafkaPrincipal): Unit = {
     alterConfigPolicy match {
       case Some(policy) =>
-        policy.validate(new AlterConfigPolicy.RequestMetadata(new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava, principal), principal)
+        policy.validate(new AlterConfigPolicy.RequestMetadata(new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava, principal))
       case None =>
     }
   }

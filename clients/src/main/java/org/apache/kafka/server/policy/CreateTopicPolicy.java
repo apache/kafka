@@ -18,6 +18,7 @@ package org.apache.kafka.server.policy;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Collections;
 import java.util.List;
@@ -41,6 +42,8 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
      */
     class RequestMetadata {
         private final String topic;
+
+        private final KafkaPrincipal principal;
         private final Integer numPartitions;
         private final Short replicationFactor;
         private final Map<Integer, List<Integer>> replicasAssignments;
@@ -59,13 +62,19 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
          * @param configs topic configs for the topic to be created, not including broker defaults. Broker configs are
          *                passed via the {@code configure()} method of the policy implementation.
          */
-        public RequestMetadata(String topic, Integer numPartitions, Short replicationFactor,
-                        Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
+        public RequestMetadata(String topic, KafkaPrincipal principal, Integer numPartitions,
+                        Short replicationFactor, Map<Integer, List<Integer>> replicasAssignments,
+                        Map<String, String> configs) {
             this.topic = topic;
+            this.principal = principal;
             this.numPartitions = numPartitions;
             this.replicationFactor = replicationFactor;
             this.replicasAssignments = replicasAssignments == null ? null : Collections.unmodifiableMap(replicasAssignments);
             this.configs = Collections.unmodifiableMap(configs);
+        }
+
+        public KafkaPrincipal principal() {
+            return principal;
         }
 
         /**

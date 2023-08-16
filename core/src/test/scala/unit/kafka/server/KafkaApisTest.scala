@@ -747,6 +747,7 @@ class KafkaApisTest {
 
     verify(adminManager).createTopics(
       ArgumentMatchers.eq(timeout),
+      ArgumentMatchers.eq(KafkaPrincipal.ANONYMOUS),
       ArgumentMatchers.eq(false),
       ArgumentMatchers.eq(Map(authorizedTopic -> topicToCreate)),
       any(),
@@ -1214,7 +1215,7 @@ class KafkaApisTest {
       when(autoTopicCreationManager.createTopics(
         ArgumentMatchers.eq(Set(topicName)),
         ArgumentMatchers.eq(UnboundedControllerMutationQuota),
-        capturedRequest.capture())).thenReturn(
+        capturedRequest.capture(), capturedRequest.getValue.get.principal())).thenReturn(
         Seq(new MetadataResponseTopic()
         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
         .setIsInternal(isInternal)

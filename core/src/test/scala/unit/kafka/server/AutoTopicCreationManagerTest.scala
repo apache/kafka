@@ -21,7 +21,6 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
-
 import kafka.controller.KafkaController
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
@@ -145,6 +144,8 @@ class AutoTopicCreationManagerTest {
 
     Mockito.verify(adminManager).createTopics(
       ArgumentMatchers.eq(0),
+      // todo same check here
+      ArgumentMatchers.eq(KafkaPrincipal.ANONYMOUS),
       ArgumentMatchers.eq(false),
       ArgumentMatchers.eq(Map(topicName -> getNewTopic(topicName))),
       ArgumentMatchers.eq(Map.empty),
@@ -244,7 +245,7 @@ class AutoTopicCreationManagerTest {
     val requestContext = initializeRequestContext(topicName, userPrincipal, Optional.of(principalSerde))
 
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext), userPrincipal)
 
     assertTrue(serializeIsCalled.get())
 
@@ -264,7 +265,7 @@ class AutoTopicCreationManagerTest {
 
     // Throw upon undefined principal serde when building the forward request
     assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext)))
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext),KafkaPrincipal.ANONYMOUS))
   }
 
   @Test
@@ -280,9 +281,9 @@ class AutoTopicCreationManagerTest {
 
     val requestContext = initializeRequestContext(topicName, KafkaPrincipal.ANONYMOUS, Optional.of(principalSerde))
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext), KafkaPrincipal.ANONYMOUS)
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext), KafkaPrincipal.ANONYMOUS)
 
     // Should only trigger once
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
@@ -302,7 +303,7 @@ class AutoTopicCreationManagerTest {
 
     // Could do the send again as inflight topics are cleared.
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext), requestContext.principal())
     Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
       argumentCaptor.capture())
@@ -366,6 +367,8 @@ class AutoTopicCreationManagerTest {
       Map(topicName -> new ApiError(error))
     Mockito.when(adminManager.createTopics(
       ArgumentMatchers.eq(0),
+      // todo: check, not sure about this, probably since it's forwarded by another node and it's in auto-create mode it is marked anonymously.
+      ArgumentMatchers.eq(KafkaPrincipal.ANONYMOUS),
       ArgumentMatchers.eq(false),
       ArgumentMatchers.eq(Map(topicName -> newTopic)),
       ArgumentMatchers.eq(Map.empty),
@@ -383,7 +386,7 @@ class AutoTopicCreationManagerTest {
                                          isInternal: Boolean,
                                          metadataContext: Option[RequestContext] = None): Unit = {
     val topicResponses = autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, metadataContext)
+      Set(topicName), UnboundedControllerMutationQuota, metadataContext, KafkaPrincipal.ANONYMOUS)
 
     val expectedResponses = Seq(new MetadataResponseTopic()
       .setErrorCode(error.code())

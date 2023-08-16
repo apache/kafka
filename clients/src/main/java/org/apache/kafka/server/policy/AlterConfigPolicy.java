@@ -23,7 +23,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * <p>An interface for enforcing a policy on alter configs requests.
