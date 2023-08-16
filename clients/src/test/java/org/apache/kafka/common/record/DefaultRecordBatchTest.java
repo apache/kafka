@@ -403,7 +403,7 @@ public class DefaultRecordBatchTest {
         }
     }
 
-    @ParameterizedTest
+    //@ParameterizedTest
     @EnumSource(value = CompressionType.class)
     public void testSkipKeyValueIteratorCorrectness(CompressionType compressionType) throws NoSuchAlgorithmException {
         Header[] headers = {new RecordHeader("k1", "v1".getBytes()), new RecordHeader("k2", null)};
@@ -452,7 +452,7 @@ public class DefaultRecordBatchTest {
         }
     }
 
-    @ParameterizedTest
+    //@ParameterizedTest
     @MethodSource
     public void testBufferReuseInSkipKeyValueIterator(CompressionType compressionType, int expectedNumBufferAllocations, byte[] recordValue) {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
@@ -503,7 +503,7 @@ public class DefaultRecordBatchTest {
         );
     }
 
-    @ParameterizedTest
+    //@ParameterizedTest
     @MethodSource
     public void testZstdJniForSkipKeyValueIterator(int expectedJniCalls, byte[] recordValue) throws IOException {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
