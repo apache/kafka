@@ -31,8 +31,6 @@ args = parser.parse_args()
 
 version = args.version
 
-release_version = version
-
 
 def update_template_js(file_name, version) -> None:
     parser = Parser()
