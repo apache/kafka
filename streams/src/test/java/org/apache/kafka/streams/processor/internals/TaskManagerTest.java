@@ -596,7 +596,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater");
+        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread");
         Mockito.verifyNoInteractions(activeTaskCreator);
     }
 
@@ -633,7 +634,8 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap())
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater");
+        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread");
         Mockito.verifyNoInteractions(activeTaskCreator);
     }
 
@@ -715,7 +717,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater");
+        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId02 + " is managed by the stream thread");
         Mockito.verifyNoInteractions(activeTaskCreator);
     }
 
