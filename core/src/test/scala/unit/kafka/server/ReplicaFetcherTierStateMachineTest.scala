@@ -95,7 +95,7 @@ class ReplicaFetcherTierStateMachineTest {
    * 4. Follower comes online and tries to fetch X from leader.
    */
   @Test
-  def testFollowerFetchMovedToAndDeletedFromTieredStore(): Unit = {
+  def testFollowerFetchOffsetOutOfRangeWithTieredStore(): Unit = {
     val partition = new TopicPartition("topic", 0)
 
     val replicaLog = Seq(
