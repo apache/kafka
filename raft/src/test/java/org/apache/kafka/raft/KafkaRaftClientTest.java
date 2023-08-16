@@ -2578,7 +2578,8 @@ public class KafkaRaftClientTest {
 
         // Now catch up to the start of the leader epoch so that the high
         // watermark advances and we can start sending committed data to the
-        // listener. Note that the `LeaderChange` control record is filtered.
+        // listener. Note that the `LeaderChange` control record is included
+        // in the committed batches.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0));
         context.client.poll();
         assertEquals(OptionalLong.of(0), context.listener.lastCommitOffset());
