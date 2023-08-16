@@ -40,7 +40,6 @@ def update_template_js(file_name, version) -> None:
         data = file.read()
     with open(file_name, "r") as file:
         data_list = file.readlines()
-    # print(data_list)
     s = []
     for l in data_list:
         if l.startswith("var context"):
@@ -91,7 +90,6 @@ def update_pom_xml(file_name, final_version, pattern):
     while index < len(file_prop) - 1:
         element = file_prop[index].strip()
         prev_element = file_prop[index-1].strip()
-        # print(element)
         if element.startswith(element_pattern):
             if (previous_element_pattern and prev_element.startswith(previous_element_pattern)) or \
                   not previous_element_pattern:
@@ -99,7 +97,6 @@ def update_pom_xml(file_name, final_version, pattern):
                 break
         index += 1
     string = ''.join(file_prop)
-    # print(file_prop)
     with open(file_name, "w") as file:
         file.write(string)
     print("Updated %s!" % file_name)
