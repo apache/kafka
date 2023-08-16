@@ -925,7 +925,7 @@ public final class QuorumController implements Controller {
         @Override
         public CompletableFuture<?> beginMigration() {
             if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
-                log.info("Starting ZK Migration");
+                log.info("Starting migration of ZooKeeper metadata to KRaft.");
                 ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
                     "Begin ZK Migration Transaction",
                     new MigrationWriteOperation(Collections.singletonList(
@@ -952,7 +952,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public CompletableFuture<OffsetAndEpoch> completeMigration() {
-            log.info("Completing ZK Migration");
+            log.info("Completing migration of ZooKeeper metadata to KRaft.");
             List<ApiMessageAndVersion> records = new ArrayList<>(2);
             records.add(ZkMigrationState.MIGRATION.toRecord());
             if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
@@ -967,21 +967,10 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public CompletableFuture<?> abortMigration() {
+        public void abortMigration() {
+            // If something goes wrong during the migration, cause the controller to crash and let the
+            // next controller abort the migration transaction (if in use).
             fatalFaultHandler.handleFault("Aborting the ZK migration");
-            if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
-                ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
-                    "Abort ZK Migration Transaction",
-                    new MigrationWriteOperation(Collections.singletonList(
-                        new ApiMessageAndVersion(
-                            new AbortTransactionRecord().setReason("Aborting ZK Migration"), (short) 0))
-                    ),
-                    eventFlags);
-                queue.append(batchEvent);
-                return batchEvent.future;
-            } else {
-                return CompletableFuture.completedFuture(null);
-            }
         }
     }
 
@@ -1176,7 +1165,7 @@ public final class QuorumController implements Controller {
     public static List<ApiMessageAndVersion> generateActivationRecords(
         Logger log,
         boolean isLogEmpty,
-        OptionalLong transactionStartOffset,
+        long transactionStartOffset,
         boolean zkMigrationEnabled,
         BootstrapMetadata bootstrapMetadata,
         FeatureControlManager featureControl
@@ -1253,13 +1242,13 @@ public final class QuorumController implements Controller {
                 }
             }
 
-            if (transactionStartOffset.isPresent()) {
+            if (transactionStartOffset != -1L) {
                 if (!featureControl.metadataVersion().isMetadataTransactionSupported()) {
-                    throw new RuntimeException("Detected in-progress transaction at " + transactionStartOffset.getAsLong() +
+                    throw new RuntimeException("Detected in-progress transaction at " + transactionStartOffset +
                        ", but the metadata.version " + featureControl.metadataVersion() +
                         " does not support transactions. Cannot continue.");
                 } else {
-                    log.warn("Detected in-progress transaction at " + transactionStartOffset.getAsLong() +
+                    log.warn("Detected in-progress transaction at " + transactionStartOffset +
                         " during controller activation. Aborting this transaction.");
                     records.add(new ApiMessageAndVersion(
                         new AbortTransactionRecord().setReason("Controller failover"), (short) 0));

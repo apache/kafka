@@ -155,8 +155,8 @@ public class KRaftMigrationDriverTest {
         }
 
         @Override
-        public CompletableFuture<?> abortMigration() {
-            return CompletableFuture.completedFuture(null);
+        public void abortMigration() {
+
         }
     }
 

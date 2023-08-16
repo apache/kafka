@@ -50,9 +50,9 @@ public class OffsetControlManagerTest {
         assertNull(offsetControl.currentSnapshotName());
         assertEquals(-1L, offsetControl.lastCommittedOffset());
         assertEquals(-1, offsetControl.lastCommittedEpoch());
-        assertEquals(-1, offsetControl.lastStableOffset());
-        assertFalse(offsetControl.transactionStartOffset().isPresent());
-        assertEquals(-1, offsetControl.nextWriteOffset());
+        assertEquals(-1L, offsetControl.lastStableOffset());
+        assertEquals(-1L, offsetControl.transactionStartOffset());
+        assertEquals(-1L, offsetControl.nextWriteOffset());
         assertFalse(offsetControl.active());
         assertEquals(Arrays.asList(-1L), offsetControl.snapshotRegistry().epochsList());
     }
@@ -126,7 +126,7 @@ public class OffsetControlManagerTest {
         assertEquals(1000L, offsetControl.lastCommittedOffset());
         assertEquals(200, offsetControl.lastCommittedEpoch());
         assertEquals(1000L, offsetControl.lastStableOffset());
-        assertFalse(offsetControl.transactionStartOffset().isPresent());
+        assertEquals(-1L, offsetControl.transactionStartOffset());
         assertEquals(-1L, offsetControl.nextWriteOffset());
         assertFalse(offsetControl.active());
         assertFalse(offsetControl.metrics().active());
@@ -174,7 +174,7 @@ public class OffsetControlManagerTest {
         assertEquals(4000L, offsetControl.lastCommittedOffset());
         assertEquals(300, offsetControl.lastCommittedEpoch());
         assertEquals(4000L, offsetControl.lastStableOffset());
-        assertFalse(offsetControl.transactionStartOffset().isPresent());
+        assertEquals(-1L, offsetControl.transactionStartOffset());
         assertEquals(-1L, offsetControl.nextWriteOffset());
         assertEquals(4000L, offsetControl.metrics().lastCommittedRecordOffset());
         assertEquals(4000L, offsetControl.metrics().lastAppliedRecordOffset());
@@ -229,7 +229,7 @@ public class OffsetControlManagerTest {
             build();
 
         offsetControl.replay(new BeginTransactionRecord(), 1500L);
-        assertEquals(1500L, offsetControl.transactionStartOffset().getAsLong());
+        assertEquals(1500L, offsetControl.transactionStartOffset());
         assertEquals(Arrays.asList(-1L, 1499L), offsetControl.snapshotRegistry().epochsList());
 
         offsetControl.handleCommitBatch(newFakeBatch(1550L, 100, 2000L));
@@ -247,7 +247,7 @@ public class OffsetControlManagerTest {
             assertEquals(Arrays.asList("snapshot[-1]", "snapshot[1499]"),
                 snapshotRegistry.operations());
         }
-        assertFalse(offsetControl.transactionStartOffset().isPresent());
+        assertEquals(-1L, offsetControl.transactionStartOffset());
         assertEquals(1499L, offsetControl.lastStableOffset());
 
         offsetControl.handleCommitBatch(newFakeBatch(1650, 100, 2100L));
@@ -263,7 +263,7 @@ public class OffsetControlManagerTest {
             build();
         offsetControl.replay(new BeginTransactionRecord(), 1500L);
         offsetControl.beginLoadSnapshot(new OffsetAndEpoch(4000L, 300));
-        assertFalse(offsetControl.transactionStartOffset().isPresent());
+        assertEquals(-1L, offsetControl.transactionStartOffset());
         assertEquals(Arrays.asList("snapshot[-1]", "snapshot[1499]", "reset"),
                 snapshotRegistry.operations());
     }
