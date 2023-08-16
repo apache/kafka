@@ -213,6 +213,21 @@ public class FileStreamSourceConnectorTest {
         assertThrows(ConnectException.class, () -> alterOffsets.apply(-10L));
         assertTrue(() -> alterOffsets.apply(10L));
     }
+    @Test
+    public void testAlterOffsetsOffsetTombstones() {
+        Function<Map<String, ?>, Boolean> alterOffsets = partition ->
+                connector.alterOffsets(sourceProperties, Collections.singletonMap(partition, null));
+
+        assertTrue(alterOffsets.apply(null));
+        assertTrue(alterOffsets.apply(Collections.emptyMap()));
+        Map<String, Object> partition = new HashMap<>();
+        partition.put("unused_partition_key", "unused_partition_value");
+        assertTrue(alterOffsets.apply(partition));
+        partition.put(FILENAME_FIELD, FILENAME);
+        assertTrue(alterOffsets.apply(partition));
+        partition.put("", "");
+        assertTrue(alterOffsets.apply(partition));
+    }
 
     @Test
     public void testSuccessfulAlterOffsets() {

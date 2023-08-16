@@ -117,6 +117,14 @@ public class FileStreamSourceConnector extends SourceConnector {
         // This connector makes use of a single source partition at a time which represents the file that it is configured to read from.
         // However, there could also be source partitions from previous configurations of the connector.
         for (Map.Entry<Map<String, ?>, Map<String, ?>> partitionOffset : offsets.entrySet()) {
+            Map<String, ?> offset = partitionOffset.getValue();
+            // null offsets are allowed and represent a deletion of offsets for a partition
+            // allow tombstones for anything; if there's garbage in the offsets for the connector, we don't
+            // want to prevent users from being able to clean it up using the REST API
+            if (offset == null) {
+                continue;
+            }
+
             Map<String, ?> partition = partitionOffset.getKey();
             if (partition == null) {
                 throw new ConnectException("Partition objects cannot be null");
@@ -126,11 +134,6 @@ public class FileStreamSourceConnector extends SourceConnector {
                 throw new ConnectException("Partition objects should contain the key '" + FILENAME_FIELD + "'");
             }
 
-            Map<String, ?> offset = partitionOffset.getValue();
-            // null offsets are allowed and represent a deletion of offsets for a partition
-            if (offset == null) {
-                continue;
-            }
 
             if (!offset.containsKey(POSITION_FIELD)) {
                 throw new ConnectException("Offset objects should either be null or contain the key '" + POSITION_FIELD + "'");
