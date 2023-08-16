@@ -20,6 +20,7 @@ from kafkatest.version import LATEST_3_5
 from kafkatest.services.connect import ConnectStandaloneService, ConnectServiceBase
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
+from ducktape.utils.util import wait_until
 
 
 class ConnectPluginDiscoveryTest(KafkaTest):
@@ -62,10 +63,15 @@ class ConnectPluginDiscoveryTest(KafkaTest):
         migrated = command == ('sync-manifests',)
         should_start = not (plugin_discovery == 'hybrid_fail' and not migrated)
         # Do not clean the plugin path during startup
-        self.cc.start(mode=None if should_start else ConnectServiceBase.STARTUP_MODE_CRASH, clean=False)
+        self.cc.start(mode=None if should_start else ConnectServiceBase.STARTUP_MODE_INSTANT, clean=False)
 
         if should_start:
             # plugins should be visible in the backwards-compatible modes, or if the migration finished.
             expect_discovered = (plugin_discovery == 'only_scan' or plugin_discovery == 'hybrid_warn') or migrated
             actual_discovered = set([connector_plugin['class'] for connector_plugin in self.cc.list_connector_plugins()]).issuperset({self.FILE_SOURCE_CONNECTOR, self.FILE_SINK_CONNECTOR})
             assert expect_discovered == actual_discovered
+        else:
+            # The worker should crash due to non-migrated plugins
+            for node in self.cc.nodes:
+                wait_until(lambda: not node.account.alive(self.cc.pids(node)), timeout_sec=self.cc.startup_timeout_sec,
+                           err_msg="Kafka Connect did not stop: %s" % str(node.account))
