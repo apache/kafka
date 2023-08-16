@@ -570,6 +570,11 @@ public final class QuorumController implements Controller {
     }
 
     // Visible for testing
+    OffsetControlManager offsetControl() {
+        return offsetControl;
+    }
+
+    // Visible for testing
     ReplicationControlManager replicationControl() {
         return replicationControl;
     }

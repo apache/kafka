@@ -1420,7 +1420,7 @@ public class QuorumControllerTest {
             RecordTestUtils.recordAtIndexAs(AbortTransactionRecord.class, records, 0).get(),
             21
         );
-        assertFalse(offsetControlManager.inTransaction());
+        assertFalse(offsetControlManager.transactionStartOffset().isPresent());
     }
 
     @Test
@@ -1487,9 +1487,12 @@ public class QuorumControllerTest {
                 Errors.UNKNOWN_TOPIC_OR_PARTITION,
                 results.get(30, TimeUnit.SECONDS).get("spam").error().error());
 
-            assertEquals(ZkMigrationState.PRE_MIGRATION, newActive.appendReadEvent("read migration state", OptionalLong.empty(),
-                () -> newActive.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
-
+            assertEquals(
+                ZkMigrationState.PRE_MIGRATION,
+                newActive.appendReadEvent("read migration state", OptionalLong.empty(),
+                    () -> newActive.featureControl().zkMigrationState()
+                ).get(30, TimeUnit.SECONDS)
+            );
             // Ensure the migration can happen on new active controller
             migrationConsumer = newActive.zkRecordConsumer();
             migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
@@ -1502,6 +1505,48 @@ public class QuorumControllerTest {
             assertEquals(ZkMigrationState.MIGRATION, newActive.appendReadEvent("read migration state", OptionalLong.empty(),
                 () -> newActive.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
 
+        }
+    }
+
+    @Test
+    public void testAbortMigration() throws Exception {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build();
+        ) {
+            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"));
+            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+            QuorumController active = controlEnv.activeController(true);
+            ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
+            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
+            migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
+            migrationConsumer.abortMigration().get(30, TimeUnit.SECONDS);
+            assertFalse(active.offsetControl().transactionStartOffset().isPresent());
+
+            CompletableFuture<Map<String, ResultOrError<Uuid>>> results =
+                active.findTopicIds(ANONYMOUS_CONTEXT, Collections.singleton("spam"));
+            assertEquals(
+                Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                results.get(30, TimeUnit.SECONDS).get("spam").error().error());
+
+            assertEquals(
+                ZkMigrationState.PRE_MIGRATION,
+                active.appendReadEvent("read migration state", OptionalLong.empty(),
+                    () -> active.featureControl().zkMigrationState()
+                ).get(30, TimeUnit.SECONDS)
+            );
+
+            // Ensure the migration can happen again
+            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
+            migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
+            migrationConsumer.completeMigration().get(30, TimeUnit.SECONDS);
+
+            results = active.findTopicIds(ANONYMOUS_CONTEXT, Collections.singleton("spam"));
+            assertTrue(results.get(30, TimeUnit.SECONDS).get("spam").isResult());
+
+            assertEquals(ZkMigrationState.MIGRATION, active.appendReadEvent("read migration state", OptionalLong.empty(),
+                () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
         }
     }
 }

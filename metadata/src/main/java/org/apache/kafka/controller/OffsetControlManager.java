@@ -212,10 +212,6 @@ class OffsetControlManager {
         return lastStableOffset;
     }
 
-    boolean inTransaction() {
-        return transactionStartOffset != -1L;
-    }
-
     /**
      * @return the transaction start offset if present, or empty if there is no transaction.
      */
