@@ -54,7 +54,6 @@ public class BooleanConverterTest {
         );
     }
 
-
     @Test
     public void testFromConnectBadSchema() {
         assertThrows(DataException.class,
