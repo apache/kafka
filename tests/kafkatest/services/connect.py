@@ -53,6 +53,8 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     """STARTUP_MODE_LISTEN: Start Connect worker and return after opening the REST port."""
     STARTUP_MODE_JOIN = 'JOIN'
     """STARTUP_MODE_JOIN: Start Connect worker and return after joining the group."""
+    STARTUP_MODE_CRASH = 'CRASH'
+    """STARTUP_MODE_CRASH: Start Connect worker and return after the process exits."""
 
     logs = {
         "connect_log": {
@@ -89,7 +91,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         except:
             return []
 
-    def set_configs(self, config_template_func, connector_config_templates=None):
+    def set_configs(self, config_template_func, connector_config_templates=[]):
         """
         Set configurations for the worker and the connector to run on
         it. These are not provided in the constructor because the worker
@@ -120,10 +122,10 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             self.logger.debug("REST resources are not loaded yet")
             return False
 
-    def start(self, mode=None):
+    def start(self, mode=None, **kwargs):
         if mode:
             self.startup_mode = mode
-        super(ConnectServiceBase, self).start()
+        super(ConnectServiceBase, self).start(**kwargs)
 
     def start_and_return_immediately(self, node, worker_type, remote_connector_configs):
         cmd = self.start_cmd(node, remote_connector_configs)
@@ -151,6 +153,12 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             monitor.wait_until('Joined group', timeout_sec=self.startup_timeout_sec,
                                err_msg="Never saw message indicating Kafka Connect joined group on node: " +
                                        "%s in condition mode: %s" % (str(node.account), self.startup_mode))
+
+    def start_and_wait_to_stop(self, node, worker_type, remote_connector_configs):
+        self.start_and_return_immediately(node, worker_type, remote_connector_configs)
+        wait_until(lambda: not node.account.alive(self.pids(node)), timeout_sec=self.startup_timeout_sec,
+                   err_msg="Kafka Connect did not stop: %s in condition mode: %s" %
+                           (str(node.account), self.startup_mode))
 
     def stop_node(self, node, clean_shutdown=True, await_shutdown=None):
         if await_shutdown is None:
@@ -342,7 +350,7 @@ class ConnectStandaloneService(ConnectServiceBase):
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
 
-    def start_node(self, node):
+    def start_node(self, node, **kwargs):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         self.security_config.setup_node(node)
@@ -363,6 +371,8 @@ class ConnectStandaloneService(ConnectServiceBase):
             self.start_and_return_immediately(node, 'standalone', remote_connector_configs)
         elif self.startup_mode == self.STARTUP_MODE_JOIN:
             self.start_and_wait_to_join_group(node, 'standalone', remote_connector_configs)
+        elif self.startup_mode == self.STARTUP_MODE_CRASH:
+            self.start_and_wait_to_stop(node, 'standalone', remote_connector_configs)
         else:
             # The default mode is to wait until the complete startup of the worker
             self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
@@ -399,7 +409,7 @@ class ConnectDistributedService(ConnectServiceBase):
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
 
-    def start_node(self, node):
+    def start_node(self, node, **kwargs):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         self.security_config.setup_node(node)
@@ -417,6 +427,8 @@ class ConnectDistributedService(ConnectServiceBase):
             self.start_and_return_immediately(node, 'distributed', '')
         elif self.startup_mode == self.STARTUP_MODE_LISTEN:
             self.start_and_wait_to_start_listening(node, 'distributed', '')
+        elif self.startup_mode == self.STARTUP_MODE_CRASH:
+            self.start_and_wait_to_stop(node, 'distributed', '')
         else:
             # The default mode is to wait until the complete startup of the worker
             self.start_and_wait_to_join_group(node, 'distributed', '')
