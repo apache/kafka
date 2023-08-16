@@ -629,7 +629,9 @@ public final class QuorumController implements Controller {
         /**
          * This flag signifies that an event will be completed even if it is part of an unfinished transaction.
          * This is needed for metadata transactions so that external callers can add records to a transaction
-         * and still use the returned future.
+         * and still use the returned future. One example usage of this flag is the batches of migrations records.
+         * The migration driver needs to wait on each submitted batch to avoid overwhelming the controller queue
+         * with events, so it needs events to be completed based on the committed (i.e., not stable) offset.
          */
         COMPLETES_IN_TRANSACTION
     }
@@ -798,7 +800,6 @@ public final class QuorumController implements Controller {
             }
         }
 
-
         @Override
         public String toString() {
             return name + "(" + System.identityHashCode(this) + ")";
@@ -918,15 +919,21 @@ public final class QuorumController implements Controller {
         }
         @Override
         public CompletableFuture<?> beginMigration() {
-            log.info("Starting ZK Migration");
-            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
-                "Begin ZK Migration Transaction",
-                new MigrationWriteOperation(Collections.singletonList(
-                    new ApiMessageAndVersion(
-                        new BeginTransactionRecord().setName("ZK Migration"), (short) 0))
-                ), eventFlags);
-            queue.append(batchEvent);
-            return batchEvent.future;
+            if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
+                log.info("Starting ZK Migration");
+                ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
+                    "Begin ZK Migration Transaction",
+                    new MigrationWriteOperation(Collections.singletonList(
+                        new ApiMessageAndVersion(
+                            new BeginTransactionRecord().setName("ZK Migration"), (short) 0))
+                    ), eventFlags);
+                queue.append(batchEvent);
+                return batchEvent.future;
+            } else {
+                log.warn("Starting ZK Migration without metadata transactions enabled. This is not safe since " +
+                    "a controller failover or processing error may lead to partially migrated metadata.");
+                return CompletableFuture.completedFuture(null);
+            }
         }
 
         @Override
@@ -941,15 +948,15 @@ public final class QuorumController implements Controller {
         @Override
         public CompletableFuture<OffsetAndEpoch> completeMigration() {
             log.info("Completing ZK Migration");
+            List<ApiMessageAndVersion> records = new ArrayList<>(2);
+            records.add(ZkMigrationState.MIGRATION.toRecord());
+            if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
+                records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
+            }
             ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
                 "Complete ZK Migration",
-                new MigrationWriteOperation(
-                    Arrays.asList(
-                        ZkMigrationState.MIGRATION.toRecord(),
-                        new ApiMessageAndVersion(
-                            new EndTransactionRecord(), (short) 0)
-                    )),
-                    eventFlags);
+                new MigrationWriteOperation(records),
+                eventFlags);
             queue.append(event);
             return event.future.thenApply(__ -> highestMigrationRecordOffset);
         }
@@ -957,14 +964,19 @@ public final class QuorumController implements Controller {
         @Override
         public CompletableFuture<?> abortMigration() {
             fatalFaultHandler.handleFault("Aborting the ZK migration");
-            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
-                "Abort ZK Migration Transaction",
-                new MigrationWriteOperation(Collections.singletonList(
-                    new ApiMessageAndVersion(
-                        new AbortTransactionRecord(), (short) 0))
-                ), eventFlags);
-            queue.append(batchEvent);
-            return batchEvent.future;
+            if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
+                ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
+                    "Abort ZK Migration Transaction",
+                    new MigrationWriteOperation(Collections.singletonList(
+                        new ApiMessageAndVersion(
+                            new AbortTransactionRecord().setReason("Aborting ZK Migration"), (short) 0))
+                    ),
+                    eventFlags);
+                queue.append(batchEvent);
+                return batchEvent.future;
+            } else {
+                return CompletableFuture.completedFuture(null);
+            }
         }
     }
 
@@ -1159,7 +1171,7 @@ public final class QuorumController implements Controller {
     public static List<ApiMessageAndVersion> generateActivationRecords(
         Logger log,
         boolean isLogEmpty,
-        boolean inTransaction,
+        OptionalLong transactionStartOffset,
         boolean zkMigrationEnabled,
         BootstrapMetadata bootstrapMetadata,
         FeatureControlManager featureControl
@@ -1236,13 +1248,16 @@ public final class QuorumController implements Controller {
                 }
             }
 
-            if (inTransaction) {
+            if (transactionStartOffset.isPresent()) {
                 if (!featureControl.metadataVersion().isMetadataTransactionSupported()) {
-                    throw new RuntimeException("Detected in-progress transaction, but the metadata.version " + featureControl.metadataVersion() +
+                    throw new RuntimeException("Detected in-progress transaction at " + transactionStartOffset.getAsLong() +
+                       ", but the metadata.version " + featureControl.metadataVersion() +
                         " does not support transactions. Cannot continue.");
                 } else {
-                    log.warn("Detected in-progress transaction during controller activation. Aborting this transaction.");
-                    records.add(new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0));
+                    log.warn("Detected in-progress transaction at " + transactionStartOffset.getAsLong() +
+                        " during controller activation. Aborting this transaction.");
+                    records.add(new ApiMessageAndVersion(
+                        new AbortTransactionRecord().setReason("Controller failover"), (short) 0));
                 }
             }
         }
@@ -1255,7 +1270,7 @@ public final class QuorumController implements Controller {
             try {
                 List<ApiMessageAndVersion> records = generateActivationRecords(log,
                     logReplayTracker.empty(),
-                    offsetControl.inTransaction(),
+                    offsetControl.transactionStartOffset(),
                     zkMigrationEnabled,
                     bootstrapMetadata,
                     featureControl);

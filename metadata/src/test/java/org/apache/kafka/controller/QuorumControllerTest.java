@@ -135,7 +135,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1295,7 +1294,7 @@ public class QuorumControllerTest {
         List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
             log,
             !stateInLog.isPresent(),
-            false,
+            OptionalLong.empty(),
             zkMigrationEnabled,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
             featureControlManager);
@@ -1412,7 +1411,7 @@ public class QuorumControllerTest {
         List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
             log,
             false,
-            offsetControlManager.inTransaction(),
+            offsetControlManager.transactionStartOffset(),
             false,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             featureControlManager);
@@ -1441,7 +1440,7 @@ public class QuorumControllerTest {
             QuorumController.generateActivationRecords(
                 log,
                 false,
-                offsetControlManager.inTransaction(),
+                offsetControlManager.transactionStartOffset(),
                 false,
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
                 featureControlManager)

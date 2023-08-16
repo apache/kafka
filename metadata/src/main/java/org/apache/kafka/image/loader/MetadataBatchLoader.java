@@ -29,8 +29,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 
-import java.util.function.Supplier;
-
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 /**
@@ -58,7 +56,6 @@ public class MetadataBatchLoader {
     private final Logger log;
     private final Time time;
     private final FaultHandler faultHandler;
-    private final Supplier<LeaderAndEpoch> leaderAndEpochSupplier;
     private final MetadataUpdater callback;
 
     private MetadataImage image;
@@ -75,13 +72,11 @@ public class MetadataBatchLoader {
         LogContext logContext,
         Time time,
         FaultHandler faultHandler,
-        Supplier<LeaderAndEpoch> leaderAndEpochSupplier,
         MetadataUpdater callback
     ) {
         this.log = logContext.logger(MetadataBatchLoader.class);
         this.time = time;
         this.faultHandler = faultHandler;
-        this.leaderAndEpochSupplier = leaderAndEpochSupplier;
         this.callback = callback;
     }
 
@@ -116,7 +111,7 @@ public class MetadataBatchLoader {
      * @return         The time in nanoseconds that elapsed while loading this batch
      */
 
-    public long loadBatch(Batch<ApiMessageAndVersion> batch) {
+    public long loadBatch(Batch<ApiMessageAndVersion> batch, LeaderAndEpoch leaderAndEpoch) {
         long startNs = time.nanoseconds();
         int indexWithinBatch = 0;
 
@@ -138,7 +133,7 @@ public class MetadataBatchLoader {
                 MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs);
                 LogDeltaManifest manifest = LogDeltaManifest.newBuilder()
                     .provenance(provenance)
-                    .leaderAndEpoch(leaderAndEpochSupplier.get())
+                    .leaderAndEpoch(leaderAndEpoch)
                     .numBatches(numBatches) // This will be zero if we have not yet read a batch
                     .elapsedNs(totalBatchElapsedNs)
                     .numBytes(numBytes)     // This will be zero if we have not yet read a batch
@@ -170,11 +165,11 @@ public class MetadataBatchLoader {
      * Flush the metadata accumulated in this batch loader if not in the middle of a transaction. The
      * flushed metadata will be passed to the {@link MetadataUpdater} configured for this class.
      */
-    public void maybeFlushBatches() {
+    public void maybeFlushBatches(LeaderAndEpoch leaderAndEpoch) {
         MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs);
         LogDeltaManifest manifest = LogDeltaManifest.newBuilder()
             .provenance(provenance)
-            .leaderAndEpoch(leaderAndEpochSupplier.get())
+            .leaderAndEpoch(leaderAndEpoch)
             .numBatches(numBatches)
             .elapsedNs(totalBatchElapsedNs)
             .numBytes(numBytes)
@@ -182,18 +177,21 @@ public class MetadataBatchLoader {
         switch (transactionState) {
             case STARTED_TRANSACTION:
             case CONTINUED_TRANSACTION:
-                log.debug("handleCommit: not publishing since a transaction is still in progress");
+                log.debug("handleCommit: not publishing since a transaction starting at {} is still in progress. " +
+                    "{} batch(es) processed so far.", image.offset(), numBatches);
                 break;
             case ABORTED_TRANSACTION:
-                log.debug("handleCommit: publishing empty delta since a transaction was aborted");
+                log.debug("handleCommit: publishing empty delta between {} and {} from {} batch(es) " +
+                    "since a transaction was aborted", image.offset(), manifest.provenance().lastContainedOffset(),
+                    manifest.numBatches());
                 applyDeltaAndUpdate(new MetadataDelta.Builder().setImage(image).build(), manifest);
                 break;
             case ENDED_TRANSACTION:
             case NO_TRANSACTION:
                 if (log.isDebugEnabled()) {
                     log.debug("handleCommit: Generated a metadata delta between {} and {} from {} batch(es) in {} us.",
-                            image.offset(), manifest.provenance().lastContainedOffset(),
-                            manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()));
+                        image.offset(), manifest.provenance().lastContainedOffset(),
+                        manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()));
                 }
                 applyDeltaAndUpdate(delta, manifest);
                 break;
@@ -204,11 +202,11 @@ public class MetadataBatchLoader {
         MetadataRecordType type = MetadataRecordType.fromId(record.message().apiKey());
         switch (type) {
             case BEGIN_TRANSACTION_RECORD:
-                if (transactionState != TransactionState.CONTINUED_TRANSACTION &&
-                    transactionState != TransactionState.STARTED_TRANSACTION) {
-                    transactionState = TransactionState.STARTED_TRANSACTION;
-                } else {
+                if (transactionState == TransactionState.STARTED_TRANSACTION ||
+                    transactionState == TransactionState.CONTINUED_TRANSACTION) {
                     throw new RuntimeException("Encountered BeginTransactionRecord while already in a transaction");
+                } else {
+                    transactionState = TransactionState.STARTED_TRANSACTION;
                 }
                 break;
             case END_TRANSACTION_RECORD:
@@ -228,13 +226,20 @@ public class MetadataBatchLoader {
                 }
                 break;
             default:
-                if (transactionState == TransactionState.ENDED_TRANSACTION ||
-                    transactionState == TransactionState.ABORTED_TRANSACTION) {
-                    // If we see a non-transaction record after ending a transaction, transition back to NO_TRANSACTION
-                    transactionState = TransactionState.NO_TRANSACTION;
-                } else if (transactionState == TransactionState.STARTED_TRANSACTION) {
-                    // If we see a non-transaction record after starting a transaction, transition to CONTINUED_TRANSACTION
-                    transactionState = TransactionState.CONTINUED_TRANSACTION;
+                switch (transactionState) {
+                    case STARTED_TRANSACTION:
+                        // If we see a non-transaction record after starting a transaction, transition to CONTINUED_TRANSACTION
+                        transactionState = TransactionState.CONTINUED_TRANSACTION;
+                        break;
+                    case ENDED_TRANSACTION:
+                    case ABORTED_TRANSACTION:
+                        // If we see a non-transaction record after ending a transaction, transition back to NO_TRANSACTION
+                        transactionState = TransactionState.NO_TRANSACTION;
+                        break;
+                    case CONTINUED_TRANSACTION:
+                    case NO_TRANSACTION:
+                    default:
+                        break;
                 }
                 delta.replay(record.message());
         }

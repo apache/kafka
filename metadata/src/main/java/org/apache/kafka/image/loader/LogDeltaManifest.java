@@ -31,9 +31,9 @@ public class LogDeltaManifest implements LoaderManifest {
     public static class Builder {
         private MetadataProvenance provenance;
         private LeaderAndEpoch leaderAndEpoch;
-        private Integer numBatches;
-        private Long elapsedNs;
-        private Long numBytes;
+        private int numBatches = -1;
+        private long elapsedNs = -1L;
+        private long numBytes = -1L;
 
         public Builder provenance(MetadataProvenance provenance) {
             this.provenance = provenance;
@@ -67,13 +67,13 @@ public class LogDeltaManifest implements LoaderManifest {
             if (leaderAndEpoch == null) {
                 throw new RuntimeException("leaderAndEpoch must not be null");
             }
-            if (numBatches == null) {
+            if (numBatches == -1) {
                 throw new RuntimeException("numBatches must not be null");
             }
-            if (elapsedNs == null) {
+            if (elapsedNs == -1L) {
                 throw new RuntimeException("elapsedNs must not be null");
             }
-            if (numBytes == null) {
+            if (numBytes == -1L) {
                 throw new RuntimeException("numBytes must not be null");
             }
             return new LogDeltaManifest(provenance, leaderAndEpoch, numBatches, elapsedNs, numBytes);
@@ -136,7 +136,6 @@ public class LogDeltaManifest implements LoaderManifest {
     public LeaderAndEpoch leaderAndEpoch() {
         return leaderAndEpoch;
     }
-
 
     public int numBatches() {
         return numBatches;

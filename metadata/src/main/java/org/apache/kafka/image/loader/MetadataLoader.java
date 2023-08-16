@@ -183,7 +183,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      */
     private MetadataImage image;
 
-    private MetadataBatchLoader batchLoader;
+    private final MetadataBatchLoader batchLoader;
 
     /**
      * The event queue which runs this loader.
@@ -211,7 +211,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             logContext,
             time,
             faultHandler,
-            () -> currentLeaderAndEpoch,
             this::maybePublishMetadata);
         this.batchLoader.resetToImage(this.image);
         this.eventQueue = new KafkaEventQueue(
@@ -355,11 +354,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             try {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
-                    long elapsedNs = batchLoader.loadBatch(batch);
+                    long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
                 }
-                batchLoader.maybeFlushBatches();
+                batchLoader.maybeFlushBatches(currentLeaderAndEpoch);
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.

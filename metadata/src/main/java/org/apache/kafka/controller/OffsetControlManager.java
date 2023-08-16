@@ -31,6 +31,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.Optional;
+import java.util.OptionalLong;
 
 
 /**
@@ -216,10 +217,14 @@ class OffsetControlManager {
     }
 
     /**
-     * @return the transaction start offset, or -1 if there is no transaction.
+     * @return the transaction start offset if present, or empty if there is no transaction.
      */
-    long transactionStartOffset() {
-        return transactionStartOffset;
+    OptionalLong transactionStartOffset() {
+        if (transactionStartOffset == -1L) {
+            return OptionalLong.empty();
+        } else {
+            return OptionalLong.of(transactionStartOffset);
+        }
     }
 
     /**

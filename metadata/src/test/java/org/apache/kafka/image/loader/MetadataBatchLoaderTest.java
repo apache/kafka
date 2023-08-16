@@ -58,6 +58,7 @@ public class MetadataBatchLoaderTest {
     static final List<ApiMessageAndVersion> TXN_BEGIN_SINGLETON;
     static final List<ApiMessageAndVersion> TXN_END_SINGLETON;
     static final List<ApiMessageAndVersion> TXN_ABORT_SINGLETON;
+    static final LeaderAndEpoch LEADER_AND_EPOCH = new LeaderAndEpoch(OptionalInt.of(1), 42);
 
     static {
         {
@@ -147,18 +148,17 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testAlignedTransactionBatches"),
-            () -> new LeaderAndEpoch(OptionalInt.of(1), 42),
             updater
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
-        batchLoader.loadBatch(batch1);
+        batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
-        batchLoader.loadBatch(batch2);
+        batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
-        batchLoader.loadBatch(batch3);
+        batchLoader.loadBatch(batch3, LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
         assertNotNull(updater.latestImage.topics().getTopic("foo"));
         assertEquals(18, updater.latestImage.provenance().lastContainedOffset());
@@ -183,22 +183,21 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testSingletonBeginAndEnd"),
-            () -> new LeaderAndEpoch(OptionalInt.of(1), 42),
             updater
         );
 
         // All in one commit
         batchLoader.resetToImage(MetadataImage.EMPTY);
-        batchLoader.loadBatch(batch1);
+        batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
-        batchLoader.loadBatch(batch2);
+        batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
         assertNull(updater.latestImage.topics().getTopic("bar"));
-        batchLoader.loadBatch(batch3);
+        batchLoader.loadBatch(batch3, LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
-        batchLoader.loadBatch(batch4);
+        batchLoader.loadBatch(batch4, LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertNotNull(updater.latestImage.topics().getTopic("bar"));
         assertEquals(20, updater.latestImage.provenance().lastContainedOffset());
         assertEquals(4, updater.latestImage.provenance().lastContainedEpoch());
@@ -206,20 +205,20 @@ public class MetadataBatchLoaderTest {
         // Each batch in a separate commit
         updater.reset();
         batchLoader.resetToImage(MetadataImage.EMPTY);
-        batchLoader.loadBatch(batch1);
-        batchLoader.maybeFlushBatches();
+        batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
 
-        batchLoader.loadBatch(batch2);
-        batchLoader.maybeFlushBatches();
+        batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
 
-        batchLoader.loadBatch(batch3);
-        batchLoader.maybeFlushBatches();
+        batchLoader.loadBatch(batch3, LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
 
-        batchLoader.loadBatch(batch4);
-        batchLoader.maybeFlushBatches();
+        batchLoader.loadBatch(batch4, LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(2, updater.updates);
     }
 
@@ -231,7 +230,6 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            () -> new LeaderAndEpoch(OptionalInt.of(1), 42),
             updater
         );
 
@@ -242,15 +240,15 @@ public class MetadataBatchLoaderTest {
             13, 2, 0, 30, TXN_BEGIN_SINGLETON);
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
-        batchLoader.loadBatch(batch1);
+        batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
         assertNull(faultHandler.firstException());
-        batchLoader.loadBatch(batch2);
+        batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
         assertEquals(RuntimeException.class, faultHandler.firstException().getCause().getClass());
         assertEquals(
             "Encountered BeginTransactionRecord while already in a transaction",
             faultHandler.firstException().getCause().getMessage()
         );
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
     }
 
@@ -262,7 +260,6 @@ public class MetadataBatchLoaderTest {
                 new LogContext(),
                 new MockTime(),
                 faultHandler,
-                () -> new LeaderAndEpoch(OptionalInt.of(1), 42),
                 updater
         );
 
@@ -275,15 +272,15 @@ public class MetadataBatchLoaderTest {
             13, 2, 0, 30, TXN_END_SINGLETON);
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
-        batchLoader.loadBatch(batch1);
+        batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
         assertNull(faultHandler.firstException());
-        batchLoader.loadBatch(batch2);
+        batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
         assertEquals(RuntimeException.class, faultHandler.firstException().getCause().getClass());
         assertEquals(
             "Encountered EndTransactionRecord without having seen a BeginTransactionRecord",
             faultHandler.firstException().getCause().getMessage()
         );
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
         assertNotNull(updater.latestImage.topics().getTopic("bar"));
     }
@@ -296,7 +293,6 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            () -> new LeaderAndEpoch(OptionalInt.of(1), 42),
             updater
         );
 
@@ -309,15 +305,15 @@ public class MetadataBatchLoaderTest {
             13, 2, 0, 30, TXN_ABORT_SINGLETON);
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
-        batchLoader.loadBatch(batch1);
+        batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
         assertNull(faultHandler.firstException());
-        batchLoader.loadBatch(batch2);
+        batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
         assertEquals(RuntimeException.class, faultHandler.firstException().getCause().getClass());
         assertEquals(
             "Encountered AbortTransactionRecord without having seen a BeginTransactionRecord",
             faultHandler.firstException().getCause().getMessage()
         );
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
         assertNotNull(updater.latestImage.topics().getTopic("bar"));
     }
@@ -334,12 +330,11 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            () -> new LeaderAndEpoch(OptionalInt.of(1), 42),
             updater
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
-        batchLoader.loadBatch(batch);
+        batchLoader.loadBatch(batch, LEADER_AND_EPOCH);
         return batchLoader;
     }
 
@@ -363,7 +358,7 @@ public class MetadataBatchLoaderTest {
 
         assertNotNull(updater.latestImage.topics().getTopic("foo"));
         assertNull(updater.latestImage.topics().getTopic("bar"));
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(2, updater.updates);
         assertEquals(100, updater.latestManifest.numBytes());
         assertEquals(20, updater.latestImage.provenance().lastContainedOffset());
@@ -398,7 +393,7 @@ public class MetadataBatchLoaderTest {
         assertEquals(42, updater.latestImage.provenance().lastContainedEpoch());
         assertNotNull(updater.latestImage.topics().getTopic("foo"));
         assertNull(updater.latestImage.topics().getTopic("bar"));
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
         assertEquals(3, updater.updates);
         assertEquals(100, updater.latestManifest.numBytes());
         assertEquals(26, updater.latestImage.provenance().lastContainedOffset());
@@ -415,26 +410,25 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testOneTransactionInMultipleBatches"),
-            () -> new LeaderAndEpoch(OptionalInt.of(1), 42),
             updater
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
         batchLoader.loadBatch(Batch.data(
-            16, 2, 0, 10, TXN_BEGIN_SINGLETON));
+            16, 2, 0, 10, TXN_BEGIN_SINGLETON), LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
         batchLoader.loadBatch(Batch.data(
-            17, 3, 0, 30, TOPIC_NO_TXN_BATCH));
+            17, 3, 0, 30, TOPIC_NO_TXN_BATCH), LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
         if (abortTxn) {
             batchLoader.loadBatch(Batch.data(
-                20, 4, 0, 10, TXN_ABORT_SINGLETON));
+                20, 4, 0, 10, TXN_ABORT_SINGLETON), LEADER_AND_EPOCH);
         } else {
             batchLoader.loadBatch(Batch.data(
-                20, 4, 0, 10, TXN_END_SINGLETON));
+                20, 4, 0, 10, TXN_END_SINGLETON), LEADER_AND_EPOCH);
         }
         assertEquals(0, updater.updates);
-        batchLoader.maybeFlushBatches();
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
 
         // Regardless of end/abort, we should publish an updated MetadataProvenance and manifest
         assertEquals(50, updater.latestManifest.numBytes());
