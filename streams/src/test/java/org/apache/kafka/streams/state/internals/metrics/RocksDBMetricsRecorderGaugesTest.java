@@ -59,12 +59,11 @@ import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.SI
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_BACKGROUND_ERRORS;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.TOTAL_SST_FILES_SIZE;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.USAGE_OF_BLOCK_CACHE;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.powermock.api.easymock.PowerMock.replay;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class RocksDBMetricsRecorderGaugesTest {
     private static final String METRICS_SCOPE = "metrics-scope";
@@ -212,11 +211,8 @@ public class RocksDBMetricsRecorderGaugesTest {
 
         final long recordedValue1 = 5L;
         final long recordedValue2 = 3L;
-        expect(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName))
-            .andStubReturn(recordedValue1);
-        expect(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName))
-            .andStubReturn(recordedValue2);
-        replay(dbToAdd1, dbToAdd2);
+        when(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue1);
+        when(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue2);
 
         verifyMetrics(streamsMetrics, propertyName, recordedValue1 + recordedValue2);
     }
@@ -235,11 +231,8 @@ public class RocksDBMetricsRecorderGaugesTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd2);
 
         final long recordedValue = 5L;
-        expect(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName))
-            .andStubReturn(recordedValue);
-        expect(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName))
-            .andStubReturn(recordedValue);
-        replay(dbToAdd1, dbToAdd2);
+        when(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue);
+        when(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue);
 
         verifyMetrics(streamsMetrics, propertyName, recordedValue);
     }

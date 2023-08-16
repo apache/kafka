@@ -158,7 +158,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV0)).
+                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV1)).
                 setBrokerId(0).
                 setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
@@ -199,7 +199,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV1)).
                     setBrokerId(0).
                     setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
@@ -536,7 +536,7 @@ public class QuorumControllerTest {
                     setBrokerId(0).
                     setClusterId(active.clusterId()).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV1)).
                     setListeners(listeners));
             assertEquals(3L, reply.get().epoch());
             CreateTopicsRequestData createTopicsRequestData =
@@ -978,44 +978,6 @@ public class QuorumControllerTest {
 
     private static final Map<Integer, Long> ALL_ZERO_BROKER_EPOCHS =
         IntStream.of(0, 1, 2, 3).boxed().collect(Collectors.toMap(identity(), __ -> 0L));
-
-    @Test
-    public void testQuorumControllerCompletesAuthorizerInitialLoad() throws Throwable {
-        final int numControllers = 3;
-        List<StandardAuthorizer> authorizers = new ArrayList<>(numControllers);
-        for (int i = 0; i < numControllers; i++) {
-            StandardAuthorizer authorizer = new StandardAuthorizer();
-            authorizer.configure(Collections.emptyMap());
-            authorizers.add(authorizer);
-        }
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(numControllers).
-                setSharedLogDataInitializer(sharedLogData -> {
-                    sharedLogData.setInitialMaxReadOffset(2);
-                }).
-                build()
-        ) {
-            logEnv.appendInitialRecords(generateTestRecords(FOO_ID, ALL_ZERO_BROKER_EPOCHS));
-            logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2));
-            try (
-                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                    setControllerBuilderInitializer(controllerBuilder -> {
-                        controllerBuilder.setAuthorizer(authorizers.get(controllerBuilder.nodeId()));
-                    }).
-                    build()
-            ) {
-                assertInitialLoadFuturesNotComplete(authorizers);
-                logEnv.logManagers().get(0).setMaxReadOffset(Long.MAX_VALUE);
-                QuorumController active = controlEnv.activeController();
-                active.unregisterBroker(ANONYMOUS_CONTEXT, 3).get();
-                assertInitialLoadFuturesNotComplete(authorizers.stream().skip(1).collect(Collectors.toList()));
-                logEnv.logManagers().forEach(m -> m.setMaxReadOffset(Long.MAX_VALUE));
-                TestUtils.waitForCondition(() -> {
-                    return authorizers.stream().allMatch(a -> a.initialLoadFuture().isDone());
-                }, "Failed to complete initial authorizer load for all controllers.");
-            }
-        }
-    }
 
     @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {

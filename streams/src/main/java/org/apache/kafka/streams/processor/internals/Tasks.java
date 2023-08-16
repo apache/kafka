@@ -115,6 +115,11 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public boolean hasPendingTasksToRecycle() {
+        return pendingUpdateActions.values().stream().anyMatch(action -> action.getAction() == Action.RECYCLE);
+    }
+
+    @Override
     public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.UPDATE_INPUT_PARTITIONS)) {
             return pendingUpdateActions.remove(taskId).getInputPartitions();

@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageListener.LocalTieredStorageListeners;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
@@ -302,9 +303,9 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     }
 
     @Override
-    public void copyLogSegmentData(final RemoteLogSegmentMetadata metadata, final LogSegmentData data)
+    public Optional<CustomMetadata> copyLogSegmentData(final RemoteLogSegmentMetadata metadata, final LogSegmentData data)
             throws RemoteStorageException {
-        Callable<Void> callable = () -> {
+        Callable<Optional<CustomMetadata>> callable = () -> {
             final RemoteLogSegmentId id = metadata.remoteLogSegmentId();
             final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(COPY_SEGMENT, id);
             RemoteLogSegmentFileset fileset = null;
@@ -331,10 +332,10 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 throw e;
             }
 
-            return null;
+            return Optional.empty();
         };
 
-        wrap(callable);
+        return wrap(callable);
     }
 
     @Override

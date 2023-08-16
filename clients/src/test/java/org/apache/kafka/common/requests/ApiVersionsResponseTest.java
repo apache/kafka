@@ -162,8 +162,9 @@ public class ApiVersionsResponseTest {
         assertEquals(10, response.data().finalizedFeaturesEpoch());
     }
 
-    @Test
-    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
+    @ParameterizedTest
+    @EnumSource(names = {"ZK_BROKER", "BROKER"})
+    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(ListenerType listenerType) {
         ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
@@ -171,11 +172,11 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER,
+            listenerType,
             true,
             false
         );
-        assertEquals(new HashSet<>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKeys.apisForListener(listenerType)), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data().supportedFeatures().isEmpty());
         assertTrue(response.data().finalizedFeatures().isEmpty());

@@ -39,7 +39,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -70,17 +69,10 @@ public class RecordTestUtils {
                     try {
                         Method method = target.getClass().getMethod("replay",
                             record.getClass(),
-                            Optional.class);
-                        method.invoke(target, record, Optional.empty());
-                    } catch (NoSuchMethodException t) {
-                        try {
-                            Method method = target.getClass().getMethod("replay",
-                                record.getClass(),
-                                long.class);
-                            method.invoke(target, record, 0L);
-                        } catch (NoSuchMethodException i) {
-                            // ignore
-                        }
+                            long.class);
+                        method.invoke(target, record, 0L);
+                    } catch (NoSuchMethodException i) {
+                        // ignore
                     }
                 }
             } catch (InvocationTargetException e) {

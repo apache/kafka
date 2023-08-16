@@ -42,10 +42,14 @@ import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -73,6 +77,9 @@ import static org.mockito.Mockito.when;
 
 @RunWith(value = Parameterized.class)
 public class WorkerCoordinatorTest {
+
+    @Rule
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private static final String LEADER_URL = "leaderUrl:8083";
     private static final String MEMBER_URL = "memberUrl:8083";
