@@ -56,27 +56,27 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
             return false;
         }
 
-        switch ((String) upgradeFrom) {
-            case StreamsConfig.UPGRADE_FROM_0100:
-            case StreamsConfig.UPGRADE_FROM_0101:
-            case StreamsConfig.UPGRADE_FROM_0102:
-            case StreamsConfig.UPGRADE_FROM_0110:
-            case StreamsConfig.UPGRADE_FROM_10:
-            case StreamsConfig.UPGRADE_FROM_11:
-            case StreamsConfig.UPGRADE_FROM_20:
-            case StreamsConfig.UPGRADE_FROM_21:
-            case StreamsConfig.UPGRADE_FROM_22:
-            case StreamsConfig.UPGRADE_FROM_23:
-            case StreamsConfig.UPGRADE_FROM_24:
-            case StreamsConfig.UPGRADE_FROM_25:
-            case StreamsConfig.UPGRADE_FROM_26:
-            case StreamsConfig.UPGRADE_FROM_27:
-            case StreamsConfig.UPGRADE_FROM_28:
-            case StreamsConfig.UPGRADE_FROM_30:
-            case StreamsConfig.UPGRADE_FROM_31:
-            case StreamsConfig.UPGRADE_FROM_32:
-            case StreamsConfig.UPGRADE_FROM_33:
-            case StreamsConfig.UPGRADE_FROM_34:
+        switch (StreamsConfig.UpgradeFromValues.valueOf("UPGRADE_FROM_" + ((String) upgradeFrom).replace(".", ""))) {
+            case UPGRADE_FROM_0100:
+            case UPGRADE_FROM_0101:
+            case UPGRADE_FROM_0102:
+            case UPGRADE_FROM_0110:
+            case UPGRADE_FROM_10:
+            case UPGRADE_FROM_11:
+            case UPGRADE_FROM_20:
+            case UPGRADE_FROM_21:
+            case UPGRADE_FROM_22:
+            case UPGRADE_FROM_23:
+            case UPGRADE_FROM_24:
+            case UPGRADE_FROM_25:
+            case UPGRADE_FROM_26:
+            case UPGRADE_FROM_27:
+            case UPGRADE_FROM_28:
+            case UPGRADE_FROM_30:
+            case UPGRADE_FROM_31:
+            case UPGRADE_FROM_32:
+            case UPGRADE_FROM_33:
+            case UPGRADE_FROM_34:
                 // there is no need to add new version here
                 return true;
             default:

@@ -16,19 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import junit.framework.AssertionFailedError;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -63,8 +58,8 @@ public class AssignorConfigurationTest {
 
             try {
                 assignorConfiguration.rebalanceProtocol();
-            } catch (final Exception throwable) {
-                throw new AssertionFailedError("Upgrade from " + upgradeFrom + " failed with " + throwable.getMessage() + "!");
+            } catch (final Exception error) {
+                throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
             }
         }
     }
@@ -77,8 +72,8 @@ public class AssignorConfigurationTest {
 
             try {
                 assignorConfiguration.configuredMetadataVersion(0);
-            } catch (final Exception throwable) {
-                throw new AssertionFailedError("Upgrade from " + upgradeFrom + " failed with " + throwable.getMessage() + "!");
+            } catch (final Exception error) {
+                throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
             }
         }
     }

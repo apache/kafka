@@ -1390,6 +1390,18 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
+    @Test
+    public void shouldSupportAllUpgradeFromValues() {
+        for (final StreamsConfig.UpgradeFromValues upgradeFrom : StreamsConfig.UpgradeFromValues.values()) {
+            props.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
+            try {
+                new StreamsConfig(props);
+            } catch (final Exception fatal) {
+                throw new AssertionError("StreamsConfig did not accept `upgrade.from` config value `" + upgradeFrom + "`");
+            }
+        }
+    }
+
     static class MisconfiguredSerde implements Serde<Object> {
         @Override
         public void configure(final Map<String, ?>  configs, final boolean isKey) {
