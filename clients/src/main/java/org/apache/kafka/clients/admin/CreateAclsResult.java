@@ -33,7 +33,8 @@ import java.util.Map;
 public class CreateAclsResult {
     private final Map<AclBinding, KafkaFuture<Void>> futures;
 
-    CreateAclsResult(Map<AclBinding, KafkaFuture<Void>> futures) {
+    // Visible for testing
+    public CreateAclsResult(Map<AclBinding, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 

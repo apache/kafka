@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.CreateAclsResult;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -27,8 +28,10 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -41,9 +44,11 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
@@ -55,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
@@ -74,10 +80,14 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class MirrorSourceConnectorTest {
@@ -682,5 +692,66 @@ public class MirrorSourceConnectorTest {
         ConfigValue result = results.get(0);
         assertNotNull(result, "Connector should not have record null config value for '" + name + "' property");
         return Optional.of(result);
+    }
+
+    @Test
+    public void testUpdateIncrementTopicAcls() {
+        Admin sourceAdmin = mock(Admin.class);
+        Admin targetAdmin = mock(Admin.class);
+        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin);
+
+        List<AclBinding> filteredBindings = new ArrayList<>();
+        AclBinding binding1 = mock(AclBinding.class);
+        AclBinding binding2 = mock(AclBinding.class);
+        filteredBindings.add(binding1);
+        filteredBindings.add(binding2);
+        doReturn(mock(CreateAclsResult.class)).when(targetAdmin).createAcls(anySet());
+
+        // First topic acl info update when starting `syncTopicAcls` thread
+        int newAddCount = connector.updateTopicAcls(filteredBindings);
+        assertEquals(new HashSet<>(filteredBindings), connector.knownTopicAclBindings());
+        assertEquals(filteredBindings.size(), newAddCount);
+
+        List<AclBinding> newAddBindings = new ArrayList<>();
+        AclBinding binding3 = mock(AclBinding.class);
+        AclBinding binding4 = mock(AclBinding.class);
+        newAddBindings.add(binding3);
+        newAddBindings.add(binding4);
+        filteredBindings.addAll(newAddBindings);
+
+        // The next increment topic acl info update
+        newAddCount = connector.updateTopicAcls(filteredBindings);
+        assertEquals(new HashSet<>(filteredBindings), connector.knownTopicAclBindings());
+        assertEquals(newAddBindings.size(), newAddCount);
+
+        // The next increment topic acl info update, contains failed create
+        List<AclBinding> newAddFailedBindings = new ArrayList<>();
+        AclBinding binding5 = mock(AclBinding.class);
+        AclBinding binding6 = mock(AclBinding.class);
+        newAddFailedBindings.add(binding5);
+        newAddFailedBindings.add(binding6);
+        filteredBindings.addAll(newAddFailedBindings);
+
+        Map<AclBinding, KafkaFuture<Void>> futures = new HashMap<>();
+        KafkaFutureImpl<Void> futureForBinding5 = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Void> futureForBinding6 = new KafkaFutureImpl<>();
+        ExecutorService singleThread = Executors.newSingleThreadExecutor();
+        // Delayed completion of `createAclRequest` for simulating actual scenarios
+        singleThread.submit(() -> {
+            sleep(5000);
+            futureForBinding5.complete(null);
+            futureForBinding6.completeExceptionally(new ApiException("mock create acl failure."));
+        });
+        futures.put(binding5, futureForBinding5);
+        futures.put(binding6, futureForBinding6);
+        CreateAclsResult mockCreateAclsResult = new CreateAclsResult(new HashMap<>(futures));
+        doReturn(new ResourcePattern(ResourceType.TOPIC, "topic6", PatternType.LITERAL)).when(binding6).pattern();
+        doReturn(mockCreateAclsResult).when(targetAdmin).createAcls(ArgumentMatchers.eq(new HashSet<>(newAddFailedBindings)));
+
+        int newAddSuccessCount = connector.updateTopicAcls(filteredBindings);
+        Set<AclBinding> bindingToVerify = new HashSet<>(filteredBindings);
+        bindingToVerify.remove(binding6);
+        assertEquals(bindingToVerify, connector.knownTopicAclBindings());
+        assertEquals(1, newAddSuccessCount);
     }
 }
