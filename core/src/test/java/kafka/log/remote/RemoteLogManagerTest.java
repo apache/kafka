@@ -1034,6 +1034,33 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    public void testBuildRefinedLeaderEpochMap() {
+        TreeMap<Integer, Long> leaderEpochToStartOffset = new TreeMap<Integer, Long>() {{
+                put(0, 0L);
+                put(1, 10L);
+                put(2, 20L);
+                put(3, 30L);
+                put(4, 40L);
+                put(5, 60L);
+                put(6, 60L);
+                put(7, 70L);
+            }};
+
+        TreeMap<Integer, Long> expectedLeaderEpochs = new TreeMap<Integer, Long>() {{
+                put(0, 0L);
+                put(1, 10L);
+                put(2, 20L);
+                put(3, 30L);
+                put(4, 40L);
+                put(6, 60L);
+                put(7, 70L);
+            }};
+
+        NavigableMap<Integer, Long> refinedLeaderEpochMap = RemoteLogManager.buildFilteredLeaderEpochMap(leaderEpochToStartOffset);
+        assertEquals(expectedLeaderEpochs, refinedLeaderEpochMap);
+    }
+
+    @Test
     public void testRemoteSegmentWithinLeaderEpochs() {
         // Test whether a remote segment is within the leader epochs
         final long logEndOffset = 90L;

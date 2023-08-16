@@ -97,6 +97,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -924,7 +925,8 @@ public class RemoteLogManager implements Closeable {
             Collections.sort(remoteLeaderEpochs);
 
             LeaderEpochFileCache leaderEpochCache = leaderEpochCacheOption.get();
-            NavigableMap<Integer, Long> epochWithOffsets = leaderEpochCache.epochWithOffsets();
+            // Build the leader epoch map by filtering the epochs that do not have any records.
+            NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
             Optional<EpochEntry> earliestEpochEntryOptional = leaderEpochCache.earliestEntry();
 
             long logStartOffset = log.logStartOffset();
@@ -1045,7 +1047,8 @@ public class RemoteLogManager implements Closeable {
                                                             long logEndOffset,
                                                             NavigableMap<Integer, Long> leaderEpochs) {
         long segmentEndOffset = segmentMetadata.endOffset();
-        NavigableMap<Integer, Long> segmentLeaderEpochs = segmentMetadata.segmentLeaderEpochs();
+        // Filter epochs that does not have any messages/records associated with them.
+        NavigableMap<Integer, Long> segmentLeaderEpochs = buildFilteredLeaderEpochMap(segmentMetadata.segmentLeaderEpochs());
         // Check for out of bound epochs between segment epochs and current leader epochs.
         Integer segmentFirstEpoch = segmentLeaderEpochs.firstKey();
         Integer segmentLastEpoch = segmentLeaderEpochs.lastKey();
@@ -1095,6 +1098,49 @@ public class RemoteLogManager implements Closeable {
 
         // segment end offset should be with in the log end offset.
         return segmentEndOffset < logEndOffset;
+    }
+
+    /**
+     * Returns a map containing the epoch vs start-offset for the given leader epoch map by filtering the epochs that
+     * does not contain any messages/records associated with them.
+     *
+     * For ex:
+     *  <epoch - start offset>
+     *  0 - 0
+     *  1 - 10
+     *  2 - 20
+     *  3 - 30
+     *  4 - 40
+     *  5 - 60  // epoch 5 does not have records or messages associated with it
+     *  6 - 60
+     *  7 - 70
+     *
+     *  When the above leaderEpochMap is passed to this method, it returns the following map:
+     *  <epoch - start offset>
+     *  0 - 0
+     *  1 - 10
+     *  2 - 20
+     *  3 - 30
+     *  4 - 40
+     *  6 - 60
+     *  7 - 70
+     *
+     * @param leaderEpochs The leader epoch map to be refined.
+     */
+    // Visible for testing
+    public static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
+        NavigableMap<Integer, Long> refinedLeaderEpochs = new TreeMap<>();
+        Map.Entry<Integer, Long> previousEntry = null;
+        for (Map.Entry<Integer, Long> entry : leaderEpochs.entrySet()) {
+            refinedLeaderEpochs.put(entry.getKey(), entry.getValue());
+
+            if (previousEntry != null && previousEntry.getValue().equals(entry.getValue())) {
+                refinedLeaderEpochs.remove(previousEntry.getKey());
+            }
+            previousEntry = entry;
+        }
+
+        return refinedLeaderEpochs;
     }
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
