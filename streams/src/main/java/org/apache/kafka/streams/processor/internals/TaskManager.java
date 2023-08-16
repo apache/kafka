@@ -1635,6 +1635,20 @@ public class TaskManager {
         return commit(tasks.allTasks());
     }
 
+    /** Prepare a poll-call on the main consumer */
+    public void preparePoll() {
+        for (final Task t: tasks.activeTasks()) {
+            t.preparePoll();
+        }
+    }
+
+    /** Wrap-up a poll-call on the main consumer */
+    public void postPoll() {
+        for (final Task t: tasks.activeTasks()) {
+            t.postPoll();
+        }
+    }
+
     /**
      * Take records and add them to each respective task
      *
@@ -1901,9 +1915,5 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
-    }
-
-    TasksRegistry tasks() {
-        return tasks;
     }
 }

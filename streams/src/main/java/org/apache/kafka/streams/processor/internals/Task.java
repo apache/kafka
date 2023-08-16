@@ -162,6 +162,12 @@ public interface Task {
      */
     void prepareRecycle();
 
+    /** Prepares the consumer for the next polling phase for this task */
+    void preparePoll();
+
+    /** Wraps up after a polling phase for this task */
+    void postPoll();
+
     // runtime methods (using in RUNNING state)
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);

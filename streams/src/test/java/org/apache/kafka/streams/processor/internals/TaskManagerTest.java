@@ -287,6 +287,42 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldPreparePollForAllActiveTasks() {
+        final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+
+        taskManager.preparePoll();
+
+        Mockito.verify(activeTask1).preparePoll();
+        Mockito.verify(activeTask2).preparePoll();
+    }
+
+    @Test
+    public void shouldPostPollForAllActiveTasks() {
+        final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+
+        taskManager.postPoll();
+
+        Mockito.verify(activeTask1).postPoll();
+        Mockito.verify(activeTask2).postPoll();
+    }
+
+    @Test
     public void shouldPrepareActiveTaskInStateUpdaterToBeRecycled() {
         final StreamTask activeTaskToRecycle = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
@@ -4833,6 +4869,16 @@ public class TaskManagerTest {
         @Override
         public void prepareRecycle() {
             transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public void preparePoll() {
+            // noop
+        }
+
+        @Override
+        public void postPoll() {
+            // noop
         }
 
         @Override

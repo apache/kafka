@@ -590,6 +590,30 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Closed and recycled state");
     }
 
+    @Override
+    public void preparePoll() {
+        if (state() == State.RUNNING) {
+            // before running a new poll on the main consumer, if a queue's buffered size has been
+            // decreased to the threshold, we can then resume the consumption on this partition
+            final Set<TopicPartition> currentAssignment = mainConsumer.assignment();
+
+            mainConsumer.resume(
+                partitionGroup.partitions()
+                    .stream()
+                    .filter(currentAssignment::contains)
+                    .filter(p -> partitionGroup.numBuffered(p) <= maxBufferedSize)
+                    .collect(Collectors.toList())
+            );
+        }
+    }
+
+    @Override
+    public void postPoll() {
+        if (state() == State.RUNNING) {
+            partitionGroup.updateLags();
+        }
+    }
+
     /**
      * The following exceptions maybe thrown from the state manager flushing call
      *
@@ -744,12 +768,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
-
-            // after processing this record, if its partition queue's buffered size has been
-            // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() == maxBufferedSize) {
-                mainConsumer.resume(singleton(partition));
-            }
 
             record = null;
         } catch (final TimeoutException timeoutException) {

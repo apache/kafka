@@ -254,6 +254,15 @@ public class StandbyTask extends AbstractTask implements Task {
         log.info("Closed and recycled state");
     }
 
+    @Override
+    public void preparePoll() {
+        // noop
+    }
+    @Override
+    public void postPoll() {
+        // noop
+    }
+
     private void close(final boolean clean) {
         switch (state()) {
             case SUSPENDED:

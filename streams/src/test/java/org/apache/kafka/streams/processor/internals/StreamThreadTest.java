@@ -3055,6 +3055,19 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldCallPreparePollAndPostPollOnTaskManager() {
+        final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
+        streamThread.setState(State.STARTING);
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
+
+        streamThread.runOnce();
+
+        Mockito.verify(streamThread.taskManager()).preparePoll();
+        Mockito.verify(streamThread.taskManager()).postPoll();
+    }
+
+    @Test
     public void shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
         streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);

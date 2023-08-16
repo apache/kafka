@@ -135,6 +135,16 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void preparePoll() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
+    public void postPoll() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new UnsupportedOperationException("This task is read-only");
     }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -443,6 +444,7 @@ public class PartitionGroupTest {
         assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
         assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
+        assertThat(group.fetchedLags().size(), equalTo(0));
 
         group.addRawRecords(partition1, list);
     }
@@ -652,6 +654,7 @@ public class PartitionGroupTest {
             );
         }
         lags.put(partition2, OptionalLong.of(0L));
+        group.updateLags();
         assertThat(group.readyToProcess(0L), is(true));
     }
 
@@ -676,6 +679,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         lags.put(partition2, OptionalLong.of(1L));
+        group.updateLags();
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
@@ -705,6 +709,7 @@ public class PartitionGroupTest {
             enforcedProcessingSensor,
             1L
         );
+        group.updateLags();
 
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
@@ -762,6 +767,40 @@ public class PartitionGroupTest {
                 ))
             );
         }
+    }
+
+    @Test
+    public void shouldUpdateLags() {
+        final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
+        final PartitionGroup group = new PartitionGroup(
+            logContext,
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(partition2, queue2)
+            ),
+            tp -> lags.getOrDefault(tp, OptionalLong.empty()),
+            getValueSensor(metrics, lastLatenessValue),
+            enforcedProcessingSensor,
+            0L
+        );
+
+        assertEquals(group.fetchedLags().size(), 0);
+
+        lags.put(partition1, OptionalLong.of(5));
+
+        assertEquals(group.fetchedLags().size(), 0);
+
+        group.updateLags();
+
+        assertEquals(group.fetchedLags(), Collections.singletonMap(partition1, 5L));
+
+        lags.remove(partition1);
+
+        assertEquals(group.fetchedLags(), Collections.singletonMap(partition1, 5L));
+
+        group.updateLags();
+
+        assertEquals(group.fetchedLags(), Collections.emptyMap());
     }
 
     private PartitionGroup getBasicGroup() {
