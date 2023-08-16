@@ -111,6 +111,15 @@ public class LogConfig extends AbstractConfig {
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         }
+
+        @Override
+        public String toString() {
+            return "RemoteLogConfig{" +
+                    "remoteStorageEnable=" + remoteStorageEnable +
+                    ", localRetentionMs=" + localRetentionMs +
+                    ", localRetentionBytes=" + localRetentionBytes +
+                    '}';
+        }
     }
 
     // Visible for testing
@@ -454,54 +463,99 @@ public class LogConfig extends AbstractConfig {
                 throw new InvalidConfigurationException("Unknown topic config name: " + name);
     }
 
+    /**
+     * Validates the values of the given properties. Can be called by both client and server.
+     * The `props` supplied should contain all the LogConfig properties and the default values are extracted from the
+     * LogConfig class.
+     * @param props The properties to be validated
+     */
     public static void validateValues(Map<?, ?> props) {
         long minCompactionLag = (Long) props.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
         long maxCompactionLag = (Long) props.get(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG);
         if (minCompactionLag > maxCompactionLag) {
             throw new InvalidConfigurationException("conflict topic config setting "
-                + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + " (" + minCompactionLag + ") > "
-                + TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG + " (" + maxCompactionLag + ")");
+                    + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + " (" + minCompactionLag + ") > "
+                    + TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG + " (" + maxCompactionLag + ")");
         }
+    }
 
-        if (props.containsKey(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)) {
-            boolean isRemoteStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
-            String cleanupPolicy = props.get(TopicConfig.CLEANUP_POLICY_CONFIG).toString().toLowerCase(Locale.getDefault());
-            if (isRemoteStorageEnabled && cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
-                throw new ConfigException("Remote log storage is unsupported for the compacted topics");
+    /**
+     * Validates the values of the given properties. Should be called only by the broker.
+     * The `props` supplied doesn't contain any topic-level configs, only broker-level configs.
+     * The default values should be extracted from the KafkaConfig.
+     * @param props The properties to be validated
+     */
+    public static void validateBrokerLogConfigValues(Map<?, ?> props,
+                                                     boolean isRemoteLogStorageSystemEnabled) {
+        validateValues(props);
+        if (isRemoteLogStorageSystemEnabled) {
+            validateRemoteStorageRetentionSize(props);
+            validateRemoteStorageRetentionTime(props);
+        }
+    }
+
+    /**
+     * Validates the values of the given properties. Should be called only by the broker.
+     * The `props` supplied contains the topic-level configs,
+     * The default values should be extracted from the KafkaConfig.
+     * @param props The properties to be validated
+     */
+    private static void validateTopicLogConfigValues(Map<?, ?> props,
+                                                     boolean isRemoteLogStorageSystemEnabled) {
+        validateValues(props);
+        boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+        if (isRemoteLogStorageEnabled) {
+            validateRemoteStorageOnlyIfSystemEnabled(isRemoteLogStorageSystemEnabled);
+            validateNoRemoteStorageForCompactedTopic(props);
+            validateRemoteStorageRetentionSize(props);
+            validateRemoteStorageRetentionTime(props);
+        }
+    }
+
+    private static void validateRemoteStorageOnlyIfSystemEnabled(boolean isRemoteLogStorageSystemEnabled) {
+        if (!isRemoteLogStorageSystemEnabled) {
+            throw new ConfigException("Tiered Storage functionality is disabled in the broker. " +
+                    "Topic cannot be configured with remote log storage.");
+        }
+    }
+
+    private static void validateNoRemoteStorageForCompactedTopic(Map<?, ?> props) {
+        String cleanupPolicy = props.get(TopicConfig.CLEANUP_POLICY_CONFIG).toString().toLowerCase(Locale.getDefault());
+        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
+            throw new ConfigException("Remote log storage is unsupported for the compacted topics");
+        }
+    }
+
+    private static void validateRemoteStorageRetentionSize(Map<?, ?> props) {
+        Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
+        Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
+        if (retentionBytes > -1 && localRetentionBytes != -2) {
+            if (localRetentionBytes == -1) {
+                String message = String.format("Value must not be -1 as %s value is set as %d.",
+                        TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
+                throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes, message);
+            }
+            if (localRetentionBytes > retentionBytes) {
+                String message = String.format("Value must not be more than %s property value: %d",
+                        TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
+                throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes, message);
             }
         }
+    }
 
-        if (props.containsKey(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)) {
-            Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
-            Long localLogRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-            if (retentionBytes > -1 && localLogRetentionBytes != -2) {
-                if (localLogRetentionBytes == -1) {
-                    String message = String.format("Value must not be -1 as %s value is set as %d.",
-                            TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localLogRetentionBytes, message);
-                }
-                if (localLogRetentionBytes > retentionBytes) {
-                    String message = String.format("Value must not be more than %s property value: %d",
-                            TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localLogRetentionBytes, message);
-                }
+    private static void validateRemoteStorageRetentionTime(Map<?, ?> props) {
+        Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
+        Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
+        if (retentionMs != -1 && localRetentionMs != -2) {
+            if (localRetentionMs == -1) {
+                String message = String.format("Value must not be -1 as %s value is set as %d.",
+                        TopicConfig.RETENTION_MS_CONFIG, retentionMs);
+                throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs, message);
             }
-        }
-
-        if (props.containsKey(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG)) {
-            Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
-            Long localLogRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
-            if (retentionMs != -1 && localLogRetentionMs != -2) {
-                if (localLogRetentionMs == -1) {
-                    String message = String.format("Value must not be -1 as %s value is set as %d.",
-                            TopicConfig.RETENTION_MS_CONFIG, retentionMs);
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localLogRetentionMs, message);
-                }
-                if (localLogRetentionMs > retentionMs) {
-                    String message = String.format("Value must not be more than %s property value: %d",
-                            TopicConfig.RETENTION_MS_CONFIG, retentionMs);
-                    throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localLogRetentionMs, message);
-                }
+            if (localRetentionMs > retentionMs) {
+                String message = String.format("Value must not be more than %s property value: %d",
+                        TopicConfig.RETENTION_MS_CONFIG, retentionMs);
+                throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs, message);
             }
         }
     }
@@ -510,9 +564,56 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
+        validate(props, Collections.emptyMap(), false);
+    }
+
+    public static void validate(Properties props,
+                                Map<?, ?> configuredProps,
+                                boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);
-        Map<?, ?> valueMaps = CONFIG.parse(props);
-        validateValues(valueMaps);
+        if (configuredProps == null || configuredProps.isEmpty()) {
+            Map<?, ?> valueMaps = CONFIG.parse(props);
+            validateValues(valueMaps);
+        } else {
+            Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
+            combinedConfigs.putAll(props);
+            Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
+            validateTopicLogConfigValues(valueMaps, isRemoteLogStorageSystemEnabled);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "LogConfig{" +
+                "segmentSize=" + segmentSize +
+                ", segmentMs=" + segmentMs +
+                ", segmentJitterMs=" + segmentJitterMs +
+                ", maxIndexSize=" + maxIndexSize +
+                ", flushInterval=" + flushInterval +
+                ", flushMs=" + flushMs +
+                ", retentionSize=" + retentionSize +
+                ", retentionMs=" + retentionMs +
+                ", indexInterval=" + indexInterval +
+                ", fileDeleteDelayMs=" + fileDeleteDelayMs +
+                ", deleteRetentionMs=" + deleteRetentionMs +
+                ", compactionLagMs=" + compactionLagMs +
+                ", maxCompactionLagMs=" + maxCompactionLagMs +
+                ", minCleanableRatio=" + minCleanableRatio +
+                ", compact=" + compact +
+                ", delete=" + delete +
+                ", uncleanLeaderElectionEnable=" + uncleanLeaderElectionEnable +
+                ", minInSyncReplicas=" + minInSyncReplicas +
+                ", compressionType='" + compressionType + '\'' +
+                ", preallocate=" + preallocate +
+                ", messageFormatVersion=" + messageFormatVersion +
+                ", messageTimestampType=" + messageTimestampType +
+                ", messageTimestampDifferenceMaxMs=" + messageTimestampDifferenceMaxMs +
+                ", leaderReplicationThrottledReplicas=" + leaderReplicationThrottledReplicas +
+                ", followerReplicationThrottledReplicas=" + followerReplicationThrottledReplicas +
+                ", messageDownConversionEnable=" + messageDownConversionEnable +
+                ", remoteLogConfig=" + remoteLogConfig +
+                ", maxMessageSize=" + maxMessageSize +
+                '}';
     }
 
     public static void main(String[] args) {

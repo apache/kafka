@@ -18,9 +18,10 @@
 package kafka.admin
 
 import java.util.concurrent.ExecutionException
-import java.util.{Arrays, Collections}
+import java.util.{Arrays, Collections, Optional}
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.utils.Exit
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.clients.admin.{Config, MockAdminClient, PartitionReassignment}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidReplicationFactorException, UnknownTopicOrPartitionException}
@@ -230,19 +231,19 @@ class ReassignPartitionsUnitTest {
       build()
     try {
       assertEquals(Seq(
-        BrokerMetadata(0, Some("rack0")),
-        BrokerMetadata(1, Some("rack1"))
+        new BrokerMetadata(0, Optional.of("rack0")),
+        new BrokerMetadata(1, Optional.of("rack1"))
       ), getBrokerMetadata(adminClient, Seq(0, 1), true))
       assertEquals(Seq(
-        BrokerMetadata(0, None),
-        BrokerMetadata(1, None)
+        new BrokerMetadata(0, Optional.empty()),
+        new BrokerMetadata(1, Optional.empty())
       ), getBrokerMetadata(adminClient, Seq(0, 1), false))
       assertStartsWith("Not all brokers have rack information",
         assertThrows(classOf[AdminOperationException],
           () => getBrokerMetadata(adminClient, Seq(1, 2), true)).getMessage)
       assertEquals(Seq(
-        BrokerMetadata(1, None),
-        BrokerMetadata(2, None)
+        new BrokerMetadata(1, Optional.empty()),
+        new BrokerMetadata(2, Optional.empty())
       ), getBrokerMetadata(adminClient, Seq(1, 2), false))
     } finally {
       adminClient.close()
