@@ -18,6 +18,7 @@ package org.apache.kafka.server.policy;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,8 @@ public class AlterConfigPolicyTest {
     public void testRequestMetadataEquals() {
         RequestMetadata requestMetadata = new RequestMetadata(
             new ConfigResource(Type.BROKER, "0"),
-            Collections.singletonMap("foo", "bar")
+            Collections.singletonMap("foo", "bar"),
+            new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
         );
 
         assertEquals(requestMetadata, requestMetadata);
@@ -41,11 +43,13 @@ public class AlterConfigPolicyTest {
         assertNotEquals(requestMetadata, new Object());
         assertNotEquals(requestMetadata, new RequestMetadata(
             new ConfigResource(Type.BROKER, "1"),
-            Collections.singletonMap("foo", "bar")
+            Collections.singletonMap("foo", "bar"),
+            new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
         ));
         assertNotEquals(requestMetadata, new RequestMetadata(
             new ConfigResource(Type.BROKER, "0"),
-            Collections.emptyMap()
+            Collections.emptyMap(),
+            new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
         ));
     }
 }

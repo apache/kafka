@@ -50,6 +50,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.controller.ControllerRequestContext;
 import org.apache.kafka.controller.ResultOrError;
@@ -383,7 +384,8 @@ public class MockController implements Controller {
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         ControllerRequestContext context,
         Map<ConfigResource, Map<String, String>> newConfigs,
-        boolean validateOnly
+        boolean validateOnly,
+        KafkaPrincipal principal
     ) {
         Map<ConfigResource, ApiError> results = new HashMap<>();
         if (!validateOnly) {

@@ -45,6 +45,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
@@ -398,7 +399,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
-  def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+  def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean, principal: KafkaPrincipal): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
 
       try {
@@ -410,8 +411,8 @@ class ZkAdminManager(val config: KafkaConfig,
         }
 
         resource.`type` match {
-          case ConfigResource.Type.TOPIC => alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
-          case ConfigResource.Type.BROKER => alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
+          case ConfigResource.Type.TOPIC => alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap, principal)
+          case ConfigResource.Type.BROKER => alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap, principal)
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
@@ -437,7 +438,8 @@ class ZkAdminManager(val config: KafkaConfig,
   }
 
   private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
-                                configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+                                configProps: Properties, configEntriesMap: Map[String, String],
+                                principal: KafkaPrincipal): (ConfigResource, ApiError) = {
     val topic = resource.name
     if (topic.isEmpty()) {
       throw new InvalidRequestException("Default topic resources are not allowed.")
@@ -447,7 +449,7 @@ class ZkAdminManager(val config: KafkaConfig,
       throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
     adminZkClient.validateTopicConfig(topic, configProps)
-    validateConfigPolicy(resource, configEntriesMap)
+    validateConfigPolicy(resource, configEntriesMap, principal)
     if (!validateOnly) {
       info(s"Updating topic $topic with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
       adminZkClient.changeTopicConfig(topic, configProps)
@@ -457,11 +459,11 @@ class ZkAdminManager(val config: KafkaConfig,
   }
 
   private def alterBrokerConfigs(resource: ConfigResource, validateOnly: Boolean,
-                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+                                 configProps: Properties, configEntriesMap: Map[String, String], principal: KafkaPrincipal): (ConfigResource, ApiError) = {
     val brokerId = getBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
     this.config.dynamicConfig.validate(configProps, perBrokerConfig)
-    validateConfigPolicy(resource, configEntriesMap)
+    validateConfigPolicy(resource, configEntriesMap, principal)
     if (!validateOnly) {
       if (perBrokerConfig)
         this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
@@ -489,16 +491,15 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
-  private def validateConfigPolicy(resource: ConfigResource, configEntriesMap: Map[String, String]): Unit = {
+  private def validateConfigPolicy(resource: ConfigResource, configEntriesMap: Map[String, String], principal: KafkaPrincipal): Unit = {
     alterConfigPolicy match {
       case Some(policy) =>
-        policy.validate(new AlterConfigPolicy.RequestMetadata(
-          new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava))
+        policy.validate(new AlterConfigPolicy.RequestMetadata(new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava, principal), principal)
       case None =>
     }
   }
 
-  def incrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+  def incrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]], validateOnly: Boolean, principal: KafkaPrincipal): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, alterConfigOps) =>
       try {
         val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
@@ -510,7 +511,7 @@ class ZkAdminManager(val config: KafkaConfig,
             }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
             prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys.asScala)
-            alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
+            alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap, principal)
 
           case ConfigResource.Type.BROKER =>
             val brokerId = getBrokerId(resource)
@@ -521,7 +522,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
-            alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
+            alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap, principal)
 
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")

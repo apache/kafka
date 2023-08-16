@@ -565,7 +565,7 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> configRecords;
             if (keyToOps != null) {
                 ControllerResult<ApiError> configResult =
-                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true);
+                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true, context.principal());
                 if (configResult.response().isFailure()) {
                     topicErrors.put(topic.name(), configResult.response());
                     continue;

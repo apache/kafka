@@ -512,7 +512,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         iterator.remove()
       }
     }
-    controller.legacyAlterConfigs(context, configChanges, alterConfigsRequest.data.validateOnly)
+    controller.legacyAlterConfigs(context, configChanges, alterConfigsRequest.data.validateOnly, request.context.principal())
       .handle[Unit] { (controllerResults, exception) =>
         if (exception != null) {
           requestHelper.handleError(request, exception)
