@@ -85,6 +85,15 @@ class ReplicaFetcherTierStateMachineTest {
     assertEquals(9L, replicaState.logEndOffset)
   }
 
+  /**
+   * This test verifies the following scenario:
+   * 1. Leader is archiving to tiered storage and has a follower.
+   * 2. Follower has caught up to offset X (exclusive).
+   * 3. While follower is offline, leader moves X to tiered storage and expires data locally till Y, such that,
+   *    `Y = leaderLocalLogStartOffset` and `leaderLocalLogStartOffset > X`. Meanwhile, X has been expired from
+   *    tiered storage as well. Hence, `X < globalLogStartOffset`.
+   * 4. Follower comes online and tries to fetch X from leader.
+   */
   @Test
   def testFollowerFetchMovedToAndDeletedFromTieredStore(): Unit = {
     val partition = new TopicPartition("topic", 0)
