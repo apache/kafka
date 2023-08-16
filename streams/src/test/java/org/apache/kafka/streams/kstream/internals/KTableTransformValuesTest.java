@@ -67,8 +67,11 @@ import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
@@ -178,6 +181,13 @@ public class KTableTransformValuesTest {
         doNothing().when(context).forward(new Record<>("Key", new Change<>("Key->newValue!", "Key->oldValue!"), 0));
 
         processor.process(new Record<>("Key", new Change<>("newValue", "oldValue"), 0));
+    }
+
+    @Test
+    public void shouldNotSetSendOldValuesOnParentIfMaterialized() {
+        new KTableTransformValues<>(parent, new NoOpValueTransformerWithKeySupplier<>(), QUERYABLE_NAME).enableSendingOldValues(true);
+
+        verify(parent, never()).enableSendingOldValues(anyBoolean());
     }
 
     @Test
