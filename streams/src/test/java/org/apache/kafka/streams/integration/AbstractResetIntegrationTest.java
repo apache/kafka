@@ -42,7 +42,6 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -83,14 +82,6 @@ public abstract class AbstractResetIntegrationTest {
 
     @Rule
     public final TestName testName = new TestName();
-
-    @AfterClass
-    public static void afterClassCleanup() {
-        if (adminClient != null) {
-            adminClient.close(Duration.ofSeconds(10));
-            adminClient = null;
-        }
-    }
 
     protected Properties commonClientConfig;
     protected Properties streamsConfig;
@@ -190,6 +181,10 @@ public abstract class AbstractResetIntegrationTest {
             streams.close(Duration.ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
+        if (adminClient != null) {
+            adminClient.close(Duration.ofSeconds(10));
+            adminClient = null;
+        }
     }
 
     private void add10InputElements() {
