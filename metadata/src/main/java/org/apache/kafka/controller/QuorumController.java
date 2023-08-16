@@ -1157,118 +1157,16 @@ public final class QuorumController implements Controller {
         }
     }
 
-    /**
-     * Generate the set of activation records. Until KIP-868 transactions are supported, these records
-     * are committed to the log as an atomic batch. The records will include the bootstrap metadata records
-     * (including the bootstrap "metadata.version") and may include a ZK migration record.
-     */
-    public static List<ApiMessageAndVersion> generateActivationRecords(
-        Logger log,
-        boolean isLogEmpty,
-        long transactionStartOffset,
-        boolean zkMigrationEnabled,
-        BootstrapMetadata bootstrapMetadata,
-        FeatureControlManager featureControl
-    ) {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        if (isLogEmpty) {
-            // If no records have been replayed, we need to write out the bootstrap records.
-            // This will include the new metadata.version, as well as things like SCRAM
-            // initialization, etc.
-            log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
-                "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
-                bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
-            records.addAll(bootstrapMetadata.records());
-
-            if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
-                if (zkMigrationEnabled) {
-                    log.info("Putting the controller into pre-migration mode. No metadata updates will be allowed until " +
-                        "the ZK metadata has been migrated");
-                    records.add(ZkMigrationState.PRE_MIGRATION.toRecord());
-                } else {
-                    log.debug("Setting the ZK migration state to NONE since this is a de-novo KRaft cluster.");
-                    records.add(ZkMigrationState.NONE.toRecord());
-                }
-            } else {
-                if (zkMigrationEnabled) {
-                    throw new RuntimeException("The bootstrap metadata.version " + bootstrapMetadata.metadataVersion() +
-                        " does not support ZK migrations. Cannot continue with ZK migrations enabled.");
-                }
-            }
-        } else {
-            // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
-            if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-                log.info("No metadata.version feature level record was found in the log. " +
-                    "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
-            }
-
-            if (featureControl.metadataVersion().isMigrationSupported()) {
-                log.info("Loaded ZK migration state of {}", featureControl.zkMigrationState());
-                switch (featureControl.zkMigrationState()) {
-                    case NONE:
-                        // Since this is the default state there may or may not be an actual NONE in the log. Regardless,
-                        // it will eventually be persisted in a snapshot, so we don't need to explicitly write it here.
-                        if (zkMigrationEnabled) {
-                            throw new RuntimeException("Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
-                        }
-                        break;
-                    case PRE_MIGRATION:
-                        log.warn("Activating pre-migration controller without empty log. There may be a partial migration");
-                        break;
-                    case MIGRATION:
-                        if (!zkMigrationEnabled) {
-                            // This can happen if controller leadership transfers to a controller with migrations enabled
-                            // after another controller had finalized the migration. For example, during a rolling restart
-                            // of the controller quorum during which the migration config is being set to false.
-                            log.warn("Completing the ZK migration since this controller was configured with " +
-                                "'zookeeper.metadata.migration.enable' set to 'false'.");
-                            records.add(ZkMigrationState.POST_MIGRATION.toRecord());
-                        } else {
-                            log.info("Staying in the ZK migration since 'zookeeper.metadata.migration.enable' is still 'true'.");
-                        }
-                        break;
-                    case POST_MIGRATION:
-                        if (zkMigrationEnabled) {
-                            log.info("Ignoring 'zookeeper.metadata.migration.enable' value of 'true' since the ZK migration" +
-                                "has been completed.");
-                        }
-                        break;
-                    default:
-                        throw new IllegalStateException("Unsupported ZkMigrationState " + featureControl.zkMigrationState());
-                }
-            } else {
-                if (zkMigrationEnabled) {
-                    throw new RuntimeException("Should not have ZK migrations enabled on a cluster running metadata.version " + featureControl.metadataVersion());
-                }
-            }
-
-            if (transactionStartOffset != -1L) {
-                if (!featureControl.metadataVersion().isMetadataTransactionSupported()) {
-                    throw new RuntimeException("Detected in-progress transaction at " + transactionStartOffset +
-                       ", but the metadata.version " + featureControl.metadataVersion() +
-                        " does not support transactions. Cannot continue.");
-                } else {
-                    log.warn("Detected in-progress transaction at " + transactionStartOffset +
-                        " during controller activation. Aborting this transaction.");
-                    records.add(new ApiMessageAndVersion(
-                        new AbortTransactionRecord().setReason("Controller failover"), (short) 0));
-                }
-            }
-        }
-        return records;
-    }
-
     class CompleteActivationEvent implements ControllerWriteOperation<Void> {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
-                List<ApiMessageAndVersion> records = generateActivationRecords(log,
-                    logReplayTracker.empty(),
+                return ActivationRecordsGenerator.generate(log,
+                    offsetControl.lastStableOffset(),
                     offsetControl.transactionStartOffset(),
                     zkMigrationEnabled,
                     bootstrapMetadata,
                     featureControl);
-                return ControllerResult.atomicOf(records, null);
             } catch (Throwable t) {
                 throw fatalFaultHandler.handleFault("exception while completing controller " +
                     "activation", t);

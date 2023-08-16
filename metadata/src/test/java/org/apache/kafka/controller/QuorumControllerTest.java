@@ -49,6 +49,7 @@ import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
@@ -115,6 +116,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -543,7 +546,7 @@ public class QuorumControllerTest {
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                     setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV1)).
                     setListeners(listeners));
-            assertEquals(3L, reply.get().epoch());
+            assertEquals(5L, reply.get().epoch());
             CreateTopicsRequestData createTopicsRequestData =
                 new CreateTopicsRequestData().setTopics(
                     new CreatableTopicCollection(Collections.singleton(
@@ -559,7 +562,7 @@ public class QuorumControllerTest {
                         get().topics().find("foo").errorMessage());
             assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                 active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                        setWantFence(false).setBrokerEpoch(3L).setBrokerId(0).
+                        setWantFence(false).setBrokerEpoch(5L).setBrokerId(0).
                         setCurrentMetadataOffset(100000L)).get());
             assertEquals(Errors.NONE.code(), active.createTopics(ANONYMOUS_CONTEXT,
                 createTopicsRequestData, Collections.singleton("foo")).
@@ -1291,14 +1294,18 @@ public class QuorumControllerTest {
         stateInLog.ifPresent(zkMigrationState ->
             featureControlManager.replay((ZkMigrationStateRecord) zkMigrationState.toRecord().message()));
 
-        List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
+        long fakeOffset = -1;
+        if (stateInLog.isPresent()) {
+            fakeOffset = 1;
+        }
+        ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             log,
-            !stateInLog.isPresent(),
+            fakeOffset,
             -1L,
             zkMigrationEnabled,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
             featureControlManager);
-        RecordTestUtils.replayAll(featureControlManager, records);
+        RecordTestUtils.replayAll(featureControlManager, result.records());
         return featureControlManager;
     }
 
@@ -1376,6 +1383,47 @@ public class QuorumControllerTest {
         assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testActivationRecordsPartialBootstrap(boolean zkMigrationEnabled) {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
+            .setSnapshotRegistry(new SnapshotRegistry(new LogContext()))
+            .setMetadataVersion(MetadataVersion.IBP_3_6_IV1)
+            .build();
+
+        ControllerResult<Void> result = ActivationRecordsGenerator.generate(
+            log,
+            -1L,
+            0L,
+            zkMigrationEnabled,
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
+            featureControlManager);
+        assertFalse(result.isAtomic());
+        assertTrue(RecordTestUtils.recordAtIndexAs(
+            AbortTransactionRecord.class, result.records(), 0).isPresent());
+        assertTrue(RecordTestUtils.recordAtIndexAs(
+            BeginTransactionRecord.class, result.records(), 1).isPresent());
+        assertTrue(RecordTestUtils.recordAtIndexAs(
+            EndTransactionRecord.class, result.records(), result.records().size() - 1).isPresent());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testActivationRecordsPartialBootstrapNoTxn(boolean zkMigrationEnabled) {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
+            .setSnapshotRegistry(new SnapshotRegistry(new LogContext()))
+            .setMetadataVersion(MetadataVersion.IBP_3_6_IV0)
+            .build();
+
+        assertThrows(RuntimeException.class, () -> ActivationRecordsGenerator.generate(
+            log,
+            -1L,
+            0L,
+            zkMigrationEnabled,
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
+            featureControlManager));
+    }
+
     @Test
     public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {
         try (
@@ -1408,16 +1456,17 @@ public class QuorumControllerTest {
         offsetControlManager.handleCommitBatch(Batch.data(20, 1, 1L, 0,
             Collections.singletonList(new ApiMessageAndVersion(new BeginTransactionRecord(), (short) 0))));
 
-        List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
+        ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             log,
-            false,
+            9,
             offsetControlManager.transactionStartOffset(),
             false,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             featureControlManager);
 
+        assertFalse(result.isAtomic());
         offsetControlManager.replay(
-            RecordTestUtils.recordAtIndexAs(AbortTransactionRecord.class, records, 0).get(),
+            RecordTestUtils.recordAtIndexAs(AbortTransactionRecord.class, result.records(), 0).get(),
             21
         );
         assertEquals(-1L, offsetControlManager.transactionStartOffset());
@@ -1437,9 +1486,9 @@ public class QuorumControllerTest {
             Collections.singletonList(new ApiMessageAndVersion(new BeginTransactionRecord(), (short) 0))));
 
         assertThrows(RuntimeException.class, () ->
-            QuorumController.generateActivationRecords(
+            ActivationRecordsGenerator.generate(
                 log,
-                false,
+                9,
                 offsetControlManager.transactionStartOffset(),
                 false,
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
