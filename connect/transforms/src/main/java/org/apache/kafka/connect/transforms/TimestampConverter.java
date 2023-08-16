@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -34,6 +33,8 @@ import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.transforms.field.SingleFieldPath;
+import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
@@ -88,23 +89,32 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final Schema OPTIONAL_TIME_SCHEMA = Time.builder().optional().schema();
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
-                    "The field containing the timestamp, or empty if the entire value is a timestamp")
-            .define(TARGET_TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-                    ConfigDef.ValidString.in(TYPE_STRING, TYPE_UNIX, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP),
-                    ConfigDef.Importance.HIGH,
-                    "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
-            .define(FORMAT_CONFIG, ConfigDef.Type.STRING, FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM,
-                    "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
-                            + "or used to parse the input if the input is a string.")
-            .define(UNIX_PRECISION_CONFIG, ConfigDef.Type.STRING, UNIX_PRECISION_DEFAULT,
-                    ConfigDef.ValidString.in(
-                            UNIX_PRECISION_NANOS, UNIX_PRECISION_MICROS,
-                            UNIX_PRECISION_MILLIS, UNIX_PRECISION_SECONDS),
-                    ConfigDef.Importance.LOW,
-                    "The desired Unix precision for the timestamp: seconds, milliseconds, microseconds, or nanoseconds. " +
-                            "Used to generate the output when type=unix or used to parse the input if the input is a Long." +
-                            "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.");
+        .addDefinition(FieldSyntaxVersion.configDef())
+        .define(FIELD_CONFIG,
+                ConfigDef.Type.STRING,
+                FIELD_DEFAULT,
+                ConfigDef.Importance.HIGH,
+                "The field containing the timestamp, or empty if the entire value is a timestamp")
+        .define(TARGET_TYPE_CONFIG,
+                ConfigDef.Type.STRING,
+                ConfigDef.NO_DEFAULT_VALUE,
+                ConfigDef.ValidString.in(TYPE_STRING, TYPE_UNIX, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP),
+                ConfigDef.Importance.HIGH,
+                "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
+        .define(FORMAT_CONFIG,
+                ConfigDef.Type.STRING,
+                FORMAT_DEFAULT,
+                ConfigDef.Importance.MEDIUM,
+                "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
+                        + "or used to parse the input if the input is a string.")
+        .define(UNIX_PRECISION_CONFIG,
+                ConfigDef.Type.STRING,
+                UNIX_PRECISION_DEFAULT,
+                ConfigDef.ValidString.in(UNIX_PRECISION_NANOS, UNIX_PRECISION_MICROS, UNIX_PRECISION_MILLIS, UNIX_PRECISION_SECONDS),
+                ConfigDef.Importance.LOW,
+                "The desired Unix precision for the timestamp: seconds, milliseconds, microseconds, or nanoseconds. " +
+                        "Used to generate the output when type=unix or used to parse the input if the input is a Long." +
+                        "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.");
 
     private interface TimestampTranslator {
         /**
@@ -115,7 +125,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         /**
          * Get the schema for this format.
          */
-        Schema typeSchema(boolean isOptional);
+        Schema typeSchema(boolean isOptional, Object defaultValue);
 
         /**
          * Convert from the universal java.util.Date format to the type-specific format
@@ -144,8 +154,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional) {
-                return isOptional ? Schema.OPTIONAL_STRING_SCHEMA : Schema.STRING_SCHEMA;
+            public Schema typeSchema(boolean isOptional, Object defaultValue) {
+                return TimestampConverter.typeSchema(SchemaBuilder.string(), isOptional, defaultValue);
             }
 
             @Override
@@ -176,8 +186,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional) {
-                return isOptional ? Schema.OPTIONAL_INT64_SCHEMA : Schema.INT64_SCHEMA;
+            public Schema typeSchema(boolean isOptional, Object defaultValue) {
+                return TimestampConverter.typeSchema(SchemaBuilder.int64(), isOptional, defaultValue);
             }
 
             @Override
@@ -207,8 +217,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional) {
-                return isOptional ? OPTIONAL_DATE_SCHEMA : org.apache.kafka.connect.data.Date.SCHEMA;
+            public Schema typeSchema(boolean isOptional, Object defaultValue) {
+                return TimestampConverter.typeSchema(org.apache.kafka.connect.data.Date.builder(), isOptional, defaultValue);
             }
 
             @Override
@@ -233,8 +243,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional) {
-                return isOptional ? OPTIONAL_TIME_SCHEMA : Time.SCHEMA;
+            public Schema typeSchema(boolean isOptional, Object defaultValue) {
+                return TimestampConverter.typeSchema(Time.builder(), isOptional, defaultValue);
             }
 
             @Override
@@ -260,8 +270,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional) {
-                return isOptional ? OPTIONAL_TIMESTAMP_SCHEMA : Timestamp.SCHEMA;
+            public Schema typeSchema(boolean isOptional, Object defaultValue) {
+                return TimestampConverter.typeSchema(Timestamp.builder(), isOptional, defaultValue);
             }
 
             @Override
@@ -271,19 +281,25 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         });
     }
 
+    private static Schema typeSchema(SchemaBuilder builder, boolean isOptional, Object defaultValue) {
+        if (isOptional) builder.optional();
+        if (defaultValue != null) builder.defaultValue(defaultValue);
+        return builder.build();
+    }
+
     // This is a bit unusual, but allows the transformation config to be passed to static anonymous classes to customize
     // their behavior
     private static class Config {
-        Config(String field, String type, SimpleDateFormat format, String unixPrecision) {
+        Config(SingleFieldPath field, String type, SimpleDateFormat format, String unixPrecision) {
             this.field = field;
             this.type = type;
             this.format = format;
             this.unixPrecision = unixPrecision;
         }
-        String field;
-        String type;
-        SimpleDateFormat format;
-        String unixPrecision;
+        final SingleFieldPath field;
+        final String type;
+        final SimpleDateFormat format;
+        final String unixPrecision;
     }
     private Config config;
     private Cache<Schema, Schema> schemaUpdateCache;
@@ -311,7 +327,11 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                         + formatPattern, e);
             }
         }
-        config = new Config(field, type, format, unixPrecision);
+        FieldSyntaxVersion syntaxVersion = FieldSyntaxVersion.fromConfig(simpleConfig);
+        SingleFieldPath fieldPath = field.isEmpty()
+            ? null
+            : new SingleFieldPath(field, syntaxVersion);
+        config = new Config(fieldPath, type, format, unixPrecision);
     }
 
     @Override
@@ -374,31 +394,36 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
     private R applyWithSchema(R record) {
         final Schema schema = operatingSchema(record);
-        if (config.field.isEmpty()) {
+        if (config.field == null) {
             Object value = operatingValue(record);
             // New schema is determined by the requested target timestamp type
-            Schema updatedSchema = TRANSLATORS.get(config.type).typeSchema(schema.isOptional());
+            Schema updatedSchema = TRANSLATORS.get(config.type).typeSchema(schema.isOptional(), schema.defaultValue());
             return newRecord(record, updatedSchema, convertTimestamp(value, timestampTypeFromSchema(schema)));
         } else {
             final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
             Schema updatedSchema = schemaUpdateCache.get(schema);
             if (updatedSchema == null) {
-                SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
-                for (Field field : schema.fields()) {
-                    if (field.name().equals(config.field)) {
-                        builder.field(field.name(), TRANSLATORS.get(config.type).typeSchema(field.schema().isOptional()));
-                    } else {
-                        builder.field(field.name(), field.schema());
-                    }
-                }
-                if (schema.isOptional())
-                    builder.optional();
+                // cover raw schemas with default value
+                SchemaBuilder updated = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
                 if (schema.defaultValue() != null) {
-                    Struct updatedDefaultValue = applyValueWithSchema((Struct) schema.defaultValue(), builder);
-                    builder.defaultValue(updatedDefaultValue);
+                    Struct updatedDefaultValue = applyValueWithSchema((Struct) schema.defaultValue(), updated);
+                    updated.defaultValue(updatedDefaultValue);
                 }
 
-                updatedSchema = builder.build();
+                updatedSchema = config.field.updateSchemaFrom(
+                    schema,
+                    updated,
+                    (builder, field, fieldPath) -> {
+                        // default value is conserved and transformed
+                        Object defaultValue = convertTimestamp(
+                                field.schema().defaultValue(),
+                                timestampTypeFromSchema(field.schema()));
+                        builder.field(
+                                field.name(),
+                                TRANSLATORS.get(config.type)
+                                        .typeSchema(field.schema().isOptional(), defaultValue)
+                        );
+                    });
                 schemaUpdateCache.put(schema, updatedSchema);
             }
 
@@ -411,27 +436,28 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         if (value == null) {
             return null;
         }
-        Struct updatedValue = new Struct(updatedSchema);
-        for (Field field : value.schema().fields()) {
-            final Object updatedFieldValue;
-            if (field.name().equals(config.field)) {
-                updatedFieldValue = convertTimestamp(value.get(field), timestampTypeFromSchema(field.schema()));
-            } else {
-                updatedFieldValue = value.get(field);
-            }
-            updatedValue.put(field.name(), updatedFieldValue);
-        }
-        return updatedValue;
+        return config.field.updateValueFrom(
+            value.schema(),
+            value,
+            updatedSchema,
+            (originalParent, originalField, struct, updatedField, fieldPath) ->
+                struct.put(
+                        updatedField.name(),
+                        // default value is conserved
+                        convertTimestamp(originalParent.get(originalField), timestampTypeFromSchema(originalField.schema()))
+                )
+        );
     }
 
     private R applySchemaless(R record) {
         Object rawValue = operatingValue(record);
-        if (rawValue == null || config.field.isEmpty()) {
+        if (rawValue == null || config.field == null) {
             return newRecord(record, null, convertTimestamp(rawValue));
         } else {
             final Map<String, Object> value = requireMap(rawValue, PURPOSE);
-            final HashMap<String, Object> updatedValue = new HashMap<>(value);
-            updatedValue.put(config.field, convertTimestamp(value.get(config.field)));
+            final Map<String, Object> updatedValue = config.field.updateValueFrom(
+                value,
+                (orig, map, fieldPath, k) -> map.put(k, convertTimestamp(orig.get(k))));
             return newRecord(record, null, updatedValue);
         }
     }

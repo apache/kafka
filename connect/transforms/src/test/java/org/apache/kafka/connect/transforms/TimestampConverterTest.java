@@ -26,9 +26,11 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
@@ -397,6 +399,15 @@ public class TimestampConverterTest {
     }
 
     @Test
+    public void testWithSchemaNullFieldToTimestampV2() {
+        testWithSchemaNullFieldConversionV2("Timestamp", Schema.OPTIONAL_INT64_SCHEMA, TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Timestamp", TimestampConverter.OPTIONAL_TIME_SCHEMA, TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Timestamp", TimestampConverter.OPTIONAL_DATE_SCHEMA, TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Timestamp", Schema.OPTIONAL_STRING_SCHEMA, TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Timestamp", TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA, TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA);
+    }
+
+    @Test
     public void testWithSchemaNullValueToUnix() {
         testWithSchemaNullValueConversion("unix", Schema.OPTIONAL_INT64_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
         testWithSchemaNullValueConversion("unix", TimestampConverter.OPTIONAL_TIME_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
@@ -412,6 +423,15 @@ public class TimestampConverterTest {
         testWithSchemaNullFieldConversion("unix", TimestampConverter.OPTIONAL_DATE_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
         testWithSchemaNullFieldConversion("unix", Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
         testWithSchemaNullFieldConversion("unix", TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
+    }
+
+    @Test
+    public void testWithSchemaNullFieldToUnixV2() {
+        testWithSchemaNullFieldConversionV2("unix", Schema.OPTIONAL_INT64_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
+        testWithSchemaNullFieldConversionV2("unix", TimestampConverter.OPTIONAL_TIME_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
+        testWithSchemaNullFieldConversionV2("unix", TimestampConverter.OPTIONAL_DATE_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
+        testWithSchemaNullFieldConversionV2("unix", Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
+        testWithSchemaNullFieldConversionV2("unix", TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA);
     }
 
     @Test
@@ -433,6 +453,15 @@ public class TimestampConverterTest {
     }
 
     @Test
+    public void testWithSchemaNullFieldToTimeV2() {
+        testWithSchemaNullFieldConversionV2("Time", Schema.OPTIONAL_INT64_SCHEMA, TimestampConverter.OPTIONAL_TIME_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Time", TimestampConverter.OPTIONAL_TIME_SCHEMA, TimestampConverter.OPTIONAL_TIME_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Time", TimestampConverter.OPTIONAL_DATE_SCHEMA, TimestampConverter.OPTIONAL_TIME_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Time", Schema.OPTIONAL_STRING_SCHEMA, TimestampConverter.OPTIONAL_TIME_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Time", TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA, TimestampConverter.OPTIONAL_TIME_SCHEMA);
+    }
+
+    @Test
     public void testWithSchemaNullValueToDate() {
         testWithSchemaNullValueConversion("Date", Schema.OPTIONAL_INT64_SCHEMA, TimestampConverter.OPTIONAL_DATE_SCHEMA);
         testWithSchemaNullValueConversion("Date", TimestampConverter.OPTIONAL_TIME_SCHEMA, TimestampConverter.OPTIONAL_DATE_SCHEMA);
@@ -451,6 +480,15 @@ public class TimestampConverterTest {
     }
 
     @Test
+    public void testWithSchemaNullFieldToDateV2() {
+        testWithSchemaNullFieldConversionV2("Date", Schema.OPTIONAL_INT64_SCHEMA, TimestampConverter.OPTIONAL_DATE_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Date", TimestampConverter.OPTIONAL_TIME_SCHEMA, TimestampConverter.OPTIONAL_DATE_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Date", TimestampConverter.OPTIONAL_DATE_SCHEMA, TimestampConverter.OPTIONAL_DATE_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Date", Schema.OPTIONAL_STRING_SCHEMA, TimestampConverter.OPTIONAL_DATE_SCHEMA);
+        testWithSchemaNullFieldConversionV2("Date", TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA, TimestampConverter.OPTIONAL_DATE_SCHEMA);
+    }
+
+    @Test
     public void testWithSchemaNullValueToString() {
         testWithSchemaNullValueConversion("string", Schema.OPTIONAL_INT64_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
         testWithSchemaNullValueConversion("string", TimestampConverter.OPTIONAL_TIME_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
@@ -466,6 +504,15 @@ public class TimestampConverterTest {
         testWithSchemaNullFieldConversion("string", TimestampConverter.OPTIONAL_DATE_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
         testWithSchemaNullFieldConversion("string", Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
         testWithSchemaNullFieldConversion("string", TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
+    }
+
+    @Test
+    public void testWithSchemaNullFieldToStringV2() {
+        testWithSchemaNullFieldConversionV2("string", Schema.OPTIONAL_INT64_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
+        testWithSchemaNullFieldConversionV2("string", TimestampConverter.OPTIONAL_TIME_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
+        testWithSchemaNullFieldConversionV2("string", TimestampConverter.OPTIONAL_DATE_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
+        testWithSchemaNullFieldConversionV2("string", Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
+        testWithSchemaNullFieldConversionV2("string", TimestampConverter.OPTIONAL_TIMESTAMP_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
     }
 
     private void testWithSchemaNullValueConversion(String targetType, Schema originalSchema, Schema expectedSchema) {
@@ -510,6 +557,42 @@ public class TimestampConverterTest {
         assertNull(transformed.value());
     }
 
+    private void testWithSchemaNullFieldConversionV2(String targetType, Schema originalSchema, Schema expectedSchema) {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, targetType);
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FIELD_CONFIG, "foo.ts");
+        config.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xformValue.configure(config);
+        SchemaBuilder structSchema = SchemaBuilder.struct()
+                .field("ts", originalSchema)
+                .field("other", Schema.STRING_SCHEMA);
+        SchemaBuilder fooSchema = SchemaBuilder.struct().field("foo", structSchema);
+
+        SchemaBuilder expectedStructSchema = SchemaBuilder.struct()
+                .field("ts", expectedSchema)
+                .field("other", Schema.STRING_SCHEMA);
+        SchemaBuilder expectedFooSchema = SchemaBuilder.struct().field("foo", expectedStructSchema.build());
+
+        Struct original = new Struct(structSchema);
+        original.put("ts", null);
+        original.put("other", "test");
+        Struct foo = new Struct(fooSchema);
+        foo.put("foo", original);
+
+        // Struct field is null
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(fooSchema.build(), foo));
+
+        assertEquals(expectedFooSchema.build(), transformed.valueSchema());
+        assertNull(requireStruct(transformed.value(), "").getStruct("foo").get("ts"));
+
+        // entire Struct is null
+        transformed = xformValue.apply(createRecordWithSchema(fooSchema.optional().build(), null));
+
+        assertEquals(expectedFooSchema.optional().build(), transformed.valueSchema());
+        assertNull(transformed.value());
+    }
+
     // Convert field instead of entire key/value
 
     @Test
@@ -524,6 +607,23 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(Collections.singletonMap("ts", DATE.getTime()), transformed.value());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSchemalessFieldConversionV2() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Date");
+        config.put(TimestampConverter.FIELD_CONFIG, "foo.ts");
+        config.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xformValue.configure(config);
+
+        Object value = Collections.singletonMap("ts", DATE_PLUS_TIME.getTime());
+        Object foo = Collections.singletonMap("foo", value);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(foo));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(Collections.singletonMap("ts", DATE.getTime()), ((Map<String, Object>) transformed.value()).get("foo"));
     }
 
     @Test
@@ -551,6 +651,38 @@ public class TimestampConverterTest {
         assertEquals(expectedSchema, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), ((Struct) transformed.value()).get("ts"));
         assertEquals("test", ((Struct) transformed.value()).get("other"));
+    }
+
+    @Test
+    public void testWithSchemaFieldConversionV2() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.FIELD_CONFIG, "foo.ts");
+        config.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xformValue.configure(config);
+
+        // ts field is a unix timestamp
+        Schema structWithTimestampFieldSchema = SchemaBuilder.struct()
+                .field("ts", Schema.INT64_SCHEMA)
+                .field("other", Schema.STRING_SCHEMA)
+                .build();
+        SchemaBuilder fooSchema = SchemaBuilder.struct().field("foo", structWithTimestampFieldSchema);
+
+        Struct original = new Struct(structWithTimestampFieldSchema);
+        original.put("ts", DATE_PLUS_TIME_UNIX);
+        original.put("other", "test");
+        Struct foo = new Struct(fooSchema).put("foo", original);
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(fooSchema, foo));
+
+        Schema expectedSchema = SchemaBuilder.struct()
+                .field("ts", Timestamp.SCHEMA)
+                .field("other", Schema.STRING_SCHEMA)
+                .build();
+        Schema expectedFooSchema = SchemaBuilder.struct().field("foo", expectedSchema).build();
+        assertEquals(expectedFooSchema, transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME.getTime(), ((Struct) transformed.value()).getStruct("foo").get("ts"));
+        assertEquals("test", ((Struct) transformed.value()).getStruct("foo").get("other"));
     }
 
     @Test
@@ -669,6 +801,40 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME_UNIX_SECONDS, transformed.value());
+    }
+
+
+    @Test
+    public void testWithSchemaFieldConversionWithDefaultValueV2() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.FIELD_CONFIG, "foo.ts");
+        config.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xformValue.configure(config);
+
+        Instant now = Instant.now();
+        // ts field is a unix timestamp
+        Schema structWithTimestampFieldSchema = SchemaBuilder.struct()
+                .field("ts", SchemaBuilder.int64().defaultValue(now.toEpochMilli()).build())
+                .field("other", Schema.STRING_SCHEMA)
+                .build();
+        SchemaBuilder fooSchema = SchemaBuilder.struct().field("foo", structWithTimestampFieldSchema);
+
+        Struct original = new Struct(structWithTimestampFieldSchema);
+        original.put("ts", DATE_PLUS_TIME_UNIX);
+        original.put("other", "test");
+        Struct foo = new Struct(fooSchema).put("foo", original);
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(fooSchema, foo));
+
+        Schema expectedSchema = SchemaBuilder.struct()
+                .field("ts", Timestamp.builder().defaultValue(java.util.Date.from(now)).build())
+                .field("other", Schema.STRING_SCHEMA)
+                .build();
+        Schema expectedFooSchema = SchemaBuilder.struct().field("foo", expectedSchema).build();
+        assertEquals(expectedFooSchema, transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME.getTime(), ((Struct) transformed.value()).getStruct("foo").get("ts"));
+        assertEquals("test", ((Struct) transformed.value()).getStruct("foo").get("other"));
     }
 
     // Validate Key implementation in addition to Value
