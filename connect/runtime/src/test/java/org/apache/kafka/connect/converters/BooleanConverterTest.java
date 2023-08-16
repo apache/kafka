@@ -55,7 +55,20 @@ public class BooleanConverterTest {
     }
 
     @Test
-    public void testFromConnectBadSchema() {
+    public void testFromConnectNullSchema() {
+        assertArrayEquals(
+            TRUE,
+            converter.fromConnectData(TOPIC, null, Boolean.TRUE)
+        );
+        assertArrayEquals(
+            FALSE,
+            converter.fromConnectData(TOPIC, null, Boolean.FALSE)
+        );
+    }
+
+
+    @Test
+    public void testFromConnectWrongSchema() {
         assertThrows(DataException.class,
             () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, Boolean.FALSE));
     }
@@ -67,7 +80,7 @@ public class BooleanConverterTest {
     }
 
     @Test
-    public void testFromConnectNull() {
+    public void testFromConnectNullValue() {
         assertNull(converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, null));
     }
 
@@ -78,10 +91,16 @@ public class BooleanConverterTest {
 
         assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, FALSE).schema());
         assertFalse((Boolean) converter.toConnectData(TOPIC, FALSE).value());
+    }
 
+    @Test
+    public void testToConnectNullValue() {
         assertEquals(Schema.OPTIONAL_BOOLEAN_SCHEMA, converter.toConnectData(TOPIC, null).schema());
         assertNull(converter.toConnectData(TOPIC, null).value());
+    }
 
+    @Test
+    public void testToConnectInvalidValue() {
         byte[] invalidValue = "42".getBytes(StandardCharsets.UTF_8);
         assertThrows(DataException.class, () -> converter.toConnectData(TOPIC, invalidValue));
     }
