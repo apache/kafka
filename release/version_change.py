@@ -34,27 +34,6 @@ version = args.version
 release_version = version
 
 
-def replace(path, pattern, replacement):
-    updated = []
-    with open(path, 'r') as f:
-        for line in f:
-            updated.append((replacement + '\n') if line.startswith(pattern) else line)
-
-    with open(path, 'w') as f:
-        for line in updated:
-            f.write(line)
-
-def regexReplace(path, pattern, replacement):
-    updated = []
-    with open(path, 'r') as f:
-        for line in f:
-            updated.append(re.sub(pattern, replacement, line))
-
-    with open(path, 'w') as f:
-        for line in updated:
-            f.write(line)
-
-
 def update_template_js(file_name, version) -> None:
     parser = Parser()
 
