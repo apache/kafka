@@ -89,7 +89,6 @@ public class BooleanConverter implements Converter, HeaderConverter {
         }
     }
 
-
     @Override
     public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
         return fromConnectData(topic, schema, value);
