@@ -84,11 +84,12 @@ public final class TieredStorageTestContext implements AutoCloseable {
     public TieredStorageTestContext(TieredStorageTestHarness harness) {
         this.harness = harness;
         this.testReport = new TieredStorageTestReport(this);
+        initClients();
         initContext();
     }
 
     @SuppressWarnings("deprecation")
-    private void initContext() {
+    private void initClients() {
         // Set a producer linger of 60 seconds, in order to optimistically generate batches of
         // records with a pre-determined size.
         Properties producerOverrideProps = new Properties();
@@ -98,9 +99,11 @@ public final class TieredStorageTestContext implements AutoCloseable {
         consumer = harness.createConsumer(de, de, new Properties(),
                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toList());
         admin = harness.createAdminClient(harness.listenerName(), new Properties());
+    }
 
-        remoteStorageManagers = TieredStorageTestHarness.remoteStorageManagers(harness.brokers());
-        localStorages = TieredStorageTestHarness.localStorages(harness.brokers());
+    private void initContext() {
+        remoteStorageManagers = TieredStorageTestHarness.remoteStorageManagers(harness.aliveBrokers());
+        localStorages = TieredStorageTestHarness.localStorages(harness.aliveBrokers());
     }
 
     public void createTopic(TopicSpec spec) throws ExecutionException, InterruptedException {
@@ -224,20 +227,17 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void bounce(int brokerId) {
-        closeClients();
         harness.killBroker(brokerId);
         harness.startBroker(brokerId);
         initContext();
     }
 
     public void stop(int brokerId) {
-        closeClients();
         harness.killBroker(brokerId);
         initContext();
     }
 
     public void start(int brokerId) {
-        closeClients();
         harness.startBroker(brokerId);
         initContext();
     }
@@ -312,11 +312,5 @@ public final class TieredStorageTestContext implements AutoCloseable {
     public void close() throws IOException {
         Utils.closeAll(producer, consumer);
         Utils.closeQuietly(admin, "Admin client");
-    }
-
-    private void closeClients() {
-        producer.close(Duration.ofSeconds(5));
-        consumer.close(Duration.ofSeconds(5));
-        admin.close();
     }
 }
