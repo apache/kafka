@@ -89,8 +89,8 @@ public class LeaderElectionCommandTest {
         TestUtils.assertLeader(client, topicPartition, broker2);
         cluster.shutdownBroker(broker3);
         TestUtils.waitForBrokersOutOfIsr(client,
-                JavaConverters.asScala(Collections.singleton(topicPartition)).toSet(),
-                JavaConverters.asScala(Collections.singleton(broker3)).toSet()
+                JavaConverters.asScalaBuffer(Collections.singletonList(topicPartition)).toSet(),
+                JavaConverters.asScalaBuffer(Collections.singletonList(broker3)).toSet()
         );
         cluster.shutdownBroker(broker2);
         TestUtils.assertNoLeader(client, topicPartition);
