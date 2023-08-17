@@ -128,38 +128,38 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class RemoteLogManagerTest {
-    Time time = new MockTime();
-    int brokerId = 0;
-    String logDir = TestUtils.tempDirectory("kafka-").toString();
-    String clusterId = "dummyId";
-    String remoteLogStorageTestProp = "remote.log.storage.test";
-    String remoteLogStorageTestVal = "storage.test";
-    String remoteLogMetadataTestProp = "remote.log.metadata.test";
-    String remoteLogMetadataTestVal = "metadata.test";
-    String remoteLogMetadataCommonClientTestProp = REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "common.client.test";
-    String remoteLogMetadataCommonClientTestVal = "common.test";
-    String remoteLogMetadataProducerTestProp = REMOTE_LOG_METADATA_PRODUCER_PREFIX + "producer.test";
-    String remoteLogMetadataProducerTestVal = "producer.test";
-    String remoteLogMetadataConsumerTestProp = REMOTE_LOG_METADATA_CONSUMER_PREFIX + "consumer.test";
-    String remoteLogMetadataConsumerTestVal = "consumer.test";
-    String remoteLogMetadataTopicPartitionsNum = "1";
+    private final Time time = new MockTime();
+    private final int brokerId = 0;
+    private final String logDir = TestUtils.tempDirectory("kafka-").toString();
+    private final String clusterId = "dummyId";
+    private final String remoteLogStorageTestProp = "remote.log.storage.test";
+    private final String remoteLogStorageTestVal = "storage.test";
+    private final String remoteLogMetadataTestProp = "remote.log.metadata.test";
+    private final String remoteLogMetadataTestVal = "metadata.test";
+    private final String remoteLogMetadataCommonClientTestProp = REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "common.client.test";
+    private final String remoteLogMetadataCommonClientTestVal = "common.test";
+    private final String remoteLogMetadataProducerTestProp = REMOTE_LOG_METADATA_PRODUCER_PREFIX + "producer.test";
+    private final String remoteLogMetadataProducerTestVal = "producer.test";
+    private final String remoteLogMetadataConsumerTestProp = REMOTE_LOG_METADATA_CONSUMER_PREFIX + "consumer.test";
+    private final String remoteLogMetadataConsumerTestVal = "consumer.test";
+    private final String remoteLogMetadataTopicPartitionsNum = "1";
 
-    RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
-    RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
-    RemoteLogManagerConfig remoteLogManagerConfig = null;
+    private final RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
+    private final RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
+    private RemoteLogManagerConfig remoteLogManagerConfig = null;
 
-    BrokerTopicStats brokerTopicStats = null;
-    RemoteLogManager remoteLogManager = null;
+    private BrokerTopicStats brokerTopicStats = null;
+    private RemoteLogManager remoteLogManager = null;
 
-    TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
-    TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Follower", 0));
-    Map<String, Uuid> topicIds = new HashMap<>();
-    TopicPartition tp = new TopicPartition("TestTopic", 5);
-    EpochEntry epochEntry0 = new EpochEntry(0, 0);
-    EpochEntry epochEntry1 = new EpochEntry(1, 100);
-    EpochEntry epochEntry2 = new EpochEntry(2, 200);
-    List<EpochEntry> totalEpochEntries = Arrays.asList(epochEntry0, epochEntry1, epochEntry2);
-    LeaderEpochCheckpoint checkpoint = new LeaderEpochCheckpoint() {
+    private final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
+    private final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Follower", 0));
+    private final Map<String, Uuid> topicIds = new HashMap<>();
+    private final TopicPartition tp = new TopicPartition("TestTopic", 5);
+    private final EpochEntry epochEntry0 = new EpochEntry(0, 0);
+    private final EpochEntry epochEntry1 = new EpochEntry(1, 100);
+    private final EpochEntry epochEntry2 = new EpochEntry(2, 200);
+    private final List<EpochEntry> totalEpochEntries = Arrays.asList(epochEntry0, epochEntry1, epochEntry2);
+    private final LeaderEpochCheckpoint checkpoint = new LeaderEpochCheckpoint() {
         List<EpochEntry> epochs = Collections.emptyList();
 
         @Override
@@ -173,7 +173,7 @@ public class RemoteLogManagerTest {
         }
     };
 
-    UnifiedLog mockLog = mock(UnifiedLog.class);
+    private final UnifiedLog mockLog = mock(UnifiedLog.class);
 
     @BeforeEach
     void setUp() throws Exception {
@@ -1034,25 +1034,24 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testBuildRefinedLeaderEpochMap() {
+    public void testBuildFilteredLeaderEpochMap() {
         TreeMap<Integer, Long> leaderEpochToStartOffset = new TreeMap<>();
         leaderEpochToStartOffset.put(0, 0L);
-        leaderEpochToStartOffset.put(1, 10L);
-        leaderEpochToStartOffset.put(2, 20L);
+        leaderEpochToStartOffset.put(1, 0L);
+        leaderEpochToStartOffset.put(2, 0L);
         leaderEpochToStartOffset.put(3, 30L);
         leaderEpochToStartOffset.put(4, 40L);
         leaderEpochToStartOffset.put(5, 60L);
         leaderEpochToStartOffset.put(6, 60L);
         leaderEpochToStartOffset.put(7, 70L);
+        leaderEpochToStartOffset.put(8, 70L);
 
         TreeMap<Integer, Long> expectedLeaderEpochs = new TreeMap<>();
-        expectedLeaderEpochs.put(0, 0L);
-        expectedLeaderEpochs.put(1, 10L);
-        expectedLeaderEpochs.put(2, 20L);
+        expectedLeaderEpochs.put(2, 0L);
         expectedLeaderEpochs.put(3, 30L);
         expectedLeaderEpochs.put(4, 40L);
         expectedLeaderEpochs.put(6, 60L);
-        expectedLeaderEpochs.put(7, 70L);
+        expectedLeaderEpochs.put(8, 70L);
 
         NavigableMap<Integer, Long> refinedLeaderEpochMap = RemoteLogManager.buildFilteredLeaderEpochMap(leaderEpochToStartOffset);
         assertEquals(expectedLeaderEpochs, refinedLeaderEpochMap);
@@ -1241,7 +1240,7 @@ public class RemoteLogManagerTest {
         Supplier<RemoteLogManager.RetentionTimeData>[] invalidRetentionTimeData =
             new Supplier[] {
                 () -> new RemoteLogManager.RetentionTimeData(-1, 10),
-                () -> new RemoteLogManager.RetentionTimeData(1000, 10),
+                () -> new RemoteLogManager.RetentionTimeData(10, 1000),
             };
 
         for (Supplier<RemoteLogManager.RetentionTimeData> invalidRetentionTimeDataEntry : invalidRetentionTimeData) {
