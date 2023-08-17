@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -53,7 +54,6 @@ import org.junit.rules.Timeout;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -177,12 +177,10 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     void cleanupTest() throws Exception {
-        if (streams != null) {
-            streams.close(Duration.ofSeconds(30));
-        }
+        Utils.closeQuietly(streams, "kafka streams");
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
         if (adminClient != null) {
-            adminClient.close(Duration.ofSeconds(10));
+            Utils.closeQuietly(adminClient, "admin client");
             adminClient = null;
         }
     }
