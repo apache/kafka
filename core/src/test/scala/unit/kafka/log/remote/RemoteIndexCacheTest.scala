@@ -452,6 +452,7 @@ class RemoteIndexCacheTest {
     val spyEntry = generateSpyCacheEntry(segmentId)
     cache.internalCache.put(segmentUuid, spyEntry)
     assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+    assertFalse(spyEntry.isMarkedForCleanup)
 
     cache.remove(segmentId.id())
     assertFalse(cache.internalCache().asMap().containsKey(segmentUuid))
@@ -486,6 +487,7 @@ class RemoteIndexCacheTest {
 
       cache.internalCache.put(segmentUuid, spyEntry)
       assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+      assertFalse(spyEntry.isMarkedForCleanup)
     }
     cache.removeAll(uuidAndEntryList.keySet())
     uuidAndEntryList.values().forEach { entry =>
