@@ -64,9 +64,9 @@ public class DelegationTokenControlManager {
     static class Builder {
         private LogContext logContext = null;
         private DelegationTokenCache tokenCache = null;
-        private String secretKeyString = null;
-        private long tokenDefaultMaxLifetime = 0;
-        private long tokenDefaultRenewLifetime = 0;
+        private String tokenSecretKeyString = null;
+        private long tokenDefaultMaxLifetimeMs = 0;
+        private long tokenDefaultRenewLifetimeMs = 0;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -78,18 +78,18 @@ public class DelegationTokenControlManager {
             return this;
         }
 
-        Builder setTokenKeyString(String secretKeyString) {
-            this.secretKeyString = secretKeyString;
+        Builder setDelegationTokenSecretKey(String tokenSecretKeyString) {
+            this.tokenSecretKeyString = tokenSecretKeyString;
             return this;
         }
 
-        Builder setDelegationTokenMaxLifeMs(long tokenDefaultMaxLifetime) {
-            this.tokenDefaultMaxLifetime = tokenDefaultMaxLifetime;
+        Builder setDelegationTokenMaxLifeMs(long tokenDefaultMaxLifetimeMs) {
+            this.tokenDefaultMaxLifetimeMs = tokenDefaultMaxLifetimeMs;
             return this;
         }
 
-        Builder setDelegationTokenExpiryTimeMs(long tokenDefaultRenewLifetime) {
-            this.tokenDefaultRenewLifetime = tokenDefaultRenewLifetime;
+        Builder setDelegationTokenExpiryTimeMs(long tokenDefaultRenewLifetimeMs) {
+            this.tokenDefaultRenewLifetimeMs = tokenDefaultRenewLifetimeMs;
             return this;
         }
 
@@ -98,39 +98,39 @@ public class DelegationTokenControlManager {
             return new DelegationTokenControlManager(
               logContext,
               tokenCache,
-              secretKeyString,
-              tokenDefaultMaxLifetime,
-              tokenDefaultRenewLifetime);
+              tokenSecretKeyString,
+              tokenDefaultMaxLifetimeMs,
+              tokenDefaultRenewLifetimeMs);
         }
     }
 
     private final Logger log;
     private final DelegationTokenCache tokenCache;
-    private final String secretKeyString;
-    private final long tokenDefaultMaxLifetime;
-    private final long tokenDefaultRenewLifetime;
+    private final String tokenSecretKeyString;
+    private final long tokenDefaultMaxLifetimeMs;
+    private final long tokenDefaultRenewLifetimeMs;
 
     private DelegationTokenControlManager(
         LogContext logContext,
         DelegationTokenCache tokenCache,
-        String secretKeyString,
-        long tokenDefaultMaxLifetime,
-        long tokenDefaultRenewLifetime
+        String tokenSecretKeyString,
+        long tokenDefaultMaxLifetimeMs,
+        long tokenDefaultRenewLifetimeMs
     ) {
         this.log = logContext.logger(DelegationTokenControlManager.class);
         this.tokenCache = tokenCache;
-        this.secretKeyString = secretKeyString;
-        this.tokenDefaultMaxLifetime = tokenDefaultMaxLifetime;
-        this.tokenDefaultRenewLifetime = tokenDefaultRenewLifetime;
+        this.tokenSecretKeyString = tokenSecretKeyString;
+        this.tokenDefaultMaxLifetimeMs = tokenDefaultMaxLifetimeMs;
+        this.tokenDefaultRenewLifetimeMs = tokenDefaultRenewLifetimeMs;
     }
 
-    public static byte[] toBytes(String str) {
+    private static byte[] toBytes(String str) {
         return str.getBytes(StandardCharsets.UTF_8);
     }
 
     private byte[] createHmac(String tokenId) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA512");
-        SecretKeySpec secretKey = new SecretKeySpec(toBytes(secretKeyString), mac.getAlgorithm());
+        SecretKeySpec secretKey = new SecretKeySpec(toBytes(tokenSecretKeyString), mac.getAlgorithm());
 
         mac.init(secretKey);
         return mac.doFinal(toBytes(tokenId));
@@ -142,22 +142,11 @@ public class DelegationTokenControlManager {
     }
 
     private boolean allowedToRenew(TokenInformation tokenInfo, KafkaPrincipal renewer) {
-        if (tokenInfo.owner().equals(renewer)) {
-            return true;
-        }
-        for (KafkaPrincipal validRenewer : tokenInfo.renewers()) {
-            if (validRenewer.equals(renewer)) {
-                return true;
-            }
-        }
-        return false;
+        return tokenInfo.owner().equals(renewer) || tokenInfo.renewers().contains(renewer);
     }
 
     public boolean isEnabled() {
-        if (secretKeyString != null) {
-            return true;
-        }
-        return false;
+        return tokenSecretKeyString != null;
     }
 
     /*
@@ -170,16 +159,6 @@ public class DelegationTokenControlManager {
         MetadataVersion metadataVersion
     ) {
         long now = time.milliseconds();
-        long maxLifeTime = tokenDefaultMaxLifetime;
-        if (requestData.maxLifetimeMs() > 0) {
-            maxLifeTime = Math.min(maxLifeTime, requestData.maxLifetimeMs());
-        }
-
-        long maxTimestamp = now + maxLifeTime;
-        long expiryTimestamp = Math.min(maxTimestamp, now + tokenDefaultRenewLifetime);
-
-        String tokenId = Uuid.randomUuid().toString();
-
         KafkaPrincipal owner = context.principal();
         if ((requestData.ownerPrincipalName() != null) && 
             (!requestData.ownerPrincipalName().isEmpty())) {
@@ -194,7 +173,7 @@ public class DelegationTokenControlManager {
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
-        if (secretKeyString == null) {
+        if (isEnabled()) {
             // DelegationTokens are not enabled
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
         }
@@ -203,6 +182,16 @@ public class DelegationTokenControlManager {
             // DelegationTokens are not supported in this metadata version
             return ControllerResult.atomicOf(records, responseData.setErrorCode(UNSUPPORTED_VERSION.code()));
         }
+
+        long maxLifeTime = tokenDefaultMaxLifetimeMs;
+        if (requestData.maxLifetimeMs() > 0) {
+            maxLifeTime = Math.min(maxLifeTime, requestData.maxLifetimeMs());
+        }
+
+        long maxTimestamp = now + maxLifeTime;
+        long expiryTimestamp = Math.min(maxTimestamp, now + tokenDefaultRenewLifetimeMs);
+
+        String tokenId = Uuid.randomUuid().toString();
 
         List<KafkaPrincipal> renewers = new ArrayList<KafkaPrincipal>();
         for (CreatableRenewers renewer : requestData.renewers()) {
@@ -243,9 +232,18 @@ public class DelegationTokenControlManager {
         MetadataVersion metadataVersion
     ) {
         long now = time.milliseconds();
-
         List<ApiMessageAndVersion> records = new ArrayList<>();
         RenewDelegationTokenResponseData responseData = new RenewDelegationTokenResponseData();
+
+        if (isEnabled()) {
+            // DelegationTokens are not enabled
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
+        }
+
+        if (!metadataVersion.isDelegationTokenSupported()) {
+            // DelegationTokens are not supported in this metadata version
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(UNSUPPORTED_VERSION.code()));
+        }
 
         TokenInformation myTokenInformation = getToken(requestData.hmac());
 
@@ -261,7 +259,7 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_OWNER_MISMATCH.code()));
         }
 
-        long renewLifeTime = tokenDefaultRenewLifetime;
+        long renewLifeTime = tokenDefaultRenewLifetimeMs;
         if (requestData.renewPeriodMs() > 0) {
             renewLifeTime = Math.min(renewLifeTime, requestData.renewPeriodMs());
         }
@@ -286,13 +284,17 @@ public class DelegationTokenControlManager {
         MetadataVersion metadataVersion
     ) {
         long now = time.milliseconds();
-
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ExpireDelegationTokenResponseData responseData = new ExpireDelegationTokenResponseData();
 
-        if (secretKeyString == null) {
+        if (isEnabled()) {
             // DelegationTokens are not enabled
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
+        }
+
+        if (!metadataVersion.isDelegationTokenSupported()) {
+            // DelegationTokens are not supported in this metadata version
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(UNSUPPORTED_VERSION.code()));
         }
 
         TokenInformation myTokenInformation = getToken(requestData.hmac());

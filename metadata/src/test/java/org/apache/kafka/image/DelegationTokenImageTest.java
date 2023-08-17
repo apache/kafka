@@ -119,7 +119,7 @@ public class DelegationTokenImageTest {
     }
 
     @Test
-    public void testEmptyWithInvalidIBP() throws Throwable {
+    public void testEmptyWithInvalidIBP() {
         ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
                 setMetadataVersion(MetadataVersion.IBP_3_5_IV2).build();
         RecordListWriter writer = new RecordListWriter();
@@ -127,7 +127,7 @@ public class DelegationTokenImageTest {
     }
 
     @Test
-    public void testImage1withInvalidIBP() throws Throwable {
+    public void testImage1withInvalidIBP() {
         ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
                 setMetadataVersion(MetadataVersion.IBP_3_5_IV2).build();
         RecordListWriter writer = new RecordListWriter();

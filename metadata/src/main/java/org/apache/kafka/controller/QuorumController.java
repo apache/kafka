@@ -212,7 +212,7 @@ public final class QuorumController implements Controller {
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
         private DelegationTokenCache tokenCache;
-        private String tokenKeyString;
+        private String tokenSecretKeyString;
         private long delegationTokenMaxLifeMs;
         private long delegationTokenExpiryTimeMs;
         private long delegationTokenExpiryCheckIntervalMs;
@@ -341,8 +341,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setDelegationTokenSecretKeyString(String tokenKeyString) {
-            this.tokenKeyString = tokenKeyString;
+        public Builder setDelegationTokenSecretKey(String tokenSecretKeyString) {
+            this.tokenSecretKeyString = tokenSecretKeyString;
             return this;
         }
 
@@ -414,7 +414,7 @@ public final class QuorumController implements Controller {
                     maxRecordsPerBatch,
                     zkMigrationEnabled,
                     tokenCache,
-                    tokenKeyString,
+                    tokenSecretKeyString,
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs
@@ -1791,7 +1791,7 @@ public final class QuorumController implements Controller {
         int maxRecordsPerBatch,
         boolean zkMigrationEnabled,
         DelegationTokenCache tokenCache,
-        String tokenKeyString,
+        String tokenSecretKeyString,
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs
@@ -1874,7 +1874,7 @@ public final class QuorumController implements Controller {
         this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
             setLogContext(logContext).
             setTokenCache(tokenCache).
-            setTokenKeyString(tokenKeyString).
+            setDelegationTokenSecretKey(tokenSecretKeyString).
             setDelegationTokenMaxLifeMs(delegationTokenMaxLifeMs).
             setDelegationTokenExpiryTimeMs(delegationTokenExpiryTimeMs).
             build();
