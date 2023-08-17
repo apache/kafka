@@ -2656,6 +2656,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // as the listener has caught up to the start of the leader epoch. This guarantees
             // that the state machine has seen the full committed state before it becomes
             // leader and begins writing to the log.
+            //
+            // Note that the raft client doesn't need to compare nextOffset against the high-watermark
+            // to gurantee that the listener has caught up to the high-watermark. This is true because
+            // the only way nextOffset can be greater than epochStartOffset is for the leader to have
+            // established the new high-watermark (of at least epochStartOffset + 1) and for the listener
+            // to have consumed up to that new high-watermark.
             if (shouldFireLeaderChange(leaderAndEpoch) && nextOffset() > epochStartOffset) {
                 lastFiredLeaderChange = leaderAndEpoch;
                 listener.handleLeaderChange(leaderAndEpoch);
