@@ -541,16 +541,16 @@ public class EmbeddedKafkaCluster {
         Map<String, Object> props = new HashMap<>(clientConfigs);
         props.putAll(consumerProps);
 
-        putIfAbsent(props, GROUP_ID_CONFIG, UUID.randomUUID().toString());
-        putIfAbsent(props, BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        putIfAbsent(props, ENABLE_AUTO_COMMIT_CONFIG, "false");
-        putIfAbsent(props, AUTO_OFFSET_RESET_CONFIG, "earliest");
-        putIfAbsent(props, KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        putIfAbsent(props, VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.putIfAbsent(GROUP_ID_CONFIG, UUID.randomUUID().toString());
+        props.putIfAbsent(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        props.putIfAbsent(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.putIfAbsent(KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.putIfAbsent(VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         if (sslEnabled()) {
-            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-            putIfAbsent(props, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+            props.putIfAbsent(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            props.putIfAbsent(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
         KafkaConsumer<byte[], byte[]> consumer;
         try {
@@ -570,13 +570,13 @@ public class EmbeddedKafkaCluster {
     public KafkaProducer<byte[], byte[]> createProducer(Map<String, Object> producerProps) {
         Map<String, Object> props = new HashMap<>(clientConfigs);
         props.putAll(producerProps);
-        putIfAbsent(props, BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        putIfAbsent(props, KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        putIfAbsent(props, VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.putIfAbsent(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        props.putIfAbsent(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.putIfAbsent(VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         if (sslEnabled()) {
-            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-            putIfAbsent(props, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+            props.putIfAbsent(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            props.putIfAbsent(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
         KafkaProducer<byte[], byte[]> producer;
         try {
@@ -592,11 +592,5 @@ public class EmbeddedKafkaCluster {
         brokerConfig.putIfAbsent(KafkaConfig.GroupInitialRebalanceDelayMsProp(), "0");
         brokerConfig.putIfAbsent(KafkaConfig.OffsetsTopicReplicationFactorProp(), String.valueOf(numBrokers));
         brokerConfig.putIfAbsent(KafkaConfig.AutoCreateTopicsEnableProp(), "false");
-    }
-
-    private static void putIfAbsent(final Map<String, Object> props, final String propertyKey, final Object propertyValue) {
-        if (!props.containsKey(propertyKey)) {
-            props.put(propertyKey, propertyValue);
-        }
     }
 }
