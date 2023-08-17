@@ -76,9 +76,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public abstract class TopicCommand {
-    private static final Logger log = LoggerFactory.getLogger(TopicCommand.class);
+    private static final Logger LOG = LoggerFactory.getLogger(TopicCommand.class);
 
-    public static void main(String[] args) {
+    public static void main(String... args) {
         Exit.exit(mainNoExit(args));
     }
 
@@ -86,9 +86,6 @@ public abstract class TopicCommand {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
-            System.err.println(e.getMessage());
-            return 1;
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -98,7 +95,6 @@ public abstract class TopicCommand {
 
     static void execute(String... args) throws Exception {
         TopicCommandOptions opts = new TopicCommandOptions(args);
-        opts.checkArgs();
         TopicService topicService = new TopicService(opts.commandConfig(), opts.bootstrapServer());
         int exitCode = 0;
         try {
@@ -128,12 +124,11 @@ public abstract class TopicCommand {
             topicService.close();
             Exit.exit(exitCode);
         }
-
     }
 
     private static void printException(Throwable e) {
         System.out.println("Error while executing topic command : " + e.getMessage());
-        log.error(Utils.stackTrace(e));
+        LOG.error(Utils.stackTrace(e));
     }
 
     @SuppressWarnings("deprecation")
@@ -253,12 +248,13 @@ public abstract class TopicCommand {
     }
 
     static class CommandTopicPartition {
-        private final TopicCommandOptions opts;
         private final Optional<String> name;
-        private final Optional<Integer> replicationFactor;
         private final Optional<Integer> partitions;
+        private final Optional<Integer> replicationFactor;
         private final Map<Integer, List<Integer>> replicaAssignment;
         private final Properties configsToAdd;
+
+        private final TopicCommandOptions opts;
 
         public CommandTopicPartition(TopicCommandOptions options) {
             opts = options;
@@ -271,10 +267,6 @@ public abstract class TopicCommand {
 
         public Boolean hasReplicaAssignment() {
             return !replicaAssignment.isEmpty();
-        }
-
-        public Boolean hasPartitions() {
-            return partitions.isPresent();
         }
 
         public Boolean ifTopicDoesntExist() {
@@ -304,12 +296,12 @@ public abstract class TopicCommand {
                 .filter(config -> !config.isDefault())
                 .map(ce -> String.format("%s=%s", ce.name(), ce.value()))
                 .collect(Collectors.joining(","));
-            System.out.print(String.format("Topic: %s", topic));
+            System.out.print("Topic: " +  topic);
             if (topicId != Uuid.ZERO_UUID)
-                System.out.print(String.format("\tTopicId: %s", topicId));
-            System.out.print(String.format("\tPartitionCount: %s", numPartitions));
-            System.out.print(String.format("\tReplicationFactor: %s", replicationFactor));
-            System.out.print(String.format("\tConfigs: %s", configsAsString));
+                System.out.print("\tTopicId: " + topicId);
+            System.out.print("\tPartitionCount: %s" + numPartitions);
+            System.out.print("\tReplicationFactor: %s" + replicationFactor);
+            System.out.print("\tConfigs: %s" + configsAsString);
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
         }
@@ -352,7 +344,6 @@ public abstract class TopicCommand {
 
         public Boolean isAtMinIsrPartitions() {
             return minIsrCount() == info.isr().size();
-
         }
 
         public Boolean hasUnavailablePartitions(Set<Integer> liveBrokers) {
@@ -380,7 +371,6 @@ public abstract class TopicCommand {
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
         }
-
     }
 
     static class DescribeOptions {
@@ -443,7 +433,7 @@ public abstract class TopicCommand {
 
         private static Admin createAdminClient(Properties commandConfig, Optional<String> bootstrapServer) {
             if (bootstrapServer.isPresent()) {
-                commandConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
+                commandConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer.get());
             }
             return Admin.create(commandConfig);
         }
@@ -539,7 +529,7 @@ public abstract class TopicCommand {
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
                 if (cause instanceof UnsupportedVersionException || cause instanceof ClusterAuthorizationException) {
-                    log.debug("Couldn't query reassignments through the AdminClient API: " + cause.getMessage(), cause);
+                    LOG.debug("Couldn't query reassignments through the AdminClient API: " + cause.getMessage(), cause);
                     return Collections.emptyMap();
                 } else {
                     throw new RuntimeException(e);
@@ -563,7 +553,6 @@ public abstract class TopicCommand {
             } else {
                 topicIds = Collections.emptyList();
                 topics = getTopics(opts.topic(), opts.excludeInternalTopics());
-
             }
 
             // Only check topic name when topicId is not provided
@@ -742,43 +731,45 @@ public abstract class TopicCommand {
                 .describedAs("server to connect to")
                 .ofType(String.class);
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
-                    "This is used only with --bootstrap-server option for describing and altering broker configs.")
+                            "This is used only with --bootstrap-server option for describing and altering broker configs.")
                 .withRequiredArg()
                 .describedAs("command config property file")
                 .ofType(String.class);
 
-
+            String kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
+                    " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)";
             listOpt = parser.accepts("list", "List all available topics.");
             createOpt = parser.accepts("create", "Create a new topic.");
             deleteOpt = parser.accepts("delete", "Delete a topic");
-            alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.");
+            alterOpt = parser.accepts("alter", "Alter the number of partitions and replica assignment. " +
+                    "Update the configuration of an existing topic via --alter is no longer supported here" +
+                    kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".");
             describeOpt = parser.accepts("describe", "List details for the given topics.");
-            topicOpt = parser.accepts("topic", "Alter the number of partitions and replica assignment. " +
-                            "Update the configuration of an existing topic via --alter is no longer supported here" +
-                            KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS_WITH_A_BOOTSTRAP_SERVER + ".")
+            topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
+                            "expression, except for --create option. Put topic name in double quotes and use the '\\' prefix " +
+                            "to escape regular expression symbols; e.g. \"test\\.topic\".")
                 .withRequiredArg()
                 .describedAs("topic")
                 .ofType(String.class);
             topicIdOpt = parser.accepts("topic-id", "The topic-id to describe." +
-                    "This is used only with --bootstrap-server option for describing topics.")
+                            "This is used only with --bootstrap-server option for describing topics.")
                 .withRequiredArg()
                 .describedAs("topic-id")
                 .ofType(String.class);
             nl = System.getProperty("line.separator");
 
-            String configNames = LogConfig.configNames().stream()
-                .map(name -> "\t" + name)
-                .collect(Collectors.joining("nl"));
-            configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered." +
-                    " The following is a list of valid configurations: " + nl + configNames + nl +
-                    "See the Kafka documentation for full details on the topic configs." +
-                    " It is supported only in combination with --create if --bootstrap-server option is used" +
-                    KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS_WITH_A_BOOTSTRAP_SERVER + ".")
+            String logConfigNames = LogConfig.configNames().stream().map(config -> "\t" + config).collect(Collectors.joining(nl));
+            configOpt = parser.accepts("config",  "A topic configuration override for the topic being created." +
+                            " The following is a list of valid configurations: " + nl + logConfigNames + nl +
+                            "See the Kafka documentation for full details on the topic configs." +
+                            " It is supported only in combination with --create if --bootstrap-server option is used" +
+                            kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".")
                 .withRequiredArg()
                 .describedAs("name=value")
                 .ofType(String.class);
+
             deleteConfigOpt = parser.accepts("delete-config", "A topic configuration override to be removed for an existing topic (see the list of configurations under the --config option). " +
-                    "Not supported with the --bootstrap-server option.")
+                            "Not supported with the --bootstrap-server option.")
                 .withRequiredArg()
                 .describedAs("name")
                 .ofType(String.class);
@@ -792,9 +783,9 @@ public abstract class TopicCommand {
                 .describedAs("replication factor")
                 .ofType(java.lang.Integer.class);
             replicaAssignmentOpt = parser.accepts("replica-assignment", "A list of manual partition-to-broker assignments for the topic being created or altered.")
-                .withRequiredArg()
-                .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
-                    "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
+                    .withRequiredArg()
+                    .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
+                            "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                 .ofType(String.class);
             reportUnderReplicatedPartitionsOpt = parser.accepts("under-replicated-partitions",
                 "if set when describing topics, only show under replicated partitions");
@@ -816,6 +807,8 @@ public abstract class TopicCommand {
 
             allTopicLevelOpts = new HashSet<>(Arrays.asList(alterOpt, createOpt, describeOpt, listOpt, deleteOpt));
             allReplicationReportOpts = new HashSet<>(Arrays.asList(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt));
+
+            checkArgs();
         }
 
         public Boolean has(OptionSpec<?> builder) {

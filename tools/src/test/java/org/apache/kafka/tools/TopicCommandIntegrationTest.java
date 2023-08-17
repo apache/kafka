@@ -84,6 +84,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     private Integer numPartitions = 1;
     private TopicCommand.TopicService topicService;
     private Admin adminClient;
+    private String bootstrapServer;
     private String testTopicName;
     private Integer defaultTimeout = 10000;
 
@@ -116,6 +117,12 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         return JavaConverters.asScalaBuffer(configs).toSeq();
     }
 
+    private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(String... opts) {
+        String[] finalOptions = Stream.concat(Arrays.asList(opts).stream(),
+                Arrays.asList("--bootstrap-server", bootstrapServer).stream()
+        ).toArray(String[]::new);
+        return new TopicCommand.TopicCommandOptions(finalOptions);
+    }
     private void createAndWaitTopic(TopicCommand.TopicCommandOptions opts) throws Exception {
         topicService.createTopic(opts);
         waitForTopicCreated(opts.topic().get());
@@ -134,25 +141,27 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         super.setUp(info);
         // create adminClient
         Properties props = new Properties();
-        props.put(org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(listenerName()));
+        bootstrapServer = bootstrapServers(listenerName());
+        props.put(org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         adminClient = Admin.create(props);
-        topicService = new TopicCommand.TopicService(adminClient);
+        topicService = new TopicCommand.TopicService(props, Optional.of(bootstrapServer));
         testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(),
             new scala.util.Random().alphanumeric().take(10).mkString());
     }
 
     @AfterEach
     public void close() throws Exception {
-        // adminClient is closed by topicService
         if (topicService != null)
             topicService.close();
+        if (adminClient != null)
+            adminClient.close();
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreate(String quorum) throws Exception {
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "2", "--replication-factor", "1", "--topic", testTopicName}));
+        createAndWaitTopic(buildTopicCommandOptionsWithBootstrap(
+            "--create", "--partitions", "2", "--replication-factor", "1", "--topic", testTopicName));
 
         adminClient.listTopics().names().get().contains(testTopicName);
     }
@@ -160,7 +169,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithDefaults(String quorum) throws Exception {
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName}));
+        createAndWaitTopic(buildTopicCommandOptionsWithBootstrap("--create", "--topic", testTopicName));
 
         List<TopicPartitionInfo> partitions = adminClient
             .describeTopics(Collections.singletonList(testTopicName))
@@ -175,8 +184,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithDefaultReplication(String quorum) throws Exception {
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", testTopicName, "--partitions", "2"}));
+        createAndWaitTopic(buildTopicCommandOptionsWithBootstrap("--create", "--topic", testTopicName, "--partitions", "2"));
 
         List<TopicPartitionInfo>  partitions = adminClient
             .describeTopics(Collections.singletonList(testTopicName))
@@ -191,8 +199,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithDefaultPartitions(String quorum) throws Exception {
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", testTopicName, "--replication-factor", "2"}));
+        createAndWaitTopic(buildTopicCommandOptionsWithBootstrap("--create", "--topic", testTopicName, "--replication-factor", "2"));
 
         List<TopicPartitionInfo> partitions = adminClient
             .describeTopics(Collections.singletonList(testTopicName))
@@ -209,9 +216,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithConfigs(String quorum) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config",
-                "delete.retention.ms=1000"}));
+        createAndWaitTopic(buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config",
+                "delete.retention.ms=1000"));
 
         Config configs = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
         assertEquals(1000, Integer.valueOf(configs.get("delete.retention.ms").value()));
@@ -223,8 +229,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         int numPartitions = 1;
 
         // create the topic
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", Integer.toString(numPartitions), "--replication-factor", "1", "--topic", testTopicName});
+        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(
+            "--create", "--partitions", Integer.toString(numPartitions), "--replication-factor", "1",
+                "--topic", testTopicName);
         createAndWaitTopic(createOpts);
 
         // try to re-create the topic
@@ -234,7 +241,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWhenAlreadyExistsWithIfNotExists(String quorum) throws Exception {
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName, "--if-not-exists"});
+        TopicCommand.TopicCommandOptions createOpts =
+                buildTopicCommandOptionsWithBootstrap("--create", "--topic", testTopicName, "--if-not-exists");
         createAndWaitTopic(createOpts);
         topicService.createTopic(createOpts);
     }
@@ -243,8 +251,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithReplicaAssignment(String quorum) throws Exception {
         // create the topic
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(
-            new String[]{"--replica-assignment", "5:4,3:2,1:0", "--topic", testTopicName});
+        TopicCommand.TopicCommandOptions createOpts =
+                buildTopicCommandOptionsWithBootstrap("--create", "--replica-assignment", "5:4,3:2,1:0", "--topic", testTopicName);
         createAndWaitTopic(createOpts);
 
         List<TopicPartitionInfo> partitions = adminClient
@@ -268,44 +276,42 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithInvalidReplicationFactor(String quorum) {
-        assertThrows(IllegalArgumentException.class,
-            () -> topicService.createTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
-                "--topic", testTopicName})));
+        TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
+            "--topic", testTopicName);
+        assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithNegativeReplicationFactor(String quorum) {
-        assertThrows(IllegalArgumentException.class,
-            () -> topicService.createTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName})));
+        TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create",
+            "--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName);
+        assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithNegativePartitionCount(String quorum) {
-        assertThrows(IllegalArgumentException.class,
-            () -> topicService.createTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName})));
+        TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName);
+        assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testInvalidTopicLevelConfig(String quorum) {
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
-                "--config", "message.timestamp.type=boom"});
+        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
+            "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
+            "--config", "message.timestamp.type=boom");
         assertThrows(ConfigException.class, () -> topicService.createTopic(createOpts));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testListTopics(String quorum) throws Exception {
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "1", "--replication-factor", "1", "--topic", testTopicName}));
+        createAndWaitTopic(buildTopicCommandOptionsWithBootstrap(
+            "--create", "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName));
 
-        String output = captureListTopicStandardOut(new String[]{});
+        String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list"));
         assertTrue(output.contains(testTopicName));
     }
 
@@ -324,7 +330,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         waitForTopicCreated(topic2);
         waitForTopicCreated(topic3);
 
-        String output = captureListTopicStandardOut(new String[]{"--topic", "kafka.*"});
+        String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--topic", "kafka.*"));
 
         assertTrue(output.contains(topic1));
         assertTrue(output.contains(topic2));
@@ -341,7 +347,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             .all().get();
         waitForTopicCreated(topic1);
 
-        String output = captureListTopicStandardOut(new String[]{"--exclude-internal"});
+        String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
 
         assertTrue(output.contains(topic1));
         assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME));
@@ -354,8 +360,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             Arrays.asList(new NewTopic(testTopicName, 2, (short) 2))).all().get();
         waitForTopicCreated(testTopicName);
 
-        topicService.alterTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", testTopicName, "--partitions", "3"}));
+        topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "3"));
 
         kafka.utils.TestUtils.waitUntilTrue(
             () -> brokers().forall(b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
@@ -371,8 +376,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             Collections.singletonList(new NewTopic(testTopicName, 2, (short) 2))).all().get();
         waitForTopicCreated(testTopicName);
 
-        topicService.alterTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"}));
+        topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
+            "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"));
         kafka.utils.TestUtils.waitUntilTrue(
             () -> brokers().forall(b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
             () -> "Timeout waiting for new assignment propagating to broker",
@@ -392,8 +397,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         waitForTopicCreated(testTopicName);
 
         assertThrows(ExecutionException.class,
-            () -> topicService.alterTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3"})));
+            () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
+                "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3")));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -404,26 +409,26 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         waitForTopicCreated(testTopicName);
 
         assertThrows(ExecutionException.class,
-            () -> topicService.alterTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6"})));
+            () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName,
+                "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6")));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterWithInvalidPartitionCount(String quorum) throws Exception {
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "1", "--replication-factor", "1", "--topic", testTopicName}));
+        createAndWaitTopic(
+                buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)
+        );
 
         assertThrows(ExecutionException.class,
-            () -> topicService.alterTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "-1", "--topic", testTopicName})));
+            () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--partitions", "-1", "--topic", testTopicName)));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterWhenTopicDoesntExist(String quorum) {
         // alter a topic that does not exist without --if-exists
-        TopicCommand.TopicCommandOptions alterOpts = new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName, "--partitions", "1"});
+        TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1");
         TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
         assertThrows(IllegalArgumentException.class, () -> topicService.alterTopic(alterOpts));
     }
@@ -431,8 +436,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
-        topicService.alterTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", testTopicName, "--partitions", "1", "--if-exists"}));
+        topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1", "--if-exists"));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -448,10 +452,10 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         int numPartitions = 18;
         int replicationFactor = 3;
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(new String[]{
+        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
             "--partitions", Integer.toString(numPartitions),
             "--replication-factor", Integer.toString(replicationFactor),
-            "--topic", testTopicName});
+            "--topic", testTopicName);
         createAndWaitTopic(createOpts);
 
         Map<Integer, List<Integer>> assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
@@ -465,9 +469,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         int alteredNumPartitions = 36;
         // verify that adding partitions will also be rack aware
-        TopicCommand.TopicCommandOptions alterOpts = new TopicCommand.TopicCommandOptions(new String[]{
+        TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
             "--partitions", Integer.toString(alteredNumPartitions),
-            "--topic", testTopicName});
+            "--topic", testTopicName);
         topicService.alterTopic(alterOpts);
 
         kafka.utils.TestUtils.waitUntilTrue(
@@ -490,11 +494,11 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         String cleanupVal = "compact";
 
         // create the topic
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(new String[]{
+        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
             "--partitions", Integer.toString(numPartitionsOriginal),
             "--replication-factor", "1",
             "--config", cleanupKey + "=" + cleanupVal,
-            "--topic", testTopicName});
+            "--topic", testTopicName);
         createAndWaitTopic(createOpts);
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
         Config props = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
@@ -509,8 +513,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         // modify the topic to add new partitions
         int numPartitionsModified = 3;
-        TopicCommand.TopicCommandOptions alterOpts = new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", Integer.toString(numPartitionsModified), "--topic", testTopicName});
+        TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
+            "--partitions", Integer.toString(numPartitionsModified), "--topic", testTopicName);
         topicService.alterTopic(alterOpts);
         Config newProps = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
         assertNotNull(newProps.get(cleanupKey), "Updated properties do not contain " + cleanupKey);
@@ -521,13 +525,14 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testTopicDeletion(String quorum) throws Exception {
         // create the NormalTopic
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(new String[]{"--partitions", "1",
+        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
+            "--partitions", "1",
             "--replication-factor", "1",
-            "--topic", testTopicName});
+            "--topic", testTopicName);
         createAndWaitTopic(createOpts);
 
         // delete the NormalTopic
-        TopicCommand.TopicCommandOptions deleteOpts = new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName});
+        TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
 
         if (!isKRaftTest()) {
             String deletePath = kafka.zk.DeleteTopicsTopicZNode.path(testTopicName);
@@ -542,13 +547,14 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     public void testTopicWithCollidingCharDeletionAndCreateAgain(String quorum) throws Exception {
         // create the topic with colliding chars
         String topicWithCollidingChar = "test.a";
-        TopicCommand.TopicCommandOptions createOpts = new TopicCommand.TopicCommandOptions(new String[]{"--partitions", "1",
+        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
+            "--partitions", "1",
             "--replication-factor", "1",
-            "--topic", topicWithCollidingChar});
+            "--topic", topicWithCollidingChar);
         createAndWaitTopic(createOpts);
 
         // delete the topic
-        TopicCommand.TopicCommandOptions deleteOpts = new TopicCommand.TopicCommandOptions(new String[]{"--topic", topicWithCollidingChar});
+        TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", topicWithCollidingChar);
 
         if (!isKRaftTest()) {
             String deletePath = kafka.zk.DeleteTopicsTopicZNode.path(topicWithCollidingChar);
@@ -563,16 +569,17 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteInternalTopic(String quorum) throws Exception {
         // create the offset topic
-        TopicCommand.TopicCommandOptions createOffsetTopicOpts = new TopicCommand.TopicCommandOptions(new String[]{"--partitions", "1",
+        TopicCommand.TopicCommandOptions createOffsetTopicOpts = buildTopicCommandOptionsWithBootstrap("--create",
+            "--partitions", "1",
             "--replication-factor", "1",
-            "--topic", Topic.GROUP_METADATA_TOPIC_NAME});
+            "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
         createAndWaitTopic(createOffsetTopicOpts);
 
         // Try to delete the Topic.GROUP_METADATA_TOPIC_NAME which is allowed by default.
         // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
         // If deleting internal topics is not desired, ACLS should be used to control it.
-        TopicCommand.TopicCommandOptions deleteOffsetTopicOpts = new TopicCommand.TopicCommandOptions(
-            new String[]{"--topic", Topic.GROUP_METADATA_TOPIC_NAME});
+        TopicCommand.TopicCommandOptions deleteOffsetTopicOpts =
+                buildTopicCommandOptionsWithBootstrap("--delete", "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
         String deleteOffsetTopicPath = kafka.zk.DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME);
         if (!isKRaftTest()) {
             assertFalse(zkClient().pathExists(deleteOffsetTopicPath), "Delete path for topic shouldn't exist before deletion.");
@@ -585,14 +592,14 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteWhenTopicDoesntExist(String quorum) {
         // delete a topic that does not exist
-        TopicCommand.TopicCommandOptions deleteOpts = new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName});
+        TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
         assertThrows(IllegalArgumentException.class, () -> topicService.deleteTopic(deleteOpts));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
-        topicService.deleteTopic(new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName, "--if-exists"}));
+        topicService.deleteTopic(buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName, "--if-exists"));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -602,7 +609,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             Collections.singletonList(new NewTopic(testTopicName, 2, (short) 2))).all().get();
         waitForTopicCreated(testTopicName);
 
-        String output = captureDescribeTopicStandardOut(new String[] {"--topic", testTopicName});
+        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
         String[] rows = output.split("\n");
         assertEquals(3, rows.length);
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)));
@@ -612,13 +619,13 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeWhenTopicDoesntExist(String quorum) {
         assertThrows(IllegalArgumentException.class,
-            () -> topicService.describeTopic(new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName})));
+            () -> topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName)));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
-        topicService.describeTopic(new TopicCommand.TopicCommandOptions(new String[]{"--topic", testTopicName, "--if-exists"}));
+        topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--if-exists"));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -672,7 +679,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
 
             // grab the console output and assert
-            String output = captureDescribeTopicStandardOut(new String[] {"--topic", testTopicName, "--unavailable-partitions"});
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--unavailable-partitions"));
             String[] rows = output.split("\n");
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)));
             assertTrue(rows[0].contains("Leader: none\tReplicas: 0\tIsr:"));
@@ -695,7 +702,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             } else {
                 TestUtils.waitForPartitionMetadata(aliveBrokers(), testTopicName, 0, org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS);
             }
-            String output = captureDescribeTopicStandardOut(new String[]{"--under-replicated-partitions"});
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-replicated-partitions"));
             String[] rows = output.split("\n");
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), String.format("Unexpected output: %s", rows[0]));
         } finally {
@@ -724,7 +731,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
                 );
             }
-            String output = captureDescribeTopicStandardOut(new String[]{"--under-min-isr-partitions"});
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions"));
             String[] rows = output.split("\n");
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)));
         } finally {
@@ -781,12 +788,12 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
 
         // describe the topic and test if it's under-replicated
-        String simpleDescribeOutput = captureDescribeTopicStandardOut(new String[]{"--topic", testTopicName});
+        String simpleDescribeOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
         String[] simpleDescribeOutputRows = simpleDescribeOutput.split("\n");
         assertTrue(simpleDescribeOutputRows[0].startsWith(String.format("Topic: %s", testTopicName)));
         assertEquals(2, simpleDescribeOutputRows.length);
 
-        String underReplicatedOutput = captureDescribeTopicStandardOut(new String[]{"--under-replicated-partitions"});
+        String underReplicatedOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-replicated-partitions"));
         assertEquals("", underReplicatedOutput,
             String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
 
@@ -822,7 +829,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 );
             }
 
-            String output = captureDescribeTopicStandardOut(new String[]{"--at-min-isr-partitions"});
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--at-min-isr-partitions"));
             String[] rows = output.split("\n");
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)));
             assertEquals(1, rows.length);
@@ -876,7 +883,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                     () -> "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
             }
-            String output = captureDescribeTopicStandardOut(new String[]{"--under-min-isr-partitions"});
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions"));
             String[] rows = output.split("\n");
             assertTrue(rows[0].startsWith(String.format("Topic: %s", underMinIsrTopic)));
             assertTrue(rows[1].startsWith(String.format("\tTopic: %s", offlineTopic)));
@@ -890,9 +897,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeReportOverriddenConfigs(String quorum) throws Exception {
         String config = "file.delete.delay.ms=1000";
-        createAndWaitTopic(new TopicCommand.TopicCommandOptions(
-            new String[]{"--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", config}));
-        String output = captureDescribeTopicStandardOut(new String[]{});
+        createAndWaitTopic(buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "2",
+            "--replication-factor", "2", "--topic", testTopicName, "--config", config));
+        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe"));
         assertTrue(output.contains(config), String.format("Describe output should have contained %s", config));
     }
 
@@ -900,19 +907,19 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeAndListTopicsWithoutInternalTopics(String quorum) throws Exception {
         createAndWaitTopic(
-            new TopicCommand.TopicCommandOptions(new String[]{"--partitions", "1", "--replication-factor", "1", "--topic", testTopicName}));
+            buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName));
         // create a internal topic
         createAndWaitTopic(
-            new TopicCommand.TopicCommandOptions(new String[]{"--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME}));
+            buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME));
 
         // test describe
-        String output = captureDescribeTopicStandardOut(new String[]{"--describe", "--exclude-internal"});
+        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--describe", "--exclude-internal"));
         assertTrue(output.contains(testTopicName),
             String.format("Output should have contained %s", testTopicName));
         assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME));
 
         // test list
-        output = captureListTopicStandardOut(new String[]{"--list", "--exclude-internal"});
+        output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
         assertTrue(output.contains(testTopicName));
         assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME));
     }
@@ -938,7 +945,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         ).all().get();
         waitForTopicCreated(testTopicName);
 
-        String output = captureDescribeTopicStandardOut(new String[]{"--topic", testTopicName});
+        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
         String[] rows = output.split("\n");
         assertEquals(2, rows.length);
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)));
@@ -952,7 +959,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         waitForTopicCreated("foo_bar");
 
         assertThrows(InvalidTopicException.class,
-            () -> topicService.createTopic(new TopicCommand.TopicCommandOptions(new String[]{"--topic", "foo.bar"})));
+            () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap("--create", "--topic", "foo.bar")));
     }
 
     private void checkReplicaDistribution(Map<Integer, List<Integer>> assignment,
@@ -996,10 +1003,10 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         }
     }
 
-    private String captureDescribeTopicStandardOut(String[] args) {
+    private String captureDescribeTopicStandardOut(TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
             try {
-                topicService.describeTopic(new TopicCommand.TopicCommandOptions(args));
+                topicService.describeTopic(opts);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -1007,10 +1014,10 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         return ToolsTestUtils.captureStandardOut(runnable);
     }
 
-    private String captureListTopicStandardOut(String[] args) {
+    private String captureListTopicStandardOut(TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
             try {
-                topicService.listTopics(new TopicCommand.TopicCommandOptions(args));
+                topicService.listTopics(opts);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
