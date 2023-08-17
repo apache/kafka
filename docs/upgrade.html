@@ -18,6 +18,15 @@
 <script><!--#include virtual="js/templateData.js" --></script>
 
 <script id="upgrade-template" type="text/x-handlebars-template">
+    <h4><a id="upgrade_3_5_2" href="#upgrade_3_5_2">Upgrading to 3.5.2 from any version 0.8.x through 3.4.x</a></h4>
+    All upgrade steps remain same as <a id="upgrade_3_5_1" href="#upgrade_3_5_1">upgrading to 3.5.1</a>, with one important addition:
+    <ul>
+        <li>To account for a break in compatibility introduced in version 3.1.0, MirrorMaker 2 has added a new
+            <a href="#georeplication-replication-policy-internal-topic-separator-enabled">replication.policy.internal.topic.separator.enabled</a> property.
+            If upgrading from 3.0.x or earlier, it may be necessary to set this property to <code>false</code>; see the <a href="#georeplication-replication-policy">documentation</a>
+            for that property and other replication policy properties for more details.</li>
+    </ul>
+
 
 <h4><a id="upgrade_3_5_1" href="#upgrade_3_5_1">Upgrading to 3.5.1 from any version 0.8.x through 3.4.x</a></h4>
     All upgrade steps remain same as <a id="upgrade_3_5_0" href="#upgrade_3_5_0">upgrading to 3.5.0</a>

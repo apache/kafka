@@ -14,6 +14,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
+<script id="ops-template" type="text/x-handlebars-template">
 
   Here is some information on actually running Kafka as a production system based on usage and experience at LinkedIn. Please send us any additional tips you know of.
 
@@ -785,6 +786,9 @@ us-west->us-east.emit.heartbeats = false
     <li><code>sync.group.offsets.enabled</code>: whether to periodically write the translated offsets of replicated consumer groups (in the source cluster) to <code>__consumer_offsets</code> topic in target cluster, as long as no active consumers in that group are connected to the target cluster (default: false)
     <li><code>sync.group.offsets.interval.seconds</code>: frequency at which consumer group offsets are synced (default: 60, every minute)
     <li><code>offset-syncs.topic.replication.factor</code>: replication factor of MirrorMaker's internal offset-sync topics (default: 3)
+    <li id="georeplication-replication-policy"><code>replication.policy</code>: the <a href="/{{version}}/javadoc/org/apache/kafka/connect/mirror/ReplicationPolicy.html">ReplicationPolicy</a> class to use, which defaults to <a href="/{{version}}/javadoc/org/apache/kafka/connect/mirror/DefaultReplicationPolicy.html">DefaultReplicationPolicy</a>
+    <li><code>replication.policy.separator</code>: the delimiter to use between cluster aliases and topic names, if using the <a href="/{{version}}/javadoc/org/apache/kafka/connect/mirror/DefaultReplicationPolicy.html">DefaultReplicationPolicy</a> class
+    <li id="georeplication-replication-policy-internal-topic-separator-enabled"><code>replication.policy.internal.topic.separator.enabled</code>: whether to use <code>replication.policy.separator</code> to control the names of topics used for checkpoints and offset syncs, if using the <a href="/{{version}}/javadoc/org/apache/kafka/connect/mirror/DefaultReplicationPolicy.html">DefaultReplicationPolicy</a> class. By default, custom separators are used in these topic names; however, if upgrading MirrorMaker 2 from older versions that did not allow for these topic names to be customized, it may be necessary to set this property to <code>false</code> in order to continue using the same names for those topics
   </ul>
 
   <h5 class="anchor-heading"><a id="georeplication-flow-secure" class="anchor-link"></a><a href="#georeplication-flow-secure">Securing Replication Flows</a></h5>
