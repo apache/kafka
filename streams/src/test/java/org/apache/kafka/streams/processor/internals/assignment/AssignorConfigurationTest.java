@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -52,7 +53,7 @@ public class AssignorConfigurationTest {
 
     @Test
     public void rebalanceProtocolShouldSupportAllUpgradeFromVersions() {
-        for (final StreamsConfig.UpgradeFromValues upgradeFrom : StreamsConfig.UpgradeFromValues.values()) {
+        for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
             config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
             final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
 
@@ -66,7 +67,7 @@ public class AssignorConfigurationTest {
 
     @Test
     public void configuredMetadataVersionShouldSupportAllUpgradeFromVersions() {
-        for (final StreamsConfig.UpgradeFromValues upgradeFrom : StreamsConfig.UpgradeFromValues.values()) {
+        for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
             config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
             final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
 

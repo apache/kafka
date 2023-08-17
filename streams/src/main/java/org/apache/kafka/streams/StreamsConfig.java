@@ -42,6 +42,7 @@ import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -284,39 +285,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final List<String> TOPOLOGY_OPTIMIZATION_CONFIGS = Arrays.asList(
         OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS,
         SINGLE_STORE_SELF_JOIN);
-
-    public enum UpgradeFromValues {
-        UPGRADE_FROM_0100("0.10.0"),
-        UPGRADE_FROM_0101("0.10.1"),
-        UPGRADE_FROM_0102("0.10.2"),
-        UPGRADE_FROM_0110("0.11.0"),
-        UPGRADE_FROM_10("1.0"),
-        UPGRADE_FROM_11("1.1"),
-        UPGRADE_FROM_20("2.0"),
-        UPGRADE_FROM_21("2.1"),
-        UPGRADE_FROM_22("2.2"),
-        UPGRADE_FROM_23("2.3"),
-        UPGRADE_FROM_24("2.4"),
-        UPGRADE_FROM_25("2.5"),
-        UPGRADE_FROM_26("2.6"),
-        UPGRADE_FROM_27("2.7"),
-        UPGRADE_FROM_28("2.8"),
-        UPGRADE_FROM_30("3.0"),
-        UPGRADE_FROM_31("3.1"),
-        UPGRADE_FROM_32("3.2"),
-        UPGRADE_FROM_33("3.3"),
-        UPGRADE_FROM_34("3.4");
-
-        private final String value;
-
-        UpgradeFromValues(final String value) {
-            this.value = value;
-        }
-
-        public String toString() {
-            return value;
-        }
-    }
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.

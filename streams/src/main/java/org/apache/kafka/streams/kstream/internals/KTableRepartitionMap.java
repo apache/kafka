@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -98,7 +99,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 return true;
             }
 
-            switch (StreamsConfig.UpgradeFromValues.valueOf("UPGRADE_FROM_" + ((String) upgradeFrom).replace(".", ""))) {
+            switch (UpgradeFromValues.getValueFromString((String) upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:

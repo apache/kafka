@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
@@ -95,7 +96,7 @@ public final class AssignorConfiguration {
     public RebalanceProtocol rebalanceProtocol() {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (StreamsConfig.UpgradeFromValues.valueOf("UPGRADE_FROM_" + upgradeFrom.replace(".", ""))) {
+            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:
@@ -148,7 +149,7 @@ public final class AssignorConfiguration {
     public int configuredMetadataVersion(final int priorVersion) {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (StreamsConfig.UpgradeFromValues.valueOf("UPGRADE_FROM_" + upgradeFrom.replace(".", ""))) {
+            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                     log.info(
                         "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",

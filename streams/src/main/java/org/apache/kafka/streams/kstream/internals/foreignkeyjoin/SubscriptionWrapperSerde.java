@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
@@ -74,7 +75,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 return false;
             }
 
-            switch (StreamsConfig.UpgradeFromValues.valueOf("UPGRADE_FROM_" + ((String) upgradeFrom).replace(".", ""))) {
+            switch (UpgradeFromValues.getValueFromString((String) upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:
