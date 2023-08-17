@@ -173,7 +173,7 @@ public class DelegationTokenControlManager {
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
-        if (isEnabled()) {
+        if (!isEnabled()) {
             // DelegationTokens are not enabled
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
         }
@@ -235,7 +235,7 @@ public class DelegationTokenControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         RenewDelegationTokenResponseData responseData = new RenewDelegationTokenResponseData();
 
-        if (isEnabled()) {
+        if (!isEnabled()) {
             // DelegationTokens are not enabled
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
         }
@@ -266,15 +266,14 @@ public class DelegationTokenControlManager {
         long renewTimeStamp = now + renewLifeTime;
         long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(), renewTimeStamp);
 
-        myTokenInformation.setExpiryTimestamp(expiryTimestamp);
-
         DelegationTokenData newDelegationTokenData = new DelegationTokenData(myTokenInformation);
 
         responseData
             .setErrorCode(NONE.code())
             .setExpiryTimestampMs(expiryTimestamp);
 
-        records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
+        records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord()
+            .setExpirationTimestamp(expiryTimestamp), (short) 0));
         return ControllerResult.atomicOf(records, responseData);
     }
 
@@ -287,7 +286,7 @@ public class DelegationTokenControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ExpireDelegationTokenResponseData responseData = new ExpireDelegationTokenResponseData();
 
-        if (isEnabled()) {
+        if (!isEnabled()) {
             // DelegationTokens are not enabled
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
         }
@@ -325,10 +324,9 @@ public class DelegationTokenControlManager {
                 .setErrorCode(NONE.code())
                 .setExpiryTimestampMs(expiryTimestamp);
 
-            myTokenInformation.setExpiryTimestamp(expiryTimestamp);
-
             DelegationTokenData newDelegationTokenData = new DelegationTokenData(myTokenInformation);
-            records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
+            records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord()
+                .setExpirationTimestamp(expiryTimestamp), (short) 0));
         }
 
         return ControllerResult.atomicOf(records, responseData);
