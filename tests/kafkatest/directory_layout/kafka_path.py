@@ -52,7 +52,7 @@ JARS = {
         TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar",
         CONNECT_FILE_JAR: "connect/file/build/libs/connect-file*.jar"
     },
-    # This version of the file connectors do not contain ServiceLoader manifests
+    # This version of the file connectors does not contain ServiceLoader manifests
     LATEST_3_5.__str__(): {
         CONNECT_FILE_JAR: "libs/connect-file*.jar"
     },

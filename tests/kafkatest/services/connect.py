@@ -89,7 +89,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         except:
             return []
 
-    def set_configs(self, config_template_func, connector_config_templates=[]):
+    def set_configs(self, config_template_func, connector_config_templates=None):
         """
         Set configurations for the worker and the connector to run on
         it. These are not provided in the constructor because the worker
@@ -97,7 +97,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         create the configuration.
         """
         self.config_template_func = config_template_func
-        self.connector_config_templates = connector_config_templates
+        self.connector_config_templates = connector_config_templates if connector_config_templates else []
 
     def set_external_configs(self, external_config_template_func):
         """

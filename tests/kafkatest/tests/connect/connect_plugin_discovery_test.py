@@ -67,7 +67,7 @@ class ConnectPluginDiscoveryTest(KafkaTest):
 
         if should_start:
             # plugins should be visible in the backwards-compatible modes, or if the migration finished.
-            expect_discovered = (plugin_discovery == 'only_scan' or plugin_discovery == 'hybrid_warn') or migrated
+            expect_discovered = plugin_discovery == 'only_scan' or plugin_discovery == 'hybrid_warn' or migrated
             actual_discovered = set([connector_plugin['class'] for connector_plugin in self.cc.list_connector_plugins()]).issuperset({self.FILE_SOURCE_CONNECTOR, self.FILE_SINK_CONNECTOR})
             assert expect_discovered == actual_discovered
         else:
