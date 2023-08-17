@@ -3593,6 +3593,7 @@ class ReplicaManagerTest {
     val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
     val mockLog = mock(classOf[UnifiedLog])
     val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val mockMetadataCache = mock(classOf[MetadataCache])
     val remoteLogManager = new RemoteLogManager(
       remoteLogManagerConfig,
       0,
@@ -3601,7 +3602,7 @@ class ReplicaManagerTest {
       time,
       _ => Optional.of(mockLog),
       brokerTopicStats,
-      mock(classOf[MetadataCache])
+      mockMetadataCache,
     )
     when(remoteLogManager.metadataCache().getTopicId(topic)).thenReturn(topicId)
     val spyRLM = spy(remoteLogManager)

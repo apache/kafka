@@ -100,7 +100,6 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -809,27 +808,6 @@ public class RemoteLogManagerTest {
         ) {
             assertEquals(rsmManager, remoteLogManager.storageManager());
         }
-    }
-
-    private void verifyInCache(TopicIdPartition... topicIdPartitions) {
-        Arrays.stream(topicIdPartitions).forEach(topicIdPartition -> {
-            assertDoesNotThrow(() -> remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L));
-        });
-    }
-
-    @Test
-    void testTopicIdCacheUpdates() throws RemoteStorageException {
-        Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
-        Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
-
-        when(remoteLogMetadataManager.remoteLogSegmentMetadata(any(TopicIdPartition.class), anyInt(), anyLong()))
-            .thenReturn(Optional.empty());
-        verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
-        // Load topicId cache
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition));
-        verify(remoteLogMetadataManager, times(1))
-            .onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
-        verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
     }
 
     @Test
