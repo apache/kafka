@@ -1012,6 +1012,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
             s"since it is larger than the high watermark $highWatermark")
 
+        if (remoteLogEnabled()) {
+          // This should be set log-start-offset is set more than the current local-log-start-offset
+          _localLogStartOffset = math.max(newLogStartOffset, localLogStartOffset())
+        }
+
         localLog.checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
           updatedLogStartOffset = true
