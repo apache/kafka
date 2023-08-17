@@ -993,6 +993,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     updatedLogStartOffset
   }
 
+  def maybeIncrementLogStartOffsetAsRemoteLogStorageDisabled(): Boolean = {
+    maybeIncrementLogStartOffset(localLogStartOffset(), LogStartOffsetIncrementReason.RemoteLogStorageDisabled)
+  }
+
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
                                               records: MemoryRecords,
                                               origin: AppendOrigin,

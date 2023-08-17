@@ -303,7 +303,7 @@ class BrokerServer(
         groupCoordinator, transactionCoordinator)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
+        ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
       val networkListeners = new ListenerCollection()
