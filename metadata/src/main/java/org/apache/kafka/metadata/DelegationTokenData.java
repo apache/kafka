@@ -82,10 +82,14 @@ public final class DelegationTokenData {
         return tokenInformation.equals(other.tokenInformation);
     }
 
+    /*
+     * We explicitly hide tokenInformation when converting DelegationTokenData to string
+     * For legacy reasons, we did not change TokenInformation to hide sensitive data.
+     */
     @Override
     public String toString() {
         return "DelegationTokenData" +
-            "(tokenInformation=" + tokenInformation +
+            "(tokenInformation=" + "[hidden]" +
             ")";
     }
 }

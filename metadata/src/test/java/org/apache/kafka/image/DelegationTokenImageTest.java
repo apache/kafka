@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -91,31 +92,49 @@ public class DelegationTokenImageTest {
 
     @Test
     public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(DelegationTokenImage.EMPTY);
+        testToImage(DelegationTokenImage.EMPTY);
     }
 
     @Test
     public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+        testToImage(IMAGE1);
     }
 
     @Test
     public void testApplyDelta1() throws Throwable {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
     public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+        // testToImageAndBack(IMAGE2);
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(DelegationTokenImage image) throws Throwable {
+    private static void testToImage(DelegationTokenImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(DelegationTokenImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(DelegationTokenImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image stopping each of the various intermediate images along the way
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> DelegationTokenImage.EMPTY,
+            DelegationTokenDelta::new
+        ).test(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(DelegationTokenImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
-        DelegationTokenDelta delta = new DelegationTokenDelta(DelegationTokenImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
-        DelegationTokenImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
+        return writer.records();
     }
 
     @Test
