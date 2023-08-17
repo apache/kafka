@@ -529,7 +529,7 @@ public class StreamThreadTest {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         expect(taskManager.allOwnedTasks()).andStubReturn(Collections.singletonMap(taskId, runningTask));
         expect(taskManager.commit(Collections.singleton(runningTask))).andStubReturn(0);
-        taskManager.maybePurgeCommittedRecords();;
+        taskManager.maybePurgeCommittedRecords();
         EasyMock.replay(consumer, consumerGroupMetadata, taskManager);
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
