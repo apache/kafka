@@ -81,6 +81,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +92,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
@@ -105,6 +108,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -824,12 +828,12 @@ public class RemoteLogManagerTest {
         verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
 
         // Evicts from topicId cache
-        remoteLogManager.stopPartitions(leaderTopicIdPartition.topicPartition(), true);
+        remoteLogManager.stopPartitions(Collections.singleton(leaderTopicIdPartition.topicPartition()), true, (tp, ex) -> { });
         verifyNotInCache(leaderTopicIdPartition);
         verifyInCache(followerTopicIdPartition);
 
         // Evicts from topicId cache
-        remoteLogManager.stopPartitions(followerTopicIdPartition.topicPartition(), true);
+        remoteLogManager.stopPartitions(Collections.singleton(followerTopicIdPartition.topicPartition()), true, (tp, ex) -> { });
         verifyNotInCache(leaderTopicIdPartition, followerTopicIdPartition);
     }
 
@@ -1051,6 +1055,73 @@ public class RemoteLogManagerTest {
                 );
         List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 15L);
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testStopPartitionsWithoutDeletion() throws RemoteStorageException {
+        BiConsumer<TopicPartition, Throwable> errorHandler = (topicPartition, throwable) -> fail("shouldn't be called");
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(leaderTopicIdPartition.topicPartition());
+        partitions.add(followerTopicIdPartition.topicPartition());
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
+                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+
+        remoteLogManager.stopPartitions(partitions, false, errorHandler);
+        verify(remoteLogMetadataManager, times(1)).onStopPartitions(any());
+        verify(remoteStorageManager, times(0)).deleteLogSegmentData(any());
+        verify(remoteLogMetadataManager, times(0)).updateRemoteLogSegmentMetadata(any());
+    }
+
+    @Test
+    public void testStopPartitionsWithDeletion() throws RemoteStorageException {
+        BiConsumer<TopicPartition, Throwable> errorHandler =
+                (topicPartition, ex) -> fail("shouldn't be called: " + ex);
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(leaderTopicIdPartition.topicPartition());
+        partitions.add(followerTopicIdPartition.topicPartition());
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
+                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition)))
+                .thenReturn(listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024).iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(followerTopicIdPartition)))
+                .thenReturn(listRemoteLogSegmentMetadata(followerTopicIdPartition, 3, 100, 1024).iterator());
+        CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
+        dummyFuture.complete(null);
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any()))
+                .thenReturn(dummyFuture);
+
+        remoteLogManager.stopPartitions(partitions, true, errorHandler);
+        verify(remoteLogMetadataManager, times(1)).onStopPartitions(any());
+        verify(remoteStorageManager, times(8)).deleteLogSegmentData(any());
+        verify(remoteLogMetadataManager, times(16)).updateRemoteLogSegmentMetadata(any());
+    }
+
+    private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
+                                                                        int segmentCount,
+                                                                        int recordsPerSegment,
+                                                                        int segmentSize) {
+        List<RemoteLogSegmentMetadata> segmentMetadataList = new ArrayList<>();
+        for (int idx = 0; idx < segmentCount; idx++) {
+            long timestamp = time.milliseconds();
+            long startOffset = (long) idx * recordsPerSegment;
+            long endOffset = startOffset + recordsPerSegment - 1;
+            Map<Integer, Long> segmentLeaderEpochs = truncateAndGetLeaderEpochs(totalEpochEntries, startOffset, endOffset);
+            segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition,
+                    Uuid.randomUuid()), startOffset, endOffset, timestamp, brokerId, timestamp, segmentSize,
+                    segmentLeaderEpochs));
+        }
+        return segmentMetadataList;
+    }
+
+    private Map<Integer, Long> truncateAndGetLeaderEpochs(List<EpochEntry> entries,
+                                                          Long startOffset,
+                                                          Long endOffset) {
+        InMemoryLeaderEpochCheckpoint myCheckpoint = new InMemoryLeaderEpochCheckpoint();
+        myCheckpoint.write(entries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(null, myCheckpoint);
+        cache.truncateFromStart(startOffset);
+        cache.truncateFromEnd(endOffset);
+        return myCheckpoint.read().stream().collect(Collectors.toMap(e -> e.epoch, e -> e.startOffset));
     }
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {

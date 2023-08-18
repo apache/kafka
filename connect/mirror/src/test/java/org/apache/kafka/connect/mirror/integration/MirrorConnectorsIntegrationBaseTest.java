@@ -44,10 +44,13 @@ import org.apache.kafka.connect.mirror.MirrorClient;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
+import org.apache.kafka.connect.mirror.MirrorUtils;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
 import org.apache.kafka.connect.mirror.TestUtils;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
@@ -56,10 +59,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -69,6 +74,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.LongUnaryOperator;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Tag;
@@ -375,7 +381,6 @@ public class MirrorConnectorsIntegrationBaseTest {
                 assertTrue(primaryConsumer.position(
                         new TopicPartition(reverseTopic1, 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected downstream offset.");
             }
-
         }
 
         // create more matching topics
@@ -406,7 +411,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "New topic was not replicated to primary cluster.");
         }
     }
-    
+
     @Test
     public void testReplicationWithEmptyPartition() throws Exception {
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
@@ -933,9 +938,100 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    private static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses)  {
+    protected static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses)  {
         for (Class<? extends Connector> connector : connectorClasses) {
             connectCluster.restartConnectorAndTasks(connector.getSimpleName(), false, true, false);
+        }
+    }
+
+    @SafeVarargs
+    protected static void resumeMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) throws InterruptedException {
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            connectCluster.resumeConnector(connectorClass.getSimpleName());
+        }
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            String connectorName = connectorClass.getSimpleName();
+            connectCluster.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                    connectorName,
+                    1,
+                    "Connector '" + connectorName + "' and/or task did not resume in time"
+            );
+        }
+    }
+
+    @SafeVarargs
+    protected static void stopMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) throws InterruptedException {
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            connectCluster.stopConnector(connectorClass.getSimpleName());
+        }
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            String connectorName = connectorClass.getSimpleName();
+            connectCluster.assertions().assertConnectorIsStopped(
+                    connectorName,
+                    "Connector did not stop in time"
+            );
+        }
+    }
+
+    protected static void alterMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, LongUnaryOperator alterOffset, String... topics) {
+        Set<String> topicsSet = new HashSet<>(Arrays.asList(topics));
+        String connectorName = MirrorSourceConnector.class.getSimpleName();
+
+        ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);
+        List<ConnectorOffset> alteredOffsetContents = currentOffsets.offsets().stream()
+                .map(connectorOffset -> {
+                    TopicPartition topicPartition = MirrorUtils.unwrapPartition(connectorOffset.partition());
+                    if (!topicsSet.contains(topicPartition.topic())) {
+                        return null;
+                    }
+
+                    Object currentOffsetObject = connectorOffset.offset().get(MirrorUtils.OFFSET_KEY);
+                    if (!(currentOffsetObject instanceof Integer || currentOffsetObject instanceof Long)) {
+                        throw new AssertionError("Unexpected type for offset '" + currentOffsetObject + "'; should be integer or long");
+                    }
+
+                    long currentOffset = ((Number) currentOffsetObject).longValue();
+                    long alteredOffset = alterOffset.applyAsLong(currentOffset);
+
+                    return new ConnectorOffset(
+                            connectorOffset.partition(),
+                            MirrorUtils.wrapOffset(alteredOffset)
+                    );
+                }).filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        connectCluster.alterConnectorOffsets(connectorName, new ConnectorOffsets(alteredOffsetContents));
+    }
+
+    protected static void resetSomeMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, String... topics) {
+        Set<String> topicsSet = new HashSet<>(Arrays.asList(topics));
+        String connectorName = MirrorSourceConnector.class.getSimpleName();
+
+        ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);
+        List<ConnectorOffset> alteredOffsetContents = currentOffsets.offsets().stream()
+                .map(connectorOffset -> {
+                    TopicPartition topicPartition = MirrorUtils.unwrapPartition(connectorOffset.partition());
+                    if (!topicsSet.contains(topicPartition.topic())) {
+                        return null;
+                    }
+
+                    return new ConnectorOffset(connectorOffset.partition(), null);
+                }).filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        connectCluster.alterConnectorOffsets(connectorName, new ConnectorOffsets(alteredOffsetContents));
+    }
+
+    @SafeVarargs
+    protected static void resetAllMirrorMakerConnectorOffsets(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) {
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            String connectorName = connectorClass.getSimpleName();
+            connectCluster.resetConnectorOffsets(connectorName);
+            assertEquals(
+                    Collections.emptyList(),
+                    connectCluster.connectorOffsets(connectorName).offsets(),
+                    "Offsets for connector should be completely empty after full reset"
+            );
         }
     }
 

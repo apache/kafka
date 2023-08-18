@@ -43,6 +43,10 @@
             See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams">KIP-925</a>
             and <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy"><b>Kafka Streams Developer Guide</b></a> for more details.
         </li>
+        <li>To account for a break in compatibility introduced in version 3.1.0, MirrorMaker 2 has added a new
+            <code>replication.policy.internal.topic.separator.enabled</code>
+            property. If upgrading from 3.0.x or earlier, it may be necessary to set this property to <code>false</code>; see the property's
+            <a href="#mirror_connector_replication.policy.internal.topic.separator.enabled">documentation</a> for more details.</li>
     </ul>
 
 <h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>
