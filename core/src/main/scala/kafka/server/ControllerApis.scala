@@ -848,13 +848,17 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
   }
 
+  // The principal is carried through in the forwarded case.
+  // The security protocol in the context is for the current connection (hop)
+  // We need to always disallow a tokenAuthenticated principal
+  // We need to allow special protocols but only in the forwarded case for testing.
   def allowTokenRequests(request: RequestChannel.Request): Boolean = {
     val protocol = request.context.securityProtocol
     if (request.context.principal.tokenAuthenticated ||
       // We allow forwarded requests to use PLAINTEXT for testing purposes
       (request.isForwarded == false && protocol == SecurityProtocol.PLAINTEXT) ||
       // disallow requests from 1-way SSL
-      (protocol == SecurityProtocol.SSL && request.context.principal == KafkaPrincipal.ANONYMOUS))
+      (request.isForwarded == false && protocol == SecurityProtocol.SSL && request.context.principal == KafkaPrincipal.ANONYMOUS))
       false
     else
       true
