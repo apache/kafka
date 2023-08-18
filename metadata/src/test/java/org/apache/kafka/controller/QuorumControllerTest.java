@@ -1376,9 +1376,8 @@ public class QuorumControllerTest {
 
     @Test
     public void testActivationRecordsNonEmptyLog() {
-        FeatureControlManager featureControl;
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
+        FeatureControlManager featureControl = getActivationRecords(
+            MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
     }
@@ -1405,23 +1404,6 @@ public class QuorumControllerTest {
             BeginTransactionRecord.class, result.records(), 1).isPresent());
         assertTrue(RecordTestUtils.recordAtIndexAs(
             EndTransactionRecord.class, result.records(), result.records().size() - 1).isPresent());
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testActivationRecordsPartialBootstrapNoTxn(boolean zkMigrationEnabled) {
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
-            .setSnapshotRegistry(new SnapshotRegistry(new LogContext()))
-            .setMetadataVersion(MetadataVersion.IBP_3_6_IV0)
-            .build();
-
-        assertThrows(RuntimeException.class, () -> ActivationRecordsGenerator.generate(
-            msg -> { },
-            -1L,
-            0L,
-            zkMigrationEnabled,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
-            featureControlManager));
     }
 
     @Test
