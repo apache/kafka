@@ -1265,14 +1265,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
-        Optional<StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>>> storeBuilder = Optional.empty();
+        final String bufferStoreName = name + "-Buffer";
 
         if (joined.gracePeriod() != null) {
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
-            final String bufferStoreName = name + "-Buffer";
-            storeBuilder = Optional.of(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName, joined.gracePeriod(), name));
+            builder.addStateStore(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName, joined.gracePeriod(), name));
         }
 
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
@@ -1280,13 +1279,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joiner,
             leftJoin,
             Optional.ofNullable(joined.gracePeriod()),
-            storeBuilder);
+            bufferStoreName);
+
+        String[] storeNames = ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames();
+        final int N = storeNames.length;
+        storeNames = Arrays.copyOf(storeNames, N + 1);
+        storeNames[N] = bufferStoreName;
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
+            storeNames,
             this.name
         );
 

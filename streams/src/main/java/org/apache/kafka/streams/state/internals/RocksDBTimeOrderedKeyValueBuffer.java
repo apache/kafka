@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -149,7 +148,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         bufferSize = 0;
         seqnum = 0;
         this.topic = topic;
-        this.loggingEnabled = true;
+        this.loggingEnabled = loggingEnabled;
     }
 
     @SuppressWarnings("unchecked")

@@ -40,17 +40,12 @@ class KStreamKTableJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, 
                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner,
                       final boolean leftJoin,
                       final Optional<Duration> gracePeriod,
-                      final Optional<StoreBuilder<TimeOrderedKeyValueBuffer<K, V1, V1>>> buffer) {
+                      final String storeName) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
         this.gracePeriod = gracePeriod;
-        if (buffer.isPresent()) {
-            storeName = buffer.get().name();
-        } else {
-            storeName = "";
-            //not used
-        }
+        this.storeName = storeName;
     }
 
     @Override
