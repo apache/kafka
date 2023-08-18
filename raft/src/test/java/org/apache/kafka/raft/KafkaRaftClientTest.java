@@ -1191,14 +1191,14 @@ public class KafkaRaftClientTest {
         List<String> records = Arrays.asList("a", "b", "c");
         long offset = context.client.scheduleAppend(epoch, records);
         context.client.poll();
-        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+        assertEquals(OptionalLong.of(0L), context.listener.lastCommitOffset());
 
         // Let the follower send a fetch, it should advance the high watermark
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 500));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
-        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+        assertEquals(OptionalLong.of(0L), context.listener.lastCommitOffset());
 
         // Let the follower send another fetch from offset 4
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 4L, epoch, 500));
@@ -2548,18 +2548,50 @@ public class KafkaRaftClientTest {
     }
 
     @Test
-    public void testHandleClaimFiresImmediatelyOnEmptyLog() throws Exception {
+    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffsetOnEmptyLog() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
-        int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .build();
+
+        context.becomeLeader();
+        context.client.poll();
+        int epoch = context.currentEpoch();
+
+        // After becoming leader, we expect the `LeaderChange` record to be appended.
+        assertEquals(1L, context.log.endOffset().offset);
+
+        // The high watermark is not known to the leader until the followers
+        // begin fetching, so we should not have fired the `handleLeaderChange` callback.
+        assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
+        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+
+        // Deliver a fetch from the other voter. The high watermark will not
+        // be exposed until it is able to reach the start of the leader epoch,
+        // so we are unable to deliver committed data or fire `handleLeaderChange`.
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0L, 0, 0));
+        context.client.poll();
+        assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
+        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+
+        // Now catch up to the start of the leader epoch so that the high
+        // watermark advances and we can start sending committed data to the
+        // listener. Note that the `LeaderChange` control record is included
+        // in the committed batches.
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0));
+        context.client.poll();
+        assertEquals(OptionalLong.of(0), context.listener.lastCommitOffset());
+
+        // Poll again now that the listener has caught up to the HWM
+        context.client.poll();
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
+        assertEquals(0, context.listener.claimedEpochStartOffset(epoch));
     }
 
     @Test
-    public void testHandleClaimCallbackFiresAfterHighWatermarkReachesEpochStartOffset() throws Exception {
+    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffset() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
@@ -2585,13 +2617,13 @@ public class KafkaRaftClientTest {
         assertEquals(10L, context.log.endOffset().offset);
 
         // The high watermark is not known to the leader until the followers
-        // begin fetching, so we should not have fired the `handleClaim` callback.
+        // begin fetching, so we should not have fired the `handleLeaderChange` callback.
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
         assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
 
         // Deliver a fetch from the other voter. The high watermark will not
         // be exposed until it is able to reach the start of the leader epoch,
-        // so we are unable to deliver committed data or fire `handleClaim`.
+        // so we are unable to deliver committed data or fire `handleLeaderChange`.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 3L, 1, 500));
         context.client.poll();
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
@@ -2599,26 +2631,28 @@ public class KafkaRaftClientTest {
 
         // Now catch up to the start of the leader epoch so that the high
         // watermark advances and we can start sending committed data to the
-        // listener. Note that the `LeaderChange` control record is filtered.
+        // listener. Note that the `LeaderChange` control record is included
+        // in the committed batches.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 500));
         context.pollUntil(() -> {
-            int committedBatches = context.listener.numCommittedBatches();
-            long baseOffset = 0;
-            for (int index = 0; index < committedBatches; index++) {
-                List<String> expectedBatch = expectedBatches.get(index);
-                assertEquals(expectedBatch, context.listener.commitWithBaseOffset(baseOffset));
-                baseOffset += expectedBatch.size();
+            int index = 0;
+            for (Batch<String> batch : context.listener.committedBatches()) {
+                if (index < expectedBatches.size()) {
+                    // It must be a data record so compare it
+                    assertEquals(expectedBatches.get(index), batch.records());
+                }
+                index++;
             }
+            // The control record must be the last batch committed
+            assertEquals(4, index);
 
             return context.listener.currentClaimedEpoch().isPresent();
         });
 
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-        // Note that last committed offset is inclusive, hence we subtract 1.
-        assertEquals(
-            OptionalLong.of(expectedBatches.stream().mapToInt(List::size).sum() - 1),
-            context.listener.lastCommitOffset()
-        );
+        // Note that last committed offset is inclusive and must include the leader change record.
+        assertEquals(OptionalLong.of(9), context.listener.lastCommitOffset());
+        assertEquals(9, context.listener.claimedEpochStartOffset(epoch));
     }
 
     @Test
@@ -2647,18 +2681,18 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 0));
         context.pollUntil(() -> OptionalInt.of(epoch).equals(context.listener.currentClaimedEpoch()));
         assertEquals(OptionalLong.of(10L), context.client.highWatermark());
-        assertEquals(OptionalLong.of(8L), context.listener.lastCommitOffset());
+        assertEquals(OptionalLong.of(9L), context.listener.lastCommitOffset());
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-        // Ensure that the `handleClaim` callback was not fired early
+        // Ensure that the `handleLeaderChange` callback was not fired early
         assertEquals(9L, context.listener.claimedEpochStartOffset(epoch));
 
         // Register a second listener and allow it to catch up to the high watermark
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
         context.pollUntil(() -> OptionalInt.of(epoch).equals(secondListener.currentClaimedEpoch()));
-        assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
+        assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-        // Ensure that the `handleClaim` callback was not fired early
+        // Ensure that the `handleLeaderChange` callback was not fired early
         assertEquals(9L, secondListener.claimedEpochStartOffset(epoch));
     }
 
@@ -2686,12 +2720,12 @@ public class KafkaRaftClientTest {
 
         // Let the initial listener catch up
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
-        context.pollUntil(() -> OptionalLong.of(8).equals(context.listener.lastCommitOffset()));
+        context.pollUntil(() -> OptionalLong.of(9).equals(context.listener.lastCommitOffset()));
 
         // Register a second listener
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
-        context.pollUntil(() -> OptionalLong.of(8).equals(secondListener.lastCommitOffset()));
+        context.pollUntil(() -> OptionalLong.of(9).equals(secondListener.lastCommitOffset()));
         context.client.unregister(secondListener);
 
         // Write to the log and show that the default listener gets updated...
@@ -2700,7 +2734,7 @@ public class KafkaRaftClientTest {
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         context.pollUntil(() -> OptionalLong.of(10).equals(context.listener.lastCommitOffset()));
         // ... but unregister listener doesn't
-        assertEquals(OptionalLong.of(8), secondListener.lastCommitOffset());
+        assertEquals(OptionalLong.of(9), secondListener.lastCommitOffset());
     }
 
     @Test
@@ -2785,14 +2819,18 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(10L), context.client.highWatermark());
 
         // Register another listener and verify that it catches up while we remain 'voted'
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
         context.client.register(secondListener);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, otherNodeId);
 
-        // Note the offset is 8 because the record at offset 9 is a control record
-        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(8L)));
-        assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
+        // Note the offset is 9 because from offsets 0 to 8 there are data records,
+        // at offset 9 there is a control record and the raft client sends control record to the
+        // raft listener
+        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(9L)));
+        assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.empty(), secondListener.currentClaimedEpoch());
     }
 
@@ -2835,14 +2873,18 @@ public class KafkaRaftClientTest {
         context.assertVotedCandidate(candidateEpoch, localId);
 
         // Register another listener and verify that it catches up
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
         context.client.register(secondListener);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 
-        // Note the offset is 8 because the record at offset 9 is a control record
-        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(8L)));
-        assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
+        // Note the offset is 9 because from offsets 0 to 8 there are data records,
+        // at offset 9 there is a control record and the raft client sends control record to the
+        // raft listener
+        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(9L)));
+        assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.empty(), secondListener.currentClaimedEpoch());
     }
 
