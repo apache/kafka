@@ -46,6 +46,7 @@ import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
@@ -1238,6 +1239,47 @@ class PartitionTest extends AbstractPartitionTest {
       .setIsNew(true)
     partition.makeLeader(leaderState, offsetCheckpoints, None)
     assertTrue(partition.isAtMinIsr)
+  }
+
+  @Test
+  def testIsUnderMinIsr(): Unit = {
+    configRepository.setTopicConfig(topicPartition.topic, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = interBrokerProtocolVersion,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = None)
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+    assertFalse(partition.isUnderMinIsr)
+
+    val LeaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(0)
+      .setLeader(brokerId)
+      .setLeaderEpoch(1)
+      .setIsr(List(brokerId).map(Int.box).asJava)
+      .setPartitionEpoch(2)
+      .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+      .setIsNew(false)
+
+    partition.makeLeader(LeaderState, offsetCheckpoints, None)
+    assertTrue(partition.isUnderMinIsr)
   }
 
   @Test
