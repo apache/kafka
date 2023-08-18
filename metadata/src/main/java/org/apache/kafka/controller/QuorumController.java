@@ -1447,6 +1447,11 @@ public final class QuorumController implements Controller {
         if (featureControl.metadataVersion().isDelegationTokenSupported() &&
             delegationTokenControlManager.isEnabled()) {
 
+            log.debug(
+                "Scheduling write event for {} because DelegationTokens are enabled.", 
+                SWEEP_EXPIRED_DELEGATION_TOKENS
+            );
+
             ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
                 SWEEP_EXPIRED_DELEGATION_TOKENS,
                 () -> {

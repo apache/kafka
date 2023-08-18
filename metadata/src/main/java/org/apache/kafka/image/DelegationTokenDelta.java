@@ -73,6 +73,10 @@ public final class DelegationTokenDelta {
 
     public DelegationTokenImage apply() {
         Map<String, DelegationTokenData> newTokens = new HashMap<>();
+
+        // Add image entries to newTokens if there isn't a change for that entry.
+        // A snapshot of the deltas will call finishSnapshot() first which will add a
+        // removal change for all entries in the base image which did not have a change record.
         for (Entry<String, DelegationTokenData> entry : image.tokens().entrySet()) {
             Optional<DelegationTokenData> change = changes.get(entry.getKey());
             if (change == null) {
@@ -82,6 +86,7 @@ public final class DelegationTokenDelta {
             }
         }
 
+        // Add changed entries to newTokens that aren't already in newTokens.
         for (Entry<String, Optional<DelegationTokenData>> entry : changes.entrySet()) {
             if (!newTokens.containsKey(entry.getKey())) {
                 if (entry.getValue().isPresent()) {
