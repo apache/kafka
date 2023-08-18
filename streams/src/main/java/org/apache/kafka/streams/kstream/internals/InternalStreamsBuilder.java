@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
+import org.apache.kafka.streams.kstream.internals.graph.NodesWithRelaxedNullKeyJoinDownstream;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
@@ -357,7 +358,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private void rewriteRepartitionNodes() {
-        final Set<BaseRepartitionNode<?, ?>> nodes = new NodesWithRelaxedNullKeyJoinDowstream(root).find();
+        final Set<BaseRepartitionNode<?, ?>> nodes = new NodesWithRelaxedNullKeyJoinDownstream(root).find();
         for (final BaseRepartitionNode<?, ?> partitionNode : nodes) {
             if (partitionNode.getProcessorParameters() != null) {
                 partitionNode.setProcessorParameters(new ProcessorParameters<>(

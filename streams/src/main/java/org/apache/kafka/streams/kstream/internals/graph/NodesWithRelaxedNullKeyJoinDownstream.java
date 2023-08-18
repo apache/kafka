@@ -14,22 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
-
-import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class NodesWithRelaxedNullKeyJoinDowstream {
+public class NodesWithRelaxedNullKeyJoinDownstream {
 
     private final HashSet<GraphNode> visited;
     private final HashSet<GraphNode> nonOptimizable;
     private final GraphNode start;
 
-    public NodesWithRelaxedNullKeyJoinDowstream(final GraphNode root) {
+    public NodesWithRelaxedNullKeyJoinDownstream(final GraphNode root) {
         this.start = root;
         this.visited = new HashSet<>();
         this.nonOptimizable = new HashSet<>();
