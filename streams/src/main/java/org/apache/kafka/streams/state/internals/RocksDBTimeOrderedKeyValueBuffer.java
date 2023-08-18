@@ -59,6 +59,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     private int partition;
     private String changelogTopic;
     private InternalProcessorContext context;
+    private boolean minValid;
 
     public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
 
@@ -142,7 +143,8 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                                             final boolean loggingEnabled) {
         super(store);
         this.gracePeriod = gracePeriod.toMillis();
-        minTimestamp = Long.MAX_VALUE;
+        minTimestamp = store.minTimestamp();
+        minValid = false;
         numRecords = 0;
         bufferSize = 0;
         seqnum = 0;
@@ -166,11 +168,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         wrapped().init(context, wrapped());
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        partition = context.taskId().partition();
-        if (loggingEnabled) {
-            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        }
     }
 
     @Override
@@ -178,8 +175,12 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         KeyValue<Bytes, byte[]> keyValue;
 
         if (predicate.get()) {
+            long start = 0;
+            if (minValid) {
+                start = minTimestamp();
+            }
             try (final KeyValueIterator<Bytes, byte[]> iterator = wrapped()
-                .fetchAll(0, wrapped().observedStreamTime - gracePeriod)) {
+                .fetchAll(start, wrapped().observedStreamTime - gracePeriod)) {
                 while (iterator.hasNext() && predicate.get()) {
                     keyValue = iterator.next();
 
@@ -187,13 +188,14 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                     final K key = keySerde.deserializer().deserialize(topic,
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
 
-                    if (bufferValue.context().timestamp() < minTimestamp) {
+                    if (bufferValue.context().timestamp() < minTimestamp && minValid) {
                         throw new IllegalStateException(
                             "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
                                 bufferValue.context().timestamp() + "]"
                         );
                     }
                     minTimestamp = bufferValue.context().timestamp();
+                    minValid = true;
 
                     final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
 
@@ -247,9 +249,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
 
         bufferSize += computeRecordSize(serializedKey, buffered);
         numRecords++;
-        if (minTimestamp() > record.timestamp()) {
-            minTimestamp = record.timestamp();
-        }
+        minTimestamp = Math.min(minTimestamp(), record.timestamp());
         return true;
     }
 
@@ -286,6 +286,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
+        this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor((ProcessorContext) context, name(), Boolean.TRUE);
+        }
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,
@@ -300,6 +305,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     }
 
     private void logTombstone(final Bytes key) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor((ProcessorContext) context, name(), Boolean.TRUE);
+        }
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,

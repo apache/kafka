@@ -75,13 +75,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBytesStore;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
@@ -1282,9 +1277,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             bufferStoreName);
 
         String[] storeNames = ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames();
-        final int N = storeNames.length;
-        storeNames = Arrays.copyOf(storeNames, N + 1);
-        storeNames[N] = bufferStoreName;
+        final int storeLength = storeNames.length;
+        storeNames = Arrays.copyOf(storeNames, storeLength + 1);
+        storeNames[storeLength] = bufferStoreName;
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
