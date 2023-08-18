@@ -53,9 +53,11 @@ public class ActivationRecordsGenerator {
                     .append(transactionStartOffset)
                     .append(". Re-appending ")
                     .append(bootstrapMetadata.records().size())
-                    .append(" bootstrap record(s) in new metadata transaction ")
-                    .append(String.format("at metadata.version %s from bootstrap source '%s'. ",
-                        metadataVersion, bootstrapMetadata.source()));
+                    .append(" bootstrap record(s) in new metadata transaction at metadata.version ")
+                    .append(metadataVersion)
+                    .append(" from bootstrap source '")
+                    .append(bootstrapMetadata.source())
+                    .append("'. ");
                 records.add(new ApiMessageAndVersion(
                     new AbortTransactionRecord().setReason("Controller failover"), (short) 0));
                 records.add(new ApiMessageAndVersion(
@@ -63,15 +65,22 @@ public class ActivationRecordsGenerator {
             }
         } else {
             // No in-flight transaction
-            logMessageBuilder.append("The metadata log appears to be empty. ");
-            logMessageBuilder.append(String.format("Appending %s bootstrap record(s) ", bootstrapMetadata.records().size()));
+            logMessageBuilder
+                .append("The metadata log appears to be empty. ")
+                .append("Appending ")
+                .append(bootstrapMetadata.records().size())
+                .append(" bootstrap record(s) ");
             if (metadataVersion.isMetadataTransactionSupported()) {
                 records.add(new ApiMessageAndVersion(
                     new BeginTransactionRecord().setName("Bootstrap records"), (short) 0));
                 logMessageBuilder.append("in metadata transaction ");
             }
-            logMessageBuilder.append(String.format("at metadata.version %s from bootstrap source '%s'. ",
-                metadataVersion, bootstrapMetadata.source()));
+            logMessageBuilder
+                .append("at metadata.version ")
+                .append(metadataVersion)
+                .append(" from bootstrap source '")
+                .append(bootstrapMetadata.source())
+                .append("'. ");
         }
 
         // If no records have been replayed, we need to write out the bootstrap records.
