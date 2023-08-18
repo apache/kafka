@@ -241,13 +241,8 @@ public class MirrorMaker {
 
         DistributedHerder herder = (DistributedHerder) herders.get(sourceAndTarget);
         herder.putConnectorConfig(connectorName, connectorProps, true, cb);
-        String connectorReconfigUrl = herder.namespacedUrl(herder.leaderUrl())
-                .path("connectors")
-                .path(connectorName)
-                .path("config")
-                .build()
-                .toString();
         try {
+            String connectorReconfigUrl = sourceAndTarget.source()  + "/" + sourceAndTarget.target() + "/connectors/" + connectorName + "/config";
             requestHandler.completeOrForwardRequest(cb, connectorReconfigUrl, "PUT", null, connectorProps, false);
             log.info("{} connector configured for {}.", connectorName, sourceAndTarget);
         } catch (Throwable e) {
