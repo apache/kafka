@@ -547,22 +547,29 @@ public class LogConfig extends AbstractConfig {
      * The default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
-    private static void validateTopicLogConfigValues(Map<?, ?> props,
-                                                     boolean isRemoteLogStorageSystemEnabled) {
+    public static void validateTopicLogConfigValues(Map<?, ?> props,
+                                                    boolean isRemoteLogStorageSystemEnabled,
+                                                    boolean isReceivingConfigFromStore) {
         validateValues(props);
         boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
-            validateRemoteStorageOnlyIfSystemEnabled(isRemoteLogStorageSystemEnabled);
-            validateNoRemoteStorageForCompactedTopic(props);
-            validateRemoteStorageRetentionSize(props);
-            validateRemoteStorageRetentionTime(props);
+            validateRemoteStorageOnlyIfSystemEnabled(isRemoteLogStorageSystemEnabled, isReceivingConfigFromStore);
+            if (!isReceivingConfigFromStore) {
+                validateNoRemoteStorageForCompactedTopic(props);
+                validateRemoteStorageRetentionSize(props);
+                validateRemoteStorageRetentionTime(props);
+            }
         }
     }
 
-    private static void validateRemoteStorageOnlyIfSystemEnabled(boolean isRemoteLogStorageSystemEnabled) {
+    private static void validateRemoteStorageOnlyIfSystemEnabled(boolean isRemoteLogStorageSystemEnabled, boolean isReceivingConfigFromStore) {
         if (!isRemoteLogStorageSystemEnabled) {
-            throw new ConfigException("Tiered Storage functionality is disabled in the broker. " +
-                    "Topic cannot be configured with remote log storage.");
+            if (isReceivingConfigFromStore) {
+                throw new ConfigException("You have to disable tiering on all topics with the property remote.storage.enable=true before disabling tiered storage cluster-wide");
+            } else {
+                throw new ConfigException("Tiered Storage functionality is disabled in the broker. " +
+                        "Topic cannot be configured with remote log storage.");
+            }
         }
     }
 
@@ -625,7 +632,7 @@ public class LogConfig extends AbstractConfig {
             Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
             Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
-            validateTopicLogConfigValues(valueMaps, isRemoteLogStorageSystemEnabled);
+            validateTopicLogConfigValues(valueMaps, isRemoteLogStorageSystemEnabled, false);
         }
     }
 
