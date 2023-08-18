@@ -35,8 +35,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -54,7 +52,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     private final String topic;
     private int seqnum;
     private final boolean loggingEnabled;
-    private final Map<Bytes, BufferValue> dirtyKeys = new HashMap<>();
     private int partition;
     private String changelogTopic;
     private InternalProcessorContext context;
@@ -70,7 +67,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         bufferSize = 0;
         seqnum = 0;
         this.topic = topic;
-        this.loggingEnabled = true;
+        this.loggingEnabled = loggingEnabled;
     }
 
     @SuppressWarnings("unchecked")
@@ -125,7 +122,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                     wrapped().remove(keyValue.key);
 
                     if (loggingEnabled) {
-                        dirtyKeys.put(keyValue.key, null);
+                        logTombstone(keyValue.key);
                     }
 
                     numRecords--;
@@ -164,7 +161,8 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         wrapped().put(serializedKey, buffered.serialize(0).array());
 
         if (loggingEnabled) {
-            dirtyKeys.put(serializedKey, buffered);
+            final BufferKey key = new BufferKey(0L, serializedKey);
+            logValue(serializedKey, key, buffered);
         }
 
         bufferSize += computeRecordSize(serializedKey, buffered);
@@ -201,22 +199,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
 
     private void maybeUpdateSeqnumForDups() {
         seqnum = (seqnum + 1) & 0x7FFFFFFF;
-    }
-
-    @Override
-    public void flush() {
-        if (loggingEnabled) {
-            for (final Map.Entry<Bytes, BufferValue> record: dirtyKeys.entrySet()) {
-                if (record.getValue() == null) {
-                    // The record was evicted from the buffer. Send a tombstone.
-                    logTombstone(record.getKey());
-                } else {
-                    final BufferKey key = new BufferKey(0L, record.getKey());
-                    logValue(record.getKey(), key, record.getValue());
-                }
-            }
-            dirtyKeys.clear();
-        }
     }
 
     private void logValue(final Bytes key, final BufferKey bufferKey, final BufferValue value) {

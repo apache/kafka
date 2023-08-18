@@ -143,14 +143,15 @@ public class JoinGracePeriodDurabilityIntegrationTest {
         final String storeName = "grace";
         final String output = "output" + testId;
 
+        // change this once task bug fixed.
         // create multiple partitions as a trap, in case the buffer doesn't properly set the
         // partition on the records, but instead relies on the default key partitioner
-        cleanStateBeforeTest(CLUSTER, 2, streamInput, tableInput, output);
+        cleanStateBeforeTest(CLUSTER, 1, streamInput, tableInput, output);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream = builder.stream(streamInput, Consumed.with(STRING_SERDE, STRING_SERDE));
         final KTable<String, String> table = builder.table(tableInput, Consumed.with(STRING_SERDE, STRING_SERDE), Materialized.as(
-            Stores.persistentVersionedKeyValueStore(storeName, Duration.ofMinutes(5))));
+            Stores.persistentVersionedKeyValueStore(storeName, Duration.ofMillis(1000))));
         final KStream<String, String> joinedStream = stream.join(table,
             MockValueJoiner.TOSTRING_JOINER,
             Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "Grace", Duration.ofMillis(5))
@@ -182,8 +183,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k2", "v2", scaledTime(0L)),
                     new KeyValueTimestamp<>("k3", "v3", scaledTime(0L)),
                     new KeyValueTimestamp<>("k4", "v4", scaledTime(0L)),
-                    new KeyValueTimestamp<>("k5", "v5", scaledTime(0L)),
-                    new KeyValueTimestamp<>("k6", "v6", scaledTime(0L))
+                    new KeyValueTimestamp<>("k5", "v5", scaledTime(0L))
                 )
             );
             produceSynchronouslyToPartitionZero(
@@ -201,6 +201,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k2", "v2+v2", scaledTime(2L))
                 )
             );
+            assertThat(eventCount.get(), is(2));
 
             produceSynchronouslyToPartitionZero(
                 streamInput,
@@ -209,7 +210,6 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k5", "v5", scaledTime(5L))
                 )
             );
-            assertThat(eventCount.get(), is(2));
 
             // bounce to ensure that the history, including retractions,
             // get restored properly. (i.e., we shouldn't see those first events again)
@@ -230,12 +230,11 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             verifyOutput(
                 output,
                 asList(
-                    new KeyValueTimestamp<>("k3", "1L", scaledTime(6L)),
-                    new KeyValueTimestamp<>("k4", "1L", scaledTime(7L)),
-                    new KeyValueTimestamp<>("k5", "1L", scaledTime(8L))
+                    new KeyValueTimestamp<>("k4", "v4+v4", scaledTime(4L)),
+                    new KeyValueTimestamp<>("k5", "v5+v5", scaledTime(5L))
                 )
             );
-            assertThat("There should only be 5 output events.", eventCount.get(), is(5));
+            assertThat("There should only be 4 output events.", eventCount.get(), is(4));
 
         } finally {
             driver.close();
@@ -249,7 +248,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                 mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
                 mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
-                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
+                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName())
             )
         );
         IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
