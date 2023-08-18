@@ -17,15 +17,19 @@
 
 package org.apache.kafka.controller;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
@@ -44,6 +48,9 @@ public class PartitionChangeBuilder {
 
     public static boolean changeRecordIsNoOp(PartitionChangeRecord record) {
         if (record.isr() != null) return false;
+        if (record.eligibleLeaderReplicas() != null) return false;
+        if (record.lastKnownELR() != null) return false;
+        if (record.lastKnownLeader() != NO_LEADER_CHANGE) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
@@ -79,9 +86,13 @@ public class PartitionChangeBuilder {
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
     private List<Integer> targetAdding;
+    private List<Integer> targetElr;
+    private List<Integer> targetLastKnownElr;
+    private List<Integer> uncleanShutdownReplicas;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean zkMigrationEnabled;
+    private int minISR;
 
 
     public PartitionChangeBuilder(
@@ -89,7 +100,8 @@ public class PartitionChangeBuilder {
         Uuid topicId,
         int partitionId,
         IntPredicate isAcceptableLeader,
-        MetadataVersion metadataVersion
+        MetadataVersion metadataVersion,
+        int minISR
     ) {
         this.partition = partition;
         this.topicId = topicId;
@@ -97,11 +109,14 @@ public class PartitionChangeBuilder {
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
         this.zkMigrationEnabled = false;
+        this.minISR = minISR;
 
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
         this.targetAdding = Replicas.toList(partition.addingReplicas);
+        this.targetElr = Collections.emptyList();
+        this.targetLastKnownElr = Collections.emptyList();
         this.targetLeaderRecoveryState = partition.leaderRecoveryState;
     }
 
@@ -121,6 +136,12 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetReplicas(List<Integer> targetReplicas) {
         this.targetReplicas = targetReplicas;
+        return this;
+    }
+
+    // TODO(KIP-966) To actually use this field during broker registration.
+    public PartitionChangeBuilder setUncleanShutdownReplicas(List<Integer> uncleanShutdownReplicas) {
+        this.uncleanShutdownReplicas = uncleanShutdownReplicas;
         return this;
     }
 
@@ -328,13 +349,38 @@ public class PartitionChangeBuilder {
 
         completeReassignmentIfNeeded();
 
+        boolean isElrEnabled = metadataVersion.isElrSupported();
+        if (isElrEnabled) {
+            populateTargetElr();
+        }
+
         tryElection(record);
 
         triggerLeaderEpochBumpIfNeeded(record);
 
-        if (record.isr() == null && !targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
-            // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
-            record.setIsr(targetIsr);
+        boolean isCleanLeaderElection = record.isr() == null;
+
+        // Clean the ELR related fields if it is an unclean election or ELR is disabled.
+        if (!isCleanLeaderElection || !isElrEnabled) {
+            targetElr = Collections.emptyList();
+            targetLastKnownElr = Collections.emptyList();
+        }
+
+        if (!targetElr.equals(Replicas.toList(partition.elr))) {
+            record.setEligibleLeaderReplicas(targetElr);
+        }
+        if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
+            record.setLastKnownELR(targetLastKnownElr);
+        }
+
+        // The record.isr is null if it is a clean election. In this case, it will
+        // 1. Set the new ISR if it is different from the current ISR.
+        // 2. Set the new ELR/LastKnowElr if it is different from the current ones.
+        if (isCleanLeaderElection) {
+            // TODO(KIP-966) If ELR is enabled, the ISR is allowed to be empty.
+            if (!targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
+                record.setIsr(targetIsr);
+            }
         }
 
         setAssignmentChanges(record);
@@ -346,7 +392,7 @@ public class PartitionChangeBuilder {
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
-            return Optional.of(new ApiMessageAndVersion(record, (short) 0));
+            return Optional.of(new ApiMessageAndVersion(record, metadataVersion.partitionChangeRecordVersion()));
         }
     }
 
@@ -362,6 +408,38 @@ public class PartitionChangeBuilder {
         }
     }
 
+    private void populateTargetElr() {
+        // If the ISR is larger or equal to the min ISR, clear the ELR and lastKnownELR.
+        if (targetIsr.size() >= minISR) {
+            targetElr = Collections.emptyList();
+            targetLastKnownElr = Collections.emptyList();
+            return;
+        }
+
+        Set<Integer> currentIsrSet = Arrays.stream(partition.isr).boxed().collect(Collectors.toSet());
+        Set<Integer> targetIsrSet = targetIsr.stream().collect(Collectors.toSet());
+        Set<Integer> currentElrSet = Arrays.stream(partition.elr).boxed().collect(Collectors.toSet());
+        Set<Integer> currentLastKnownElrSet = Arrays.stream(partition.lastKnownElr).boxed().collect(Collectors.toSet());
+
+        // Tracking the ELR. The new elr is expected to
+        // 1. Include the current ISR
+        // 2. Exclude the duplicate replicas between elr and target ISR.
+        // 3. Exclude unclean shutdown replicas.
+        // To do that, we first union the current ISR and current elr, then filter out the target ISR and unclean shutdown
+        // Replicas.
+        Set<Integer> elrCandidates = Utils.union(HashSet::new, currentElrSet, currentIsrSet);
+        Set<Integer> newElr = elrCandidates.stream()
+            .filter(replica -> !targetIsrSet.contains(replica) && (uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica)))
+            .collect(Collectors.toSet());
+        targetElr = newElr.stream().collect(Collectors.toList());
+
+        // Tracking the last known ELR. Includes any ISR members since the ISR size drops below min ISR.
+        // In order to reduce the metadata usage, the last known ELR excludes the members in ELR.
+        Set<Integer> newLastKnownElr = Utils.union(HashSet::new, currentIsrSet, currentLastKnownElrSet, currentElrSet);
+        targetLastKnownElr =  newLastKnownElr.stream()
+            .filter(replica -> !targetIsrSet.contains(replica) && !targetElr.contains(replica)).collect(Collectors.toList());
+    }
+
     @Override
     public String toString() {
         return "PartitionChangeBuilder(" +
@@ -373,6 +451,9 @@ public class PartitionChangeBuilder {
             ", targetReplicas=" + targetReplicas +
             ", targetRemoving=" + targetRemoving +
             ", targetAdding=" + targetAdding +
+            ", targetElr=" + targetElr +
+            ", targetLastKnownElr=" + targetLastKnownElr +
+            ", uncleanShutdownReplicas=" + uncleanShutdownReplicas +
             ", election=" + election +
             ", targetLeaderRecoveryState=" + targetLeaderRecoveryState +
             ')';

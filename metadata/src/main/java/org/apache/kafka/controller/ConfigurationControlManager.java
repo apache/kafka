@@ -434,6 +434,15 @@ public class ConfigurationControlManager {
         }
     }
 
+    Map<String, String> getTopicConfigs(String topicName) {
+        Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (map == null) {
+            return Collections.emptyMap();
+        } else {
+            return Collections.unmodifiableMap(new HashMap<>(map));
+        }
+    }
+
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
             long lastCommittedOffset, Map<ConfigResource, Collection<String>> resources) {
         Map<ConfigResource, ResultOrError<Map<String, String>>> results = new HashMap<>();

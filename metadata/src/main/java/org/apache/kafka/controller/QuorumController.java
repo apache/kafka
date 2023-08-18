@@ -203,6 +203,7 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
+        private int defaultMinInSyncIsr = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -277,6 +278,11 @@ public final class QuorumController implements Controller {
 
         public Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
+            return this;
+        }
+
+        public Builder setDefaultMinInSyncIsr(int defaultMinInSyncIsr) {
+            this.defaultMinInSyncIsr = defaultMinInSyncIsr;
             return this;
         }
 
@@ -405,6 +411,7 @@ public final class QuorumController implements Controller {
                     quorumFeatures,
                     defaultReplicationFactor,
                     defaultNumPartitions,
+                    defaultMinInSyncIsr,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
@@ -1769,6 +1776,7 @@ public final class QuorumController implements Controller {
         QuorumFeatures quorumFeatures,
         short defaultReplicationFactor,
         int defaultNumPartitions,
+        int defaultMinInSyncIsr,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
@@ -1854,6 +1862,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
+            setDefaultMinInSyncIsr(defaultMinInSyncIsr).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
