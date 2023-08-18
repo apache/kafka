@@ -54,7 +54,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.ArgumentParsers;
 
-import javax.ws.rs.core.UriBuilder;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -69,7 +68,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Properties;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.io.File;
 
@@ -245,16 +243,16 @@ public class MirrorMaker {
         DistributedHerder herder = (DistributedHerder) herders.get(sourceAndTarget);
         herder.putConnectorConfig(connectorName, connectorProps, true, cb);
         try {
-            Function<UriBuilder, UriBuilder> path = builder ->
-                    herder.namespacedUrl(builder)
-                            .path("connectors")
-                            .path(connectorName)
-                            .path("config");
-            requestHandler.completeOrForwardRequest(
-                    cb, path, "PUT", null, connectorProps,
-                    new TypeReference<ConnectorInfo>() { },
-                    new ConnectorsResource.CreatedConnectorInfoTranslator(),
-                    null);
+            StringBuilder path = new StringBuilder();
+            for (String namespace : herder.namespace()) {
+                path.append(namespace);
+                path.append("/");
+            }
+            path.append("connectors/");
+            path.append(connectorName);
+            path.append("/config");
+            requestHandler.completeOrForwardRequest(cb, path.toString(), "PUT", null, connectorProps,
+                    new TypeReference<ConnectorInfo>() { }, new ConnectorsResource.CreatedConnectorInfoTranslator(), null);
             log.info("{} connector configured for {}.", connectorName, sourceAndTarget);
         } catch (Throwable e) {
             log.error("Failed to configure {} connector for {}", connectorName, sourceAndTarget, e);

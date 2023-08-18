@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 
 public class HerderRequestHandler {
 
@@ -74,33 +73,15 @@ public class HerderRequestHandler {
         }
     }
 
-    public <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
-                                             String path,
-                                             String method,
-                                             HttpHeaders headers,
-                                             Map<String, String> queryParameters,
-                                             Object body,
-                                             TypeReference<U> resultType,
-                                             Translator<T, U> translator,
-                                             Boolean forward) throws Throwable {
-        Function<UriBuilder, UriBuilder> uriBuilder = builder -> {
-            builder = builder.path(path);
-            if (queryParameters != null) {
-                queryParameters.forEach(builder::queryParam);
-            }
-            return builder;
-        };
-        return completeOrForwardRequest(cb, uriBuilder, method, headers, body, resultType, translator, forward);
-    }
-
     /**
      * Wait for a {@link FutureCallback} to complete. If it succeeds, return the parsed response. If it fails, try to forward the
      * request to the indicated target.
      */
     public <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
-                                             Function<UriBuilder, UriBuilder> requestUri,
+                                             String path,
                                              String method,
                                              HttpHeaders headers,
+                                             Map<String, String> queryParameters,
                                              Object body,
                                              TypeReference<U> resultType,
                                              Translator<T, U> translator,
@@ -120,14 +101,18 @@ public class HerderRequestHandler {
                             "Cannot complete request momentarily due to no known leader URL, "
                                     + "likely because a rebalance was underway.");
                 }
-                UriBuilder uriBuilder = requestUri.apply(UriBuilder.fromUri(forwardedUrl))
+                UriBuilder uriBuilder = UriBuilder.fromUri(forwardedUrl)
+                        .path(path)
                         .queryParam("forward", recursiveForward);
+                if (queryParameters != null) {
+                    queryParameters.forEach(uriBuilder::queryParam);
+                }
                 String forwardUrl = uriBuilder.build().toString();
                 log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
                 return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
             } else {
                 log.error("Request '{} {}' failed because it couldn't find the target Connect worker within two hops (between workers).",
-                        method, requestUri);
+                        method, path);
                 // we should find the right target for the query within two hops, so if
                 // we don't, it probably means that a rebalance has taken place.
                 throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
