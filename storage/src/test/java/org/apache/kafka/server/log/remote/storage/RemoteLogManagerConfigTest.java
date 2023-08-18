@@ -41,7 +41,7 @@ public class RemoteLogManagerConfigTest {
         RemoteLogManagerConfig expectedRemoteLogManagerConfig
                 = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
                                              "dummy.remote.log.metadata.class", "dummy.remote.log.metadata.class.path",
-                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
+                                             "listener.name", 1024 * 1024L, 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
                                              rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
 
         Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);

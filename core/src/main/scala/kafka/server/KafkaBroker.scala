@@ -19,6 +19,7 @@ package kafka.server
 
 import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
+import kafka.log.remote.RemoteLogManager
 import kafka.metrics.LinuxIoMetricsCollector
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
@@ -92,6 +93,7 @@ trait KafkaBroker extends Logging {
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
   def clientToControllerChannelManager: BrokerToControllerChannelManager
+  def remoteLogManager: Option[RemoteLogManager]
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass) {
     // For backwards compatibility, we need to keep older metrics tied

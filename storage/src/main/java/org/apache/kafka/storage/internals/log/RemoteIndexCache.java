@@ -46,6 +46,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -111,12 +112,12 @@ public class RemoteIndexCache implements Closeable {
      *
      * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
      */
-    private final Cache<Uuid, Entry> internalCache;
+    private Cache<Uuid, Entry> internalCache;
     private final RemoteStorageManager remoteStorageManager;
     private final ShutdownableThread cleanerThread;
 
     public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
-        this(1024, remoteStorageManager, logDir);
+        this(1024L, remoteStorageManager, logDir);
     }
 
     /**
@@ -126,11 +127,40 @@ public class RemoteIndexCache implements Closeable {
      * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
      * @param logDir               log directory
      */
-    public RemoteIndexCache(int maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
+    public RemoteIndexCache(long maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 
-        internalCache = Caffeine.newBuilder()
+        internalCache = initEmptyCache(maxSize);
+        init();
+
+        // Start cleaner thread that will clean the expired entries.
+        cleanerThread = createCleanerThread();
+        cleanerThread.start();
+    }
+
+    public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
+        lock.writeLock().lock();
+        try {
+            Cache<Uuid, Entry> newCache = initEmptyCache(remoteLogIndexFileCacheSize);
+            long finalSize = Math.min(remoteLogIndexFileCacheSize, internalCache.estimatedSize());
+            long count = 0;
+            for (Map.Entry<Uuid, Entry> entry : internalCache.asMap().entrySet()) {
+                if (count < finalSize) {
+                    newCache.put(entry.getKey(), entry.getValue());
+                    count++;
+                } else {
+                    break;
+                }
+            }
+            internalCache = newCache;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private Cache<Uuid, Entry> initEmptyCache(long maxSize) {
+        return Caffeine.newBuilder()
                 .maximumSize(maxSize)
                 // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
@@ -149,12 +179,6 @@ public class RemoteIndexCache implements Closeable {
                         log.error("Received entry as null for key {} when the it is removed from the cache.", key);
                     }
                 }).build();
-
-        init();
-
-        // Start cleaner thread that will clean the expired entries.
-        cleanerThread = createCleanerThread();
-        cleanerThread.start();
     }
 
     public Collection<Entry> expiredIndexes() {

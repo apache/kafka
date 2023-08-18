@@ -103,7 +103,7 @@ class BrokerServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   var logManager: LogManager = _
-  var remoteLogManagerOpt: Option[RemoteLogManager] = None
+  @volatile var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
 
@@ -687,4 +687,5 @@ class BrokerServer(
 
   override def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 
+  override def remoteLogManager: Option[RemoteLogManager] = remoteLogManagerOpt
 }
