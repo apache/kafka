@@ -74,7 +74,10 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBytesStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBytesStoreSupplier;
@@ -1262,16 +1265,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
-        Optional<TimeOrderedKeyValueBuffer<K, V, V>> buffer = Optional.empty();
+        Optional<StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>>> storeBuilder = Optional.empty();
 
         if (joined.gracePeriod() != null) {
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             final String bufferStoreName = name + "-Buffer";
-            final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDBTimeOrderedKeyValueBytesStoreSupplier(bufferStoreName).get();
-
-            buffer = Optional.of(new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name, true));
+            storeBuilder = Optional.of(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName, joined.gracePeriod(), name));
         }
 
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
@@ -1279,7 +1280,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joiner,
             leftJoin,
             Optional.ofNullable(joined.gracePeriod()),
-            buffer);
+            storeBuilder);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(

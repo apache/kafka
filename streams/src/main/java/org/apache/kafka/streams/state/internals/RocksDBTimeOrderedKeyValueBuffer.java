@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -31,10 +32,12 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -58,6 +61,82 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     private int partition;
     private String changelogTopic;
     private InternalProcessorContext context;
+
+    public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
+
+        private final String storeName;
+        private boolean loggingEnabled = true;
+        private Map<String, String> logConfig = new HashMap<>();
+        private final Duration grace;
+        private final String topic;
+
+        public Builder(final String storeName, final Duration grace, final String topic) {
+            this.storeName = storeName;
+            this.grace = grace;
+            this.topic = topic;
+        }
+
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         * <p>
+         * It's currently a no-op.
+         */
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withCachingEnabled() {
+            return this;
+        }
+
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         * <p>
+         * It's currently a no-op.
+         */
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withCachingDisabled() {
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withLoggingEnabled(final Map<String, String> config) {
+            logConfig = config;
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withLoggingDisabled() {
+            loggingEnabled = false;
+            return this;
+        }
+
+        @Override
+        public TimeOrderedKeyValueBuffer<K, V, V> build() {
+            return new RocksDBTimeOrderedKeyValueBuffer<>(
+                new RocksDBTimeOrderedKeyValueBytesStoreSupplier(storeName).get(),
+                grace,
+                topic,
+                loggingEnabled);
+        }
+
+        @Override
+        public Map<String, String> logConfig() {
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
+        }
+
+        @Override
+        public boolean loggingEnabled() {
+            return loggingEnabled;
+        }
+
+        @Override
+        public String name() {
+            return storeName;
+        }
+    }
+
 
     public RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueBytesStore store,
                                             final Duration gracePeriod,
