@@ -459,19 +459,13 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (future.succeeded()) {
-                Generation generationSnapshot;
-                MemberState stateSnapshot;
-
                 // Generation data maybe concurrently cleared by Heartbeat thread.
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
                 // and shouldn't block heartbeat thread.
                 // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment}
-                synchronized (AbstractCoordinator.this) {
-                    generationSnapshot = this.generation;
-                    stateSnapshot = this.state;
-                }
+                Generation generationSnapshot = this.generation;
 
-                if (!hasGenerationReset(generationSnapshot) && stateSnapshot == MemberState.STABLE) {
+                if (!hasGenerationReset(generationSnapshot) && this.state == MemberState.STABLE) {
                     // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                     ByteBuffer memberAssignment = future.value().duplicate();
 
