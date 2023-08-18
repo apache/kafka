@@ -62,10 +62,15 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     props.put(KafkaConfig.SslKeystorePasswordProp, encoder.encode(new Password(SECRET))) // sensitive config
     zkClient.setOrCreateEntityConfigs(ConfigType.Broker, "1", props)
 
+    val defaultProps = new Properties()
+    defaultProps.put(KafkaConfig.DefaultReplicationFactorProp, "3") // normal config
+    zkClient.setOrCreateEntityConfigs(ConfigType.Broker, "<default>", defaultProps)
+
     migrationClient.migrateBrokerConfigs(batch => batches.add(batch), brokerId => brokers.add(brokerId))
     assertEquals(1, brokers.size())
-    assertEquals(1, batches.size())
+    assertEquals(2, batches.size())
     assertEquals(2, batches.get(0).size)
+    assertEquals(1, batches.get(1).size)
 
     batches.get(0).forEach(record => {
       val message = record.message().asInstanceOf[ConfigRecord]
@@ -80,6 +85,12 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
         assertEquals(props.getProperty(name), value)
       }
     })
+
+    val record = batches.get(1).get(0).message().asInstanceOf[ConfigRecord]
+    assertEquals(ConfigResource.Type.BROKER.id(), record.resourceType())
+    assertEquals("", record.resourceName())
+    assertEquals(KafkaConfig.DefaultReplicationFactorProp, record.name())
+    assertEquals("3", record.value())
 
     // Update the sensitive config value from the config client and check that the value
     // persisted in Zookeeper is encrypted.
