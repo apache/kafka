@@ -497,6 +497,7 @@
       <allow pkg="org.apache.kafka.connect.mirror" />
       <allow pkg="kafka.server" />
       <subpackage name="rest">
+        <allow pkg="io.swagger.v3.oas.annotations"/>
         <allow pkg="javax.ws.rs" />
       </subpackage>
     </subpackage>
