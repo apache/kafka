@@ -23,9 +23,7 @@ import kafka.server.KafkaConfig;
 import kafka.utils.Logging;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
-import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.PartitionReassignment;
@@ -36,7 +34,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.Topic;
@@ -74,8 +71,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.spy;
 
 @Tag("integration")
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
@@ -105,7 +100,6 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         rackInfo.put(4, "rack3");
         rackInfo.put(5, "rack3");
 
-
         List<Properties> brokerConfigs = ToolsTestUtils
             .createBrokerProperties(6, zkConnectOrNull(), rackInfo, numPartitions, defaultReplicationFactor);
 
@@ -123,6 +117,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         ).toArray(String[]::new);
         return new TopicCommand.TopicCommandOptions(finalOptions);
     }
+
     private void createAndWaitTopic(TopicCommand.TopicCommandOptions opts) throws Exception {
         topicService.createTopic(opts);
         waitForTopicCreated(opts.topic().get());
@@ -271,7 +266,6 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     private List<Integer> getPartitionReplicas(List<TopicPartitionInfo> partitions, int partitionNumber) {
         return partitions.get(partitionNumber).replicas().stream().map(Node::id).collect(Collectors.toList());
     }
-
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
@@ -927,19 +921,6 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(String quorum) throws ExecutionException, InterruptedException {
-        adminClient = spy(adminClient);
-        topicService = new TopicCommand.TopicService(adminClient);
-
-        ListPartitionReassignmentsResult result = AdminClientTestUtils.listPartitionReassignmentsResult(
-            new ClusterAuthorizationException("Unauthorized"));
-
-        // Passing `null` here to help the compiler disambiguate the `doReturn` methods,
-        // compilation for scala 2.12 fails otherwise.
-        ListPartitionReassignmentsResult nextReturn = null;
-        doReturn(result, nextReturn).when(adminClient).listPartitionReassignments(
-            Collections.singleton(new TopicPartition(testTopicName, 0))
-        );
-
         adminClient.createTopics(
             Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1))
         ).all().get();

@@ -926,10 +926,6 @@ public abstract class TopicCommand {
             return valuesAsOption(configOpt);
         }
 
-        public Optional<List<String>> configsToDelete() {
-            return valuesAsOption(deleteConfigOpt);
-        }
-
         public void checkArgs() {
             if (args.length == 0)
                 CommandLineUtils.printUsageAndExit(parser, "Create, delete, describe, or change a topic.");

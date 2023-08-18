@@ -87,24 +87,21 @@ public class TopicCommandTest {
     @Test
     public void testAlterWithUnspecifiedPartitionCount() {
         String[] options = new String[] {" --bootstrap-server", bootstrapServer, "--alter", "--topic", topicName};
-        assertCheckArgsExitCode(1, new TopicCommand.TopicCommandOptions(options));
+        assertInitializeInvalidOptionsExitCode(1, options);
     }
 
     @Test
     public void testConfigOptWithBootstrapServers() {
-        assertCheckArgsExitCode(1,
-            new TopicCommand.TopicCommandOptions(
-                new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
-                    "--partitions", "3", "--config", "cleanup.policy=compact"}));
-        assertCheckArgsExitCode(1,
-            new TopicCommand.TopicCommandOptions(
-                new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
-                    "--partitions", "3", "--delete-config", "cleanup.policy"}));
+        assertInitializeInvalidOptionsExitCode(1,
+            new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
+                "--partitions", "3", "--config", "cleanup.policy=compact"});
+        assertInitializeInvalidOptionsExitCode(1,
+            new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
+                "--partitions", "3", "--delete-config", "cleanup.policy"});
         TopicCommand.TopicCommandOptions opts =
             new TopicCommand.TopicCommandOptions(
                 new String[] {"--bootstrap-server", bootstrapServer, "--create", "--topic", topicName, "--partitions", "3",
                     "--replication-factor", "3", "--config", "cleanup.policy=compact"});
-        opts.checkArgs();
         assertTrue(opts.hasCreateOption());
         assertEquals(bootstrapServer, opts.bootstrapServer().get());
         assertEquals("cleanup.policy=compact", opts.topicConfig().get().get(0));
@@ -117,7 +114,9 @@ public class TopicCommandTest {
                 "--create",
                 "--partitions", "2",
                 "--topic", topicName});
-        opts.checkArgs();
+        assertTrue(opts.hasCreateOption());
+        assertEquals(topicName, opts.topic().get());
+        assertEquals(2, opts.partitions().get());
     }
 
     @Test
@@ -127,29 +126,29 @@ public class TopicCommandTest {
                 "--create",
                 "--replication-factor", "3",
                 "--topic", topicName});
-        opts.checkArgs();
+        assertTrue(opts.hasCreateOption());
+        assertEquals(topicName, opts.topic().get());
+        assertEquals(3, opts.replicationFactor().get());
     }
 
     @Test
     public void testCreateWithAssignmentAndPartitionCount() {
-        assertCheckArgsExitCode(1,
-            new TopicCommand.TopicCommandOptions(
-                new String[]{"--bootstrap-server", bootstrapServer,
-                    "--create",
-                    "--replica-assignment", "3:0,5:1",
-                    "--partitions", "2",
-                    "--topic", topicName}));
+        assertInitializeInvalidOptionsExitCode(1,
+            new String[]{"--bootstrap-server", bootstrapServer,
+                "--create",
+                "--replica-assignment", "3:0,5:1",
+                "--partitions", "2",
+                "--topic", topicName});
     }
 
     @Test
     public void testCreateWithAssignmentAndReplicationFactor() {
-        assertCheckArgsExitCode(1,
-            new TopicCommand.TopicCommandOptions(
-                new String[] {"--bootstrap-server", bootstrapServer,
-                    "--create",
-                    "--replica-assignment", "3:0,5:1",
-                    "--replication-factor", "2",
-                    "--topic", topicName}));
+        assertInitializeInvalidOptionsExitCode(1,
+            new String[] {"--bootstrap-server", bootstrapServer,
+                "--create",
+                "--replica-assignment", "3:0,5:1",
+                "--replication-factor", "2",
+                "--topic", topicName});
     }
 
     @Test
@@ -158,7 +157,9 @@ public class TopicCommandTest {
             new String[] {"--bootstrap-server", bootstrapServer,
                 "--create",
                 "--topic", topicName});
-        opts.checkArgs();
+        assertTrue(opts.hasCreateOption());
+        assertEquals(topicName, opts.topic().get());
+        assertFalse(opts.partitions().isPresent());
     }
 
     @Test
@@ -167,7 +168,8 @@ public class TopicCommandTest {
             new String[] {"--bootstrap-server", bootstrapServer,
                 "--describe",
                 "--topic", topicName});
-        opts.checkArgs();
+        assertTrue(opts.hasDescribeOption());
+        assertEquals(topicName, opts.topic().get());
     }
 
 
@@ -200,7 +202,10 @@ public class TopicCommandTest {
         when(adminClient.createTopics(any(), any())).thenReturn(result);
 
         assertThrows(ThrottlingQuotaExceededException.class,
-            () -> topicService.createTopic(new TopicCommand.TopicCommandOptions(new String[]{"--topic", topicName})));
+            () -> topicService.createTopic(new TopicCommand.TopicCommandOptions(new String[]{
+                "--bootstrap-server", bootstrapServer,
+                "--create", "--topic", topicName
+            })));
 
         NewTopic expectedNewTopic = new NewTopic(topicName, Optional.empty(), Optional.empty())
             .configs(Collections.emptyMap());
@@ -223,7 +228,10 @@ public class TopicCommandTest {
         when(adminClient.deleteTopics(anyCollection(), any())).thenReturn(result);
 
         ExecutionException exception = assertThrows(ExecutionException.class,
-            () -> topicService.deleteTopic(new TopicCommand.TopicCommandOptions(new String[]{"--topic", topicName})));
+            () -> topicService.deleteTopic(new TopicCommand.TopicCommandOptions(new String[]{
+                "--bootstrap-server", bootstrapServer,
+                "--delete", "--topic", topicName
+            })));
 
         assertTrue(exception.getCause() instanceof ThrottlingQuotaExceededException);
 
@@ -250,7 +258,10 @@ public class TopicCommandTest {
         when(adminClient.createPartitions(any(), any())).thenReturn(result);
 
         Exception exception = assertThrows(ExecutionException.class,
-            () -> topicService.alterTopic(new TopicCommand.TopicCommandOptions(new String[]{"--alter", "--topic", topicName, "--partitions", "3", "--bootstrap-server", bootstrapServer})));
+            () -> topicService.alterTopic(new TopicCommand.TopicCommandOptions(new String[]{
+                "--alter", "--topic", topicName, "--partitions", "3",
+                "--bootstrap-server", bootstrapServer
+            })));
         assertTrue(exception.getCause() instanceof ThrottlingQuotaExceededException);
 
         verify(adminClient, times(1)).createPartitions(
@@ -258,13 +269,13 @@ public class TopicCommandTest {
             argThat(createPartitionOption -> !createPartitionOption.shouldRetryOnQuotaViolation()));
     }
 
-    public void assertCheckArgsExitCode(int expected, TopicCommand.TopicCommandOptions options) {
+    public void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
         Exit.setExitProcedure((exitCode, message) -> {
             assertEquals(expected, exitCode);
             throw new RuntimeException();
         });
         try {
-            assertThrows(RuntimeException.class, () -> options.checkArgs());
+            assertThrows(RuntimeException.class, () -> new TopicCommand.TopicCommandOptions(options));
         } finally {
             Exit.resetExitProcedure();
         }
