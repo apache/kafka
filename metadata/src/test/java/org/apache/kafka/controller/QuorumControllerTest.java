@@ -1464,7 +1464,7 @@ public class QuorumControllerTest {
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             featureControlManager);
 
-        assertFalse(result.isAtomic());
+        assertTrue(result.isAtomic());
         offsetControlManager.replay(
             RecordTestUtils.recordAtIndexAs(AbortTransactionRecord.class, result.records(), 0).get(),
             21

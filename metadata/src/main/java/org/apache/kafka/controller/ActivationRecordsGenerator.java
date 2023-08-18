@@ -201,7 +201,7 @@ public class ActivationRecordsGenerator {
         }
 
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
-        return ControllerResult.of(records, null);
+        return ControllerResult.atomicOf(records, null);
     }
 
     /**
