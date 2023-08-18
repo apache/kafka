@@ -223,6 +223,15 @@ public class ConnectorsResource implements ConnectResource {
                                        final @Context HttpHeaders headers,
                                        final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                        final Map<String, String> connectorConfig) throws Throwable {
+        return putConnectorConfig(herder, requestHandler, connector, headers, forward, connectorConfig);
+    }
+
+    public static Response putConnectorConfig(Herder herder,
+                                       HerderRequestHandler requestHandler,
+                                       String connector,
+                                       HttpHeaders headers,
+                                       Boolean forward,
+                                       Map<String, String> connectorConfig) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         checkAndPutConnectorConfigName(connector, connectorConfig);
 
@@ -381,7 +390,7 @@ public class ConnectorsResource implements ConnectResource {
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig
     // object. Throw BadRequestException on mismatch, otherwise put connectorName in config
-    private void checkAndPutConnectorConfigName(String connectorName, Map<String, String> connectorConfig) {
+    public static void checkAndPutConnectorConfigName(String connectorName, Map<String, String> connectorConfig) {
         String includedName = connectorConfig.get(ConnectorConfig.NAME_CONFIG);
         if (includedName != null) {
             if (!includedName.equals(connectorName))
@@ -391,7 +400,7 @@ public class ConnectorsResource implements ConnectResource {
         }
     }
 
-    private static class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
+    public static class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
         @Override
         public Herder.Created<ConnectorInfo> translate(RestClient.HttpResponse<ConnectorInfo> response) {
             boolean created = response.status() == 201;

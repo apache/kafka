@@ -29,7 +29,9 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
+import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -41,6 +43,7 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 
+import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +54,8 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.ArgumentParsers;
 
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.UriBuilder;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -69,6 +74,7 @@ import java.util.stream.Collectors;
 import java.io.File;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
 /**
  *  Entry point for "MirrorMaker 2.0".
@@ -232,17 +238,24 @@ public class MirrorMaker {
     private void configureConnector(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         checkHerder(sourceAndTarget);
         Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
-        herders.get(sourceAndTarget)
-                .putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
-                    if (e == null) {
-                        log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
-                    } else if (e instanceof NotLeaderException) {
-                        // No way to determine if the herder is a leader or not beforehand.
-                        log.info("This node is a follower for {}. Using existing connector configuration.", sourceAndTarget);
-                    } else {
-                        log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
-                    }
-                });
+        String connectorName = connectorClass.getSimpleName();
+        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
+        HerderRequestHandler requestHandler = new HerderRequestHandler(restClient, DEFAULT_REST_REQUEST_TIMEOUT_MS);
+
+        DistributedHerder herder = (DistributedHerder) herders.get(sourceAndTarget);
+        herder.putConnectorConfig(connectorName, connectorProps, true, cb);
+        String connectorReconfigUrl = herder.namespacedUrl(herder.leaderUrl())
+                .path("connectors")
+                .path(connectorName)
+                .path("config")
+                .build()
+                .toString();
+        try {
+            requestHandler.completeOrForwardRequest(cb, connectorReconfigUrl, "PUT", null, connectorProps, false);
+            log.info("{} connector configured for {}.", connectorName, sourceAndTarget);
+        } catch (Throwable e) {
+            log.error("Failed to configure {} connector for {}", connectorName, sourceAndTarget, e);
+        }
     }
 
     private void checkHerder(SourceAndTarget sourceAndTarget) {

@@ -19,11 +19,13 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.util.FutureCallback;
 
 import javax.ws.rs.POST;
@@ -35,7 +37,10 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +55,7 @@ public abstract class InternalClusterResource implements ConnectResource {
     private static final TypeReference<List<Map<String, String>>> TASK_CONFIGS_TYPE =
             new TypeReference<List<Map<String, String>>>() { };
 
-    private final HerderRequestHandler requestHandler;
+    protected final HerderRequestHandler requestHandler;
 
     // Visible for testing
     @Context

@@ -1605,7 +1605,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     /**
      * Get the URL for the leader's REST interface, or null if we do not have the leader's URL yet.
      */
-    private String leaderUrl() {
+    public String leaderUrl() {
         if (assignment == null)
             return null;
         return assignment.leaderUrl();
@@ -2629,7 +2629,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return false;
     }
 
-    private UriBuilder namespacedUrl(String workerUrl) {
+    public UriBuilder namespacedUrl(String workerUrl) {
         UriBuilder result = UriBuilder.fromUri(workerUrl);
         for (String namespacePath : restNamespace) {
             result = result.path(namespacePath);
