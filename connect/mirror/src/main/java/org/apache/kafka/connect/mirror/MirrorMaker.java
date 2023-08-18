@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Exit;
@@ -31,7 +32,7 @@ import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
@@ -53,6 +54,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.ArgumentParsers;
 
+import javax.ws.rs.core.UriBuilder;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -67,6 +69,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.io.File;
 
@@ -242,8 +245,16 @@ public class MirrorMaker {
         DistributedHerder herder = (DistributedHerder) herders.get(sourceAndTarget);
         herder.putConnectorConfig(connectorName, connectorProps, true, cb);
         try {
-            String connectorReconfigUrl = sourceAndTarget.source()  + "/" + sourceAndTarget.target() + "/connectors/" + connectorName + "/config";
-            requestHandler.completeOrForwardRequest(cb, connectorReconfigUrl, "PUT", null, connectorProps, false);
+            Function<UriBuilder, UriBuilder> path = builder ->
+                    herder.namespacedUrl(builder)
+                            .path("connectors")
+                            .path(connectorName)
+                            .path("config");
+            requestHandler.completeOrForwardRequest(
+                    cb, path, "PUT", null, connectorProps,
+                    new TypeReference<ConnectorInfo>() { },
+                    new ConnectorsResource.CreatedConnectorInfoTranslator(),
+                    null);
             log.info("{} connector configured for {}.", connectorName, sourceAndTarget);
         } catch (Throwable e) {
             log.error("Failed to configure {} connector for {}", connectorName, sourceAndTarget, e);
@@ -337,9 +348,10 @@ public class MirrorMaker {
         }
     }
 
-    public ConnectorStateInfo connectorStatus(SourceAndTarget sourceAndTarget, String connector) {
+    // visible for testing
+    public Herder herder(SourceAndTarget sourceAndTarget) {
         checkHerder(sourceAndTarget);
-        return herders.get(sourceAndTarget).connectorStatus(connector);
+        return herders.get(sourceAndTarget);
     }
 
     public static void main(String[] args) {

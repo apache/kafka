@@ -2629,8 +2629,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return false;
     }
 
-    public UriBuilder namespacedUrl(String workerUrl) {
-        UriBuilder result = UriBuilder.fromUri(workerUrl);
+    private UriBuilder namespacedUrl(String workerUrl) {
+        return namespacedUrl(UriBuilder.fromUri(workerUrl));
+    }
+
+    public UriBuilder namespacedUrl(UriBuilder result) {
         for (String namespacePath : restNamespace) {
             result = result.path(namespacePath);
         }
