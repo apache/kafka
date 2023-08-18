@@ -32,7 +32,7 @@ import java.util.function.Consumer;
 public class ActivationRecordsGenerator {
 
     static ControllerResult<Void> recordsForEmptyLog(
-        Consumer<String> warnLogConsumer,
+        Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
         boolean zkMigrationEnabled,
         BootstrapMetadata bootstrapMetadata,
@@ -105,7 +105,7 @@ public class ActivationRecordsGenerator {
             }
         }
 
-        warnLogConsumer.accept(logMessageBuilder.toString().trim());
+        activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         if (metadataVersion.isMetadataTransactionSupported()) {
             records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
             return ControllerResult.of(records, null);
@@ -115,7 +115,7 @@ public class ActivationRecordsGenerator {
     }
 
     static ControllerResult<Void> recordsForNonEmptyLog(
-        Consumer<String> warnLogConsumer,
+        Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
         boolean zkMigrationEnabled,
         FeatureControlManager featureControl,
@@ -200,7 +200,7 @@ public class ActivationRecordsGenerator {
             }
         }
 
-        warnLogConsumer.accept(logMessageBuilder.toString().trim());
+        activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         return ControllerResult.of(records, null);
     }
 
@@ -215,7 +215,7 @@ public class ActivationRecordsGenerator {
      * include a ZkMigrationState record regardless of whether the log was empty or not.
      */
     static ControllerResult<Void> generate(
-        Consumer<String> warnLogConsumer,
+        Consumer<String> activationMessageConsumer,
         long stableOffset,
         long transactionStartOffset,
         boolean zkMigrationEnabled,
@@ -223,10 +223,10 @@ public class ActivationRecordsGenerator {
         FeatureControlManager featureControl
     ) {
         if (stableOffset == -1L) {
-            return recordsForEmptyLog(warnLogConsumer, transactionStartOffset, zkMigrationEnabled,
+            return recordsForEmptyLog(activationMessageConsumer, transactionStartOffset, zkMigrationEnabled,
                 bootstrapMetadata, bootstrapMetadata.metadataVersion());
         } else {
-            return recordsForNonEmptyLog(warnLogConsumer, transactionStartOffset, zkMigrationEnabled,
+            return recordsForNonEmptyLog(activationMessageConsumer, transactionStartOffset, zkMigrationEnabled,
                 featureControl, featureControl.metadataVersion());
         }
     }
