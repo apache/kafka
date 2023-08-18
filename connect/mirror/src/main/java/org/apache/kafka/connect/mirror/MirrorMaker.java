@@ -30,7 +30,6 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
@@ -332,9 +331,10 @@ public class MirrorMaker {
         }
     }
 
-    public ConnectorStateInfo connectorStatus(SourceAndTarget sourceAndTarget, String connector) {
+    // visible for testing
+    public Herder herder(SourceAndTarget sourceAndTarget) {
         checkHerder(sourceAndTarget);
-        return herders.get(sourceAndTarget).connectorStatus(connector);
+        return herders.get(sourceAndTarget);
     }
 
     public static void main(String[] args) {

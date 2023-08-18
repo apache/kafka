@@ -23,11 +23,15 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMaker;
+import org.apache.kafka.connect.mirror.MirrorSourceConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.runtime.AbstractStatus;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.NoRetryException;
 import org.junit.jupiter.api.AfterEach;
@@ -43,8 +47,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorMaker.CONNECTOR_CLASSES;
@@ -104,6 +110,14 @@ public class DedicatedMirrorIntegrationTest {
         return result;
     }
 
+    private void stopMirrorMaker(String name) {
+        MirrorMaker mirror = mirrorMakers.remove(name);
+        if (mirror == null) {
+            throw new IllegalStateException("No MirrorMaker named " + name + " has been started");
+        }
+        mirror.stop();
+    }
+
     /**
      * Tests a single-node cluster without the REST server enabled.
      */
@@ -145,6 +159,8 @@ public class DedicatedMirrorIntegrationTest {
                     put("offset.storage.replication.factor", "1");
                     put("status.storage.replication.factor", "1");
                     put("config.storage.replication.factor", "1");
+                    // For the multi-node case, we wait for reassignment so shorten the delay period.
+                    put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "1000");
                 }};
 
             // Bring up a single-node cluster
@@ -204,7 +220,7 @@ public class DedicatedMirrorIntegrationTest {
                     put("listeners", "http://localhost:0");
                     // Refresh topics very frequently to quickly pick up on topics that are created
                     // after the MM2 nodes are brought up during testing
-                    put("refresh.topics.interval.seconds", "1");
+                    put(MirrorSourceConfig.REFRESH_TOPICS_INTERVAL_SECONDS, "1");
                     put("clusters", String.join(", ", a, b));
                     put(a + ".bootstrap.servers", clusterA.bootstrapServers());
                     put(b + ".bootstrap.servers", clusterB.bootstrapServers());
@@ -266,6 +282,22 @@ public class DedicatedMirrorIntegrationTest {
                 // and wait for MirrorMaker to copy it to cluster B
                 awaitTopicContent(clusterB, b, a + "." + topic, messagesPerTopic);
             }
+
+            // Perform a rolling restart of the cluster with a new configuration
+            Map<String, String> newMmProps = new HashMap<>(mmProps);
+            String newConfigValue = "2";
+            newMmProps.put(MirrorSourceConfig.REFRESH_TOPICS_INTERVAL_SECONDS, newConfigValue);
+            for (int i = 0; i < numNodes; i++) {
+                stopMirrorMaker("node " + i);
+                MirrorMaker any = mirrorMakers.values().stream().findAny().get();
+                // Wait for the cluster finish the reassignment and rebalance before bringing up the next node.
+                awaitConnectorTasksStart(any, MirrorHeartbeatConnector.class, sourceAndTarget);
+                awaitConnectorTasksStart(any, MirrorSourceConnector.class, sourceAndTarget);
+                startMirrorMaker("node " + i, newMmProps);
+            }
+            // Assert that the new configuration is propagated
+            awaitConnectorConfiguration(mirrorMakers.get("node 0"), MirrorSourceConnector.class, sourceAndTarget,
+                    config -> newConfigValue.equals(config.get(MirrorSourceConfig.REFRESH_TOPICS_INTERVAL_SECONDS)));
         }
     }
 
@@ -314,6 +346,23 @@ public class DedicatedMirrorIntegrationTest {
         }, MM_START_UP_TIMEOUT_MS, "Tasks for connector " + clazz.getSimpleName() + " for MirrorMaker instances did not transition to running in time");
     }
 
+    private <T extends SourceConnector> void awaitConnectorConfiguration(MirrorMaker mm, Class<T> clazz, SourceAndTarget sourceAndTarget, Predicate<Map<String, String>> predicate) throws InterruptedException {
+        String connName = clazz.getSimpleName();
+        waitForCondition(() -> {
+            try {
+                FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
+                mm.herder(sourceAndTarget).tasksConfig(connName, cb);
+                return cb.get(MM_START_UP_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                        .values()
+                        .stream()
+                        .allMatch(predicate);
+            } catch (Exception ex) {
+                log.error("Something unexpected occurred. Unable to get configuration of connector {} for mirror maker with source->target={}", connName, sourceAndTarget, ex);
+                throw new NoRetryException(ex);
+            }
+        }, MM_START_UP_TIMEOUT_MS, "Connector configuration for " + connName + " for MirrorMaker instances is incorrect");
+    }
+
     private void awaitTopicContent(EmbeddedKafkaCluster cluster, String clusterName, String topic, int numMessages) throws Exception {
         try (Consumer<?, ?> consumer = cluster.createConsumer(Collections.singletonMap(AUTO_OFFSET_RESET_CONFIG, "earliest"))) {
             consumer.subscribe(Collections.singleton(topic));
@@ -335,7 +384,7 @@ public class DedicatedMirrorIntegrationTest {
     private boolean isConnectorRunningForMirrorMaker(final Class<?> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
         final String connName = connectorClazz.getSimpleName();
         try {
-            final ConnectorStateInfo connectorStatus = mm.connectorStatus(sourceAndTarget, connName);
+            final ConnectorStateInfo connectorStatus = mm.herder(sourceAndTarget).connectorStatus(connName);
             if (connectorStatus.connector().state().equals(AbstractStatus.State.FAILED.toString())) {
                 throw new NoRetryException(new AssertionError(
                     String.format("Connector %s is in FAILED state for MirrorMaker %s and source->target=%s",
@@ -354,7 +403,7 @@ public class DedicatedMirrorIntegrationTest {
      */
     private <T extends SourceConnector> boolean isTaskRunningForMirrorMakerConnector(final Class<T> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
         final String connName = connectorClazz.getSimpleName();
-        final ConnectorStateInfo connectorStatus = mm.connectorStatus(sourceAndTarget, connName);
+        final ConnectorStateInfo connectorStatus = mm.herder(sourceAndTarget).connectorStatus(connName);
         return isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget)
             // verify that at least one task exists
             && !connectorStatus.tasks().isEmpty()
