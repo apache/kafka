@@ -851,8 +851,8 @@ class ControllerApis(val requestChannel: RequestChannel,
   def allowTokenRequests(request: RequestChannel.Request): Boolean = {
     val protocol = request.context.securityProtocol
     if (request.context.principal.tokenAuthenticated ||
-      // We have to allow PLAINTEXT for the controller Apis
-      // protocol == SecurityProtocol.PLAINTEXT ||
+      // We allow forwarded requests to use PLAINTEXT for testing purposes
+      (request.isForwarded == false && protocol == SecurityProtocol.PLAINTEXT) ||
       // disallow requests from 1-way SSL
       (protocol == SecurityProtocol.SSL && request.context.principal == KafkaPrincipal.ANONYMOUS))
       false
