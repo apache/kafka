@@ -1299,7 +1299,7 @@ public class QuorumControllerTest {
             fakeOffset = 1;
         }
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
-            log,
+            msg -> { },
             fakeOffset,
             -1L,
             zkMigrationEnabled,
@@ -1392,7 +1392,7 @@ public class QuorumControllerTest {
             .build();
 
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
-            log,
+            logMsg -> { },
             -1L,
             0L,
             zkMigrationEnabled,
@@ -1416,7 +1416,7 @@ public class QuorumControllerTest {
             .build();
 
         assertThrows(RuntimeException.class, () -> ActivationRecordsGenerator.generate(
-            log,
+            msg -> { },
             -1L,
             0L,
             zkMigrationEnabled,
@@ -1457,7 +1457,7 @@ public class QuorumControllerTest {
             Collections.singletonList(new ApiMessageAndVersion(new BeginTransactionRecord(), (short) 0))));
 
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
-            log,
+            logMsg -> { },
             9,
             offsetControlManager.transactionStartOffset(),
             false,
@@ -1487,7 +1487,7 @@ public class QuorumControllerTest {
 
         assertThrows(RuntimeException.class, () ->
             ActivationRecordsGenerator.generate(
-                log,
+                msg -> { },
                 9,
                 offsetControlManager.transactionStartOffset(),
                 false,

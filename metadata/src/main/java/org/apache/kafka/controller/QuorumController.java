@@ -1161,7 +1161,8 @@ public final class QuorumController implements Controller {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
-                return ActivationRecordsGenerator.generate(log,
+                return ActivationRecordsGenerator.generate(
+                    log::warn,
                     offsetControl.lastStableOffset(),
                     offsetControl.transactionStartOffset(),
                     zkMigrationEnabled,
