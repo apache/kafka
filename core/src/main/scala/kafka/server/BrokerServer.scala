@@ -281,7 +281,7 @@ class BrokerServer(
 
       /* start token manager */
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
-      tokenManager.startup() // does nothing, we just need a token manager in order to compile right now...
+      tokenManager.startup()
 
       groupCoordinator = createGroupCoordinator()
 

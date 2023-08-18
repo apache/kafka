@@ -5290,8 +5290,9 @@ class KafkaApisTest {
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
-    // DelegationTokens require the context authenticated to be a
-    // non SecurityProtocol.PLAINTEXT and a non KafkaPrincipal.ANONYMOUS
+    // DelegationTokens require the context authenticated to be non SecurityProtocol.PLAINTEXT
+    // and have a non KafkaPrincipal.ANONYMOUS principa. This test is done before the check
+    // for forwarding because after forwarding the context would have a different context. 
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
       listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, fromPrivilegedListener,
       Optional.of(kafkaPrincipalSerde))
