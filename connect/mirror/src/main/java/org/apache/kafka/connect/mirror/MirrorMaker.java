@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
+import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -236,12 +237,27 @@ public class MirrorMaker {
     private void configureConnector(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         checkHerder(sourceAndTarget);
         Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
-        String connectorName = connectorClass.getSimpleName();
-        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        HerderRequestHandler requestHandler = new HerderRequestHandler(restClient, DEFAULT_REST_REQUEST_TIMEOUT_MS);
 
         DistributedHerder herder = (DistributedHerder) herders.get(sourceAndTarget);
-        herder.putConnectorConfig(connectorName, connectorProps, true, cb);
+        if (restClient == null) {
+            herder.putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
+                if (e == null) {
+                    log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
+                } else if (e instanceof NotLeaderException) {
+                    // No way to determine if the herder is a leader or not beforehand.
+                    log.error("This worker is not able to communicate with the leader of the cluster, "
+                            + "which is required for rolling updates of connectors. If running MirrorMaker 2 "
+                            + "in dedicated mode, consider enabling inter-worker communication via the "
+                            + "'dedicated.mode.enable.internal.rest' property.", e);
+                } else {
+                    log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
+                }
+            });
+            return;
+        }
+        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
+        herder.putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, cb);
+        HerderRequestHandler requestHandler = new HerderRequestHandler(restClient, DEFAULT_REST_REQUEST_TIMEOUT_MS);
         try {
             StringBuilder path = new StringBuilder();
             for (String namespace : herder.namespace()) {
@@ -249,13 +265,13 @@ public class MirrorMaker {
                 path.append("/");
             }
             path.append("connectors/");
-            path.append(connectorName);
+            path.append(connectorClass.getSimpleName());
             path.append("/config");
             requestHandler.completeOrForwardRequest(cb, path.toString(), "PUT", null, connectorProps,
                     new TypeReference<ConnectorInfo>() { }, new ConnectorsResource.CreatedConnectorInfoTranslator(), null);
-            log.info("{} connector configured for {}.", connectorName, sourceAndTarget);
+            log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
         } catch (Throwable e) {
-            log.error("Failed to configure {} connector for {}", connectorName, sourceAndTarget, e);
+            log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
         }
     }
 
