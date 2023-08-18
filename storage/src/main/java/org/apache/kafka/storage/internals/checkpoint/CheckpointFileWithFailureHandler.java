@@ -41,9 +41,9 @@ public class CheckpointFileWithFailureHandler<T> {
         checkpointFile = new CheckpointFile<>(file, version, formatter);
     }
 
-    public void write(Collection<T> entries) {
+    public void write(Collection<T> entries, boolean sync) {
         try {
-            checkpointFile.write(entries);
+            checkpointFile.write(entries, sync);
         } catch (IOException e) {
             String msg = "Error while writing to checkpoint file " + file.getAbsolutePath();
             logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e);

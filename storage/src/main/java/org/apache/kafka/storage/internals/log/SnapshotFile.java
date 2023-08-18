@@ -63,7 +63,7 @@ public class SnapshotFile {
     public void renameTo(String newSuffix) throws IOException {
         File renamed = new File(Utils.replaceSuffix(file.getPath(), "", newSuffix));
         try {
-            Utils.atomicMoveWithFallback(file.toPath(), renamed.toPath());
+            Utils.atomicMoveWithFallback(file.toPath(), renamed.toPath(), false);
         } finally {
             file = renamed;
         }

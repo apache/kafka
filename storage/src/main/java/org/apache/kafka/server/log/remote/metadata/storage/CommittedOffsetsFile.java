@@ -68,7 +68,7 @@ public class CommittedOffsetsFile {
     }
 
     public synchronized void writeEntries(Map<Integer, Long> committedOffsets) throws IOException {
-        checkpointFile.write(committedOffsets.entrySet());
+        checkpointFile.write(committedOffsets.entrySet(), true);
     }
 
     public synchronized Map<Integer, Long> readEntries() throws IOException {

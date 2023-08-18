@@ -1021,6 +1021,17 @@ public final class Utils {
     }
 
     /**
+     * Flushes dirty file quietly, logs warning when exception happens.
+     */
+    public static void flushFileQuietly(Path path, String name) {
+        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
+            fileChannel.force(true);
+        } catch (IOException e) {
+            log.warn("Failed to flush {} at path {}", name, path, e);
+        }
+    }
+
+    /**
      * Closes all the provided closeables.
      * @throws IOException if any of the close methods throws an IOException.
      *         The first IOException is thrown with subsequent exceptions

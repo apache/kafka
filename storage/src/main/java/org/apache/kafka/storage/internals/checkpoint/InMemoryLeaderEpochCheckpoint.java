@@ -42,7 +42,7 @@ import java.util.List;
 public class InMemoryLeaderEpochCheckpoint implements LeaderEpochCheckpoint {
     private List<EpochEntry> epochs = Collections.emptyList();
 
-    public void write(Collection<EpochEntry> epochs) {
+    public void write(Collection<EpochEntry> epochs, boolean ignored) {
         this.epochs = new ArrayList<>(epochs);
     }
 
