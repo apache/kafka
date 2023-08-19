@@ -245,6 +245,10 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             time.addListener(this);
         }
 
+        /**
+         * The actual execution and rescheduling logic. Check all internal tasks to see if any one reaches its next
+         * execution point, call it and optionally reschedule it if it has a specified period.
+         */
         @Override
         public synchronized void onTimeUpdated() {
             long timeMs = time.milliseconds();
@@ -263,6 +267,15 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             }
         }
 
+        /**
+         * Add a task with `delayMs` and optional period to the internal waiter.
+         * When `delayMs` < 0, we immediately complete the waiter. Otherwise, we add the task metadata to the waiter and
+         * onTimeUpdated will take care of execute and reschedule it when it reaches its scheduled timestamp.
+         *
+         * @param delayMs Delay time in ms.
+         * @param period  Scheduling period, null means no periodic.
+         * @param waiter  A wrapper over a callable function.
+         */
         private synchronized void addWaiter(long delayMs, Long period, KafkaFutureImpl<Long> waiter) {
             long timeMs = time.milliseconds();
             if (delayMs <= 0) {
