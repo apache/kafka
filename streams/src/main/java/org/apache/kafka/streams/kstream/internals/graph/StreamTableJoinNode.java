@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Optional;
 
 /**
  * Represents a join between a KStream and a KTable or GlobalKTable
@@ -33,7 +34,7 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
     private final String otherJoinSideNodeName;
     private final Duration gracePeriod;
-    private final String bufferName;
+    private final Optional<String> bufferName;
 
 
     public StreamTableJoinNode(final String nodeName,
@@ -41,7 +42,7 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
                                final String[] storeNames,
                                final String otherJoinSideNodeName,
                                final Duration gracePeriod,
-                               final String bufferName) {
+                               final Optional<String> bufferName) {
         super(nodeName);
 
         // in the case of Stream-Table join the state stores associated with the KTable
@@ -72,9 +73,7 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
         // Steam - KTable join only
         if (otherJoinSideNodeName != null) {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
-            if (bufferName !=null) {
-                topologyBuilder.connectProcessorAndStateStores(processorName, bufferName);
-            }
+            bufferName.ifPresent(s -> topologyBuilder.connectProcessorAndStateStores(processorName, s));
             if (gracePeriod != null) {
                 for (final String storeName : storeNames) {
                     if (!topologyBuilder.isStoreVersioned(storeName)) {

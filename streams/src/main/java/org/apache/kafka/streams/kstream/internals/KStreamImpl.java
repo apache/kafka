@@ -1229,7 +1229,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             leftJoin);
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode =
-            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null, null);
+            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null, Optional.empty());
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
 
@@ -1283,7 +1283,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
             this.name,
             joined.gracePeriod(),
-            bufferStoreName.orElse(null)
+            bufferStoreName
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
