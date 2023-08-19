@@ -39,37 +39,38 @@ import org.junit.Test;
 
 import java.util.Random;
 
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import static org.mockito.Mockito.*;
 import static org.junit.Assert.assertTrue;
 
 public class AbstractStreamTest {
 
     @Test
+    @SuppressWarnings("rawtypes")
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerSupplier<?, ?> valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
-        expect(valueTransformerSupplier.get()).andAnswer(NoopValueTransformer::new).atLeastOnce();
-        replay(valueTransformerSupplier);
+        final ValueTransformerSupplier<?, ?> valueTransformerSupplier = mock(ValueTransformerSupplier.class);
+        when(valueTransformerSupplier.get()).thenAnswer(invocation -> new NoopValueTransformer());
+
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
-        verify(valueTransformerSupplier);
+
+        verify(valueTransformerSupplier, atLeastOnce()).get();
     }
 
     @Test
+    @SuppressWarnings("rawtypes")
     public void testToInternalValueTransformerWithKeySupplierSuppliesNewTransformers() {
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
-            createMock(ValueTransformerWithKeySupplier.class);
-        expect(valueTransformerWithKeySupplier.get()).andAnswer(NoopValueTransformerWithKey::new).atLeastOnce();
-        replay(valueTransformerWithKeySupplier);
+                mock(ValueTransformerWithKeySupplier.class);
+        when(valueTransformerWithKeySupplier.get()).thenAnswer(invocation -> new NoopValueTransformerWithKey());
+
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
-        verify(valueTransformerWithKeySupplier);
+
+        verify(valueTransformerWithKeySupplier, atLeastOnce()).get();
     }
 
     @Test
