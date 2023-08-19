@@ -62,14 +62,14 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
                                final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
                                final boolean leftJoin,
                                final Optional<Duration> gracePeriod,
-                               final String storeName) {
+                               final Optional<String> storeName) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
         this.useBuffer = gracePeriod.isPresent();
         this.gracePeriod = gracePeriod;
-        this.storeName = storeName;
+        this.storeName = storeName.orElse("");
     }
 
     @Override

@@ -41,6 +41,6 @@ class KStreamGlobalKTableJoin<K1, V1, K2, V2, VOut> implements ProcessorSupplier
 
     @Override
     public Processor<K1, V1, K1, VOut> get() {
-        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), mapper, joiner, leftJoin, Optional.empty(), "");
+        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), mapper, joiner, leftJoin, Optional.empty(), Optional.empty());
     }
 }
