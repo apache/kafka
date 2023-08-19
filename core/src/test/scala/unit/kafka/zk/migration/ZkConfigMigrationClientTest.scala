@@ -16,6 +16,7 @@
  */
 package kafka.zk.migration
 
+import kafka.utils.CoreUtils
 import kafka.server.{ConfigType, KafkaConfig, ZkAdminManager}
 import kafka.zk.{AdminZkClient, ZkMigrationClient}
 import org.apache.kafka.clients.admin.ScramMechanism
@@ -27,8 +28,10 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata.ConfigRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{ClientQuotasDelta, ClientQuotasImage}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.RecordTestUtils
@@ -336,5 +339,27 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(1, georgeProps.size())
     val aliceProps = zkClient.getEntityConfigs(ConfigType.User, "alice")
     assertEquals(0, aliceProps.size())
+  }
+
+  @Test
+  def testDelegationTokens(): Unit = {
+    val uuid = CoreUtils.generateUuidAsBase64()
+    val owner = SecurityUtils.parseKafkaPrincipal("User:alice")
+
+    val tokenInfo = new TokenInformation(uuid, owner, owner, List(owner).asJava, 0, 100, 1000)
+
+    val hmac: Array[Byte] = Array(1.toByte, 2.toByte, 3.toByte, 4.toByte)
+    val token = new DelegationToken(tokenInfo, hmac)
+
+    zkClient.createDelegationTokenPaths()
+    zkClient.setOrCreateDelegationToken(token)
+
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+
+    migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(0, brokers.size())
+    assertEquals(1, batches.size())
+    assertEquals(1, batches.get(0).size)
   }
 }

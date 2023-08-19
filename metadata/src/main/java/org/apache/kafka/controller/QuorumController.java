@@ -39,14 +39,20 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
@@ -55,6 +61,7 @@ import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
@@ -65,6 +72,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
+import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
@@ -76,6 +84,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -202,6 +211,11 @@ public final class QuorumController implements Controller {
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
+        private DelegationTokenCache tokenCache;
+        private String tokenSecretKeyString;
+        private long delegationTokenMaxLifeMs;
+        private long delegationTokenExpiryTimeMs;
+        private long delegationTokenExpiryCheckIntervalMs;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -322,6 +336,31 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setDelegationTokenCache(DelegationTokenCache tokenCache) {
+            this.tokenCache = tokenCache;
+            return this;
+        }
+
+        public Builder setDelegationTokenSecretKey(String tokenSecretKeyString) {
+            this.tokenSecretKeyString = tokenSecretKeyString;
+            return this;
+        }
+
+        public Builder setDelegationTokenMaxLifeMs(long delegationTokenMaxLifeMs) {
+            this.delegationTokenMaxLifeMs = delegationTokenMaxLifeMs;
+            return this;
+        }
+
+        public Builder setDelegationTokenExpiryTimeMs(long delegationTokenExpiryTimeMs) {
+            this.delegationTokenExpiryTimeMs = delegationTokenExpiryTimeMs;
+            return this;
+        }
+
+        public Builder setDelegationTokenExpiryCheckIntervalMs(long delegationTokenExpiryCheckIntervalMs) {
+            this.delegationTokenExpiryCheckIntervalMs = delegationTokenExpiryCheckIntervalMs;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -373,7 +412,12 @@ public final class QuorumController implements Controller {
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
-                    zkMigrationEnabled
+                    zkMigrationEnabled,
+                    tokenCache,
+                    tokenSecretKeyString,
+                    delegationTokenMaxLifeMs,
+                    delegationTokenExpiryTimeMs,
+                    delegationTokenExpiryCheckIntervalMs
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1226,6 +1270,7 @@ public final class QuorumController implements Controller {
             // periodic tasks here. At this point, all the records we generated in
             // generateRecordsAndResult have been applied, so we have the correct value for
             // metadata.version and other in-memory state.
+            maybeScheduleNextExpiredDelegationTokenSweep();
             maybeScheduleNextBalancePartitionLeaders();
             maybeScheduleNextWriteNoOpRecord();
         }
@@ -1396,6 +1441,35 @@ public final class QuorumController implements Controller {
         queue.cancelDeferred(WRITE_NO_OP_RECORD);
     }
 
+    private static final String SWEEP_EXPIRED_DELEGATION_TOKENS = "sweepExpiredDelegationTokens";
+
+    private void maybeScheduleNextExpiredDelegationTokenSweep() {
+        if (featureControl.metadataVersion().isDelegationTokenSupported() &&
+            delegationTokenControlManager.isEnabled()) {
+
+            log.debug(
+                "Scheduling write event for {} because DelegationTokens are enabled.", 
+                SWEEP_EXPIRED_DELEGATION_TOKENS
+            );
+
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
+                SWEEP_EXPIRED_DELEGATION_TOKENS,
+                () -> {
+                    maybeScheduleNextExpiredDelegationTokenSweep();
+
+                    return ControllerResult.of(
+                        delegationTokenControlManager.sweepExpiredDelegationTokens(), null);
+                },
+                EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME)
+            );
+
+            long delayNs = time.nanoseconds() + 
+                NANOSECONDS.convert(delegationTokenExpiryCheckIntervalMs, TimeUnit.MILLISECONDS);
+            queue.scheduleDeferred(SWEEP_EXPIRED_DELEGATION_TOKENS,
+                new EarliestDeadlineFunction(delayNs), event);
+        }
+    }
+
     private void handleFeatureControlChange() {
         // The feature control maybe have changed. On the active controller cancel or schedule noop
         // record writes accordingly.
@@ -1480,6 +1554,12 @@ public final class QuorumController implements Controller {
                 break;
             case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
                 scramControlManager.replay((RemoveUserScramCredentialRecord) message);
+                break;
+            case DELEGATION_TOKEN_RECORD:
+                delegationTokenControlManager.replay((DelegationTokenRecord) message);
+                break;
+            case REMOVE_DELEGATION_TOKEN_RECORD:
+                delegationTokenControlManager.replay((RemoveDelegationTokenRecord) message);
                 break;
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
@@ -1605,6 +1685,12 @@ public final class QuorumController implements Controller {
     private final ScramControlManager scramControlManager;
 
     /**
+     * Manages DelegationTokens, if there are any.
+     */
+    private final long delegationTokenExpiryCheckIntervalMs;
+    private final DelegationTokenControlManager delegationTokenControlManager;
+
+    /**
      * Manages the standard ACLs in the cluster.
      * This must be accessed only by the event queue thread.
      */
@@ -1708,7 +1794,12 @@ public final class QuorumController implements Controller {
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
-        boolean zkMigrationEnabled
+        boolean zkMigrationEnabled,
+        DelegationTokenCache tokenCache,
+        String tokenSecretKeyString,
+        long delegationTokenMaxLifeMs,
+        long delegationTokenExpiryTimeMs,
+        long delegationTokenExpiryCheckIntervalMs
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1784,6 +1875,14 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
+        this.delegationTokenExpiryCheckIntervalMs = delegationTokenExpiryCheckIntervalMs;
+        this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
+            setLogContext(logContext).
+            setTokenCache(tokenCache).
+            setDelegationTokenSecretKey(tokenSecretKeyString).
+            setDelegationTokenMaxLifeMs(delegationTokenMaxLifeMs).
+            setDelegationTokenExpiryTimeMs(delegationTokenExpiryTimeMs).
+            build();
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
@@ -1828,6 +1927,33 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
             () -> scramControlManager.alterCredentials(request, featureControl.metadataVersion()));
+    }
+
+    @Override
+    public CompletableFuture<CreateDelegationTokenResponseData> createDelegationToken(
+        ControllerRequestContext context,
+        CreateDelegationTokenRequestData request
+    ) {
+        return appendWriteEvent("createDelegationToken", context.deadlineNs(),
+            () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersion()));
+    }
+
+    @Override
+    public CompletableFuture<RenewDelegationTokenResponseData> renewDelegationToken(
+        ControllerRequestContext context,
+        RenewDelegationTokenRequestData request
+    ) {
+        return appendWriteEvent("renewDelegationToken", context.deadlineNs(),
+            () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersion()));
+    }
+
+    @Override
+    public CompletableFuture<ExpireDelegationTokenResponseData> expireDelegationToken(
+        ControllerRequestContext context,
+        ExpireDelegationTokenRequestData request
+    ) {
+        return appendWriteEvent("expireDelegationToken", context.deadlineNs(),
+            () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersion()));
     }
 
     @Override
