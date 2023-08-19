@@ -1294,13 +1294,9 @@ public class QuorumControllerTest {
         stateInLog.ifPresent(zkMigrationState ->
             featureControlManager.replay((ZkMigrationStateRecord) zkMigrationState.toRecord().message()));
 
-        long fakeOffset = -1;
-        if (stateInLog.isPresent()) {
-            fakeOffset = 1;
-        }
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             msg -> { },
-            fakeOffset,
+            !stateInLog.isPresent(),
             -1L,
             zkMigrationEnabled,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
@@ -1392,7 +1388,7 @@ public class QuorumControllerTest {
 
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             logMsg -> { },
-            -1L,
+            true,
             0L,
             zkMigrationEnabled,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
@@ -1440,7 +1436,7 @@ public class QuorumControllerTest {
 
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             logMsg -> { },
-            9,
+            false,
             offsetControlManager.transactionStartOffset(),
             false,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
@@ -1470,7 +1466,7 @@ public class QuorumControllerTest {
         assertThrows(RuntimeException.class, () ->
             ActivationRecordsGenerator.generate(
                 msg -> { },
-                9,
+                false,
                 offsetControlManager.transactionStartOffset(),
                 false,
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),

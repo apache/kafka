@@ -216,13 +216,13 @@ public class ActivationRecordsGenerator {
      */
     static ControllerResult<Void> generate(
         Consumer<String> activationMessageConsumer,
-        long stableOffset,
+        boolean isEmpty,
         long transactionStartOffset,
         boolean zkMigrationEnabled,
         BootstrapMetadata bootstrapMetadata,
         FeatureControlManager featureControl
     ) {
-        if (stableOffset == -1L) {
+        if (isEmpty) {
             return recordsForEmptyLog(activationMessageConsumer, transactionStartOffset, zkMigrationEnabled,
                 bootstrapMetadata, bootstrapMetadata.metadataVersion());
         } else {

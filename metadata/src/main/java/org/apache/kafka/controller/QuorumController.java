@@ -1163,7 +1163,7 @@ public final class QuorumController implements Controller {
             try {
                 return ActivationRecordsGenerator.generate(
                     log::warn,
-                    offsetControl.lastStableOffset(),
+                    logReplayTracker.empty(),
                     offsetControl.transactionStartOffset(),
                     zkMigrationEnabled,
                     bootstrapMetadata,
