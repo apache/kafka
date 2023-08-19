@@ -89,6 +89,8 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
   }
 }
 
+case class StopPartition(topicPartition: TopicPartition, deleteLocalLog: Boolean, deleteRemoteLog: Boolean = false)
+
 /**
  * Result metadata of a log read operation on the log
  * @param info @FetchDataInfo returned by the @Log read
@@ -456,7 +458,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         this.controllerEpoch = controllerEpoch
 
-        val stoppedPartitions = mutable.Map.empty[TopicPartition, Boolean]
+        val stoppedPartitions = mutable.Buffer.empty[StopPartition]
         partitionStates.forKeyValue { (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition()
 
@@ -478,7 +480,8 @@ class ReplicaManager(val config: KafkaConfig,
               if (requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete ||
                   requestLeaderEpoch == LeaderAndIsr.NoEpoch ||
                   requestLeaderEpoch >= currentLeaderEpoch) {
-                stoppedPartitions += topicPartition -> deletePartition
+                stoppedPartitions += StopPartition(topicPartition, deletePartition,
+                  deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete)
                 // Assume that everything will go right. It is overwritten in case of an error.
                 responseMap.put(topicPartition, Errors.NONE)
               } else if (requestLeaderEpoch < currentLeaderEpoch) {
@@ -499,12 +502,12 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.None =>
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
-              stoppedPartitions += topicPartition -> deletePartition
+              stoppedPartitions += StopPartition(topicPartition, deletePartition)
               responseMap.put(topicPartition, Errors.NONE)
           }
         }
 
-        stopPartitions(stoppedPartitions).foreach { case (topicPartition, e) =>
+        stopPartitions(stoppedPartitions.toSet).foreach { case (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
               stateChangeLogger.error(s"Ignoring StopReplica request (delete=true) from " +
                 s"controller $controllerId with correlation id $correlationId " +
@@ -526,25 +529,39 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Stop the given partitions.
    *
-   * @param partitionsToStop    A map from a topic partition to a boolean indicating
-   *                            whether the partition should be deleted.
-   *
-   * @return                    A map from partitions to exceptions which occurred.
-   *                            If no errors occurred, the map will be empty.
+   * @param partitionsToStop A map from a topic partition to a boolean indicating
+   *                         whether the partition should be deleted.
+   * @return A map from partitions to exceptions which occurred.
+   *         If no errors occurred, the map will be empty.
    */
-  protected def stopPartitions(
-    partitionsToStop: Map[TopicPartition, Boolean]
-  ): Map[TopicPartition, Throwable] = {
+  private def stopPartitions(partitionsToStop: Map[TopicPartition, Boolean]): Map[TopicPartition, Throwable] = {
+    stopPartitions(partitionsToStop.map {
+      case (topicPartition, deleteLocalLog) => StopPartition(topicPartition, deleteLocalLog)
+    }.toSet)
+  }
+
+  /**
+   * Stop the given partitions.
+   *
+   * @param partitionsToStop set of topic-partitions to be stopped which also indicates whether to remove the
+   *                         partition data from the local and remote log storage.
+   *
+   * @return                 A map from partitions to exceptions which occurred.
+   *                         If no errors occurred, the map will be empty.
+   */
+  private def stopPartitions(partitionsToStop: Set[StopPartition]): Map[TopicPartition, Throwable] = {
     // First stop fetchers for all partitions.
-    val partitions = partitionsToStop.keySet
+    val partitions = partitionsToStop.map(_.topicPartition)
     replicaFetcherManager.removeFetcherForPartitions(partitions)
     replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
 
     // Second remove deleted partitions from the partition map. Fetchers rely on the
     // ReplicaManager to get Partition's information so they must be stopped first.
     val partitionsToDelete = mutable.Set.empty[TopicPartition]
-    partitionsToStop.forKeyValue { (topicPartition, shouldDelete) =>
-      if (shouldDelete) {
+    val remotePartitionsToDelete = mutable.Set.empty[TopicPartition]
+    partitionsToStop.foreach { stopPartition =>
+      val topicPartition = stopPartition.topicPartition
+      if (stopPartition.deleteLocalLog) {
         getPartition(topicPartition) match {
           case hostedPartition: HostedPartition.Online =>
             if (allPartitions.remove(topicPartition, hostedPartition)) {
@@ -558,6 +575,9 @@ class ReplicaManager(val config: KafkaConfig,
         }
         partitionsToDelete += topicPartition
       }
+      if (stopPartition.deleteRemoteLog)
+        remotePartitionsToDelete += topicPartition
+
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
       completeDelayedFetchOrProduceRequests(topicPartition)
@@ -568,6 +588,17 @@ class ReplicaManager(val config: KafkaConfig,
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
       logManager.asyncDelete(partitionsToDelete, (tp, e) => errorMap.put(tp, e))
+    }
+    remoteLogManager.foreach { rlm =>
+      // exclude the partitions with offline/error state
+      errorMap.keySet.foreach(remotePartitionsToDelete.remove)
+      if (remotePartitionsToDelete.nonEmpty) {
+        rlm.stopPartitions(remotePartitionsToDelete.asJava, true, (tp, e) => errorMap.put(tp, e))
+      }
+      val remotePartitionsToNotDelete = partitions.diff(remotePartitionsToDelete)
+      if (remotePartitionsToNotDelete.nonEmpty) {
+        rlm.stopPartitions(remotePartitionsToNotDelete.asJava, false, (tp, e) => errorMap.put(tp, e))
+      }
     }
     errorMap
   }
@@ -2418,7 +2449,15 @@ class ReplicaManager(val config: KafkaConfig,
       // Handle deleted partitions. We need to do this first because we might subsequently
       // create new partitions with the same names as the ones we are deleting here.
       if (!localChanges.deletes.isEmpty) {
-        val deletes = localChanges.deletes.asScala.map(tp => (tp, true)).toMap
+        val deletes = localChanges.deletes.asScala
+          .map { tp =>
+            val isCurrentLeader = Option(delta.image().getTopic(tp.topic()))
+              .map(image => image.partitions().get(tp.partition()))
+              .exists(partition => partition.leader == config.nodeId)
+            val deleteRemoteLog = delta.topicWasDeleted(tp.topic()) && isCurrentLeader
+            StopPartition(tp, deleteLocalLog = true, deleteRemoteLog = deleteRemoteLog)
+          }
+          .toSet
         stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
         stopPartitions(deletes).forKeyValue { (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
