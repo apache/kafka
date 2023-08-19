@@ -173,13 +173,13 @@ public enum MetadataVersion {
     // Adds replica epoch to Fetch request (KIP-903).
     IBP_3_5_IV1(10, "3.5", "IV1", false),
 
-    // Support for SCRAM
+    // KRaft support for SCRAM
     IBP_3_5_IV2(11, "3.5", "IV2", true),
 
     // Remove leader epoch bump when KRaft controller shrinks the ISR (KAFKA-15021)
     IBP_3_6_IV0(12, "3.6", "IV0", false),
 
-    // Add metadata transactions
+    // Add metadata transactions and KRaft support for Delegation Tokens
     IBP_3_6_IV1(13, "3.6", "IV1", true);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
@@ -271,6 +271,10 @@ public enum MetadataVersion {
     }
 
     public boolean isMetadataTransactionSupported() {
+        return this.isAtLeast(IBP_3_6_IV1);
+    }
+
+    public boolean isDelegationTokenSupported() {
         return this.isAtLeast(IBP_3_6_IV1);
     }
 

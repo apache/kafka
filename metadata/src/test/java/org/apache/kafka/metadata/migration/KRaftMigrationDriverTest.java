@@ -33,6 +33,7 @@ import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.ConfigurationsImage;
+import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -306,7 +307,10 @@ public class KRaftMigrationDriverTest {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CountDownLatch claimLeaderAttempts = new CountDownLatch(3);
         CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)),
-                new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient()) {
+                new CapturingTopicMigrationClient(),
+                new CapturingConfigMigrationClient(),
+                new CapturingAclMigrationClient(),
+                new CapturingDelegationTokenMigrationClient()) {
             @Override
             public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
                 if (claimLeaderAttempts.getCount() == 0) {
@@ -399,7 +403,10 @@ public class KRaftMigrationDriverTest {
     public void testSkipWaitForBrokersInDualWrite() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(),
-            new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient());
+            new CapturingTopicMigrationClient(),
+            new CapturingConfigMigrationClient(),
+            new CapturingAclMigrationClient(),
+            new CapturingDelegationTokenMigrationClient());
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
         KRaftMigrationDriver.Builder builder = defaultTestBuilder()
             .setZkMigrationClient(migrationClient)
@@ -486,7 +493,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
@@ -538,7 +546,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
@@ -590,7 +599,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
