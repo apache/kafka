@@ -313,7 +313,7 @@ class DelegationTokenManager(val config: KafkaConfig,
             val now = time.milliseconds
             val tokenInfo =  token.tokenInfo
 
-            if (!allowedToRenew(principal, tokenInfo)) {
+            if (!allowedToRenewOrExpire(principal, tokenInfo)) {
               renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
             } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
               renewCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
@@ -368,7 +368,7 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param tokenInfo
    * @return
    */
-  private def allowedToRenew(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean = {
+  private def allowedToRenewOrExpire(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean = {
     if (principal.equals(tokenInfo.owner) || tokenInfo.renewers.asScala.toList.contains(principal)) true else false
   }
 
@@ -413,7 +413,7 @@ class DelegationTokenManager(val config: KafkaConfig,
             val tokenInfo =  token.tokenInfo
             val now = time.milliseconds
 
-            if (!allowedToRenew(principal, tokenInfo)) {
+            if (!allowedToRenewOrExpire(principal, tokenInfo)) {
               expireResponseCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
             } else if (expireLifeTimeMs < 0) { //expire immediately
               removeToken(tokenInfo.tokenId)
