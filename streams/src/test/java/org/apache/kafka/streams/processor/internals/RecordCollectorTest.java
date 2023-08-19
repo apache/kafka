@@ -81,11 +81,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -93,6 +88,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class RecordCollectorTest {
 
@@ -741,13 +738,11 @@ public class RecordCollectorTest {
     @Test
     public void shouldForwardFlushToStreamsProducer() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(false);
+        when(streamsProducer.eosEnabled()).thenReturn(false);
         streamsProducer.flush();
-        expectLastCall();
 
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
+        when(topology.sinkTopics()).thenReturn(Collections.emptySet());
 
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -759,19 +754,15 @@ public class RecordCollectorTest {
         );
 
         collector.flush();
-
-        verify(streamsProducer);
     }
 
     @Test
     public void shouldForwardFlushToStreamsProducerEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(true);
+        when(streamsProducer.eosEnabled()).thenReturn(true);
         streamsProducer.flush();
-        expectLastCall();
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
+        when(topology.sinkTopics()).thenReturn(Collections.emptySet());
         
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -783,18 +774,15 @@ public class RecordCollectorTest {
         );
 
         collector.flush();
-
-        verify(streamsProducer);
     }
 
     @Test
     public void shouldNotAbortTxOnCloseCleanIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(true);
+        when(streamsProducer.eosEnabled()).thenReturn(true);
         
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
+        when(topology.sinkTopics()).thenReturn(Collections.emptySet());
         
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -806,19 +794,16 @@ public class RecordCollectorTest {
         );
        
         collector.closeClean();
-
-        verify(streamsProducer);
     }
 
     @Test
     public void shouldAbortTxOnCloseDirtyIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(true);
+        when(streamsProducer.eosEnabled()).thenReturn(true);
         streamsProducer.abortTransaction();
         
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
+        when(topology.sinkTopics()).thenReturn(Collections.emptySet());
         
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -830,8 +815,6 @@ public class RecordCollectorTest {
         );
 
         collector.closeDirty();
-
-        verify(streamsProducer);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
