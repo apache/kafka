@@ -490,15 +490,25 @@ public class RemoteLogManager implements Closeable {
             throw new KafkaException("Topic id does not exist for topic partition: " + tp);
         }
 
+        Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(tp);
+        if (!unifiedLogOptional.isPresent()) {
+            throw new KafkaException("UnifiedLog does not exist for topic partition: " + tp);
+        }
+
+        UnifiedLog unifiedLog = unifiedLogOptional.get();
+
         // Get the respective epoch in which the starting-offset exists.
         OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
+        TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
+        NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
         while (maybeEpoch.isPresent()) {
             int epoch = maybeEpoch.getAsInt();
 
-            Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), epoch);
+            Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
             while (iterator.hasNext()) {
                 RemoteLogSegmentMetadata rlsMetadata = iterator.next();
-                if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {
+                if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset &&
+                        isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)) {
                     return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
                 }
             }
@@ -1039,7 +1049,7 @@ public class RemoteLogManager implements Closeable {
      *
      * @param segmentMetadata The remote segment metadata to be validated.
      * @param logEndOffset    The log end offset of the partition.
-     * @param leaderEpochs    The leader epoch lineage of the partition.
+     * @param leaderEpochs    The leader epoch lineage of the partition by filtering the epochs containing no data.
      * @return true if the remote segment's epoch/offsets are within the leader epoch lineage of the partition.
      */
     // Visible for testing

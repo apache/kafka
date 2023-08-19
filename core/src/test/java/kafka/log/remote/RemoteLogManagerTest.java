@@ -73,7 +73,6 @@ import scala.collection.JavaConverters;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -902,63 +901,22 @@ public class RemoteLogManagerTest {
     @Test
     void testFindOffsetByTimestamp() throws IOException, RemoteStorageException {
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
-        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid());
+
         long ts = time.milliseconds();
         long startOffset = 120;
         int targetLeaderEpoch = 10;
 
-        RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
-        when(segmentMetadata.remoteLogSegmentId()).thenReturn(remoteLogSegmentId);
-        when(segmentMetadata.maxTimestampMs()).thenReturn(ts + 2);
-        when(segmentMetadata.startOffset()).thenReturn(startOffset);
-        when(segmentMetadata.endOffset()).thenReturn(startOffset + 2);
-
-        File tpDir = new File(logDir, tp.toString());
-        Files.createDirectory(tpDir.toPath());
-        File txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix());
-        txnIdxFile.createNewFile();
-        when(remoteStorageManager.fetchIndex(any(RemoteLogSegmentMetadata.class), any(IndexType.class)))
-            .thenAnswer(ans -> {
-                RemoteLogSegmentMetadata metadata = ans.<RemoteLogSegmentMetadata>getArgument(0);
-                IndexType indexType = ans.<IndexType>getArgument(1);
-                int maxEntries = (int) (metadata.endOffset() - metadata.startOffset());
-                OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix()),
-                    metadata.startOffset(), maxEntries * 8);
-                TimeIndex timeIdx = new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix()),
-                    metadata.startOffset(), maxEntries * 12);
-                switch (indexType) {
-                    case OFFSET:
-                        return new FileInputStream(offsetIdx.file());
-                    case TIMESTAMP:
-                        return new FileInputStream(timeIdx.file());
-                    case TRANSACTION:
-                        return new FileInputStream(txnIdxFile);
-                }
-                return null;
-            });
-
-        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
-            .thenAnswer(ans -> {
-                int leaderEpoch = ans.<Integer>getArgument(1);
-                if (leaderEpoch == targetLeaderEpoch)
-                    return Collections.singleton(segmentMetadata).iterator();
-                else
-                    return Collections.emptyList().iterator();
-            });
-
-        // 3 messages are added with offset, and timestamp as below
-        // startOffset   , ts-1
-        // startOffset+1 , ts+1
-        // startOffset+2 , ts+2
-        when(remoteStorageManager.fetchLogSegment(segmentMetadata, 0))
-            .thenAnswer(a -> new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()));
+        TreeMap<Integer, Long> validSegmentEpochs = new TreeMap<>();
+        validSegmentEpochs.put(targetLeaderEpoch, startOffset);
 
         LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint);
+        leaderEpochFileCache.assign(4, 99L);
         leaderEpochFileCache.assign(5, 99L);
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
         leaderEpochFileCache.assign(12, 500L);
 
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs);
+
         // Fetching message for timestamp `ts` will return the message with startOffset+1, and `ts+1` as there are no
         // messages starting with the startOffset and with `ts`.
         Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset1 = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache);
@@ -971,6 +929,94 @@ public class RemoteLogManagerTest {
         // Fetching message for `ts+3` will return None as there are no records with timestamp >= ts+3.
         Optional<FileRecords.TimestampAndOffset>  maybeTimestampAndOffset3 = remoteLogManager.findOffsetByTimestamp(tp, ts + 3, startOffset, leaderEpochFileCache);
         assertEquals(Optional.empty(), maybeTimestampAndOffset3);
+    }
+
+    @Test
+    void testFindOffsetByTimestampWithInvalidEpochSegments() throws IOException, RemoteStorageException {
+        TopicPartition tp = leaderTopicIdPartition.topicPartition();
+
+        long ts = time.milliseconds();
+        long startOffset = 120;
+        int targetLeaderEpoch = 10;
+
+        TreeMap<Integer, Long> validSegmentEpochs = new TreeMap<>();
+        validSegmentEpochs.put(targetLeaderEpoch - 1, startOffset - 1); // invalid epochs not aligning with leader epoch cache
+        validSegmentEpochs.put(targetLeaderEpoch, startOffset);
+
+        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint);
+        leaderEpochFileCache.assign(4, 99L);
+        leaderEpochFileCache.assign(5, 99L);
+        leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
+        leaderEpochFileCache.assign(12, 500L);
+
+        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs);
+
+        // Fetch offsets for this segment returns empty as the segment epochs are not with in the leader epoch cache.
+        Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset1 = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache);
+        assertEquals(Optional.empty(), maybeTimestampAndOffset1);
+
+        Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset2 = remoteLogManager.findOffsetByTimestamp(tp, ts + 2, startOffset, leaderEpochFileCache);
+        assertEquals(Optional.empty(), maybeTimestampAndOffset2);
+
+        Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset3 = remoteLogManager.findOffsetByTimestamp(tp, ts + 3, startOffset, leaderEpochFileCache);
+        assertEquals(Optional.empty(), maybeTimestampAndOffset3);
+    }
+
+    private void doTestFindOffsetByTimestamp(long ts, long startOffset, int targetLeaderEpoch,
+                                             TreeMap<Integer, Long> validSegmentEpochs) throws IOException, RemoteStorageException {
+        TopicPartition tp = leaderTopicIdPartition.topicPartition();
+        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid());
+
+        RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
+        when(segmentMetadata.remoteLogSegmentId()).thenReturn(remoteLogSegmentId);
+        when(segmentMetadata.maxTimestampMs()).thenReturn(ts + 2);
+        when(segmentMetadata.startOffset()).thenReturn(startOffset);
+        when(segmentMetadata.endOffset()).thenReturn(startOffset + 2);
+        when(segmentMetadata.segmentLeaderEpochs()).thenReturn(validSegmentEpochs);
+
+        File tpDir = new File(logDir, tp.toString());
+        Files.createDirectory(tpDir.toPath());
+        File txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix());
+        txnIdxFile.createNewFile();
+        when(remoteStorageManager.fetchIndex(any(RemoteLogSegmentMetadata.class), any(IndexType.class)))
+                .thenAnswer(ans -> {
+                    RemoteLogSegmentMetadata metadata = ans.<RemoteLogSegmentMetadata>getArgument(0);
+                    IndexType indexType = ans.<IndexType>getArgument(1);
+                    int maxEntries = (int) (metadata.endOffset() - metadata.startOffset());
+                    OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix()),
+                            metadata.startOffset(), maxEntries * 8);
+                    TimeIndex timeIdx = new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix()),
+                            metadata.startOffset(), maxEntries * 12);
+                    switch (indexType) {
+                        case OFFSET:
+                            return Files.newInputStream(offsetIdx.file().toPath());
+                        case TIMESTAMP:
+                            return Files.newInputStream(timeIdx.file().toPath());
+                        case TRANSACTION:
+                            return Files.newInputStream(txnIdxFile.toPath());
+                    }
+                    return null;
+                });
+
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
+                .thenAnswer(ans -> {
+                    int leaderEpoch = ans.<Integer>getArgument(1);
+                    if (leaderEpoch == targetLeaderEpoch)
+                        return Collections.singleton(segmentMetadata).iterator();
+                    else
+                        return Collections.emptyIterator();
+                });
+
+        // 3 messages are added with offset, and timestamp as below
+        // startOffset   , ts-1
+        // startOffset+1 , ts+1
+        // startOffset+2 , ts+2
+        when(remoteStorageManager.fetchLogSegment(segmentMetadata, 0))
+                .thenAnswer(a -> new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()));
+
+        when(mockLog.logEndOffset()).thenReturn(600L);
+
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
     }
 
     @Test
