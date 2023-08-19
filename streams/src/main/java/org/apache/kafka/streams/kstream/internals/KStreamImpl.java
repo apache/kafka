@@ -1229,7 +1229,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             leftJoin);
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode =
-            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null);
+            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null, null);
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
 
@@ -1276,20 +1276,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             Optional.ofNullable(joined.gracePeriod()),
             bufferStoreName);
 
-        String[] storeNames = ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames();
-        if (bufferStoreName.isPresent()) {
-            final int storeLength = storeNames.length;
-            storeNames = Arrays.copyOf(storeNames, storeLength + 1);
-            storeNames[storeLength] = bufferStoreName.get();
-        }
-
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
-            storeNames,
+            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
             this.name,
-            joined.gracePeriod()
+            joined.gracePeriod(),
+            bufferStoreName.orElse(null)
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);

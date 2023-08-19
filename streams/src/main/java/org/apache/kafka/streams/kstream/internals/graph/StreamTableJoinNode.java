@@ -33,13 +33,15 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
     private final String otherJoinSideNodeName;
     private final Duration gracePeriod;
+    private final String bufferName;
 
 
     public StreamTableJoinNode(final String nodeName,
                                final ProcessorParameters<K, V, ?, ?> processorParameters,
                                final String[] storeNames,
                                final String otherJoinSideNodeName,
-                               final Duration gracePeriod) {
+                               final Duration gracePeriod,
+                               final String bufferName) {
         super(nodeName);
 
         // in the case of Stream-Table join the state stores associated with the KTable
@@ -47,6 +49,7 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
         this.processorParameters = processorParameters;
         this.otherJoinSideNodeName = otherJoinSideNodeName;
         this.gracePeriod = gracePeriod;
+        this.bufferName = bufferName;
     }
 
     @Override
@@ -69,6 +72,9 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
         // Steam - KTable join only
         if (otherJoinSideNodeName != null) {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
+            if (bufferName !=null) {
+                topologyBuilder.connectProcessorAndStateStores(processorName, bufferName);
+            }
             if (gracePeriod != null) {
                 for (final String storeName : storeNames) {
                     if (!topologyBuilder.isStoreVersioned(storeName)) {
