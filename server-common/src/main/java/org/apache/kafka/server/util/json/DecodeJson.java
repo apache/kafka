@@ -96,7 +96,7 @@ public interface DecodeJson<T> {
         };
     }
 
-    static <E> DecodeJson<List<E>> decodeList(DecodeJson<E> decodeJson) throws JsonMappingException {
+    static <E> DecodeJson<List<E>> decodeList(DecodeJson<E> decodeJson) {
         return node -> {
             if (node.isArray()) {
                 List<E> result = new ArrayList<>();
@@ -110,7 +110,7 @@ public interface DecodeJson<T> {
         };
     }
 
-    static <V> DecodeJson<Map<String, V>> decodeMap(DecodeJson<V> decodeJson) throws JsonMappingException {
+    static <V> DecodeJson<Map<String, V>> decodeMap(DecodeJson<V> decodeJson) {
         return node -> {
             if (node.isObject()) {
                 Map<String, V> result = new HashMap<>();

@@ -47,6 +47,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
@@ -83,6 +84,7 @@ import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -94,6 +96,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
@@ -104,12 +107,14 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 
 /**
  * This class is responsible for
@@ -122,8 +127,6 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
-    public static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
-    public static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -144,7 +147,7 @@ public class RemoteLogManager implements Closeable {
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderOrFollowerTasks = new ConcurrentHashMap<>();
 
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
-    private final ConcurrentMap<TopicPartition, Uuid> topicPartitionIds = new ConcurrentHashMap<>();
+    private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
     private final String clusterId;
 
     // The endpoint for remote log metadata manager to connect to
@@ -184,7 +187,7 @@ public class RemoteLogManager implements Closeable {
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
-        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT, new Gauge<Double>() {
+        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
             @Override
             public Double value() {
                 return rlmScheduledThreadPool.getIdlePercent();
@@ -194,13 +197,12 @@ public class RemoteLogManager implements Closeable {
         remoteStorageReaderThreadPool = new RemoteStorageThreadPool(
                 REMOTE_LOG_READER_THREAD_NAME_PREFIX,
                 rlmConfig.remoteLogReaderThreads(),
-                rlmConfig.remoteLogReaderMaxPendingTasks(),
-                REMOTE_LOG_READER_METRICS_NAME_PREFIX
+                rlmConfig.remoteLogReaderMaxPendingTasks()
         );
     }
 
     private void removeMetrics() {
-        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
+        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
         remoteStorageReaderThreadPool.removeMetrics();
     }
 
@@ -257,15 +259,17 @@ public class RemoteLogManager implements Closeable {
     }
 
     private void configureRLMM() {
-        final Map<String, Object> rlmmProps = new HashMap<>(rlmConfig.remoteLogMetadataManagerProps());
-
-        rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
-        rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
-        rlmmProps.put("cluster.id", clusterId);
+        final Map<String, Object> rlmmProps = new HashMap<>();
         endpoint.ifPresent(e -> {
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers", e.host() + ":" + e.port());
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", e.securityProtocol().name);
         });
+        // update the remoteLogMetadataProps here to override endpoint config if any
+        rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
+
+        rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
+        rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
+        rlmmProps.put("cluster.id", clusterId);
 
         remoteLogMetadataManager.configure(rlmmProps);
     }
@@ -287,7 +291,7 @@ public class RemoteLogManager implements Closeable {
     }
 
     private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
-        Uuid previousTopicId = topicPartitionIds.put(topicIdPartition.topicPartition(), topicIdPartition.topicId());
+        Uuid previousTopicId = topicIdByPartitionMap.put(topicIdPartition.topicPartition(), topicIdPartition.topicId());
         if (previousTopicId != null && previousTopicId != topicIdPartition.topicId()) {
             LOGGER.info("Previous cached topic id {} for {} does not match updated topic id {}",
                     previousTopicId, topicIdPartition.topicPartition(), topicIdPartition.topicId());
@@ -342,21 +346,81 @@ public class RemoteLogManager implements Closeable {
     /**
      * Deletes the internal topic partition info if delete flag is set as true.
      *
-     * @param topicPartition topic partition to be stopped.
+     * @param topicPartitions topic partitions that needs to be stopped.
      * @param delete         flag to indicate whether the given topic partitions to be deleted or not.
+     * @param errorHandler   callback to handle any errors while stopping the partitions.
      */
-    public void stopPartitions(TopicPartition topicPartition, boolean delete) {
+    public void stopPartitions(Set<TopicPartition> topicPartitions,
+                               boolean delete,
+                               BiConsumer<TopicPartition, Throwable> errorHandler) {
+        LOGGER.debug("Stopping {} partitions, delete: {}", topicPartitions.size(), delete);
+        Set<TopicIdPartition> topicIdPartitions = topicPartitions.stream()
+                .filter(topicIdByPartitionMap::containsKey)
+                .map(tp -> new TopicIdPartition(topicIdByPartitionMap.get(tp), tp))
+                .collect(Collectors.toSet());
+
+        topicIdPartitions.forEach(tpId -> {
+            try {
+                RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
+                if (task != null) {
+                    LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
+                    task.cancel();
+                }
+                if (delete) {
+                    LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
+                    deleteRemoteLogPartition(tpId);
+                }
+            } catch (Exception ex) {
+                errorHandler.accept(tpId.topicPartition(), ex);
+                LOGGER.error("Error while stopping the partition: {}, delete: {}", tpId.topicPartition(), delete, ex);
+            }
+        });
+        remoteLogMetadataManager.onStopPartitions(topicIdPartitions);
         if (delete) {
-            // Delete from internal datastructures only if it is to be deleted.
-            Uuid topicIdPartition = topicPartitionIds.remove(topicPartition);
-            LOGGER.debug("Removed partition: {} from topicPartitionIds", topicIdPartition);
+            // NOTE: this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
+            topicPartitions.forEach(topicIdByPartitionMap::remove);
         }
+    }
+
+    private void deleteRemoteLogPartition(TopicIdPartition partition) throws RemoteStorageException, ExecutionException, InterruptedException {
+        List<RemoteLogSegmentMetadata> metadataList = new ArrayList<>();
+        remoteLogMetadataManager.listRemoteLogSegments(partition).forEachRemaining(metadataList::add);
+
+        List<RemoteLogSegmentMetadataUpdate> deleteSegmentStartedEvents = metadataList.stream()
+                .map(metadata ->
+                        new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
+                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId))
+                .collect(Collectors.toList());
+        publishEvents(deleteSegmentStartedEvents).get();
+
+        // KAFKA-15313: Delete remote log segments partition asynchronously when a partition is deleted.
+        Collection<Uuid> deletedSegmentIds = new ArrayList<>();
+        for (RemoteLogSegmentMetadata metadata: metadataList) {
+            deletedSegmentIds.add(metadata.remoteLogSegmentId().id());
+            remoteLogStorageManager.deleteLogSegmentData(metadata);
+        }
+        indexCache.removeAll(deletedSegmentIds);
+
+        List<RemoteLogSegmentMetadataUpdate> deleteSegmentFinishedEvents = metadataList.stream()
+                .map(metadata ->
+                        new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
+                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId))
+                .collect(Collectors.toList());
+        publishEvents(deleteSegmentFinishedEvents).get();
+    }
+
+    private CompletableFuture<Void> publishEvents(List<RemoteLogSegmentMetadataUpdate> events) throws RemoteStorageException {
+        List<CompletableFuture<Void>> result = new ArrayList<>();
+        for (RemoteLogSegmentMetadataUpdate event : events) {
+            result.add(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(event));
+        }
+        return CompletableFuture.allOf(result.toArray(new CompletableFuture[0]));
     }
 
     public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
                                                                             int epochForOffset,
                                                                             long offset) throws RemoteStorageException {
-        Uuid topicId = topicPartitionIds.get(topicPartition);
+        Uuid topicId = topicIdByPartitionMap.get(topicPartition);
 
         if (topicId == null) {
             throw new KafkaException("No topic id registered for topic partition: " + topicPartition);
@@ -417,7 +481,7 @@ public class RemoteLogManager implements Closeable {
                                                                           long timestamp,
                                                                           long startingOffset,
                                                                           LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException, IOException {
-        Uuid topicId = topicPartitionIds.get(tp);
+        Uuid topicId = topicIdByPartitionMap.get(tp);
         if (topicId == null) {
             throw new KafkaException("Topic id does not exist for topic partition: " + tp);
         }
@@ -480,12 +544,14 @@ public class RemoteLogManager implements Closeable {
     class RLMTask extends CancellableRunnable {
 
         private final TopicIdPartition topicIdPartition;
+        private final int customMetadataSizeLimit;
         private final Logger logger;
 
         private volatile int leaderEpoch = -1;
 
-        public RLMTask(TopicIdPartition topicIdPartition) {
+        public RLMTask(TopicIdPartition topicIdPartition, int customMetadataSizeLimit) {
             this.topicIdPartition = topicIdPartition;
+            this.customMetadataSizeLimit = customMetadataSizeLimit;
             LogContext logContext = new LogContext("[RemoteLogManager=" + brokerId + " partition=" + topicIdPartition + "] ");
             logger = logContext.logger(RLMTask.class);
         }
@@ -586,6 +652,11 @@ public class RemoteLogManager implements Closeable {
                 } else {
                     logger.debug("Skipping copying segments, current read-offset:{}, and LSO:{}", copiedOffset, lso);
                 }
+            } catch (CustomMetadataSizeLimitExceededException e) {
+                // Only stop this task. Logging is done where the exception is thrown.
+                brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
+                brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
+                this.cancel();
             } catch (InterruptedException ex) {
                 throw ex;
             } catch (Exception ex) {
@@ -597,7 +668,8 @@ public class RemoteLogManager implements Closeable {
             }
         }
 
-        private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException {
+        private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException,
+                CustomMetadataSizeLimitExceededException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
 
@@ -623,10 +695,30 @@ public class RemoteLogManager implements Closeable {
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
             brokerTopicStats.topicStats(log.topicPartition().topic()).remoteCopyRequestRate().mark();
             brokerTopicStats.allTopicsStats().remoteCopyRequestRate().mark();
-            remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+            Optional<CustomMetadata> customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
-                    RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+                    customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+
+            if (customMetadata.isPresent()) {
+                long customMetadataSize = customMetadata.get().value().length;
+                if (customMetadataSize > this.customMetadataSizeLimit) {
+                    CustomMetadataSizeLimitExceededException e = new CustomMetadataSizeLimitExceededException();
+                    logger.error("Custom metadata size {} exceeds configured limit {}." +
+                                    " Copying will be stopped and copied segment will be attempted to clean." +
+                                    " Original metadata: {}",
+                            customMetadataSize, this.customMetadataSizeLimit, copySegmentStartedRlsm, e);
+                    try {
+                        // For deletion, we provide back the custom metadata by creating a new metadata object from the update.
+                        // However, the update itself will not be stored in this case.
+                        remoteLogStorageManager.deleteLogSegmentData(copySegmentStartedRlsm.createWithUpdates(copySegmentFinishedRlsm));
+                        logger.info("Successfully cleaned segment after custom metadata size exceeded");
+                    } catch (RemoteStorageException e1) {
+                        logger.error("Error while cleaning segment after custom metadata size exceeded, consider cleaning manually", e1);
+                    }
+                    throw e;
+                }
+            }
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
@@ -883,7 +975,7 @@ public class RemoteLogManager implements Closeable {
                                             Consumer<RLMTask> convertToLeaderOrFollower) {
         RLMTaskWithFuture rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
                 topicIdPartition -> {
-                    RLMTask task = new RLMTask(topicIdPartition);
+                    RLMTask task = new RLMTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
                     // set this upfront when it is getting initialized instead of doing it after scheduling.
                     convertToLeaderOrFollower.accept(task);
                     LOGGER.info("Created a new task: {} and getting scheduled", task);

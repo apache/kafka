@@ -38,6 +38,7 @@ import org.junit.runners.Parameterized;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -72,7 +73,7 @@ import static org.mockito.Mockito.when;
 @RunWith(value = Parameterized.class)
 public class WorkerCoordinatorIncrementalTest {
     @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private String connectorId1 = "connector1";
     private String connectorId2 = "connector2";

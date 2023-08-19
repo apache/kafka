@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
 import org.slf4j.Logger;
 
@@ -58,13 +59,14 @@ public class DefaultTaskManager implements TaskManager {
     private final List<TaskId> lockedTasks = new ArrayList<>();
     private final Map<TaskId, StreamsException> uncaughtExceptions = new HashMap<>();
     private final Map<TaskId, TaskExecutor> assignedTasks = new HashMap<>();
+    private final TaskExecutionMetadata taskExecutionMetadata;
 
     private final List<TaskExecutor> taskExecutors;
 
     static class DefaultTaskExecutorCreator implements TaskExecutorCreator {
         @Override
-        public TaskExecutor create(final TaskManager taskManager, final String name, final Time time) {
-            return new DefaultTaskExecutor(taskManager, name, time);
+        public TaskExecutor create(final TaskManager taskManager, final String name, final Time time, final TaskExecutionMetadata taskExecutionMetadata) {
+            return new DefaultTaskExecutor(taskManager, name, time, taskExecutionMetadata);
         }
     }
 
@@ -72,18 +74,21 @@ public class DefaultTaskManager implements TaskManager {
                               final String clientId,
                               final TasksRegistry tasks,
                               final StreamsConfig config,
-                              final TaskExecutorCreator executorCreator) {
+                              final TaskExecutorCreator executorCreator,
+                              final TaskExecutionMetadata taskExecutionMetadata
+                              ) {
         final String logPrefix = String.format("%s ", clientId);
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(DefaultTaskManager.class);
         this.time = time;
         this.tasks = tasks;
+        this.taskExecutionMetadata = taskExecutionMetadata;
 
         final int numExecutors = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
         this.taskExecutors = new ArrayList<>(numExecutors);
         for (int i = 1; i <= numExecutors; i++) {
             final String name = clientId + "-TaskExecutor-" + i;
-            this.taskExecutors.add(executorCreator.create(this, name, time));
+            this.taskExecutors.add(executorCreator.create(this, name, time, taskExecutionMetadata));
         }
     }
 
@@ -98,7 +103,8 @@ public class DefaultTaskManager implements TaskManager {
             for (final Task task : tasks.activeTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
-                    ((StreamTask) task).isProcessable(time.milliseconds())) {
+                    canProgress((StreamTask) task, time.milliseconds())
+                ) {
 
                     assignedTasks.put(task.id(), executor);
 
@@ -277,6 +283,12 @@ public class DefaultTaskManager implements TaskManager {
         } finally {
             tasksLock.unlock();
         }
+    }
+
+    private boolean canProgress(final StreamTask task, final long nowMs) {
+        return
+            taskExecutionMetadata.canProcessTask(task, nowMs) && task.isProcessable(nowMs) ||
+                taskExecutionMetadata.canPunctuateTask(task) && (task.canPunctuateStreamTime() || task.canPunctuateSystemTime());
     }
 }
 

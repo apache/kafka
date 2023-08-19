@@ -69,7 +69,8 @@ public class RemoteLogMetadataManagerTest {
 
             // 2.Move that segment to COPY_SEGMENT_FINISHED state and this segment should be available.
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                                                                                                      RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+                    Optional.empty(),
+                    RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
                                                                                                       BROKER_ID_1);
             // Wait until the segment is updated successfully.
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
@@ -108,7 +109,7 @@ public class RemoteLogMetadataManagerTest {
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
 
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
-                    segmentId, time.milliseconds(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
+                    segmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
             // Wait until the segment is updated successfully.
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
 
