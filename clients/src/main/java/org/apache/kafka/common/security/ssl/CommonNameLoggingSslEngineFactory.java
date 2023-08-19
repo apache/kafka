@@ -69,7 +69,7 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
 
-public final class DefaultSslEngineFactory implements SslEngineFactory {
+public final class CommonNameLoggingSslEngineFactory implements SslEngineFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
     public static final String PEM_TYPE = "PEM";
@@ -255,7 +255,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             }
 
             String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+            CommonNameLoggingTrustManagerFactoryWrapper tmf = CommonNameLoggingTrustManagerFactoryWrapper.getInstance(tmfAlgorithm);
             KeyStore ts = truststore == null ? null : truststore.get();
             tmf.init(ts);
 
