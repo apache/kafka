@@ -887,6 +887,7 @@ project(':core') {
     implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
+    implementation libs.slf4jlog4j
     implementation(libs.zookeeper) {
       // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
       // but the library should *not* be used in Kafka code
