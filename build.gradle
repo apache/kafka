@@ -829,6 +829,7 @@ def connectPkgs = [
     'connect:file',
     'connect:json',
     'connect:runtime',
+    'connect:test-plugins',
     'connect:transforms',
     'connect:mirror',
     'connect:mirror-client'
@@ -2768,7 +2769,6 @@ project(':connect:runtime') {
     implementation libs.reflections
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
-    implementation project(':server-common')
 
     // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
@@ -2778,6 +2778,8 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':connect:test-plugins')
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi
@@ -3072,6 +3074,18 @@ project(':connect:mirror-client') {
 
   jar {
     dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:test-plugins') {
+  archivesBaseName = "connect-test-plugins"
+
+  dependencies {
+    api project(':connect:api')
+
+    implementation project(':server-common')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
   }
 }
 

@@ -71,8 +71,7 @@ public final class RemoteLogManagerConfig {
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP = "remote.log.metadata.manager.class.name";
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteLogMetadataManager` implementation.";
-    //todo add the default topic based RLMM class name.
-    public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME = "";
+    public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME = "org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP = "remote.log.metadata.manager.class.path";
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteLogMetadataManager` implementation." +
@@ -176,7 +175,8 @@ public final class RemoteLogManagerConfig {
                                   MEDIUM,
                                   REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC)
                   .defineInternal(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                                  STRING, null,
+                                  STRING,
+                                  DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC)

@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -38,7 +37,6 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertEquals;
 
 /**
  * A set of common assertions that can be applied to a Connect cluster during integration testing
@@ -501,9 +499,6 @@ public class EmbeddedConnectClusterAssertions {
                     ).orElse(false),
                     CONNECTOR_SHUTDOWN_DURATION_MS,
                     "At least the connector or one of its tasks is still running");
-            // If the connector is truly stopped, we should also see an empty set of tasks and task configs
-            assertEquals(Collections.emptyList(), connect.connectorInfo(connectorName).tasks());
-            assertEquals(Collections.emptyMap(), connect.taskConfigs(connectorName));
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }

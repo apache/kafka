@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.isolation.ClassLoaderFactory;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginScanResult;
 import org.apache.kafka.connect.runtime.isolation.PluginSource;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.ReflectionScanner;
 import org.apache.kafka.connect.runtime.isolation.ServiceLoaderScanner;
@@ -52,14 +53,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConnectPluginPathTest {
 
@@ -107,7 +111,7 @@ public class ConnectPluginPathTest {
                 setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN)
         );
         Map<String, List<String[]>> table = assertListSuccess(res);
-        assertNonMigratedPluginsPresent(table);
+        assertNonMigratedPluginsStatus(table, false);
     }
 
     @ParameterizedTest
@@ -121,7 +125,7 @@ public class ConnectPluginPathTest {
                 setupLocation(workspace.resolve("location-b"), type, TestPlugins.TestPlugin.SAMPLING_CONFIGURABLE)
         );
         Map<String, List<String[]>> table = assertListSuccess(res);
-        assertNonMigratedPluginsPresent(table);
+        assertNonMigratedPluginsStatus(table, false);
         assertPluginsAreCompatible(table,
                 TestPlugins.TestPlugin.SAMPLING_CONFIGURABLE);
     }
@@ -169,7 +173,7 @@ public class ConnectPluginPathTest {
                                 TestPlugins.TestPlugin.BAD_PACKAGING_CO_LOCATED))
         );
         Map<String, List<String[]>> table = assertListSuccess(res);
-        assertBadPackagingPluginsPresent(table);
+        assertBadPackagingPluginsStatus(table, false);
     }
 
     @ParameterizedTest
@@ -187,9 +191,154 @@ public class ConnectPluginPathTest {
                                 TestPlugins.TestPlugin.SERVICE_LOADER))
         );
         Map<String, List<String[]>> table = assertListSuccess(res);
-        assertNonMigratedPluginsPresent(table);
+        assertNonMigratedPluginsStatus(table, false);
         assertPluginsAreCompatible(table,
                 TestPlugins.TestPlugin.SERVICE_LOADER);
+    }
+
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifests(PluginLocationType type) {
+        PluginLocation locationA, locationB;
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION),
+                "--plugin-location",
+                locationB = setupLocation(workspace.resolve("location-b"), type, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER)
+        );
+        assertEquals(0, res.returnCode);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.reflective);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.serviceLoading);
+
+        Map<String, List<String[]>> table = assertListSuccess(runCommand(
+                "list",
+                "--plugin-location",
+                locationA,
+                "--plugin-location",
+                locationB
+        ));
+        // Non-migrated plugins get new manifests
+        assertNonMigratedPluginsStatus(table, true);
+        assertBadPackagingPluginsStatus(table, true);
+    }
+
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifestsDryRun(PluginLocationType type) {
+        PluginLocation locationA, locationB;
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION),
+                "--plugin-location",
+                locationB = setupLocation(workspace.resolve("location-b"), type, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER),
+                "--dry-run"
+        );
+        assertEquals(0, res.returnCode);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.reflective);
+        assertScanResult(false, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.serviceLoading);
+
+        Map<String, List<String[]>> table = assertListSuccess(runCommand(
+                "list",
+                "--plugin-location",
+                locationA,
+                "--plugin-location",
+                locationB
+        ));
+        // Plugins are not migrated during a dry-run.
+        assertNonMigratedPluginsStatus(table, false);
+        assertBadPackagingPluginsStatus(table, false);
+    }
+
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifestsDryRunReadOnlyLocation(PluginLocationType type) {
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        assertTrue(locationA.path.toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
+    }
+
+    @Test
+    public void testSyncManifestsDryRunReadOnlyMetaInf() {
+        PluginLocationType type = PluginLocationType.CLASS_HIERARCHY;
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        String subPath = "META-INF";
+        assertTrue(locationA.path.resolve(subPath).toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
+    }
+
+    @Test
+    public void testSyncManifestsDryRunReadOnlyServices() {
+        PluginLocationType type = PluginLocationType.CLASS_HIERARCHY;
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        String subPath = "META-INF/services";
+        assertTrue(locationA.path.resolve(subPath).toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
+    }
+
+    @Test
+    public void testSyncManifestsDryRunReadOnlyManifest() {
+        PluginLocationType type = PluginLocationType.CLASS_HIERARCHY;
+        PluginLocation locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
+        String subPath = "META-INF/services/" + PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY.superClass().getName();
+        assertTrue(locationA.path.resolve(subPath).toFile().setReadOnly());
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA,
+                "--dry-run"
+        );
+        assertEquals(2, res.returnCode);
+    }
+
+    @ParameterizedTest
+    @EnumSource
+    public void testSyncManifestsKeepNotFound(PluginLocationType type) {
+        PluginLocation locationA, locationB;
+        CommandResult res = runCommand(
+                "sync-manifests",
+                "--plugin-location",
+                locationA = setupLocation(workspace.resolve("location-a"), type, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION),
+                "--plugin-location",
+                locationB = setupLocation(workspace.resolve("location-b"), type, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER),
+                "--keep-not-found"
+        );
+        assertEquals(0, res.returnCode);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.reflective);
+        assertScanResult(true, TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER, res.serviceLoading);
+        assertScanResult(false, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION, res.reflective);
+        assertScanResult(false, TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION, res.serviceLoading);
+
+        Map<String, List<String[]>> table = assertListSuccess(runCommand(
+                "list",
+                "--plugin-location",
+                locationA,
+                "--plugin-location",
+                locationB
+        ));
+        // Non-migrated plugins get new manifests
+        assertNonMigratedPluginsStatus(table, true);
+        // Because --keep-not-found is specified, the bad packaging plugins keep their manifests
+        assertBadPackagingPluginsStatus(table, false);
     }
 
 
@@ -204,24 +353,26 @@ public class ConnectPluginPathTest {
         assertPluginMigrationStatus(table, true, true, plugins);
     }
 
-    private static void assertNonMigratedPluginsPresent(Map<String, List<String[]>> table) {
-        assertPluginMigrationStatus(table, true, false,
+    private static void assertNonMigratedPluginsStatus(Map<String, List<String[]>> table, boolean migrated) {
+        // These plugins are missing manifests that get added during the migration
+        assertPluginMigrationStatus(table, true, migrated,
                 TestPlugins.TestPlugin.NON_MIGRATED_CONVERTER,
                 TestPlugins.TestPlugin.NON_MIGRATED_HEADER_CONVERTER,
                 TestPlugins.TestPlugin.NON_MIGRATED_PREDICATE,
                 TestPlugins.TestPlugin.NON_MIGRATED_SINK_CONNECTOR,
                 TestPlugins.TestPlugin.NON_MIGRATED_SOURCE_CONNECTOR,
                 TestPlugins.TestPlugin.NON_MIGRATED_TRANSFORMATION);
-        // This plugin is partially compatible
-        assertPluginMigrationStatus(table, true, null,
+        // This plugin is partially compatible, and becomes fully compatible during migration.
+        assertPluginMigrationStatus(table, true, migrated ? true : null,
                 TestPlugins.TestPlugin.NON_MIGRATED_MULTI_PLUGIN);
     }
 
-    private static void assertBadPackagingPluginsPresent(Map<String, List<String[]>> table) {
+    private static void assertBadPackagingPluginsStatus(Map<String, List<String[]>> table, boolean migrated) {
         assertPluginsAreCompatible(table,
                 TestPlugins.TestPlugin.BAD_PACKAGING_CO_LOCATED,
                 TestPlugins.TestPlugin.BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR);
-        assertPluginMigrationStatus(table, false, true,
+        // These plugins have manifests that get removed during the migration
+        assertPluginMigrationStatus(table, false, !migrated,
                 TestPlugins.TestPlugin.BAD_PACKAGING_MISSING_SUPERCLASS,
                 TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR,
                 TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR,
@@ -232,7 +383,6 @@ public class ConnectPluginPathTest {
                 TestPlugins.TestPlugin.BAD_PACKAGING_INNER_CLASS_CONNECTOR,
                 TestPlugins.TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION);
     }
-
 
     private static void assertIsolatedPluginsInOutput(PluginScanResult reflectiveResult, Map<String, List<String[]>> table) {
         reflectiveResult.forEach(pluginDesc -> {
@@ -264,16 +414,35 @@ public class ConnectPluginPathTest {
 
     private static void assertPluginMigrationStatus(Map<String, List<String[]>> table, Boolean loadable, Boolean compatible, TestPlugins.TestPlugin... plugins) {
         for (TestPlugins.TestPlugin plugin : plugins) {
-            assertTrue(table.containsKey(plugin.className()), "Plugin " + plugin.className() + " does not appear in list output");
-            for (String[] row : table.get(plugin.className())) {
-                log.info("row" + Arrays.toString(row));
-                if (loadable != null) {
-                    assertEquals(loadable, Boolean.parseBoolean(row[LOADABLE_COL]), "Plugin loadable column for " + plugin.className() + " incorrect");
+            if (loadable == null || loadable || compatible == null || compatible) {
+                assertTrue(table.containsKey(plugin.className()), "Plugin " + plugin.className() + " does not appear in list output");
+                for (String[] row : table.get(plugin.className())) {
+                    log.info("row" + Arrays.toString(row));
+                    if (loadable != null) {
+                        assertEquals(loadable, Boolean.parseBoolean(row[LOADABLE_COL]), "Plugin loadable column for " + plugin.className() + " incorrect");
+                    }
+                    if (compatible != null) {
+                        assertEquals(compatible, Boolean.parseBoolean(row[MANIFEST_COL]), "Plugin hasManifest column for " + plugin.className() + " incorrect");
+                    }
                 }
-                if (compatible != null) {
-                    assertEquals(compatible, Boolean.parseBoolean(row[MANIFEST_COL]), "Plugin hasManifest column for " + plugin.className() + " incorrect");
-                }
+            } else {
+                // The plugins are not loadable or have manifests, so it should not be visible at all.
+                assertFalse(table.containsKey(plugin.className()), "Plugin " + plugin.className() + " should not appear in list output");
             }
+        }
+    }
+
+    private static void assertScanResult(boolean expectToBeDiscovered, TestPlugins.TestPlugin plugin, PluginScanResult result) {
+        AtomicBoolean actuallyDiscovered = new AtomicBoolean();
+        result.forEach(pluginDesc -> {
+            if (pluginDesc.className().equals(plugin.className())) {
+                actuallyDiscovered.set(true);
+            }
+        });
+        if (expectToBeDiscovered && !actuallyDiscovered.get()) {
+            fail("Expected plugin " + plugin + " to be discoverable, but it was not.");
+        } else if (!expectToBeDiscovered && actuallyDiscovered.get()) {
+            fail("Expected plugin " + plugin + " to not be discoverable, but it was.");
         }
     }
 
@@ -326,12 +495,15 @@ public class ConnectPluginPathTest {
                     Path outputJar = path.resolveSibling(path.getFileName() + ".jar");
                     outputJar.getParent().toFile().mkdirs();
                     Files.copy(jarPath, outputJar, StandardCopyOption.REPLACE_EXISTING);
+                    outputJar.toUri().toURL().openConnection().setDefaultUseCaches(false);
+                    disableCaching(outputJar);
                     return new PluginLocation(outputJar);
                 }
                 case MULTI_JAR: {
                     Path outputJar = path.resolve(jarPath.getFileName());
                     outputJar.getParent().toFile().mkdirs();
                     Files.copy(jarPath, outputJar, StandardCopyOption.REPLACE_EXISTING);
+                    disableCaching(outputJar);
                     return new PluginLocation(path);
                 }
                 default:
@@ -340,6 +512,15 @@ public class ConnectPluginPathTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private static void disableCaching(Path path) throws IOException {
+        // This function is a workaround for a Java 8 caching bug. When Java 8 support is dropped it may be removed.
+        // This test runs the sync-manifests command, and _without stopping the jvm_ executes a list command.
+        // Under normal use, the sync-manifests command is followed immediately by a JVM shutdown, clearing caches.
+        // The Java 8 ServiceLoader does not disable the URLConnection caching, so doesn't read some previous writes.
+        // Java 9+ ServiceLoaders disable the URLConnection caching, so don't need this patch (it becomes a no-op)
+        path.toUri().toURL().openConnection().setDefaultUseCaches(false);
     }
 
     private static class PluginPathElement {

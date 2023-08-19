@@ -35,23 +35,16 @@ import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.ReflectionScanner;
 import org.apache.kafka.connect.runtime.isolation.ServiceLoaderScanner;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -64,8 +57,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class ConnectPluginPath {
-
-    private static final String MANIFEST_PREFIX = "META-INF/services/";
     public static final Object[] LIST_TABLE_COLUMNS = {
         "pluginName",
         "firstAlias",
@@ -86,7 +77,7 @@ public class ConnectPluginPath {
         ArgumentParser parser = parser();
         try {
             Namespace namespace = parser.parseArgs(args);
-            Config config = parseConfig(parser, namespace, out);
+            Config config = parseConfig(parser, namespace, out, err);
             runCommand(config);
             return 0;
         } catch (ArgumentParserException e) {
@@ -96,8 +87,8 @@ public class ConnectPluginPath {
             err.println(e.getMessage());
             return 2;
         } catch (Throwable e) {
-            err.println(e.getMessage());
             err.println(Utils.stackTrace(e));
+            err.println(e.getMessage());
             return 3;
         }
     }
@@ -112,8 +103,14 @@ public class ConnectPluginPath {
             .dest("subcommand")
             .addParser("list");
 
+        ArgumentParser syncManifestsCommand = parser.addSubparsers()
+            .description("Mutate the specified plugins to be compatible with plugin.discovery=SERVICE_LOAD mode")
+            .dest("subcommand")
+            .addParser("sync-manifests");
+
         ArgumentParser[] subparsers = new ArgumentParser[] {
             listCommand,
+            syncManifestsCommand
         };
 
         for (ArgumentParser subparser : subparsers) {
@@ -134,10 +131,18 @@ public class ConnectPluginPath {
                 .help("A Connect worker configuration file");
         }
 
+        syncManifestsCommand.addArgument("--dry-run")
+            .action(Arguments.storeTrue())
+            .help("If specified, changes that would have been written to disk are not applied");
+
+        syncManifestsCommand.addArgument("--keep-not-found")
+            .action(Arguments.storeTrue())
+            .help("If specified, manifests for missing plugins are not removed from the plugin path");
+
         return parser;
     }
 
-    private static Config parseConfig(ArgumentParser parser, Namespace namespace, PrintStream out) throws ArgumentParserException, TerseException {
+    private static Config parseConfig(ArgumentParser parser, Namespace namespace, PrintStream out, PrintStream err) throws ArgumentParserException, TerseException {
         Set<Path> locations = parseLocations(parser, namespace);
         String subcommand = namespace.getString("subcommand");
         if (subcommand == null) {
@@ -145,7 +150,9 @@ public class ConnectPluginPath {
         }
         switch (subcommand) {
             case "list":
-                return new Config(Command.LIST, locations, out);
+                return new Config(Command.LIST, locations, false, false, out, err);
+            case "sync-manifests":
+                return new Config(Command.SYNC_MANIFESTS, locations, namespace.getBoolean("dry_run"), namespace.getBoolean("keep_not_found"), out, err);
             default:
                 throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
         }
@@ -189,18 +196,24 @@ public class ConnectPluginPath {
     }
 
     enum Command {
-        LIST
+        LIST, SYNC_MANIFESTS;
     }
 
     private static class Config {
         private final Command command;
         private final Set<Path> locations;
+        private final boolean dryRun;
+        private final boolean keepNotFound;
         private final PrintStream out;
+        private final PrintStream err;
 
-        private Config(Command command, Set<Path> locations, PrintStream out) {
+        private Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out, PrintStream err) {
             this.command = command;
             this.locations = locations;
+            this.dryRun = dryRun;
+            this.keepNotFound = keepNotFound;
             this.out = out;
+            this.err = err;
         }
 
         @Override
@@ -208,21 +221,23 @@ public class ConnectPluginPath {
             return "Config{" +
                 "command=" + command +
                 ", locations=" + locations +
+                ", dryRun=" + dryRun +
+                ", keepNotFound=" + keepNotFound +
                 '}';
         }
     }
 
     public static void runCommand(Config config) throws TerseException {
         try {
+            ManifestWorkspace workspace = new ManifestWorkspace(config.out);
             ClassLoader parent = ConnectPluginPath.class.getClassLoader();
             ServiceLoaderScanner serviceLoaderScanner = new ServiceLoaderScanner();
             ReflectionScanner reflectionScanner = new ReflectionScanner();
-            // Process the contents of the classpath to exclude it from later results.
             PluginSource classpathSource = PluginUtils.classpathPluginSource(parent);
-            Map<String, List<ManifestEntry>> classpathManifests = findManifests(classpathSource, Collections.emptyMap());
+            ManifestWorkspace.SourceWorkspace<?> classpathWorkspace = workspace.forSource(classpathSource);
             PluginScanResult classpathPlugins = discoverPlugins(classpathSource, reflectionScanner, serviceLoaderScanner);
             Map<Path, Set<Row>> rowsByLocation = new LinkedHashMap<>();
-            Set<Row> classpathRows = enumerateRows(null, classpathManifests, classpathPlugins);
+            Set<Row> classpathRows = enumerateRows(classpathWorkspace, classpathPlugins);
             rowsByLocation.put(null, classpathRows);
 
             ClassLoaderFactory factory = new ClassLoaderFactory();
@@ -230,18 +245,18 @@ public class ConnectPluginPath {
                 beginCommand(config);
                 for (Path pluginLocation : config.locations) {
                     PluginSource source = PluginUtils.isolatedPluginSource(pluginLocation, delegatingClassLoader, factory);
-                    Map<String, List<ManifestEntry>> manifests = findManifests(source, classpathManifests);
+                    ManifestWorkspace.SourceWorkspace<?> pluginWorkspace = workspace.forSource(source);
                     PluginScanResult plugins = discoverPlugins(source, reflectionScanner, serviceLoaderScanner);
-                    Set<Row> rows = enumerateRows(pluginLocation, manifests, plugins);
+                    Set<Row> rows = enumerateRows(pluginWorkspace, plugins);
                     rowsByLocation.put(pluginLocation, rows);
                     for (Row row : rows) {
                         handlePlugin(config, row);
                     }
                 }
-                endCommand(config, rowsByLocation);
+                endCommand(config, workspace, rowsByLocation);
             }
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+        } catch (Throwable e) {
+            failCommand(config, e);
         }
     }
 
@@ -251,7 +266,7 @@ public class ConnectPluginPath {
      * that pertains to this specific plugin.
      */
     private static class Row {
-        private final Path pluginLocation;
+        private final ManifestWorkspace.SourceWorkspace<?> workspace;
         private final String className;
         private final PluginType type;
         private final String version;
@@ -259,8 +274,8 @@ public class ConnectPluginPath {
         private final boolean loadable;
         private final boolean hasManifest;
 
-        public Row(Path pluginLocation, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
-            this.pluginLocation = pluginLocation;
+        public Row(ManifestWorkspace.SourceWorkspace<?> workspace, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
+            this.workspace = Objects.requireNonNull(workspace, "workspace must be non-null");
             this.className = Objects.requireNonNull(className, "className must be non-null");
             this.version = Objects.requireNonNull(version, "version must be non-null");
             this.type = Objects.requireNonNull(type, "type must be non-null");
@@ -277,11 +292,8 @@ public class ConnectPluginPath {
             return loadable && hasManifest;
         }
 
-        private boolean incompatible() {
-            return !compatible();
-        }
-
         private String locationString() {
+            Path pluginLocation = workspace.location();
             return pluginLocation == null ? "classpath" : pluginLocation.toString();
         }
 
@@ -290,40 +302,41 @@ public class ConnectPluginPath {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             Row row = (Row) o;
-            return Objects.equals(pluginLocation, row.pluginLocation) && className.equals(row.className) && type == row.type;
+            return Objects.equals(workspace, row.workspace) && className.equals(row.className) && type == row.type;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(pluginLocation, className, type);
+            return Objects.hash(workspace, className, type);
         }
     }
 
-    private static Set<Row> enumerateRows(Path pluginLocation, Map<String, List<ManifestEntry>> manifests, PluginScanResult scanResult) {
+    private static Set<Row> enumerateRows(ManifestWorkspace.SourceWorkspace<?> workspace, PluginScanResult scanResult) {
         Set<Row> rows = new HashSet<>();
-        // Perform a deep copy of the manifests because we're going to be mutating our copy.
-        Map<String, Set<ManifestEntry>> unloadablePlugins = manifests.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())));
+        Map<String, Set<PluginType>> nonLoadableManifests = new HashMap<>();
+        workspace.forEach((className, type) -> {
+            // Mark all manifests in the workspace as non-loadable first
+            nonLoadableManifests.computeIfAbsent(className, ignored -> EnumSet.of(type)).add(type);
+        });
         scanResult.forEach(pluginDesc -> {
-            // Emit a loadable row for this scan result, since it was found during plugin discovery
+            // Only loadable plugins appear in the scan result
             Set<String> rowAliases = new LinkedHashSet<>();
             rowAliases.add(PluginUtils.simpleName(pluginDesc));
             rowAliases.add(PluginUtils.prunedName(pluginDesc));
-            rows.add(newRow(pluginLocation, pluginDesc.className(), new ArrayList<>(rowAliases), pluginDesc.type(), pluginDesc.version(), true, manifests));
-            // Remove the ManifestEntry if it has the same className and type as one of the loadable plugins.
-            unloadablePlugins.getOrDefault(pluginDesc.className(), Collections.emptySet()).removeIf(entry -> entry.type == pluginDesc.type());
+            rows.add(newRow(workspace, pluginDesc.className(), new ArrayList<>(rowAliases), pluginDesc.type(), pluginDesc.version(), true));
+            // If a corresponding manifest exists, mark it as loadable by removing it from the map.
+            nonLoadableManifests.getOrDefault(pluginDesc.className(), Collections.emptySet()).remove(pluginDesc.type());
         });
-        unloadablePlugins.values().forEach(entries -> entries.forEach(entry -> {
-            // Emit a non-loadable row, since all the loadable rows showed up in the previous iteration.
-            // Two ManifestEntries may produce the same row if they have different URIs
-            rows.add(newRow(pluginLocation, entry.className, Collections.emptyList(), entry.type, PluginDesc.UNDEFINED_VERSION, false, manifests));
+        nonLoadableManifests.forEach((className, types) -> types.forEach(type -> {
+            // All manifests which remain in the map are not loadable
+            rows.add(newRow(workspace, className, Collections.emptyList(), type, PluginDesc.UNDEFINED_VERSION, false));
         }));
         return rows;
     }
 
-    private static Row newRow(Path pluginLocation, String className, List<String> rowAliases, PluginType type, String version, boolean loadable, Map<String, List<ManifestEntry>> manifests) {
-        boolean hasManifest = manifests.containsKey(className) && manifests.get(className).stream().anyMatch(e -> e.type == type);
-        return new Row(pluginLocation, className, type, version, rowAliases, loadable, hasManifest);
+    private static Row newRow(ManifestWorkspace.SourceWorkspace<?> workspace, String className, List<String> rowAliases, PluginType type, String version, boolean loadable) {
+        boolean hasManifest = workspace.hasManifest(type, className);
+        return new Row(workspace, className, type, version, rowAliases, loadable, hasManifest);
     }
 
     private static void beginCommand(Config config) {
@@ -332,6 +345,11 @@ public class ConnectPluginPath {
             // This is officially human-readable output with no guarantees for backwards-compatibility
             // It should be reasonably easy to parse for ad-hoc scripting use-cases.
             listTablePrint(config, LIST_TABLE_COLUMNS);
+        } else if (config.command == Command.SYNC_MANIFESTS) {
+            if (config.dryRun) {
+                config.out.println("Dry run started: No changes will be committed.");
+            }
+            config.out.println("Scanning for plugins...");
         }
     }
 
@@ -350,13 +368,20 @@ public class ConnectPluginPath {
                     // last because it is least important and most repetitive
                     row.locationString()
             );
+        } else if (config.command == Command.SYNC_MANIFESTS) {
+            if (row.loadable && !row.hasManifest) {
+                row.workspace.addManifest(row.type, row.className);
+            } else if (!row.loadable && row.hasManifest && !config.keepNotFound) {
+                row.workspace.removeManifest(row.type, row.className);
+            }
         }
     }
 
     private static void endCommand(
             Config config,
+            ManifestWorkspace workspace,
             Map<Path, Set<Row>> rowsByLocation
-    ) {
+    ) throws IOException, TerseException {
         if (config.command == Command.LIST) {
             // end the table with an empty line to enable users to separate the table from the summary.
             config.out.println();
@@ -368,6 +393,35 @@ public class ConnectPluginPath {
             config.out.printf("Total plugins:      \t%d%n", totalPlugins);
             config.out.printf("Loadable plugins:   \t%d%n", loadablePlugins);
             config.out.printf("Compatible plugins: \t%d%n", compatiblePlugins);
+        } else if (config.command == Command.SYNC_MANIFESTS) {
+            if (workspace.commit(true)) {
+                if (config.dryRun) {
+                    config.out.println("Dry run passed: All above changes can be committed to disk if re-run with dry run disabled.");
+                } else {
+                    config.out.println("Writing changes to plugins...");
+                    try {
+                        workspace.commit(false);
+                    } catch (Throwable t) {
+                        config.err.println(Utils.stackTrace(t));
+                        throw new TerseException("Sync incomplete due to exception; plugin path may be corrupted. Discard the contents of the plugin.path before retrying.");
+                    }
+                    config.out.println("All loadable plugins have accurate ServiceLoader manifests.");
+                }
+            } else {
+                config.out.println("No changes required.");
+            }
+        }
+    }
+
+    private static void failCommand(Config config, Throwable e) throws TerseException {
+        if (e instanceof TerseException) {
+            throw (TerseException) e;
+        }
+        if (config.command == Command.LIST) {
+            throw new RuntimeException("Unexpected error occurred while listing plugins", e);
+        } else if (config.command == Command.SYNC_MANIFESTS) {
+            // The real write errors are propagated as a TerseException, and don't take this branch.
+            throw new RuntimeException("Unexpected error occurred while dry-running sync", e);
         }
     }
 
@@ -384,109 +438,5 @@ public class ConnectPluginPath {
         PluginScanResult serviceLoadResult = serviceLoaderScanner.discoverPlugins(Collections.singleton(source));
         PluginScanResult reflectiveResult = reflectionScanner.discoverPlugins(Collections.singleton(source));
         return new PluginScanResult(Arrays.asList(serviceLoadResult, reflectiveResult));
-    }
-
-    private static class ManifestEntry {
-        private final URI manifestURI;
-        private final String className;
-        private final PluginType type;
-
-        private ManifestEntry(URI manifestURI, String className, PluginType type) {
-            this.manifestURI = manifestURI;
-            this.className = className;
-            this.type = type;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            ManifestEntry that = (ManifestEntry) o;
-            return manifestURI.equals(that.manifestURI) && className.equals(that.className) && type == that.type;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(manifestURI, className, type);
-        }
-    }
-
-    private static Map<String, List<ManifestEntry>> findManifests(PluginSource source, Map<String, List<ManifestEntry>> exclude) {
-        Map<String, List<ManifestEntry>> manifests = new LinkedHashMap<>();
-        for (PluginType type : PluginType.values()) {
-            try {
-                Enumeration<URL> resources = source.loader().getResources(MANIFEST_PREFIX + type.superClass().getName());
-                while (resources.hasMoreElements())  {
-                    URL url = resources.nextElement();
-                    for (String className : parse(url)) {
-                        ManifestEntry e = new ManifestEntry(url.toURI(), className, type);
-                        manifests.computeIfAbsent(className, ignored -> new ArrayList<>()).add(e);
-                    }
-                }
-            } catch (URISyntaxException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }
-        for (Map.Entry<String, List<ManifestEntry>> entry : exclude.entrySet()) {
-            String className = entry.getKey();
-            List<ManifestEntry> excluded = entry.getValue();
-            // Note this must be a remove and not removeAll, because we want to remove only one copy at a time.
-            // If the same jar is present on the classpath and plugin path, then manifests will contain 2 identical
-            // ManifestEntry instances, with a third copy in the excludes. After the excludes are processed,
-            // manifests should contain exactly one copy of the ManifestEntry.
-            for (ManifestEntry e : excluded) {
-                manifests.getOrDefault(className, Collections.emptyList()).remove(e);
-            }
-        }
-        return manifests;
-    }
-
-    // Based on implementation from ServiceLoader.LazyClassPathLookupIterator from OpenJDK11
-    private static Set<String> parse(URL u) {
-        Set<String> names = new LinkedHashSet<>(); // preserve insertion order
-        try {
-            URLConnection uc = u.openConnection();
-            uc.setUseCaches(false);
-            try (InputStream in = uc.getInputStream();
-                 BufferedReader r
-                         = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                int lc = 1;
-                while ((lc = parseLine(u, r, lc, names)) >= 0) {
-                    // pass
-                }
-            }
-        } catch (IOException x) {
-            throw new RuntimeException("Error accessing configuration file", x);
-        }
-        return names;
-    }
-
-    // Based on implementation from ServiceLoader.LazyClassPathLookupIterator from OpenJDK11
-    private static int parseLine(URL u, BufferedReader r, int lc, Set<String> names) throws IOException {
-        String ln = r.readLine();
-        if (ln == null) {
-            return -1;
-        }
-        int ci = ln.indexOf('#');
-        if (ci >= 0) ln = ln.substring(0, ci);
-        ln = ln.trim();
-        int n = ln.length();
-        if (n != 0) {
-            if ((ln.indexOf(' ') >= 0) || (ln.indexOf('\t') >= 0))
-                throw new IOException("Illegal configuration-file syntax in " + u);
-            int cp = ln.codePointAt(0);
-            if (!Character.isJavaIdentifierStart(cp))
-                throw new IOException("Illegal provider-class name: " + ln + " in " + u);
-            int start = Character.charCount(cp);
-            for (int i = start; i < n; i += Character.charCount(cp)) {
-                cp = ln.codePointAt(i);
-                if (!Character.isJavaIdentifierPart(cp) && (cp != '.'))
-                    throw new IOException("Illegal provider-class name: " + ln + " in " + u);
-            }
-            names.add(ln);
-        }
-        return lc + 1;
     }
 }

@@ -74,7 +74,7 @@ class ZkAdminManager(val config: KafkaConfig,
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
-  private val adminZkClient = new AdminZkClient(zkClient)
+  private val adminZkClient = new AdminZkClient(zkClient, Some(config))
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
   private val createTopicPolicy =
