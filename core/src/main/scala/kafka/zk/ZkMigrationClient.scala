@@ -197,7 +197,9 @@ class ZkMigrationClient(
     brokerIdConsumer: Consumer[Integer]
   ): Unit = wrapZkException {
     configClient.iterateBrokerConfigs((broker, props) => {
-      brokerIdConsumer.accept(Integer.valueOf(broker))
+      if (broker.nonEmpty) {
+        brokerIdConsumer.accept(Integer.valueOf(broker))
+      }
       val batch = new util.ArrayList[ApiMessageAndVersion]()
       props.forEach((key, value) => {
         batch.add(new ApiMessageAndVersion(new ConfigRecord()

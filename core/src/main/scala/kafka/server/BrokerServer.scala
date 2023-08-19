@@ -25,7 +25,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.config.ConfigException
@@ -42,7 +42,6 @@ import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
@@ -188,8 +187,7 @@ class BrokerServer(
       kafkaScheduler.startup()
 
       /* register broker metrics */
-      brokerTopicStats = new BrokerTopicStats
-
+      brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
@@ -420,7 +418,12 @@ class BrokerServer(
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           credentialProvider),
-        authorizer,
+        new AclPublisher(
+          config.nodeId,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          authorizer
+        ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)
       metadataPublishers.add(brokerMetadataPublisher)
@@ -468,14 +471,6 @@ class BrokerServer(
         }
         rlm.startup()
       })
-
-      // If we are using a ClusterMetadataAuthorizer which stores its ACLs in the metadata log,
-      // notify it that the loading process is complete.
-      authorizer match {
-        case Some(clusterMetadataAuthorizer: ClusterMetadataAuthorizer) =>
-          clusterMetadataAuthorizer.completeInitialLoad()
-        case _ => // nothing to do
-      }
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
@@ -531,7 +526,13 @@ class BrokerServer(
         config.consumerGroupHeartbeatIntervalMs,
         config.consumerGroupMaxSize,
         config.consumerGroupAssignors,
-        config.offsetsTopicSegmentBytes
+        config.offsetsTopicSegmentBytes,
+        config.offsetMetadataMaxSize,
+        config.groupMaxSize,
+        config.groupInitialRebalanceDelay,
+        GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
+        config.groupMinSessionTimeoutMs,
+        config.groupMaxSessionTimeoutMs
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
@@ -571,7 +572,7 @@ class BrokerServer(
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava));
+        (tp: TopicPartition) => logManager.getLog(tp).asJava, brokerTopicStats));
     } else {
       None
     }

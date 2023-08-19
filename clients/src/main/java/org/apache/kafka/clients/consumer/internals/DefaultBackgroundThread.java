@@ -16,14 +16,18 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -34,10 +38,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
+
+import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -61,6 +68,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
     private final GroupState groupState;
+    private final SubscriptionState subscriptionState;
     private boolean running;
 
     private final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry;
@@ -71,6 +79,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final LogContext logContext,
                             final BlockingQueue<ApplicationEvent> applicationEventQueue,
                             final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                            final SubscriptionState subscriptionState,
                             final ErrorEventHandler errorEventHandler,
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
@@ -90,6 +99,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.networkClientDelegate = networkClient;
         this.errorEventHandler = errorEventHandler;
         this.groupState = groupState;
+        this.subscriptionState = subscriptionState;
 
         this.requestManagerRegistry = new HashMap<>();
         this.requestManagerRegistry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
@@ -102,16 +112,35 @@ public class DefaultBackgroundThread extends KafkaThread {
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                    final ConsumerMetadata metadata,
-                                   final KafkaClient networkClient) {
+                                   final SubscriptionState subscriptionState,
+                                   final ApiVersions apiVersions,
+                                   final Metrics metrics,
+                                   final Sensor fetcherThrottleTimeSensor) {
         super(BACKGROUND_THREAD_NAME, true);
+        requireNonNull(config);
+        requireNonNull(rebalanceConfig);
+        requireNonNull(logContext);
+        requireNonNull(applicationEventQueue);
+        requireNonNull(backgroundEventQueue);
+        requireNonNull(metadata);
+        requireNonNull(subscriptionState);
         try {
             this.time = time;
             this.log = logContext.logger(getClass());
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
+            this.subscriptionState = subscriptionState;
             this.config = config;
-            // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
+            final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
+                    logContext,
+                    apiVersions,
+                    time,
+                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                    metadata,
+                    fetcherThrottleTimeSensor);
             this.networkClientDelegate = new NetworkClientDelegate(
                     this.time,
                     this.config,
@@ -121,7 +150,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.groupState = new GroupState(rebalanceConfig);
             this.requestManagerRegistry = Collections.unmodifiableMap(buildRequestManagerRegistry(logContext));
-            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry);
+            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry, metadata);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
@@ -138,11 +167,10 @@ public class DefaultBackgroundThread extends KafkaThread {
                         config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
                         errorEventHandler,
                         groupState.groupId);
-        // Add subscriptionState
         CommitRequestManager commitRequestManager = coordinatorManager == null ?
                 null :
                 new CommitRequestManager(time,
-                        logContext, null, config,
+                        logContext, this.subscriptionState, config,
                         coordinatorManager,
                         groupState);
         registry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
@@ -214,7 +242,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     private void consumeApplicationEvent(final ApplicationEvent event) {
-        Objects.requireNonNull(event);
+        requireNonNull(event);
         applicationEventProcessor.process(event);
     }
 

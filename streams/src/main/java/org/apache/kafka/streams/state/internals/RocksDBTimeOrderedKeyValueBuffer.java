@@ -168,6 +168,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         wrapped().init(context, wrapped());
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        }
     }
 
     @Override

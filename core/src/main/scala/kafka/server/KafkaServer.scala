@@ -261,7 +261,7 @@ class KafkaServer(
         metrics = Server.initializeMetrics(config, time, clusterId)
 
         /* register broker metrics */
-        _brokerTopicStats = new BrokerTopicStats
+        _brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
         KafkaBroker.notifyClusterListeners(clusterId, kafkaMetricsReporters ++ metrics.reporters.asScala)
@@ -614,7 +614,7 @@ class KafkaServer(
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava));
+        (tp: TopicPartition) => logManager.getLog(tp).asJava, brokerTopicStats));
     } else {
       None
     }

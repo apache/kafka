@@ -185,7 +185,6 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             );
             assertThat(eventCount.get(), is(2));
 
-
             produceSynchronouslyToPartitionZero(
                 streamInput,
                 asList(

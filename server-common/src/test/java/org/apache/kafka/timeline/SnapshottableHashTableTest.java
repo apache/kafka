@@ -275,6 +275,21 @@ public class SnapshottableHashTableTest {
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE));
     }
 
+    @Test
+    public void testIteratorAtOlderEpoch() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+                new SnapshottableHashTable<>(registry, 4);
+        assertNull(table.snapshottableAddOrReplace(E_3B));
+        registry.getOrCreateSnapshot(0);
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        registry.getOrCreateSnapshot(1);
+        assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
+        registry.getOrCreateSnapshot(2);
+        assertEquals(E_1B, table.snapshottableRemove(E_1B));
+        assertIteratorYields(table.snapshottableIterator(1), E_3B, E_1A);
+    }
+
     /**
      * Assert that the given iterator contains the given elements, in any order.
      * We compare using reference equality here, rather than object equality.

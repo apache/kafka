@@ -26,18 +26,17 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Unstable
 public interface PartitionAssignor {
-
     /**
      * Unique name for this assignor.
      */
     String name();
 
     /**
-     * Perform the group assignment given the current members and
-     * topic metadata.
+     * Assigns partitions to group members based on the given assignment specification and topic metadata.
      *
-     * @param assignmentSpec The assignment spec.
+     * @param assignmentSpec           The assignment spec which includes member metadata.
+     * @param subscribedTopicDescriber The topic and partition metadata describer.
      * @return The new assignment for the group.
      */
-    GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException;
+    GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException;
 }

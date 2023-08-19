@@ -25,7 +25,9 @@ import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
+import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
+import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.AddressSpec
@@ -34,7 +36,7 @@ import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, Process
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Optional
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 
@@ -106,6 +108,7 @@ class SharedServer(
   val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
   @volatile var snapshotGenerator: SnapshotGenerator = _
+  @volatile var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
   def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
@@ -259,15 +262,24 @@ class SharedServer(
         raftManager = _raftManager
         _raftManager.startup()
 
+        metadataLoaderMetrics = if (brokerMetrics != null) {
+          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+            elapsedNs => brokerMetrics.updateBatchProcessingTime(elapsedNs),
+            batchSize => brokerMetrics.updateBatchSize(batchSize),
+            brokerMetrics.lastAppliedImageProvenance)
+        } else {
+          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+            _ => {},
+            _ => {},
+            new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
+        }
         val loaderBuilder = new MetadataLoader.Builder().
           setNodeId(metaProps.nodeId).
           setTime(time).
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
-          setHighWaterMarkAccessor(() => _raftManager.client.highWatermark())
-        if (brokerMetrics != null) {
-          loaderBuilder.setMetadataLoaderMetrics(brokerMetrics)
-        }
+          setHighWaterMarkAccessor(() => _raftManager.client.highWatermark()).
+          setMetrics(metadataLoaderMetrics)
         loader = loaderBuilder.build()
         snapshotEmitter = new SnapshotEmitter.Builder().
           setNodeId(metaProps.nodeId).
@@ -282,15 +294,15 @@ class SharedServer(
           setDisabledReason(snapshotsDisabledReason).
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           build()
-        _raftManager.register(loader)
         try {
-          loader.installPublishers(Collections.singletonList(snapshotGenerator))
+          loader.installPublishers(util.Arrays.asList(snapshotGenerator)).get()
         } catch {
           case t: Throwable => {
             error("Unable to install metadata publishers", t)
             throw new RuntimeException("Unable to install metadata publishers.", t)
           }
         }
+        _raftManager.register(loader)
         debug("Completed SharedServer startup.")
         started = true
       } catch {
@@ -325,6 +337,10 @@ class SharedServer(
       if (loader != null) {
         CoreUtils.swallow(loader.close(), this)
         loader = null
+      }
+      if (metadataLoaderMetrics != null) {
+        CoreUtils.swallow(metadataLoaderMetrics.close(), this)
+        metadataLoaderMetrics = null
       }
       if (snapshotGenerator != null) {
         CoreUtils.swallow(snapshotGenerator.close(), this)

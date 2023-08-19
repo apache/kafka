@@ -328,4 +328,24 @@ class MetadataVersionTest {
         }
         assertEquals(expectedVersion, metadataVersion.groupMetadataValueVersion());
     }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testOffsetCommitValueVersion(MetadataVersion metadataVersion) {
+        final short expectedVersion;
+        if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_1_IV1)) {
+            expectedVersion = 3;
+        } else if (metadataVersion.isAtLeast(IBP_2_1_IV0)) {
+            expectedVersion = 2;
+        } else {
+            expectedVersion = 1;
+        }
+        assertEquals(expectedVersion, metadataVersion.offsetCommitValueVersion(false));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testOffsetCommitValueVersionWithExpiredTimestamp(MetadataVersion metadataVersion) {
+        assertEquals((short) 1, metadataVersion.offsetCommitValueVersion(true));
+    }
 }

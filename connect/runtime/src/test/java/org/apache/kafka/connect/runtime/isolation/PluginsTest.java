@@ -31,6 +31,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
@@ -46,6 +48,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.isolation.TestPlugins.TestPlugin;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
@@ -58,6 +61,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
@@ -76,6 +80,9 @@ public class PluginsTest {
     private TestConverter converter;
     private TestHeaderConverter headerConverter;
     private TestInternalConverter internalConverter;
+    private PluginScanResult nonEmpty;
+    private PluginScanResult empty;
+    private String missingPluginClass;
 
     @Before
     public void setup() {
@@ -93,6 +100,22 @@ public class PluginsTest {
         props.put("value.converter.extra.config", "foo2");
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestHeaderConverter.class.getName());
         props.put("header.converter.extra.config", "baz");
+
+        // Set up some PluginScanResult instances to test the plugin discovery modes
+        SortedSet<PluginDesc<SinkConnector>> sinkConnectors = (SortedSet<PluginDesc<SinkConnector>>) plugins.sinkConnectors();
+        missingPluginClass = sinkConnectors.first().className();
+        nonEmpty = new PluginScanResult(
+                sinkConnectors,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
+        );
+        empty = new PluginScanResult(Collections.emptyList());
 
         createConfig();
     }
@@ -476,8 +499,104 @@ public class PluginsTest {
         }
     }
 
+    @Test
+    public void testOnlyScanNoPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.ONLY_SCAN, empty, empty);
+            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+        }
+    }
+
+    @Test
+    public void testOnlyScanWithPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.ONLY_SCAN, empty, nonEmpty);
+            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+        }
+    }
+
+    @Test
+    public void testHybridWarnNoPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, empty, empty);
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            // These log messages must contain the config name, it is referenced in the documentation.
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
+        }
+    }
+
+    @Test
+    public void testHybridWarnWithPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, nonEmpty, nonEmpty);
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && !e.getMessage().contains(missingPluginClass)
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
+        }
+    }
+
+    @Test
+    public void testHybridWarnMissingPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, empty, nonEmpty);
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && e.getMessage().contains(missingPluginClass)
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
+        }
+    }
+
+    @Test
+    public void testHybridFailNoPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, empty, empty);
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
+        }
+    }
+
+    @Test
+    public void testHybridFailWithPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, nonEmpty, nonEmpty);
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
+                    e.getLevel().equals("WARN")
+                            && !e.getMessage().contains(missingPluginClass)
+                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            ));
+        }
+    }
+
+    @Test
+    public void testHybridFailMissingPlugins() {
+        assertThrows(ConnectException.class, () -> Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, empty, nonEmpty));
+    }
+
+    @Test
+    public void testServiceLoadNoPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.SERVICE_LOAD, empty, empty);
+            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+        }
+    }
+
+    @Test
+    public void testServiceLoadWithPlugins() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
+            Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.SERVICE_LOAD, nonEmpty, nonEmpty);
+            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+        }
+    }
+
     private void assertClassLoaderReadsVersionFromResource(
-            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws MalformedURLException {
+            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) {
         URL[] systemPath = TestPlugins.pluginPath(parentResource)
                 .stream()
                 .map(Path::toFile)
@@ -499,6 +618,11 @@ public class PluginsTest {
                 TestPlugins.pluginPathJoined(childResource)
         );
         plugins = new Plugins(pluginProps, parent, new ClassLoaderFactory());
+
+        assertTrue("Should find plugin in plugin classloader",
+                plugins.converters().stream().anyMatch(desc -> desc.loader() instanceof PluginClassLoader));
+        assertTrue("Should find plugin in parent classloader",
+                plugins.converters().stream().anyMatch(desc -> parent.equals(desc.loader())));
 
         Converter converter = plugins.newPlugin(
                 className,
@@ -565,7 +689,7 @@ public class PluginsTest {
         }
     }
 
-    public static class TestConverter implements Converter, Configurable {
+    public static class TestConverter implements Converter, Configurable, Versioned {
         public Map<String, ?> configs;
 
         public ConfigDef config() {
@@ -591,6 +715,11 @@ public class PluginsTest {
         @Override
         public SchemaAndValue toConnectData(String topic, byte[] value) {
             return null;
+        }
+
+        @Override
+        public String version() {
+            return "test";
         }
     }
 
@@ -647,8 +776,13 @@ public class PluginsTest {
         }
     }
 
-    public static class TestInternalConverter extends JsonConverter {
+    public static class TestInternalConverter extends JsonConverter implements Versioned {
         public Map<String, ?> configs;
+
+        @Override
+        public String version() {
+            return "test";
+        }
 
         @Override
         public void configure(Map<String, ?> configs) {

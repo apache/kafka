@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
@@ -712,6 +713,99 @@ class DynamicBrokerConfigTest {
     assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
     config.updateCurrentConfig(new KafkaConfig(props))
     assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionMsConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "2592000000")
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2160000000")
+    // update default config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(2160000000L, config.logLocalRetentionMs)
+
+    // update per broker config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2150000000")
+    config.dynamicConfig.updateBrokerConfig(0, newProps)
+    assertEquals(2150000000L, config.logLocalRetentionMs)
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionSizeConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.LogRetentionBytesProp, "4294967296")
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967295")
+    // update default config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(4294967295L, config.logLocalRetentionBytes)
+
+    // update per broker config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967294")
+    config.dynamicConfig.updateBrokerConfig(0, newProps)
+    assertEquals(4294967294L, config.logLocalRetentionBytes)
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionSkipsOnInvalidConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
+    val config = KafkaConfig(props)
+    config.dynamicConfig.initialize(None)
+
+    // Check for invalid localRetentionMs < -2
+    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP -> "-3"))
+    // Check for invalid localRetentionBytes < -2
+    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP -> "-3"))
+  }
+
+  @Test
+  def testDynamicLogLocalRetentionThrowsOnIncorrectConfig(): Unit = {
+    // Check for incorrect case of logLocalRetentionMs > retentionMs
+    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, 2, 100)
+    // Check for incorrect case of logLocalRetentionBytes > retentionBytes
+    verifyIncorrectLogLocalRetentionProps(500L, 1000L, 200, 100)
+    // Check for incorrect case of logLocalRetentionMs (-1 viz unlimited) > retentionMs,
+    verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
+    // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
+    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
+  }
+
+  def verifyIncorrectLogLocalRetentionProps(logLocalRetentionMs: Long,
+                                            retentionMs: Long,
+                                            logLocalRetentionBytes: Long,
+                                            retentionBytes: Long): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, retentionMs.toString)
+    props.put(KafkaConfig.LogRetentionBytesProp, retentionBytes.toString)
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaServer]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes.toString)
+    // validate default config
+    assertThrows(classOf[ConfigException], () =>  config.dynamicConfig.validate(newProps, perBrokerConfig = false))
+    // validate per broker config
+    assertThrows(classOf[ConfigException], () =>  config.dynamicConfig.validate(newProps, perBrokerConfig = true))
   }
 }
 

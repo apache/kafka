@@ -36,7 +36,9 @@ import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,6 +64,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KafkaStatusBackingStoreTest {
 
     private static final String STATUS_TOPIC = "status-topic";
@@ -369,7 +372,6 @@ public class KafkaStatusBackingStoreTest {
         statusMap.put("state", "RUNNING");
         statusMap.put("generation", 0L);
 
-        when(converter.fromConnectData(eq(STATUS_TOPIC), any(Schema.class), any(Struct.class))).thenReturn(value);
         when(converter.fromConnectData(eq(STATUS_TOPIC), any(Schema.class), any(Struct.class))).thenReturn(value);
         when(converter.toConnectData(STATUS_TOPIC, value)).thenReturn(new SchemaAndValue(null, statusMap));
 

@@ -1286,7 +1286,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             name,
             processorParameters,
             storeNames,
-            this.name
+            this.name,
+            joined.gracePeriod()
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);

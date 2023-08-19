@@ -1030,6 +1030,7 @@ public class StreamTaskTest {
         ));
 
         // st: -1
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime()); // punctuate at 20
 
         // st: 20
@@ -1037,6 +1038,7 @@ public class StreamTaskTest {
         assertEquals(7, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 25
@@ -1044,6 +1046,7 @@ public class StreamTaskTest {
         assertEquals(6, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(1, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st: 142
@@ -1052,6 +1055,7 @@ public class StreamTaskTest {
         assertEquals(5, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 145
@@ -1060,6 +1064,7 @@ public class StreamTaskTest {
         assertEquals(4, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(2, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st: 155
@@ -1068,6 +1073,7 @@ public class StreamTaskTest {
         assertEquals(3, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 159
@@ -1075,6 +1081,7 @@ public class StreamTaskTest {
         assertEquals(2, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st: 160, aligned at 0
@@ -1082,6 +1089,7 @@ public class StreamTaskTest {
         assertEquals(1, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(3, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 161
@@ -1089,6 +1097,7 @@ public class StreamTaskTest {
         assertEquals(0, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(4, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         processorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 142L, 155L, 160L);
@@ -1112,16 +1121,19 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45)
         ));
 
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st is now 20
         assertTrue(task.process(0L));
 
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st is now 25
         assertTrue(task.process(0L));
 
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st is now 30
@@ -1129,6 +1141,7 @@ public class StreamTaskTest {
 
         processorStreamTime.mockProcessor.scheduleCancellable().cancel();
 
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         processorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L);
@@ -1141,9 +1154,11 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.scheduleCancellable().cancel();
         time.sleep(10);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10);
     }
@@ -1166,6 +1181,7 @@ public class StreamTaskTest {
         task.postCommit(true);
         assertFalse(task.commitNeeded());
 
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
         assertTrue(task.commitNeeded());
 
@@ -1176,6 +1192,7 @@ public class StreamTaskTest {
         assertFalse(task.commitNeeded());
 
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         assertTrue(task.commitNeeded());
 
@@ -1396,15 +1413,21 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(9);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(1);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(20);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10, now + 20, now + 30, now + 50);
     }
@@ -1414,8 +1437,10 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(9);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME);
     }
@@ -1427,21 +1452,31 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
         time.sleep(100);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(12);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(7);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(1); // punctuate at now + 130
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(105); // punctuate at now + 235
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(5); // punctuate at now + 240, still aligned on the initial punctuation
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 100, now + 110, now + 122, now + 130, now + 235, now + 240);
     }

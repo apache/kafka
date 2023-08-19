@@ -29,8 +29,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
-import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.fault.FaultHandler
 
 import java.util.concurrent.CompletableFuture
@@ -107,7 +105,7 @@ class BrokerMetadataPublisher(
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
   scramPublisher: ScramPublisher,
-  private val _authorizer: Option[Authorizer],
+  aclPublisher: AclPublisher,
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
 ) extends MetadataPublisher with Logging {
@@ -229,43 +227,8 @@ class BrokerMetadataPublisher(
       // Apply SCRAM delta.
       scramPublisher.onMetadataUpdate(delta, newImage)
 
-      // Apply changes to ACLs. This needs to be handled carefully because while we are
-      // applying these changes, the Authorizer is continuing to return authorization
-      // results in other threads. We never want to expose an invalid state. For example,
-      // if the user created a DENY ALL acl and then created an ALLOW ACL for topic foo,
-      // we want to apply those changes in that order, not the reverse order! Otherwise
-      // there could be a window during which incorrect authorization results are returned.
-      Option(delta.aclsDelta()).foreach { aclsDelta =>
-        _authorizer match {
-          case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta) {
-            try {
-              // If the delta resulted from a snapshot load, we want to apply the new changes
-              // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
-              // first snapshot load, it will also complete the futures returned by
-              // Authorizer#start (which we wait for before processing RPCs).
-              authorizer.loadSnapshot(newImage.acls().acls())
-            } catch {
-              case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
-                s"authorizer snapshot in $deltaName", t)
-            }
-          } else {
-            try {
-              // Because the changes map is a LinkedHashMap, the deltas will be returned in
-              // the order they were performed.
-              aclsDelta.changes().entrySet().forEach(e =>
-                if (e.getValue.isPresent) {
-                  authorizer.addAcl(e.getKey, e.getValue.get())
-                } else {
-                  authorizer.removeAcl(e.getKey)
-                })
-            } catch {
-              case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
-                s"authorizer changes in $deltaName", t)
-            }
-          }
-          case _ => // No ClusterMetadataAuthorizer is configured. There is nothing to do.
-        }
-      }
+      // Apply ACL delta.
+      aclPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       try {
         // Propagate the new image to the group coordinator.
