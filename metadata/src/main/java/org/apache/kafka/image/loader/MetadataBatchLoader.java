@@ -67,6 +67,7 @@ public class MetadataBatchLoader {
     private int numBatches;
     private long totalBatchElapsedNs;
     private TransactionState transactionState;
+    private boolean empty;
 
     public MetadataBatchLoader(
         LogContext logContext,
@@ -78,6 +79,15 @@ public class MetadataBatchLoader {
         this.time = time;
         this.faultHandler = faultHandler;
         this.callback = callback;
+        this.resetToImage(MetadataImage.EMPTY);
+        this.empty = true;
+    }
+
+    /**
+     * @return True if this batch loader has seen at least one record.
+     */
+    public boolean isEmpty() {
+        return empty;
     }
 
     /**
@@ -88,6 +98,7 @@ public class MetadataBatchLoader {
      */
     public void resetToImage(MetadataImage image) {
         this.image = image;
+        this.empty = false;
         this.delta = new MetadataDelta.Builder().setImage(image).build();
         this.transactionState = TransactionState.NO_TRANSACTION;
         this.lastOffset = image.provenance().lastContainedOffset();
@@ -241,6 +252,7 @@ public class MetadataBatchLoader {
                     default:
                         break;
                 }
+                empty = false;
                 delta.replay(record.message());
         }
     }
