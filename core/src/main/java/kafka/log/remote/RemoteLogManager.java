@@ -739,6 +739,8 @@ public class RemoteLogManager implements Closeable {
                 .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             brokerTopicStats.allTopicsStats().remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             copiedOffsetOption = OptionalLong.of(endOffset);
+            // Update the highest offset in remote storage for this partition's log so that the local log segments
+            // are not deleted before they are copied to remote storage.
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
         }
@@ -766,6 +768,8 @@ public class RemoteLogManager implements Closeable {
                     cleanupExpiredRemoteLogSegments();
                 } else {
                     long offset = findHighestRemoteOffset(topicIdPartition, log);
+                    // Update the highest offset in remote storage for this partition's log so that the local log segments
+                    // are not deleted before they are copied to remote storage.
                     log.updateHighestOffsetInRemoteStorage(offset);
                 }
             } catch (InterruptedException ex) {
