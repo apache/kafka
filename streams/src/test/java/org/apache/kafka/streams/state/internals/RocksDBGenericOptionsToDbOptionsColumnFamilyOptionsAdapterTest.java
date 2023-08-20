@@ -17,9 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.easymock.EasyMockRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.verification.VerificationMode;
 import org.rocksdb.AbstractCompactionFilter;
 import org.rocksdb.AbstractCompactionFilter.Context;
 import org.rocksdb.AbstractCompactionFilterFactory;
@@ -50,7 +51,6 @@ import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteBufferManager;
 import org.rocksdb.util.BytewiseComparator;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import java.util.Arrays;
@@ -61,23 +61,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
-import static org.easymock.EasyMock.resetToNice;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * The purpose of this test is, to catch interface changes if we upgrade {@link RocksDB}.
  * Using reflections, we make sure the {@link RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter} maps all
  * methods from {@link DBOptions} and {@link ColumnFamilyOptions} to/from {@link Options} correctly.
  */
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.class)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
     private final List<String> walRelatedMethods = new LinkedList<String>() {
@@ -131,6 +127,20 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             }
         }
     }
+    private void assertMethodInvoked(Object object,
+                                     Object[] params,
+                                     Class<?>[] paramTypes,
+                                     String methodName,
+                                     VerificationMode verificationMode) throws Exception {
+        for (Method m : object.getClass().getMethods()) {
+            if (m.getName().equals(methodName) && Arrays.equals(m.getParameterTypes(), paramTypes)) {
+                final Object verify = verify(object, verificationMode);
+                m.invoke(verify, params);
+                return;
+            }
+        }
+        fail("Did not find a method with name " + methodName + ", param count " + params.length);
+    }
 
     private void verifyDBOptionsMethodCall(final Method method) throws Exception {
         final DBOptions mockedDbOptions = mock(DBOptions.class);
@@ -139,20 +149,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
         final Object[] parameters = getDBOptionsParameters(method.getParameterTypes());
 
-        try {
-            reset(mockedDbOptions);
-            replay(mockedDbOptions);
-            method.invoke(optionsFacadeDbOptions, parameters);
-            verify();
-            fail("Should have called DBOptions." + method.getName() + "()");
-        } catch (final InvocationTargetException undeclaredMockMethodCall) {
-            assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
-            assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
-        } finally {
-            resetToNice(mockedDbOptions);
-            optionsFacadeDbOptions.close();
-        }
+        method.invoke(optionsFacadeDbOptions, parameters);
+        assertMethodInvoked(mockedDbOptions, parameters, method.getParameterTypes(), method.getName(), times(1));
+        optionsFacadeDbOptions.close();
     }
 
     private Object[] getDBOptionsParameters(final Class<?>[] parameterTypes) throws Exception {
@@ -247,20 +246,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
         final Object[] parameters = getColumnFamilyOptionsParameters(method.getParameterTypes());
 
-        try {
-            reset(mockedColumnFamilyOptions);
-            replay(mockedColumnFamilyOptions);
-            method.invoke(optionsFacadeColumnFamilyOptions, parameters);
-            verify();
-            fail("Should have called ColumnFamilyOptions." + method.getName() + "()");
-        } catch (final InvocationTargetException undeclaredMockMethodCall) {
-            assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
-            assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
-        } finally {
-            resetToNice(mockedColumnFamilyOptions);
-            optionsFacadeColumnFamilyOptions.close();
-        }
+        method.invoke(optionsFacadeColumnFamilyOptions, parameters);
+        assertMethodInvoked(mockedColumnFamilyOptions, parameters, method.getParameterTypes(), method.getName(), times(1));
+        optionsFacadeColumnFamilyOptions.close();
     }
 
     private Object[] getColumnFamilyOptionsParameters(final Class<?>[] parameterTypes) throws Exception {
