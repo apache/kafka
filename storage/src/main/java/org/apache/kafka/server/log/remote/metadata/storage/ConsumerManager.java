@@ -59,7 +59,10 @@ public class ConsumerManager implements Closeable {
         consumerTask = new ConsumerTask(
             remotePartitionMetadataEventHandler,
             topicPartitioner,
-            consumer
+            consumer,
+            100L,
+            300_000L,
+            time
         );
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
@@ -110,17 +113,17 @@ public class ConsumerManager implements Closeable {
         long startTimeMs = time.milliseconds();
         while (true) {
             log.debug("Checking if partition [{}] is up to date with offset [{}]", partition, offset);
-            long receivedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
-            if (receivedOffset >= offset) {
+            long readOffset = consumerTask.readOffsetForMetadataPartition(partition).orElse(-1L);
+            if (readOffset >= offset) {
                 return;
             }
 
             log.debug("Expected offset [{}] for partition [{}], but the committed offset: [{}],  Sleeping for [{}] to retry again",
-                    offset, partition, receivedOffset, consumeCheckIntervalMs);
+                    offset, partition, readOffset, consumeCheckIntervalMs);
 
             if (time.milliseconds() - startTimeMs > timeoutMs) {
                 log.warn("Expected offset for partition:[{}] is : [{}], but the committed offset: [{}] ",
-                        partition, receivedOffset, offset);
+                        partition, readOffset, offset);
                 throw new TimeoutException("Timed out in catching up with the expected offset by consumer.");
             }
 
@@ -149,7 +152,7 @@ public class ConsumerManager implements Closeable {
         consumerTask.removeAssignmentsForPartitions(partitions);
     }
 
-    public Optional<Long> receivedOffsetForPartition(int metadataPartition) {
-        return consumerTask.receivedOffsetForPartition(metadataPartition);
+    public Optional<Long> readOffsetForPartition(int metadataPartition) {
+        return consumerTask.readOffsetForMetadataPartition(metadataPartition);
     }
 }

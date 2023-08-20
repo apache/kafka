@@ -264,8 +264,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     // Visible For Testing
-    public Optional<Long> receivedOffsetForPartition(int metadataPartition) {
-        return consumerManager.receivedOffsetForPartition(metadataPartition);
+    public Optional<Long> readOffsetForPartition(int metadataPartition) {
+        return consumerManager.readOffsetForPartition(metadataPartition);
     }
 
     @Override

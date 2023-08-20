@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
@@ -85,8 +86,7 @@ public class ConsumerTaskTest {
             .collect(Collectors.toMap(Function.identity(), e -> 0L));
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updateBeginningOffsets(offsets);
-        ConsumerTask.pollIntervalMs = 10L;
-        consumerTask = new ConsumerTask(handler, partitioner, consumer);
+        consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, new SystemTime());
         thread = new Thread(consumerTask);
     }
 
@@ -156,7 +156,7 @@ public class ConsumerTaskTest {
         final TopicIdPartition tpId = allPartitions.get(0);
         TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Timed out waiting for " + tpId + " to be assigned");
         addRecord(consumer, partitioner.metadataPartition(tpId), tpId, 0);
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(partitioner.metadataPartition(tpId)).isPresent(),
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(partitioner.metadataPartition(tpId)).isPresent(),
             "Couldn't read record");
 
         final Set<TopicIdPartition> removePartitions = Collections.singleton(tpId);
@@ -201,7 +201,7 @@ public class ConsumerTaskTest {
         Runnable consumerRunnable = () -> {
             try {
                 while (!isAllPartitionsAssigned.get()) {
-                    consumerTask.maybeWaitForPartitionsAssignment();
+                    consumerTask.maybeWaitForPartitionAssignments();
                     latch.countDown();
                 }
             } catch (Exception e) {
@@ -235,19 +235,19 @@ public class ConsumerTaskTest {
 
         addRecord(consumer, metadataPartition, tpId0, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         assertEquals(2, handler.metadataCounter);
 
         // should only read the tpId1 records
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
         TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId1), "Timed out waiting for " + tpId1 + " to be assigned");
         addRecord(consumer, metadataPartition, tpId1, 2);
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(2L)), "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(2L)), "Couldn't read record");
         assertEquals(3, handler.metadataCounter);
 
         // shouldn't read tpId2 records because it's not assigned
         addRecord(consumer, metadataPartition, tpId2, 3);
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(3L)), "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(3L)), "Couldn't read record");
         assertEquals(3, handler.metadataCounter);
     }
 
@@ -263,7 +263,7 @@ public class ConsumerTaskTest {
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
         assertFalse(handler.isPartitionInitialized.containsKey(tpId));
         IntStream.range(0, 5).forEach(offset -> addRecord(consumer, metadataPartition, tpId, offset));
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(4L)), "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(4L)), "Couldn't read record");
         assertTrue(handler.isPartitionInitialized.get(tpId));
     }
 
@@ -282,7 +282,7 @@ public class ConsumerTaskTest {
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
         TestUtils.waitForCondition(() -> handler.isPartitionInitialized.containsKey(tpId),
             "should have initialized the partition");
-        assertFalse(consumerTask.receivedOffsetForPartition(metadataPartition).isPresent());
+        assertFalse(consumerTask.readOffsetForMetadataPartition(metadataPartition).isPresent());
     }
 
     @Test
@@ -331,7 +331,7 @@ public class ConsumerTaskTest {
         consumer.setPollException(new TimeoutException("Not able to complete the operation within the timeout"));
         addRecord(consumer, metadataPartition, tpId, 1);
 
-        TestUtils.waitForCondition(() -> consumerTask.receivedOffsetForPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         assertEquals(2, handler.metadataCounter);
     }
 

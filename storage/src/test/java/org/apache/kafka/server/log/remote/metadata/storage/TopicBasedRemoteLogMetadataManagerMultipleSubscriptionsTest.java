@@ -171,8 +171,8 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     private void waitUntilConsumerCatchesUp(long timeoutMs) throws TimeoutException, InterruptedException {
         TestUtils.waitForCondition(() -> {
             // If both the leader and follower partitions are mapped to the same metadata partition which is 0, it
-            // should have at least 2 messages. That means, received offset should be >= 1 (including duplicate messages if any).
-            return rlmm().receivedOffsetForPartition(0).orElse(-1L) >= 1;
+            // should have at least 2 messages. That means, read offset should be >= 1 (including duplicate messages if any).
+            return rlmm().readOffsetForPartition(0).orElse(-1L) >= 1;
         }, timeoutMs, "Consumer did not catch up");
     }
 }
