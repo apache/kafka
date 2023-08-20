@@ -543,6 +543,67 @@ errors.tolerance=all</pre>
         </tbody>
     </table>
 
+    <h4><a id="connect_plugindiscovery" href="#connect_plugindiscovery">Plugin Discovery</a></h4>
+
+    <p>Plugin discovery is the name for the strategy which the Connect worker uses to find plugin classes and make them accessible to configure and run in connectors. This is controlled by the <a href="#connectconfigs_plugin.discovery">plugin.discovery</a> worker configuration, and has a significant impact on worker startup time. <code>service_load</code> is the fastest strategy, but care should be taken to verify that plugins are compatible before setting this configuration to <code>service_load</code>.</p>
+
+    <p>Prior to version 3.6, this strategy was not configurable, and behaved like the <code>only_scan</code> mode which is compatible with all plugins. For version 3.6 and later, this mode defaults to <code>hybrid_warn</code> which is also compatible with all plugins, but logs a warning for plugins which are incompatible with <code>service_load</code>. The <code>hybrid_fail</code> strategy stops the worker with an error if a plugin incompatible with <code>service_load</code> is detected, asserting that all plugins are compatible. Finally, the <code>service_load</code> strategy disables the slow legacy scanning mechanism used in all other modes, and instead uses the faster <code>ServiceLoader</code> mechanism. Plugins which are incompatible with that mechanism may be unusable.</p>
+
+    <h5><a id="connect_plugindiscovery_compatibility" href="#connect_plugindiscovery_compatibility">Verifying Plugin Compatibility</a></h5>
+
+    <p>To verify if all of your plugins are compatible with <code>service_load</code>, first ensure that you are using version 3.6 or later of Kafka Connect. You can then perform one of the following checks:</p>
+
+    <ul>
+        <li>Start your worker with the default <code>hybrid_warn</code>strategy, and WARN logs enabled for the <code>org.apache.kafka.connect</code> package. At least one WARN log message mentioning the <code>plugin.discovery</code> configuration should be printed. This log message will explicitly say that all plugins are compatible, or list the incompatible plugins.</li>
+        <li>Start your worker in a test environment with <code>hybrid_fail</code>. If all plugins are compatible, startup will succeed. If at least one plugin is not compatible the worker will fail to start up, and all incompatible plugins will be listed in the exception.</li>
+    </ul>
+
+    <p>If the verification step succeeds, then your current set of installed plugins is compatible, and it should be safe to change the <code>plugin.discovery</code> configuration to <code>service_load</code>. If the verification fails, you cannot use <code>service_load</code> strategy and should take note of the list of incompatible plugins. All plugins must be addressed before using the <code>service_load</code> strategy. It is recommended to perform this verification after installing or changing plugin versions, and the verification can be done automatically in a Continuous Integration environment.</p>
+
+    <h5><a id="connect_plugindiscovery_migrateartifact" href="#connect_plugindiscovery_migrateartifact">Operators: Artifact Migration</a></h5>
+
+    <p>As an operator of Connect, if you discover incompatible plugins, there are multiple ways to resolve the incompatibility. They are listed below from most to least preferable.</p>
+
+    <ol>
+        <li>Check the latest release from your plugin provider, and if it is compatible, upgrade.</li>
+        <li>Contact your plugin provider and request that they migrate the plugin to be compatible, following the <a href="#connect_plugindiscovery_migratesource">source migration instructions</a>, and then upgrade to the compatible version.</li>
+        <li>Migrate the plugin artifacts yourself using the included migration script.</li>
+    </ol>
+
+    <p>The migration script is located in <code>bin/connect-plugin-path.sh</code> and <code>bin\windows\connect-plugin-path.bat</code> of your Kafka installation. The script can migrate incompatible plugin artifacts already installed on your Connect worker's <code>plugin.path</code> by adding or modifying JAR or resource files. This is not suitable for environments using code-signing, as this can change artifacts such that they will fail signature verification. View the built-in help with <code>--help</code>.</p>
+
+    <p>To perform a migration, first use the <code>list</code> subcommand to get an overview of the plugins available to the script. You must tell the script where to find plugins, which can be done with the repeatable <code>--worker-config</code>, <code>--plugin-path</code>, and <code>--plugin-location</code> arguments. The script will ignore plugins on the classpath, so any custom plugins on your classpath should be moved to the plugin path in order to be used with this migration script, or migrated manually. Be sure to compare the output of <code>list</code> with the worker startup warning or error message to ensure that all of your affected plugins are found by the script.</p>
+
+    <p>Once you see that all incompatible plugins are included in the listing, you can proceed to dry-run the migration with <code>sync-manifests --dry-run</code>. This will perform all parts of the migration, except for writing the results of the migration to disk. Note that the <code>sync-manifests</code> command requires all specified paths to be writable, and may alter the contents of the directories. Make a backup of your plugins in the specified paths, or copy them to a writable directory.</p>
+
+    <p>Ensure that you have a backup of your plugins and the dry-run succeeds before removing the <code>--dry-run</code> flag and actually running the migration. If the migration fails without the <code>--dry-run</code> flag, then the partially migrated artifacts should be discarded. The migration is idempotent, so running it multiple times and on already-migrated plugins is safe. After the script finishes, you should <a href="#connect_plugindiscovery_compatibility">verify the migration is complete</a>. The migration script is suitable for use in a Continuous Integration environment for automatic migration.</p>
+
+    <h5><a id="connect_plugindiscovery_migratesource" href="#connect_plugindiscovery_migratesource">Developers: Source Migration</a></h5>
+
+    <p>To make plugins compatible with <code>service_load</code>, it is necessary to add <a href="https://docs.oracle.com/javase/8/docs/api/java/util/ServiceLoader.html">ServiceLoader</a> manifests to your source code, which should then be packaged in the release artifact. Manifests are resource files in <code>META-INF/services/</code> named after their superclass type, and contain a list of fully-qualified subclass names, one on each line.</p>
+
+    <p>In order for a plugin to be compatible, it must appear as a line in a manifest corresponding to the plugin superclass it extends. If a single plugin implements multiple plugin interfaces, then it should appear in a manifest for each interface it implements. If you have no classes for a certain type of plugin, you do not need to include a manifest file for that type. If you have classes which should not be visible as plugins, they should be marked abstract. The following types are expected to have manifests:</p>
+
+    <ul>
+        <li><code>org.apache.kafka.connect.sink.SinkConnector</code></li>
+        <li><code>org.apache.kafka.connect.source.SourceConnector</code></li>
+        <li><code>org.apache.kafka.connect.storage.Converter</code></li>
+        <li><code>org.apache.kafka.connect.storage.HeaderConverter</code></li>
+        <li><code>org.apache.kafka.connect.transforms.Transformation</code></li>
+        <li><code>org.apache.kafka.connect.transforms.predicates.Predicate</code></li>
+        <li><code>org.apache.kafka.common.config.provider.ConfigProvider</code></li>
+        <li><code>org.apache.kafka.connect.rest.ConnectRestExtension</code></li>
+        <li><code>org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy</code></li>
+    </ul>
+
+    <p>For example, if you only have one connector with the fully-qualified name <code>com.example.MySinkConnector</code>, then only one manifest file must be added to resources in <code>META-INF/services/org.apache.kafka.connect.sink.SinkConnector</code>, and the contents should be similar to the following:</p>
+
+    <pre class="brush: resource;">
+# license header or comment
+com.example.MySinkConnector</pre>
+
+    <p>You should then verify that your manifests are correct by using the <a href="#connect_plugindiscovery_compatibility">verification steps</a> with a pre-release artifact. If the verification succeeds, you can then release the plugin normally, and operators can upgrade to the compatible version.</p>
+
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
 
     <p>This guide describes how developers can write new connectors for Kafka Connect to move data between Kafka and other systems. It briefly reviews a few key concepts and then describes how to create a simple connector.</p>
@@ -577,9 +638,15 @@ errors.tolerance=all</pre>
 
     <h5><a id="connect_connectorexample" href="#connect_connectorexample">Connector Example</a></h5>
 
-    <p>We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Start by creating the class that inherits from <code>SourceConnector</code> and add a field that will store the configuration information to be propagated to the task(s) (the topic to send data to, and optionally - the filename to read from and the maximum batch size):</p>
+    <p>We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Pick a package and class name, these examples will use the <code>FileStreamSourceConnector</code> but substitute your own class name where appropriate. In order to <a href="#connect_plugindiscovery">make the plugin discoverable at runtime</a>, add a ServiceLoader manifest to your resources in <code>META-INF/services/org.apache.kafka.connect.source.SourceConnector</code> with your fully-qualified class name on a single line:</p>
+    <pre class="brush: resource;">
+com.example.FileStreamSourceConnector</pre>
+
+    <p>Create a class that inherits from <code>SourceConnector</code> and add a field that will store the configuration information to be propagated to the task(s) (the topic to send data to, and optionally - the filename to read from and the maximum batch size):</p>
 
     <pre class="brush: java;">
+package com.example;
+
 public class FileStreamSourceConnector extends SourceConnector {
     private Map&lt;String, String&gt; props;</pre>
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
@@ -35,6 +36,8 @@ import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
@@ -59,6 +62,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentMatchers;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -595,4 +600,248 @@ public class GroupCoordinatorServiceTest {
             future.get()
         );
     }
+
+    @Test
+    public void testListGroups() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+                new LogContext(),
+                createConfig(),
+                runtime
+        );
+        service.startup(() -> 1);
+
+        ListGroupsRequestData request = new ListGroupsRequestData();
+
+        ListGroupsResponseData expectResponseData = new ListGroupsResponseData()
+                .setGroups(Arrays.asList(
+                        new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group1")
+                                .setGroupType(Group.GroupType.GENERIC.toString())
+                                .setGroupState("Stable")
+                                .setProtocolType("protocol1"),
+                        new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group2")
+                                .setGroupType(Group.GroupType.CONSUMER.toString())
+                                .setGroupState("Empty")
+                                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+
+                ));
+        when(runtime.scheduleReadOperation(
+                ArgumentMatchers.eq("list_groups"),
+                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+                expectResponseData));
+
+        CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
+                requestContext(ApiKeys.LIST_GROUPS),
+                request
+        );
+
+        assertTrue(responseFuture.isDone());
+        assertEquals(expectResponseData, responseFuture.get().duplicate());
+    }
+
+    @Test
+    public void testListGroupsFailed() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+                new LogContext(),
+                createConfig(),
+                runtime
+        );
+        service.startup(() -> 1);
+
+        ListGroupsRequestData request = new ListGroupsRequestData();
+
+        ListGroupsResponseData expectResponseData = new ListGroupsResponseData()
+                .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
+        when(runtime.scheduleReadOperation(
+                ArgumentMatchers.eq("list_groups"),
+                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+                expectResponseData));
+
+        CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
+                requestContext(ApiKeys.LIST_GROUPS),
+                request
+        );
+
+        responseFuture.get().errorCode();
+        assertTrue(responseFuture.isDone());
+        assertEquals(expectResponseData, responseFuture.get().duplicate());
+
+    }
+
+//    @ParameterizedTest
+//    @ApiKeyVersionsSource(apiKey = ApiKeys.LIST_GROUPS)
+//    def testListGroupsRequest(version: Short): Unit = {
+//        val listGroupsRequest = new ListGroupsRequestData()
+//                .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
+//
+//        val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build(version))
+//
+//        val expectedListGroupsRequest = new ListGroupsRequestData()
+//                .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
+//
+//        val future = new CompletableFuture[ListGroupsResponseData]()
+//        when(groupCoordinator.listGroups(
+//                requestChannelRequest.context,
+//                expectedListGroupsRequest
+//        )).thenReturn(future)
+//
+//        createKafkaApis().handleListGroupsRequest(requestChannelRequest)
+//
+//        val expectedListGroupsResponse = new ListGroupsResponseData()
+//                .setGroups(List(
+//                        new ListGroupsResponseData.ListedGroup()
+//                                .setGroupId("group1")
+//                                .setGroupState(if (version >= 4) "Stable" else "")
+//          .setProtocolType("protocol1"),
+//                new ListGroupsResponseData.ListedGroup()
+//                        .setGroupId("group2")
+//                        .setGroupState(if (version >= 4) "Empty" else "")
+//          .setProtocolType("qwerty")
+//      ).asJava)
+//
+//        future.complete(expectedListGroupsResponse)
+//        val response = verifyNoThrottling[ListGroupsResponse](requestChannelRequest)
+//                assertEquals(expectedListGroupsResponse, response.data)
+//    }
+//
+//    @Test
+//    def testListGroupsRequestFutureFailed(): Unit = {
+//        val listGroupsRequest = new ListGroupsRequestData()
+//                .setStatesFilter(List("Stable", "Empty").asJava)
+//
+//        val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build())
+//
+//        val expectedListGroupsRequest = new ListGroupsRequestData()
+//                .setStatesFilter(List("Stable", "Empty").asJava)
+//
+//        val future = new CompletableFuture[ListGroupsResponseData]()
+//        when(groupCoordinator.listGroups(
+//                requestChannelRequest.context,
+//                expectedListGroupsRequest
+//        )).thenReturn(future)
+//
+//        createKafkaApis().handleListGroupsRequest(requestChannelRequest)
+//
+//        future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+//        val response = verifyNoThrottling[ListGroupsResponse](requestChannelRequest)
+//                assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, response.data.errorCode)
+//    }
+//
+//    @Test
+//    def testListGroupsRequestFiltersUnauthorizedGroupsWithDescribeCluster(): Unit = {
+//        val authorizer: Authorizer = mock(classOf[Authorizer])
+//
+//        authorizeResource(
+//                authorizer,
+//                AclOperation.DESCRIBE,
+//                ResourceType.GROUP,
+//                "group1",
+//                AuthorizationResult.DENIED,
+//                logIfDenied = false
+//        )
+//        authorizeResource(
+//                authorizer,
+//                AclOperation.DESCRIBE,
+//                ResourceType.GROUP,
+//                "group2",
+//                AuthorizationResult.DENIED,
+//                logIfDenied = false
+//        )
+//        authorizeResource(
+//                authorizer,
+//                AclOperation.DESCRIBE,
+//                ResourceType.CLUSTER,
+//                Resource.CLUSTER_NAME,
+//                AuthorizationResult.ALLOWED,
+//                logIfDenied = false
+//        )
+//
+//        testListGroupsRequestFiltersUnauthorizedGroups(
+//                authorizer,
+//                List("group1", "group2"),
+//                List("group1", "group2")
+//        )
+//    }
+//
+//    @Test
+//    def testListGroupsRequestFiltersUnauthorizedGroupsWithDescribeGroups(): Unit = {
+//        val authorizer: Authorizer = mock(classOf[Authorizer])
+//
+//        authorizeResource(
+//                authorizer,
+//                AclOperation.DESCRIBE,
+//                ResourceType.GROUP,
+//                "group1",
+//                AuthorizationResult.DENIED,
+//                logIfDenied = false
+//        )
+//        authorizeResource(
+//                authorizer,
+//                AclOperation.DESCRIBE,
+//                ResourceType.GROUP,
+//                "group2",
+//                AuthorizationResult.ALLOWED,
+//                logIfDenied = false
+//        )
+//        authorizeResource(
+//                authorizer,
+//                AclOperation.DESCRIBE,
+//                ResourceType.CLUSTER,
+//                Resource.CLUSTER_NAME,
+//                AuthorizationResult.DENIED,
+//                logIfDenied = false
+//        )
+//
+//        testListGroupsRequestFiltersUnauthorizedGroups(
+//                authorizer,
+//                List("group1", "group2"),
+//                List("group2")
+//        )
+//    }
+//
+//    def testListGroupsRequestFiltersUnauthorizedGroups(
+//            authorizer: Authorizer,
+//            groups: List[String],
+//            expectedGroups: List[String],
+//            ): Unit = {
+//        val listGroupsRequest = new ListGroupsRequestData()
+//
+//        val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build())
+//
+//        val expectedListGroupsRequest = new ListGroupsRequestData()
+//
+//        val future = new CompletableFuture[ListGroupsResponseData]()
+//        when(groupCoordinator.listGroups(
+//                requestChannelRequest.context,
+//                expectedListGroupsRequest
+//        )).thenReturn(future)
+//
+//        createKafkaApis(authorizer = Some(authorizer)).handleListGroupsRequest(requestChannelRequest)
+//
+//        val listGroupsResponse = new ListGroupsResponseData()
+//        groups.foreach { groupId =>
+//            listGroupsResponse.groups.add(new ListGroupsResponseData.ListedGroup()
+//                    .setGroupId(groupId)
+//            )
+//        }
+//
+//        val expectedListGroupsResponse = new ListGroupsResponseData()
+//        expectedGroups.foreach { groupId =>
+//            expectedListGroupsResponse.groups.add(new ListGroupsResponseData.ListedGroup()
+//                    .setGroupId(groupId)
+//            )
+//        }
+//
+//        future.complete(listGroupsResponse)
+//        val response = verifyNoThrottling[ListGroupsResponse](requestChannelRequest)
+//                assertEquals(expectedListGroupsResponse, response.data)
+//    }
+
 }

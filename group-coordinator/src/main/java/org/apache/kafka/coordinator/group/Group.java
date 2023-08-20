@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 
 /**
  * Interface common for all groups.
@@ -66,4 +67,9 @@ public interface Group {
         String groupInstanceId,
         int generationIdOrMemberEpoch
     ) throws KafkaException;
+
+    /**
+     * @return the group formatted as a list group response.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup();
 }

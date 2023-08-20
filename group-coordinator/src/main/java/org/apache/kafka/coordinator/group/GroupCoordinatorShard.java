@@ -58,7 +58,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -287,7 +286,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             RequestContext context,
             ListGroupsRequestData request
     ) throws ApiException {
-        return groupMetadataManager.listGenericGroups(request);
+        return groupMetadataManager.listGroups(request);
     }
 
     /**

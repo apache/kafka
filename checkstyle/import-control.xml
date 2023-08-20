@@ -261,6 +261,10 @@
       <allow pkg="org.apache.kafka.storage"/>
       <subpackage name="remote">
         <allow pkg="scala.collection" />
+        <subpackage name="storage">
+          <allow pkg="com.yammer.metrics.core" />
+          <allow pkg="org.apache.kafka.server.metrics" />
+        </subpackage>
       </subpackage>
 
     </subpackage>
@@ -304,6 +308,8 @@
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.connect.runtime" />
+    <allow pkg="org.apache.kafka.connect.runtime.isolation" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
@@ -566,6 +572,8 @@
       <allow pkg="javax.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
+      <!-- for tests -->
+      <allow pkg="org.apache.kafka.server.util" />
     </subpackage>
 
     <subpackage name="json">
@@ -585,6 +593,7 @@
 
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.server.util" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 

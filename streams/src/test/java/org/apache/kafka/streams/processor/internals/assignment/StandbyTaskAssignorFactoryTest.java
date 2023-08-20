@@ -16,30 +16,91 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Arrays;
+import java.util.Collection;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@RunWith(Parameterized.class)
 public class StandbyTaskAssignorFactoryTest {
+    @org.junit.Rule
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.LENIENT);
+
     private static final long ACCEPTABLE_RECOVERY_LAG = 0L;
     private static final int MAX_WARMUP_REPLICAS = 1;
     private static final int NUMBER_OF_STANDBY_REPLICAS = 1;
     private static final long PROBING_REBALANCE_INTERVAL_MS = 60000L;
 
-    @Test
-    public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(singletonList("az")));
-        assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
+    enum State {
+        DISABLED,
+        ENABLED,
+        NULL
+    }
+
+    private RackAwareTaskAssignor rackAwareTaskAssignor;
+
+    @Parameter
+    public State state;
+
+    @Parameterized.Parameters(name = "RackAwareTaskAssignor={0}")
+    public static Collection<State> parameters() {
+        return Arrays.asList(State.DISABLED, State.ENABLED, State.NULL);
+    }
+
+    @Before
+    public void setUp() {
+        if (state == State.ENABLED) {
+            rackAwareTaskAssignor = mock(RackAwareTaskAssignor.class);
+            when(rackAwareTaskAssignor.validClientRack()).thenReturn(true);
+        } else if (state == State.DISABLED) {
+            rackAwareTaskAssignor = mock(RackAwareTaskAssignor.class);
+            when(rackAwareTaskAssignor.validClientRack()).thenReturn(false);
+        } else {
+            rackAwareTaskAssignor = null;
+        }
     }
 
     @Test
-    public void shouldReturnDefaultStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty() {
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(Collections.emptyList()));
-        assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
+    public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(singletonList("az")), rackAwareTaskAssignor);
+        assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
+        if (state != State.NULL) {
+            verify(rackAwareTaskAssignor, never()).racksForProcess();
+            verify(rackAwareTaskAssignor, never()).validClientRack();
+        }
+    }
+
+    @Test
+    public void shouldReturnDefaultOrRackAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty() {
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(Collections.emptyList()), rackAwareTaskAssignor);
+        if (state == State.ENABLED) {
+            assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
+            verify(rackAwareTaskAssignor, times(1)).racksForProcess();
+            verify(rackAwareTaskAssignor, times(1)).validClientRack();
+        } else if (state == State.DISABLED) {
+            assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
+            verify(rackAwareTaskAssignor, never()).racksForProcess();
+            verify(rackAwareTaskAssignor, times(1)).validClientRack();
+        } else {
+            assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
+        }
     }
 
     private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final List<String> rackAwareAssignmentTags) {

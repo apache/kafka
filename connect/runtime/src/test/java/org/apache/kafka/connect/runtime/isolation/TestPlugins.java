@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -124,7 +125,7 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, and is missing a superclass definition.
          */
-        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclass", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclassConverter", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
          */
@@ -172,7 +173,35 @@ public class TestPlugins {
         /**
          * A ServiceLoader discovered plugin which subclasses another plugin which is present on the classpath
          */
-        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY("subclass-of-classpath", "test.plugins.SubclassOfClasspathOverridePolicy");
+        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY("subclass-of-classpath", "test.plugins.SubclassOfClasspathOverridePolicy"),
+        /**
+         * A converter which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_CONVERTER("non-migrated", "test.plugins.NonMigratedConverter", false),
+        /**
+         * A header converter which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_HEADER_CONVERTER("non-migrated", "test.plugins.NonMigratedHeaderConverter", false),
+        /**
+         * A plugin which implements multiple interfaces, and has ServiceLoader manifests for some interfaces and not others.
+         */
+        NON_MIGRATED_MULTI_PLUGIN("non-migrated", "test.plugins.NonMigratedMultiPlugin", false),
+        /**
+         * A predicate which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_PREDICATE("non-migrated", "test.plugins.NonMigratedPredicate", false),
+        /**
+         * A sink connector which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_SINK_CONNECTOR("non-migrated", "test.plugins.NonMigratedSinkConnector", false),
+        /**
+         * A source connector which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_SOURCE_CONNECTOR("non-migrated", "test.plugins.NonMigratedSourceConnector", false),
+        /**
+         * A transformation which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_TRANSFORMATION("non-migrated", "test.plugins.NonMigratedTransformation", false);
 
         private final String resourceDir;
         private final String className;
@@ -248,7 +277,7 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<Path> pluginPath() {
+    public static Set<Path> pluginPath() {
         return pluginPath(defaultPlugins());
     }
 
@@ -262,14 +291,14 @@ public class TestPlugins {
      * @return A list of plugin jar filenames containing the specified test plugins
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<Path> pluginPath(TestPlugin... plugins) {
+    public static Set<Path> pluginPath(TestPlugin... plugins) {
         assertAvailable();
         return Arrays.stream(plugins)
                 .filter(Objects::nonNull)
                 .map(TestPlugin::resourceDir)
                 .distinct()
                 .map(PLUGIN_JARS::get)
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
     }
 
     public static String pluginPathJoined(TestPlugin... plugins) {

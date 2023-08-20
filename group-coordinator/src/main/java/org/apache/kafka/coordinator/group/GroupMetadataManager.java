@@ -414,24 +414,18 @@ public class GroupMetadataManager {
     /**
      * @return The GenericGroup List filtered by statesFilter or typesFilter.
      */
-    public ListGroupsResponseData listGenericGroups(ListGroupsRequestData request) throws GroupIdNotFoundException {
+    public ListGroupsResponseData listGroups(ListGroupsRequestData request) throws GroupIdNotFoundException {
         List<ListGroupsResponseData.ListedGroup> listedGroups = Collections.emptyList();
-        Stream<GenericGroup> genericGroupStream = groups.values().stream().
-                map(group -> getOrMaybeCreateGenericGroup(group.groupId(),
-                        false));
+        Stream<Group> groupStream = groups.values().stream();
         List<String> statesFilter = request.statesFilter();
         if (!statesFilter.isEmpty()) {
-            genericGroupStream = genericGroupStream.filter(group -> statesFilter.contains(group.stateAsString()));
+            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString()));
         }
         List<String> typesFilter = request.statesFilter();
         if (!typesFilter.isEmpty()) {
-            genericGroupStream = genericGroupStream.filter(group -> typesFilter.contains(group.type().toString()));
+            groupStream = groupStream.filter(group -> typesFilter.contains(group.type().toString()));
         }
-        return new ListGroupsResponseData().setGroups(
-                genericGroupStream.map(group -> new ListGroupsResponseData.ListedGroup()
-                        .setGroupId(group.groupId())
-                        .setGroupState(group.stateAsString())
-                        .setProtocolType(group.protocolType().get())).collect(Collectors.toList()));
+        return new ListGroupsResponseData().setGroups(groupStream.map(Group::asListedGroup).collect(Collectors.toList()));
     }
 
     /**

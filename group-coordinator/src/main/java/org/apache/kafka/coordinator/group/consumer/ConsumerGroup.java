@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.image.ClusterImage;
@@ -739,4 +741,15 @@ public class ConsumerGroup implements Group {
     private static Integer incValue(String key, Integer value) {
         return value == null ? 1 : value + 1;
     }
+
+    /**
+     * @return the group formatted as a list group response.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup() {
+        return new ListGroupsResponseData.ListedGroup()
+                .setGroupId(groupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(state.toString());
+    }
+
 }

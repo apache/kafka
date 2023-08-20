@@ -385,9 +385,7 @@ public final class RaftClientTestContext {
         return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
     }
 
-    void expectAndGrantVotes(
-        int epoch
-    ) throws Exception {
+    void expectAndGrantVotes(int epoch) throws Exception {
         pollUntilRequest();
 
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch,
@@ -406,9 +404,7 @@ public final class RaftClientTestContext {
         return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
-    private void expectBeginEpoch(
-        int epoch
-    ) throws Exception {
+    private void expectBeginEpoch(int epoch) throws Exception {
         pollUntilRequest();
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
             BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localIdOrThrow());
