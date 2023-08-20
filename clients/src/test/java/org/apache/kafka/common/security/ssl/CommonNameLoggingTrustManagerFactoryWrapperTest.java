@@ -48,18 +48,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @TestInstance(Lifecycle.PER_CLASS)
 public class CommonNameLoggingTrustManagerFactoryWrapperTest {
 
-    X509Certificate[] chainWithValidEndCertificate;
-    X509Certificate[] chainWithExpiredEndCertificate;
-    X509Certificate[] chainWithInvalidEndCertificate;
-    X509Certificate[] chainWithMultipleEndCertificates;
-
+    private X509Certificate[] chainWithValidEndCertificate;
+    private X509Certificate[] chainWithExpiredEndCertificate;
+    private X509Certificate[] chainWithInvalidEndCertificate;
+    private X509Certificate[] chainWithMultipleEndCertificates;
+    private X509Certificate[] chainWithValidAndInvalidEndCertificates;
 
     @BeforeAll
     public void setUpOnce() throws CertificateException, NoSuchAlgorithmException {
-        chainWithValidEndCertificate = generateKeyChainIncludingCA(false, true, false);
-        chainWithExpiredEndCertificate = generateKeyChainIncludingCA(true, true, false);
-        chainWithInvalidEndCertificate = generateKeyChainIncludingCA(false, false, false);
-        chainWithMultipleEndCertificates = generateKeyChainIncludingCA(false, false, true);
+        chainWithValidEndCertificate = generateKeyChainIncludingCA(false, false, true, false);
+        chainWithExpiredEndCertificate = generateKeyChainIncludingCA(true, false, true, false);
+        chainWithInvalidEndCertificate = generateKeyChainIncludingCA(false, false, false, false);
+        chainWithMultipleEndCertificates = generateKeyChainIncludingCA(false, true, false, true);
+        chainWithValidAndInvalidEndCertificates = generateKeyChainIncludingCA(false, true, true, false);
     }
 
     @Test
@@ -451,6 +452,45 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         }
     }
 
+        @Test
+    public void testCommonNameLoggingTrustManagerMixValidAndInvalidCertificates() throws Exception {
+        // Setup certificate chain with expired end certificate
+        X509Certificate endCertValid = chainWithValidAndInvalidEndCertificates[0];
+        X509Certificate endCertInvalid = chainWithValidAndInvalidEndCertificates[1];
+        X509Certificate intermediateCert = chainWithValidAndInvalidEndCertificates[2];
+        X509Certificate caCert = chainWithValidAndInvalidEndCertificates[3];
+        X509Certificate[] validChainWithoutCa = new X509Certificate[] {endCertValid, intermediateCert};
+        X509Certificate[] invalidChainWithoutCa = new X509Certificate[] {endCertInvalid, intermediateCert};
+        // Setup certificate chain with valid end certificate
+
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("CA", caCert);
+
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        tmf.init(trustStore);
+        final X509TrustManager origTrustManager = getX509TrustManager(tmf);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
+
+            CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
+
+            // Call with valid certificate
+            assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(validChainWithoutCa, "RSA"));
+            // Call with invalid certificate
+            assertThrows(CertificateException.class,
+                    () -> testTrustManager.checkClientTrusted(invalidChainWithoutCa, "RSA"));
+            // Call with valid certificate again
+            assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(validChainWithoutCa, "RSA"));
+            // Call with invalid certificate
+            assertThrows(CertificateException.class,
+                    () -> testTrustManager.checkClientTrusted(invalidChainWithoutCa, "RSA"));
+            // Call with valid certificate again
+            assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(validChainWithoutCa, "RSA"));
+        }
+    }
+
     @Test
     public void testSortChainAnWrapEndCertificate() {
         // Calling method with null or empty chain is expected to throw
@@ -506,7 +546,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
      * @throws CertificateException
      * @throws NoSuchAlgorithmException
      */
-    private X509Certificate[] generateKeyChainIncludingCA(boolean expired, boolean endCertValid, boolean multipleEndCert)
+    private X509Certificate[] generateKeyChainIncludingCA(boolean expired, boolean multipleEndCert, boolean endCert0Valid, boolean endCert1Valid)
             throws CertificateException, NoSuchAlgorithmException {
         // For testing, we might create another end certificate
         int nrOfCerts = multipleEndCert ? 4 : 3;
@@ -527,6 +567,8 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
                 keyPairs[intermediateCertIndex], 365, 365, certs[caIndex].getSubjectX500Principal().getName(), keyPairs[caIndex],
                 "SHA512withRSA", true, false, false);
         for (int currIndex = intermediateCertIndex - 1; currIndex >= 0; currIndex--) {
+            // When generating multiple end certificates, 
+            boolean endCertValid = currIndex==0 ? endCert0Valid : endCert1Valid;
             if (endCertValid) {
                 // Generate a valid end certificate, i.e. one that is signed by our intermediate
                 // CA
