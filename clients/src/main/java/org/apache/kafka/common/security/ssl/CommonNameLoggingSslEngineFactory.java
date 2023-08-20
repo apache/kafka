@@ -71,7 +71,7 @@ import javax.net.ssl.TrustManagerFactory;
 
 public final class CommonNameLoggingSslEngineFactory implements SslEngineFactory {
 
-    private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
+    private static final Logger log = LoggerFactory.getLogger(CommonNameLoggingSslEngineFactory.class);
     public static final String PEM_TYPE = "PEM";
 
     private Map<String, ?> configs;

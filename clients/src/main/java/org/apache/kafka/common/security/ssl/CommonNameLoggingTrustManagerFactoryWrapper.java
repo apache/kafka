@@ -53,7 +53,7 @@ import javax.security.auth.x500.X500Principal;
  */
 class CommonNameLoggingTrustManagerFactoryWrapper {
 
-    private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
+    private static final Logger log = LoggerFactory.getLogger(CommonNameLoggingTrustManagerFactoryWrapper.class);
 
     private TrustManagerFactory origTmf;
 

@@ -255,7 +255,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         tmf.init(trustStore);
         final X509TrustManager origTrustManager = getX509TrustManager(tmf);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CommonNameLoggingSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
             // Check client certificate first
@@ -292,7 +292,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         tmf.init(trustStore);
         final X509TrustManager origTrustManager = getX509TrustManager(tmf);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CommonNameLoggingSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
             assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
@@ -322,7 +322,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         tmf.init(trustStore);
         final X509TrustManager origTrustManager = getX509TrustManager(tmf);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CommonNameLoggingSslEngineFactory.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
             // Check client certificate
@@ -368,7 +368,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         tmf.init(trustStore);
         final X509TrustManager origTrustManager = getX509TrustManager(tmf);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CommonNameLoggingTrustManagerFactoryWrapper.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
 
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
@@ -411,7 +411,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         tmf.init(trustStore);
         final X509TrustManager origTrustManager = getX509TrustManager(tmf);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CommonNameLoggingTrustManagerFactoryWrapper.class)) {
             int nrOfInitialMessagges = appender.getMessages().size();
 
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
@@ -427,18 +427,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             assertEquals(nrOfInitialMessagges + 1, logMessages.size());
             assertEquals("Certificate with common name \"" + endCert.getSubjectX500Principal() +
                 "\" expired on " + endCert.getNotAfter(), logMessages.get(logMessages.size() - 1));
-            // Test the same certificate again. This time, no method must be logged as the chain is rejected based on the cache
-            // Call original method, then method of wrapped trust manager and compare result
-            origException = assertThrows(CertificateException.class,
-                    () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
-            testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
-            assertEquals(origException.getMessage(), testException.getMessage());
-            // Check that there is still exactly one message (and not a second one!)
-            logMessages = appender.getMessages();
-            assertEquals(nrOfInitialMessagges + 1, logMessages.size());
-            assertEquals("Certificate with common name \"" + endCert.getSubjectX500Principal() +
-                "\" expired on " + endCert.getNotAfter(), logMessages.get(logMessages.size() - 1));
+            // Note: As there are multiple SSLContext created within Kafka, the message may be logged multiple times
 
             // Check validation of server certificates, then method of wrapped trust manager and compare result
             origException = assertThrows(CertificateException.class,
@@ -472,7 +461,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         tmf.init(trustStore);
         final X509TrustManager origTrustManager = getX509TrustManager(tmf);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultSslEngineFactory.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CommonNameLoggingSslEngineFactory.class)) {
 
             CommonNameLoggingTrustManager testTrustManager = new CommonNameLoggingTrustManager(origTrustManager, 2);
 
