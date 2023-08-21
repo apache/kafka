@@ -157,6 +157,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     public void setSerdesIfNull(final SerdeGetter getter) {
         keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
         valueSerde = valueSerde == null ? getter.valueSerde() : valueSerde;
+        this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor((ProcessorContext) context, name(), Boolean.TRUE);
+        }
     }
 
     @Deprecated
@@ -291,11 +296,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
-        this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
-        partition = context.taskId().partition();
-        if (loggingEnabled) {
-            changelogTopic = ProcessorContextUtils.changelogFor((ProcessorContext) context, name(), Boolean.TRUE);
-        }
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,
@@ -311,10 +311,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
 
     private void logTombstone(final Bytes key) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
-        partition = context.taskId().partition();
-        if (loggingEnabled) {
-            changelogTopic = ProcessorContextUtils.changelogFor((ProcessorContext) context, name(), Boolean.TRUE);
-        }
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,

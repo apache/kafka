@@ -86,7 +86,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             buffer = new RocksDBTimeOrderedKeyValueBuffer<>(
                 requireNonNull(context.getStateStore(storeName)),
                 gracePeriod.orElse(Duration.ZERO),
-                ((org.apache.kafka.streams.processor.ProcessorContext) context).topic(),
+                internalProcessorContext.topic(),
                 true);
             buffer.setSerdesIfNull(new SerdeGetter(context));
         }
