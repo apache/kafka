@@ -465,6 +465,15 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
+            if (!firstPublish && image.isEmpty()) {
+                // KAFKA-15389 When first loading from an empty log, MetadataLoader can publish an empty image
+                log.debug("Encountered an empty MetadataImage while waiting for the first image to be published. " +
+                        "Ignoring this image since it either does not include bootstrap records or it is a valid " +
+                        "image for an older unsupported metadata version.");
+                completionHandler.accept(null);
+                return;
+            }
+
             KRaftMigrationDriver.this.firstPublish = true;
             MetadataImage prevImage = KRaftMigrationDriver.this.image;
             KRaftMigrationDriver.this.image = image;
