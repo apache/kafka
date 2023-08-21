@@ -16,14 +16,18 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -39,6 +43,8 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -107,7 +113,9 @@ public class DefaultBackgroundThread extends KafkaThread {
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                    final ConsumerMetadata metadata,
                                    final SubscriptionState subscriptionState,
-                                   final KafkaClient networkClient) {
+                                   final ApiVersions apiVersions,
+                                   final Metrics metrics,
+                                   final Sensor fetcherThrottleTimeSensor) {
         super(BACKGROUND_THREAD_NAME, true);
         requireNonNull(config);
         requireNonNull(rebalanceConfig);
@@ -116,7 +124,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         requireNonNull(backgroundEventQueue);
         requireNonNull(metadata);
         requireNonNull(subscriptionState);
-        requireNonNull(networkClient);
         try {
             this.time = time;
             this.log = logContext.logger(getClass());
@@ -125,6 +132,15 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.subscriptionState = subscriptionState;
             this.config = config;
             this.metadata = metadata;
+            final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
+                    logContext,
+                    apiVersions,
+                    time,
+                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                    metadata,
+                    fetcherThrottleTimeSensor);
             this.networkClientDelegate = new NetworkClientDelegate(
                     this.time,
                     this.config,

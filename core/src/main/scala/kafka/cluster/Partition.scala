@@ -355,7 +355,12 @@ class Partition(val topicPartition: TopicPartition,
 
   def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - partitionState.isr.size) > 0
 
-  def isUnderMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size < _.config.minInSyncReplicas }
+  // In the makeFollower process, it will first change the leaderReplicaIdOpt then clear the ISR. In order not to get
+  // a false positive under min isr check, it has to check the leaderReplicaIdOpt again. Though it can still be affected
+  // by ABA problems when leader->follower->leader, but it should be good enough for a metric.
+  def isUnderMinIsr: Boolean = {
+    leaderLogIfLocal.exists { partitionState.isr.size < _.config.minInSyncReplicas } && isLeader
+  }
 
   def isAtMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size == _.config.minInSyncReplicas }
 
@@ -798,6 +803,14 @@ class Partition(val topicPartition: TopicPartition,
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionState.controllerEpoch
 
+      val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
+      // The leader should be updated before updateAssignmentAndIsr where we clear the ISR. Or it is possible to meet
+      // the under min isr condition during the makeFollower process and emits the wrong metric.
+      leaderReplicaIdOpt = Option(partitionState.leader)
+      leaderEpoch = partitionState.leaderEpoch
+      leaderEpochStartOffsetOpt = None
+      partitionEpoch = partitionState.partitionEpoch
+
       updateAssignmentAndIsr(
         replicas = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
         isLeader = false,
@@ -817,8 +830,6 @@ class Partition(val topicPartition: TopicPartition,
       }
 
       val followerLog = localLogOrException
-      val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
-
       if (isNewLeaderEpoch) {
         val leaderEpochEndOffset = followerLog.logEndOffset
         stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
@@ -829,11 +840,6 @@ class Partition(val topicPartition: TopicPartition,
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
           s"and partition state $partitionState since it is already a follower with leader epoch $leaderEpoch.")
       }
-
-      leaderReplicaIdOpt = Option(partitionState.leader)
-      leaderEpoch = partitionState.leaderEpoch
-      leaderEpochStartOffsetOpt = None
-      partitionEpoch = partitionState.partitionEpoch
 
       // We must restart the fetchers when the leader epoch changed regardless of
       // whether the leader changed as well.

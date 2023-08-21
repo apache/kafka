@@ -291,10 +291,17 @@ public class IntegrationTestUtils {
     public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster,
                                             final int partitionCount,
                                             final String... topics) {
+        cleanStateBeforeTest(cluster, partitionCount, 1, topics);
+    }
+
+    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster,
+                                            final int partitionCount,
+                                            final int replicationCount,
+                                            final String... topics) {
         try {
             cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
             for (final String topic : topics) {
-                cluster.createTopic(topic, partitionCount, 1);
+                cluster.createTopic(topic, partitionCount, replicationCount);
             }
         } catch (final InterruptedException e) {
             throw new RuntimeException(e);

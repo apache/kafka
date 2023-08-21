@@ -159,6 +159,10 @@ class MetadataVersionTest {
 
         assertEquals(IBP_3_5_IV0, MetadataVersion.fromVersionString("3.5-IV0"));
         assertEquals(IBP_3_5_IV1, MetadataVersion.fromVersionString("3.5-IV1"));
+        assertEquals(IBP_3_5_IV2, MetadataVersion.fromVersionString("3.5-IV2"));
+
+        assertEquals(IBP_3_6_IV0, MetadataVersion.fromVersionString("3.6-IV0"));
+        assertEquals(IBP_3_6_IV1, MetadataVersion.fromVersionString("3.6-IV1"));
     }
 
     @Test
@@ -209,6 +213,9 @@ class MetadataVersionTest {
         assertEquals("3.4", IBP_3_4_IV0.shortVersion());
         assertEquals("3.5", IBP_3_5_IV0.shortVersion());
         assertEquals("3.5", IBP_3_5_IV1.shortVersion());
+        assertEquals("3.5", IBP_3_5_IV2.shortVersion());
+        assertEquals("3.6", IBP_3_6_IV0.shortVersion());
+        assertEquals("3.6", IBP_3_6_IV1.shortVersion());
     }
 
     @Test
@@ -248,6 +255,9 @@ class MetadataVersionTest {
         assertEquals("3.4-IV0", IBP_3_4_IV0.version());
         assertEquals("3.5-IV0", IBP_3_5_IV0.version());
         assertEquals("3.5-IV1", IBP_3_5_IV1.version());
+        assertEquals("3.5-IV2", IBP_3_5_IV2.version());
+        assertEquals("3.6-IV0", IBP_3_6_IV0.version());
+        assertEquals("3.6-IV1", IBP_3_6_IV1.version());
     }
 
     @Test
@@ -297,6 +307,13 @@ class MetadataVersionTest {
     public void testIsInControlledShutdownStateSupported(MetadataVersion metadataVersion) {
         assertEquals(metadataVersion.isAtLeast(IBP_3_3_IV3),
             metadataVersion.isInControlledShutdownStateSupported());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testIsDelegationTokenSupported(MetadataVersion metadataVersion) {
+        assertEquals(metadataVersion.isAtLeast(IBP_3_6_IV1),
+            metadataVersion.isDelegationTokenSupported());
     }
 
     @ParameterizedTest

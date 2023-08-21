@@ -166,6 +166,24 @@ public class RemoteIndexCache implements Closeable {
         return internalCache;
     }
 
+    public void remove(Uuid key) {
+        lock.writeLock().lock();
+        try {
+            internalCache.invalidate(key);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void removeAll(Collection<Uuid> keys) {
+        lock.writeLock().lock();
+        try {
+            internalCache.invalidateAll(keys);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     // Visible for testing
     public ShutdownableThread cleanerThread() {
         return cleanerThread;
