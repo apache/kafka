@@ -408,20 +408,17 @@ public class OffsetMetadataManager {
             offsetsByGroup.get(groupId, lastCommittedOffset);
 
         if (groupOffsets != null) {
-            // Using entrySet(lastCommittedOffset) does not respect honor the lastCommittedOffset therefore
-            // we use keySet(lastCommittedOffset) in conjunction with get(key, lastCommittedOffset) as a workaround.
-            groupOffsets.keySet(lastCommittedOffset).forEach(topic -> {
-                final TimelineHashMap<Integer, OffsetAndMetadata> topicOffsets =
-                    groupOffsets.get(topic, lastCommittedOffset);
-                if (topicOffsets == null) return;
+            groupOffsets.entrySet(lastCommittedOffset).forEach(topicEntry -> {
+                final String topic = topicEntry.getKey();
+                final TimelineHashMap<Integer, OffsetAndMetadata> topicOffsets = topicEntry.getValue();
 
                 final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
                     new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic);
                 topicResponses.add(topicResponse);
 
-                topicOffsets.keySet(lastCommittedOffset).forEach(partition -> {
-                    final OffsetAndMetadata offsetAndMetadata = topicOffsets.get(partition, lastCommittedOffset);
-                    if (offsetAndMetadata == null) return;
+                topicOffsets.entrySet(lastCommittedOffset).forEach(partitionEntry -> {
+                    final int partition = partitionEntry.getKey();
+                    final OffsetAndMetadata offsetAndMetadata = partitionEntry.getValue();
 
                     topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                         .setPartitionIndex(partition)
