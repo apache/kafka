@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.security.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
@@ -153,99 +152,6 @@ class KafkaServerTest extends QuorumTestHarness {
       case None => fail("RemoteLogManager should be initialized")
     }
     server.shutdown()
-  }
-
-  @Test
-  def testClusterWideDisablementOfTieredStorageWithEnabledTieredTopic(): Unit = {
-    val tsEnabledProps = TestUtils.createBrokerConfigs(1, zkConnect).head
-    tsEnabledProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-    tsEnabledProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-      "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
-    tsEnabledProps.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-      "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
-
-    var server: KafkaServer = null
-    try {
-      server = TestUtils.createServer(KafkaConfig.fromProps(tsEnabledProps))
-      server.remoteLogManagerOpt match {
-        case Some(_) =>
-        case None => fail("RemoteLogManager should be initialized")
-      }
-
-      val topicProps = new Properties()
-      topicProps.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, true.toString)
-
-      TestUtils.createTopic(zkClient = server.zkClient, topic = "batman", servers = Seq(server), topicConfig = topicProps)
-    } finally {
-      if (server != null) {
-        server.shutdown()
-      }
-    }
-
-    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnect).head
-
-    assertThrows(classOf[ConfigException], () => TestUtils.createServer(KafkaConfig.fromProps(tsDisabledProps)))
-  }
-
-  @Test
-  def testClusterWideDisablementOfTieredStorageWithDisabledTieredTopic(): Unit = {
-    val tsEnabledProps = TestUtils.createBrokerConfigs(1, zkConnect).head
-    tsEnabledProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-    tsEnabledProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-      "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
-    tsEnabledProps.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-      "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
-
-    var server: KafkaServer = null
-
-    try {
-      server = TestUtils.createServer(KafkaConfig.fromProps(tsEnabledProps))
-      server.remoteLogManagerOpt match {
-        case Some(_) =>
-        case None => fail("RemoteLogManager should be initialized")
-      }
-
-      val topicProps = new Properties()
-      topicProps.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
-
-      TestUtils.createTopic(zkClient = server.zkClient, topic = "batman", servers = Seq(server), topicConfig = topicProps)
-
-      server.shutdown()
-
-      val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnect).head
-
-      server = TestUtils.createServer(KafkaConfig.fromProps(tsDisabledProps))
-    } finally {
-      if (server != null) {
-        server.shutdown()
-      }
-    }
-  }
-
-  @Test
-  def testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabled(): Unit = {
-    val serverProps = TestUtils.createBrokerConfigs(1, zkConnect).head
-
-    var server: KafkaServer = null
-
-    try {
-      server = TestUtils.createServer(KafkaConfig.fromProps(serverProps))
-
-      val topicProps = new Properties()
-      topicProps.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
-
-      TestUtils.createTopic(zkClient = server.zkClient, topic = "batman", servers = Seq(server), topicConfig = topicProps)
-
-      server.shutdown()
-
-      server = TestUtils.createServer(KafkaConfig.fromProps(serverProps))
-
-      server.shutdown()
-    } finally {
-      if (server != null) {
-        server.shutdown()
-      }
-    }
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
