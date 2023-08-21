@@ -39,6 +39,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -88,6 +89,32 @@ public class RecordTestUtils {
         ApiMessageAndVersion recordAndVersion
     ) {
         replayAll(target, Collections.singletonList(recordAndVersion));
+    }
+
+    public static <T extends ApiMessage> Optional<T> recordAtIndexAs(
+            Class<T> recordClazz,
+            List<ApiMessageAndVersion> recordsAndVersions,
+            int recordIndex
+    ) {
+        if (recordIndex > recordsAndVersions.size() - 1) {
+            return Optional.empty();
+        } else {
+            if (recordIndex == -1) {
+                return recordsAndVersions.stream().map(ApiMessageAndVersion::message)
+                    .filter(record -> record.getClass().isAssignableFrom(recordClazz))
+                    .map(recordClazz::cast)
+                    .findFirst();
+            } else {
+                ApiMessageAndVersion messageAndVersion = recordsAndVersions.get(recordIndex);
+                ApiMessage record = messageAndVersion.message();
+                if (record.getClass().isAssignableFrom(recordClazz)) {
+                    return Optional.of(recordClazz.cast(record));
+                } else {
+                    return Optional.empty();
+                }
+            }
+
+        }
     }
 
     public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {

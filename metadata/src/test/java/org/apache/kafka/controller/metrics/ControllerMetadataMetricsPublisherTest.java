@@ -130,7 +130,12 @@ public class ControllerMetadataMetricsPublisherTest {
         if (isSnapshot) {
             return new SnapshotManifest(MetadataProvenance.EMPTY, 0);
         } else {
-            return new LogDeltaManifest(MetadataProvenance.EMPTY, LeaderAndEpoch.UNKNOWN, 0, 0, 0);
+            return LogDeltaManifest.newBuilder()
+                .provenance(MetadataProvenance.EMPTY)
+                .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+                .numBatches(0)
+                .elapsedNs(0)
+                .numBytes(0).build();
         }
     }
 
