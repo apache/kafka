@@ -16,16 +16,18 @@
  */
 package kafka.api
 
-import java.util.Properties
-
-import kafka.admin.{RackAwareMode, RackAwareTest}
+import java.util.{Collections, Properties}
+import kafka.admin.RackAwareTest
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
 import scala.collection.Map
+import scala.jdk.CollectionConverters._
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
   val numServers = 4
@@ -35,31 +37,37 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
   overridingProps.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
   overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)
 
+
   def generateConfigs =
     (0 until numServers) map { node =>
-      TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown = false, rack = Some((node / 2).toString))
+      TestUtils.createBrokerConfig(node, zkConnectOrNull, enableControlledShutdown = false, rack = Some((node / 2).toString))
     } map (KafkaConfig.fromProps(_, overridingProps))
 
   private val topic = "topic"
 
-  @Test
-  def testAutoCreateTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk")) // TODO Partition leader is not evenly distributed in kraft mode, see KAFKA-15354
+  def testAutoCreateTopic(quorum: String): Unit = {
     val producer = TestUtils.createProducer(bootstrapServers())
+    val admin =  TestUtils.createAdminClient(brokers, listenerName, new Properties)
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
       assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
 
       // double check that the topic is created with leader elected
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
-      val assignment = zkClient.getReplicaAssignmentForTopics(Set(topic)).map { case (topicPartition, replicas) =>
-        topicPartition.partition -> replicas
-      }
-      val brokerMetadatas = adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced)
+      TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic, 0)
+      val assignment = admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get().asScala.flatMap(_._2.partitions().asScala).map { info =>
+        info.partition -> info.replicas().asScala.toSeq.map(_.id())
+      }.toMap
+      val brokerMetadatas = admin.describeCluster().nodes().get().asScala.toSeq.sortBy(_.id)
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
-      assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
+      assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack).toMap)
       checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor)
-    } finally producer.close()
+    } finally {
+      producer.close()
+      admin.close()
+    }
   }
 }
 
