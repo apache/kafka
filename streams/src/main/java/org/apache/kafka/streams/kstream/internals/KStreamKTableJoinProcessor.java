@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,11 +82,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             if (!valueGetter.isVersioned() && gracePeriod.isPresent()) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
-            buffer = new RocksDBTimeOrderedKeyValueBuffer<>(
-                requireNonNull(context.getStateStore(storeName)),
-                gracePeriod.orElse(Duration.ZERO),
-                internalProcessorContext.topic(),
-                true);
+            buffer = requireNonNull(context.getStateStore(storeName));
             buffer.setSerdesIfNull(new SerdeGetter(context));
         }
     }
