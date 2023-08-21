@@ -310,7 +310,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     }
 
     private void logTombstone(final Bytes key) {
-        this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,
