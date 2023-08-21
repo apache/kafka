@@ -41,8 +41,8 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
     private class TaskExecutorThread extends Thread {
 
-        private final AtomicBoolean isRunning = new AtomicBoolean(true);
-        private final AtomicReference<KafkaFutureImpl<StreamTask>> pauseRequested = new AtomicReference<>(null);
+        private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+        private final AtomicReference<KafkaFutureImpl<StreamTask>> taskReleaseRequested = new AtomicReference<>(null);
 
         private final Logger log;
 
@@ -57,26 +57,52 @@ public class DefaultTaskExecutor implements TaskExecutor {
         public void run() {
             log.info("Task executor thread started");
             try {
-                while (isRunning.get()) {
-                    runOnce(time.milliseconds());
+                while (!shutdownRequested.get()) {
+                    try {
+                        runOnce(time.milliseconds());
+                    } catch (final StreamsException e) {
+                        handleException(e);
+                    } catch (final Exception e) {
+                        handleException(new StreamsException(e));
+                    }
                 }
-            } catch (final StreamsException e) {
-                handleException(e);
-            } catch (final Exception e) {
-                handleException(new StreamsException(e));
             } finally {
                 if (currentTask != null) {
+                    log.debug("Releasing task {} due to shutdown.", currentTask.id());
                     unassignCurrentTask();
                 }
 
                 shutdownGate.countDown();
+
+                final KafkaFutureImpl<StreamTask> taskReleaseFuture;
+                if ((taskReleaseFuture = taskReleaseRequested.getAndSet(null)) != null) {
+                    log.debug("Asked to return current task, but shutting down.");
+                    taskReleaseFuture.complete(null);
+                }
                 log.info("Task executor thread shutdown");
+            }
+        }
+
+        private void handleTaskReleaseRequested() {
+            final KafkaFutureImpl<StreamTask> taskReleaseFuture;
+            if ((taskReleaseFuture = taskReleaseRequested.getAndSet(null)) != null) {
+                if (currentTask != null) {
+                    log.debug("Releasing task {} upon request.", currentTask.id());
+                    final StreamTask unassignedTask = unassignCurrentTask();
+                    taskReleaseFuture.complete(unassignedTask);
+                } else {
+                    log.debug("Asked to return current task, but returned current task already.");
+                    taskReleaseFuture.complete(null);
+                }
             }
         }
 
         private void handleException(final StreamsException e) {
             if (currentTask != null) {
                 taskManager.setUncaughtException(e, currentTask.id());
+
+                log.debug("Releasing task {} due to uncaught exception.", currentTask.id());
+                unassignCurrentTask();
             } else {
                 // If we do not currently have a task assigned and still get an error, this is fatal for the executor thread
                 throw e;
@@ -84,11 +110,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
         }
 
         private void runOnce(final long nowMs) {
-            final KafkaFutureImpl<StreamTask> pauseFuture;
-            if ((pauseFuture = pauseRequested.getAndSet(null)) != null) {
-                final StreamTask unassignedTask = unassignCurrentTask();
-                pauseFuture.complete(unassignedTask);
-            }
+            handleTaskReleaseRequested();
 
             if (currentTask == null) {
                 currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
@@ -105,6 +127,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
                 if (taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
                     if (processTask(currentTask, nowMs, time)) {
+                        log.trace("processed a record for {}", currentTask.id());
                         progressed = true;
                     }
                 }
@@ -121,6 +144,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 }
 
                 if (!progressed) {
+                    log.debug("Releasing task {} because we are not making progress.", currentTask.id());
                     unassignCurrentTask();
                 }
             }
@@ -131,10 +155,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
             try {
                 processed = task.process(now);
                 if (processed) {
+                    log.trace("Successfully processed task {}", task.id());
                     task.clearTaskTimeout();
                     // TODO: enable regardless of whether using named topologies
                     if (taskExecutionMetadata.hasNamedTopologies() && taskExecutionMetadata.processingMode() != EXACTLY_ONCE_V2) {
-                        log.trace("Successfully processed task {}", task.id());
                         taskExecutionMetadata.addToSuccessfullyProcessed(task);
                     }
                 }
@@ -168,9 +192,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
             if (currentTask == null)
                 throw new IllegalStateException("Does not own any task while being ask to unassign from task manager");
 
-            // flush the task before giving it back to task manager
-            // TODO: we can add a separate function in StreamTask to just flush and not return offsets
-            currentTask.prepareCommit();
+            // flush the task before giving it back to task manager, if we are not handing it back because of an error.
+            if (!taskManager.hasUncaughtException(currentTask.id())) {
+                currentTask.flush();
+            }
             taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
 
             final StreamTask retTask = currentTask;
@@ -183,6 +208,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
     private final String name;
     private final TaskManager taskManager;
     private final TaskExecutionMetadata taskExecutionMetadata;
+    private final Logger log;
 
     private StreamTask currentTask = null;
     private TaskExecutorThread taskExecutorThread = null;
@@ -196,6 +222,8 @@ public class DefaultTaskExecutor implements TaskExecutor {
         this.name = name;
         this.taskManager = taskManager;
         this.taskExecutionMetadata = taskExecutionMetadata;
+        final LogContext logContext = new LogContext(name);
+        this.log = logContext.logger(DefaultTaskExecutor.class);
     }
 
     @Override
@@ -213,10 +241,20 @@ public class DefaultTaskExecutor implements TaskExecutor {
     }
 
     @Override
-    public void shutdown(final Duration timeout) {
+    public boolean isRunning() {
+        return taskExecutorThread != null && taskExecutorThread.isAlive() && shutdownGate.getCount() != 0;
+    }
+
+    @Override
+    public void requestShutdown() {
         if (taskExecutorThread != null) {
-            taskExecutorThread.isRunning.set(false);
-            taskExecutorThread.interrupt();
+            taskExecutorThread.shutdownRequested.set(true);
+        }
+    }
+
+    @Override
+    public void awaitShutdown(final Duration timeout) {
+        if (taskExecutorThread != null) {
             try {
                 if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
@@ -237,8 +275,18 @@ public class DefaultTaskExecutor implements TaskExecutor {
         final KafkaFutureImpl<StreamTask> future = new KafkaFutureImpl<>();
 
         if (taskExecutorThread != null) {
-            taskExecutorThread.pauseRequested.set(future);
+            log.debug("Asking {} to hand back task", taskExecutorThread.getName());
+            if (!taskExecutorThread.taskReleaseRequested.compareAndSet(null, future)) {
+                throw new IllegalStateException("There was already a task release request registered");
+            }
+            if (shutdownGate.getCount() == 0) {
+                log.debug("Completing future, because task executor was just shut down");
+                future.complete(null);
+            } else {
+                taskManager.signalTaskExecutors();
+            }
         } else {
+            log.debug("Tried to unassign but no thread is running");
             future.complete(null);
         }
 
