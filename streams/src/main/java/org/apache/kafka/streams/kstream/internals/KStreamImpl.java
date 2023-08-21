@@ -1232,7 +1232,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             leftJoin);
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode =
-            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null);
+            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null);
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
 
@@ -1271,7 +1271,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final String bufferStoreName = name + "-Buffer";
             final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDBTimeOrderedKeyValueBytesStoreSupplier(bufferStoreName).get();
 
-            buffer = Optional.of(new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name));
+            buffer = Optional.of(new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name, true));
         }
 
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
@@ -1286,7 +1286,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             name,
             processorParameters,
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
-            this.name
+            this.name,
+            joined.gracePeriod()
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);

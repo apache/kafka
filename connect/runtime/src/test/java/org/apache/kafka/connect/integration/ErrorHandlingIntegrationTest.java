@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -282,7 +283,7 @@ public class ErrorHandlingIntegrationTest {
         assertEquals(expected, new String(actual));
     }
 
-    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
         static final ConfigDef CONFIG_DEF = new ConfigDef();
 
@@ -298,6 +299,11 @@ public class ErrorHandlingIntegrationTest {
         static final int BAD_RECORD_VAL = 7;
 
         private boolean shouldFail = true;
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
 
         @Override
         public R apply(R record) {

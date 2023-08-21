@@ -21,11 +21,13 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.utils.Bytes;
 
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * This class encapsulates a generic group member's metadata.
@@ -54,7 +56,7 @@ public class GenericGroupMember {
     /**
      * An empty assignment.
      */
-    public static final byte[] EMPTY_ASSIGNMENT = new byte[0];
+    public static final byte[] EMPTY_ASSIGNMENT = Bytes.EMPTY;
 
     /**
      * The member id.
@@ -400,13 +402,15 @@ public class GenericGroupMember {
     public String toString() {
         return "GenericGroupMember(" +
             "memberId='" + memberId + '\'' +
-            ", groupInstanceId='" + groupInstanceId + '\'' +
+            ", groupInstanceId='" + groupInstanceId.orElse("") + '\'' +
             ", clientId='" + clientId + '\'' +
             ", clientHost='" + clientHost + '\'' +
             ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
             ", sessionTimeoutMs=" + sessionTimeoutMs +
             ", protocolType='" + protocolType + '\'' +
-            ", supportedProtocols=" + supportedProtocols +
+            ", supportedProtocols=" + supportedProtocols.stream()
+                .map(JoinGroupRequestProtocol::name)
+                .collect(Collectors.toList()) +
             ')';
     }
 }

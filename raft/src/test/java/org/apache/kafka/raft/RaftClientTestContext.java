@@ -385,9 +385,7 @@ public final class RaftClientTestContext {
         return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
     }
 
-    void expectAndGrantVotes(
-        int epoch
-    ) throws Exception {
+    void expectAndGrantVotes(int epoch) throws Exception {
         pollUntilRequest();
 
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch,
@@ -406,9 +404,7 @@ public final class RaftClientTestContext {
         return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
-    private void expectBeginEpoch(
-        int epoch
-    ) throws Exception {
+    private void expectBeginEpoch(int epoch) throws Exception {
         pollUntilRequest();
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
             BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localIdOrThrow());
@@ -1120,6 +1116,10 @@ public final class RaftClientTestContext {
             return currentLeaderAndEpoch;
         }
 
+        List<Batch<String>> committedBatches() {
+            return commits;
+        }
+
         Batch<String> lastCommit() {
             if (commits.isEmpty()) {
                 return null;
@@ -1142,14 +1142,6 @@ public final class RaftClientTestContext {
             } else {
                 return OptionalInt.empty();
             }
-        }
-
-        List<String> commitWithBaseOffset(long baseOffset) {
-            return commits.stream()
-                .filter(batch -> batch.baseOffset() == baseOffset)
-                .findFirst()
-                .map(batch -> batch.records())
-                .orElse(null);
         }
 
         List<String> commitWithLastOffset(long lastOffset) {
@@ -1198,14 +1190,14 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
-            // We record the next expected offset as the claimed epoch's start
+            // We record the current committed offset as the claimed epoch's start
             // offset. This is useful to verify that the `handleLeaderChange` callback
-            // was not received early.
+            // was not received early on the leader.
             this.currentLeaderAndEpoch = leaderAndEpoch;
 
             currentClaimedEpoch().ifPresent(claimedEpoch -> {
                 long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
-                    lastCommitOffset().getAsLong() + 1 : 0L;
+                    lastCommitOffset().getAsLong() : 0L;
                 this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
             });
         }

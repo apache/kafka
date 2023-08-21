@@ -189,7 +189,7 @@ class OffsetSyncStore implements AutoCloseable {
         // Make a copy of the array before mutating it, so that readers do not see inconsistent data
         // TODO: consider batching updates so that this copy can be performed less often for high-volume sync topics.
         OffsetSync[] mutableSyncs = Arrays.copyOf(syncs, SYNCS_PER_PARTITION);
-        updateSyncArray(mutableSyncs, offsetSync);
+        updateSyncArray(mutableSyncs, syncs, offsetSync);
         if (log.isTraceEnabled()) {
             log.trace("New sync {} applied, new state is {}", offsetSync, offsetArrayToString(mutableSyncs));
         }
@@ -227,7 +227,7 @@ class OffsetSyncStore implements AutoCloseable {
         }
     }
 
-    private void updateSyncArray(OffsetSync[] syncs, OffsetSync offsetSync) {
+    private void updateSyncArray(OffsetSync[] syncs, OffsetSync[] original, OffsetSync offsetSync) {
         long upstreamOffset = offsetSync.upstreamOffset();
         // While reading to the end of the topic, ensure that our earliest sync is later than
         // any earlier sync that could have been used for translation, to preserve monotonicity
@@ -237,29 +237,49 @@ class OffsetSyncStore implements AutoCloseable {
             return;
         }
         OffsetSync replacement = offsetSync;
-        // The most-recently-discarded offset sync
-        // We track this since it may still be eligible for use in the syncs array at a later index
-        OffsetSync oldValue = syncs[0];
+        // Index into the original syncs array to the replacement we'll consider next.
+        int replacementIndex = 0;
         // Invariant A is always violated once a new sync appears.
         // Repair Invariant A: the latest sync must always be updated
         syncs[0] = replacement;
         for (int current = 1; current < SYNCS_PER_PARTITION; current++) {
             int previous = current - 1;
 
-            // We can potentially use oldValue instead of replacement, allowing us to keep more distinct values stored
-            // If oldValue is not recent, it should be expired from the store
-            boolean isRecent = invariantB(syncs[previous], oldValue, previous, current);
-            // Ensure that this value is sufficiently separated from the previous value
-            // We prefer to keep more recent syncs of similar precision (i.e. the value in replacement)
-            boolean separatedFromPrevious = invariantC(syncs[previous], oldValue, previous);
-            // Ensure that this value is sufficiently separated from the next value
-            // We prefer to keep existing syncs of lower precision (i.e. the value in syncs[next])
-            int next = current + 1;
-            boolean separatedFromNext = next >= SYNCS_PER_PARTITION || invariantC(oldValue, syncs[next], current);
-            // If this condition is false, oldValue will be expired from the store and lost forever.
-            if (isRecent && separatedFromPrevious && separatedFromNext) {
-                replacement = oldValue;
-            }
+            // Try to choose a value from the old array as the replacement
+            // This allows us to keep more distinct values stored overall, improving translation.
+            boolean skipOldValue;
+            do {
+                OffsetSync oldValue = original[replacementIndex];
+                // If oldValue is not recent enough, then it is not valid to use at the current index.
+                // It may still be valid when used in a later index where values are allowed to be older.
+                boolean isRecent = invariantB(syncs[previous], oldValue, previous, current);
+                // Ensure that this value is sufficiently separated from the previous value
+                // We prefer to keep more recent syncs of similar precision (i.e. the value in replacement)
+                // If this value is too close to the previous value, it will never be valid in a later position.
+                boolean separatedFromPrevious = invariantC(syncs[previous], oldValue, previous);
+                // Ensure that this value is sufficiently separated from the next value
+                // We prefer to keep existing syncs of lower precision (i.e. the value in syncs[next])
+                int next = current + 1;
+                boolean separatedFromNext = next >= SYNCS_PER_PARTITION || invariantC(oldValue, syncs[next], current);
+                // If the next value in the old array is a duplicate of the current one, then they are equivalent
+                // This value will not need to be considered again
+                int nextReplacement = replacementIndex + 1;
+                boolean duplicate = nextReplacement < SYNCS_PER_PARTITION && oldValue == original[nextReplacement];
+
+                // Promoting the oldValue to the replacement only happens if it satisfies all invariants.
+                boolean promoteOldValueToReplacement = isRecent && separatedFromPrevious && separatedFromNext;
+                if (promoteOldValueToReplacement) {
+                    replacement = oldValue;
+                }
+                // The index should be skipped without promoting if we know that it will not be used at a later index
+                // based only on the observed part of the array so far.
+                skipOldValue = duplicate || !separatedFromPrevious;
+                if (promoteOldValueToReplacement || skipOldValue) {
+                    replacementIndex++;
+                }
+                // We may need to skip past multiple indices, so keep looping until we're done skipping forward.
+                // The index must not get ahead of the current index, as we only promote from low index to high index.
+            } while (replacementIndex < current && skipOldValue);
 
             // The replacement variable always contains a value which satisfies the invariants for this index.
             // This replacement may or may not be used, since the invariants could already be satisfied,
@@ -273,8 +293,7 @@ class OffsetSyncStore implements AutoCloseable {
                 break;
             } else {
                 // Invariant B violated for syncs[current]: sync is now too old and must be updated
-                // Repair Invariant B: swap in replacement, and save the old value for the next iteration
-                oldValue = syncs[current];
+                // Repair Invariant B: swap in replacement
                 syncs[current] = replacement;
 
                 assert invariantB(syncs[previous], syncs[current], previous, current);
