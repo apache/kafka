@@ -1695,6 +1695,10 @@ project(':storage:api') {
   javadoc {
     include "**/org/apache/kafka/server/log/remote/storage/*"
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
+  }
 }
 
 project(':storage') {
@@ -1719,6 +1723,7 @@ project(':storage') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -1796,6 +1801,10 @@ project(':storage') {
 
   javadoc {
     enabled = false
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
   }
 }
 

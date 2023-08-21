@@ -97,7 +97,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         create the configuration.
         """
         self.config_template_func = config_template_func
-        self.connector_config_templates = connector_config_templates
+        self.connector_config_templates = connector_config_templates if connector_config_templates else []
 
     def set_external_configs(self, external_config_template_func):
         """
@@ -120,10 +120,10 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             self.logger.debug("REST resources are not loaded yet")
             return False
 
-    def start(self, mode=None):
+    def start(self, mode=None, **kwargs):
         if mode:
             self.startup_mode = mode
-        super(ConnectServiceBase, self).start()
+        super(ConnectServiceBase, self).start(**kwargs)
 
     def start_and_return_immediately(self, node, worker_type, remote_connector_configs):
         cmd = self.start_cmd(node, remote_connector_configs)
@@ -342,7 +342,7 @@ class ConnectStandaloneService(ConnectServiceBase):
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
 
-    def start_node(self, node):
+    def start_node(self, node, **kwargs):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         self.security_config.setup_node(node)
@@ -399,7 +399,7 @@ class ConnectDistributedService(ConnectServiceBase):
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
 
-    def start_node(self, node):
+    def start_node(self, node, **kwargs):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         self.security_config.setup_node(node)

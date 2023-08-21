@@ -148,6 +148,28 @@ public class TasksTest {
     }
 
     @Test
+    public void shouldVerifyIfPendingTaskToInitExist() {
+        assertFalse(tasks.hasPendingTasksToInit());
+
+        final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0)).build();
+        tasks.addPendingTasksToInit(Collections.singleton(activeTask));
+        assertTrue(tasks.hasPendingTasksToInit());
+
+        final StandbyTask standbyTask = standbyTask(TASK_1_0, mkSet(TOPIC_PARTITION_A_1)).build();
+        tasks.addPendingTasksToInit(Collections.singleton(standbyTask));
+        assertTrue(tasks.hasPendingTasksToInit());
+
+        tasks.addPendingTaskToCloseClean(TASK_0_1);
+        tasks.addPendingTaskToCloseDirty(TASK_0_2);
+        tasks.addPendingTaskToUpdateInputPartitions(TASK_1_1, mkSet(TOPIC_PARTITION_B_0));
+        tasks.addPendingActiveTaskToSuspend(TASK_1_2);
+        assertTrue(tasks.hasPendingTasksToInit());
+
+        tasks.drainPendingTasksToInit();
+        assertFalse(tasks.hasPendingTasksToInit());
+    }
+
+    @Test
     public void shouldAddAndRemovePendingTaskToUpdateInputPartitions() {
         final Set<TopicPartition> expectedInputPartitions = mkSet(TOPIC_PARTITION_A_0);
         assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));

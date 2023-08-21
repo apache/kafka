@@ -18,12 +18,14 @@ package kafka.admin
 
 import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
+import org.apache.kafka.common.errors.{InvalidConfigurationException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager,
+  RemoteLogManagerConfig, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
@@ -31,7 +33,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.{Collections, Optional, Properties}
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
@@ -41,8 +44,11 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
   val numPartitions = 2
   val numReplicationFactor = 2
+
   var testTopicName: String = _
   var sysRemoteStorageEnabled = true
+  var storageManagerClassName: String = classOf[NoOpRemoteStorageManager].getName
+  var metadataManagerClassName: String = classOf[NoOpRemoteLogMetadataManager].getName
 
   override protected def brokerCount: Int = 2
 
@@ -58,6 +64,10 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   override def setUp(info: TestInfo): Unit = {
     if (info.getTestMethod.get().getName.endsWith("SystemRemoteStorageIsDisabled")) {
       sysRemoteStorageEnabled = false
+    }
+    if (info.getTestMethod.get().getName.equals("testTopicDeletion")) {
+      storageManagerClassName = classOf[MyRemoteStorageManager].getName
+      metadataManagerClassName = classOf[MyRemoteLogMetadataManager].getName
     }
     super.setUp(info)
     testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
@@ -270,6 +280,27 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
       () => admin.incrementalAlterConfigs(configs).all().get(), "Invalid local retention size")
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicDeletion(quorum: String): Unit = {
+    val numPartitions = 2
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "200")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+      topicConfig = topicConfig)
+    TestUtils.deleteTopicWithAdmin(createAdminClient(), testTopicName, brokers)
+    assertThrowsException(classOf[UnknownTopicOrPartitionException],
+      () => TestUtils.describeTopic(createAdminClient(), testTopicName), "Topic should be deleted")
+
+    // FIXME: It seems the storage manager is being instantiated in different class loader so couldn't verify the value
+    //  but ensured it by adding a log statement in the storage manager (manually).
+    //    assertEquals(numPartitions * MyRemoteLogMetadataManager.segmentCount,
+    //      MyRemoteStorageManager.deleteSegmentEventCounter.get(),
+    //      "Remote log segments should be deleted only once by the leader")
+  }
+
   private def assertThrowsException(exceptionType: Class[_ <: Throwable],
                                     executable: Executable,
                                     message: String = ""): Throwable = {
@@ -320,15 +351,51 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   private def overrideProps(): Properties = {
     val props = new Properties()
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-      classOf[NoOpRemoteStorageManager].getName)
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-      classOf[NoOpRemoteLogMetadataManager].getName)
-
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, storageManagerClassName)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, metadataManagerClassName)
     props.put(KafkaConfig.LogRetentionTimeMillisProp, "2000")
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
     props.put(KafkaConfig.LogRetentionBytesProp, "2048")
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
     props
   }
+}
+
+object MyRemoteStorageManager {
+  val deleteSegmentEventCounter = new AtomicInteger(0)
+}
+
+class MyRemoteStorageManager extends NoOpRemoteStorageManager with Logging {
+  import MyRemoteStorageManager._
+
+  override def deleteLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {
+    deleteSegmentEventCounter.incrementAndGet()
+    info(s"Deleted the remote log segment: $remoteLogSegmentMetadata, counter: ${deleteSegmentEventCounter.get()}")
+  }
+}
+
+class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
+
+  import MyRemoteLogMetadataManager._
+  val time = new MockTime()
+
+  override def listRemoteLogSegments(topicIdPartition: TopicIdPartition): util.Iterator[RemoteLogSegmentMetadata] = {
+    val segmentMetadataList = new util.ArrayList[RemoteLogSegmentMetadata]()
+    for (idx <- 0 until segmentCount) {
+      val timestamp = time.milliseconds()
+      val startOffset = idx * recordsPerSegment
+      val endOffset = startOffset + recordsPerSegment - 1
+      val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = Collections.singletonMap(0, 0L)
+      segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
+        startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(),
+        RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs))
+    }
+    segmentMetadataList.iterator()
+  }
+}
+
+object MyRemoteLogMetadataManager {
+  val segmentCount = 10
+  val recordsPerSegment = 100
+  val segmentSize = 1024
 }
