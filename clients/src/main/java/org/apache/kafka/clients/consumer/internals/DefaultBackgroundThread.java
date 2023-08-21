@@ -214,7 +214,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         final long pollWaitTimeMs = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
                 .map(m -> m.get().poll(currentTimeMs))
-                .filter(Objects::nonNull)
                 .map(this::handlePollResult)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);

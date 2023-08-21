@@ -83,8 +83,8 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.getConfiguredConsumerInterceptors;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.getConfiguredIsolationLevel;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
@@ -699,7 +699,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metrics = createMetrics(config, time);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
-            List<ConsumerInterceptor<K, V>> interceptorList = getConfiguredConsumerInterceptors(config);
+            List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
             this.subscriptions = createSubscriptionState(config, logContext);
@@ -712,7 +712,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata.bootstrap(addresses);
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
-            this.isolationLevel = getConfiguredIsolationLevel(config);
+            this.isolationLevel = configuredIsolationLevel(config);
 
             ApiVersions apiVersions = new ApiVersions();
             this.client = createConsumerNetworkClient(config,

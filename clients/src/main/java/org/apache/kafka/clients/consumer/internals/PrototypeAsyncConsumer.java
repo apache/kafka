@@ -73,7 +73,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.getConfiguredConsumerInterceptors;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
@@ -123,7 +123,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
         this.subscriptions = createSubscriptionState(config, logContext);
         this.metrics = createMetrics(config, time);
-        List<ConsumerInterceptor<K, V>> interceptorList = getConfiguredConsumerInterceptors(config);
+        List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
         ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                 metrics.reporters(),
                 interceptorList,

@@ -99,7 +99,7 @@ public final class ConsumerUtils {
         }
     }
 
-    public static IsolationLevel getConfiguredIsolationLevel(ConsumerConfig config) {
+    public static IsolationLevel configuredIsolationLevel(ConsumerConfig config) {
         String s = config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT);
         return IsolationLevel.valueOf(s);
     }
@@ -132,13 +132,13 @@ public final class ConsumerUtils {
 
     public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config,
                                                              Deserializers<K, V> deserializers) {
-        IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
+        IsolationLevel isolationLevel = configuredIsolationLevel(config);
         return new FetchConfig<>(config, deserializers, isolationLevel);
     }
 
     @SuppressWarnings("unchecked")
-    public static <K, V> List<ConsumerInterceptor<K, V>> getConfiguredConsumerInterceptors(ConsumerConfig config) {
-        return (List<ConsumerInterceptor<K, V>>) ClientUtils.getConfiguredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
+    public static <K, V> List<ConsumerInterceptor<K, V>> configuredConsumerInterceptors(ConsumerConfig config) {
+        return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
     }
 
 }
