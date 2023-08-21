@@ -160,11 +160,10 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         valueSerde = valueSerde == null ? getter.valueSerde() : valueSerde;
     }
 
-    /**
-     * The name of this store.
-     *
-     * @return the storage name
-     */
+    private long observedStreamTime() {
+        return store.observedStreamTime;
+    }
+
     @Override
     public String name() {
         return store.name();
@@ -221,7 +220,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
                 start = minTimestamp();
             }
             try (final KeyValueIterator<Bytes, byte[]> iterator = store
-                .fetchAll(start, store.observedStreamTime - gracePeriod)) {
+                .fetchAll(start, observedStreamTime() - gracePeriod)) {
                 while (iterator.hasNext() && predicate.get()) {
                     keyValue = iterator.next();
 
@@ -254,7 +253,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
                 if (numRecords == 0) {
                     minTimestamp = Long.MAX_VALUE;
                 } else {
-                    minTimestamp = store.observedStreamTime - gracePeriod + 1;
+                    minTimestamp = observedStreamTime() - gracePeriod + 1;
                 }
             }
         }
@@ -271,7 +270,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(record.key(), "key cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
-        if (store.observedStreamTime - gracePeriod > record.timestamp()) {
+        if (observedStreamTime() - gracePeriod > record.timestamp()) {
             return false;
         }
         maybeUpdateSeqnumForDups();
