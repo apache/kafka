@@ -259,6 +259,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  override def tryCompleteActions(): Unit = {
+    replicaManager.tryCompleteActions()
+  }
+
   def handleLeaderAndIsrRequest(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
     // ensureTopicExists is only for client facing requests
