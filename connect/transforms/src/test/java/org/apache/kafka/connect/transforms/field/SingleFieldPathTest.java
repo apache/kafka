@@ -60,11 +60,15 @@ class SingleFieldPathTest {
     }
 
     @Test void shouldBuildV2AndIgnoreBackticksThatAreNotWrapping() {
+        assertArrayEquals(new String[] {"foo", "`bar.baz"}, new SingleFieldPath("foo.``bar.baz`", FieldSyntaxVersion.V2).path());
+        assertArrayEquals(new String[] {"foo", "bar.baz`"}, new SingleFieldPath("foo.`bar.baz``", FieldSyntaxVersion.V2).path());
         assertArrayEquals(new String[] {"foo", "ba`r.baz"}, new SingleFieldPath("foo.`ba`r.baz`", FieldSyntaxVersion.V2).path());
         assertArrayEquals(new String[] {"foo", "ba`r", "baz"}, new SingleFieldPath("foo.ba`r.baz", FieldSyntaxVersion.V2).path());
     }
 
     @Test void shouldBuildV2AndEscapeBackticks() {
+        assertArrayEquals(new String[] {"foo", "bar`.baz"}, new SingleFieldPath("foo.`bar\\`.baz`", FieldSyntaxVersion.V2).path());
+        assertArrayEquals(new String[] {"foo", "bar.`baz"}, new SingleFieldPath("foo.`bar.\\`baz`", FieldSyntaxVersion.V2).path());
         assertArrayEquals(new String[] {"foo", "bar`.`baz"}, new SingleFieldPath("foo.`bar\\`.\\`baz`", FieldSyntaxVersion.V2).path());
         assertArrayEquals(new String[] {"foo", "bar\\`.`baz"}, new SingleFieldPath("foo.`bar\\\\`.\\`baz`", FieldSyntaxVersion.V2).path());
     }
