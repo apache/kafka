@@ -31,10 +31,14 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -55,6 +59,83 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     private int partition;
     private String changelogTopic;
     private InternalProcessorContext context;
+    private boolean minValid;
+
+    public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
+
+        private final String storeName;
+        private boolean loggingEnabled = true;
+        private Map<String, String> logConfig = new HashMap<>();
+        private final Duration grace;
+        private final String topic;
+
+        public Builder(final String storeName, final Duration grace, final String topic) {
+            this.storeName = storeName;
+            this.grace = grace;
+            this.topic = topic;
+        }
+
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         * <p>
+         * It's currently a no-op.
+         */
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withCachingEnabled() {
+            return this;
+        }
+
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         * <p>
+         * It's currently a no-op.
+         */
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withCachingDisabled() {
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withLoggingEnabled(final Map<String, String> config) {
+            logConfig = config;
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withLoggingDisabled() {
+            loggingEnabled = false;
+            return this;
+        }
+
+        @Override
+        public TimeOrderedKeyValueBuffer<K, V, V> build() {
+            return new RocksDBTimeOrderedKeyValueBuffer<>(
+                new RocksDBTimeOrderedKeyValueBytesStoreSupplier(storeName).get(),
+                grace,
+                topic,
+                loggingEnabled);
+        }
+
+        @Override
+        public Map<String, String> logConfig() {
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
+        }
+
+        @Override
+        public boolean loggingEnabled() {
+            return loggingEnabled;
+        }
+
+        @Override
+        public String name() {
+            return storeName;
+        }
+    }
+
 
     public RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueBytesStore store,
                                             final Duration gracePeriod,
@@ -62,7 +143,8 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                                             final boolean loggingEnabled) {
         super(store);
         this.gracePeriod = gracePeriod.toMillis();
-        minTimestamp = Long.MAX_VALUE;
+        minTimestamp = store.minTimestamp();
+        minValid = false;
         numRecords = 0;
         bufferSize = 0;
         seqnum = 0;
@@ -98,8 +180,12 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         KeyValue<Bytes, byte[]> keyValue;
 
         if (predicate.get()) {
+            long start = 0;
+            if (minValid) {
+                start = minTimestamp();
+            }
             try (final KeyValueIterator<Bytes, byte[]> iterator = wrapped()
-                .fetchAll(0, wrapped().observedStreamTime - gracePeriod)) {
+                .fetchAll(start, wrapped().observedStreamTime - gracePeriod)) {
                 while (iterator.hasNext() && predicate.get()) {
                     keyValue = iterator.next();
 
@@ -107,13 +193,14 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                     final K key = keySerde.deserializer().deserialize(topic,
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
 
-                    if (bufferValue.context().timestamp() < minTimestamp) {
+                    if (bufferValue.context().timestamp() < minTimestamp && minValid) {
                         throw new IllegalStateException(
                             "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
                                 bufferValue.context().timestamp() + "]"
                         );
                     }
                     minTimestamp = bufferValue.context().timestamp();
+                    minValid = true;
 
                     final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
 
@@ -167,9 +254,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
 
         bufferSize += computeRecordSize(serializedKey, buffered);
         numRecords++;
-        if (minTimestamp() > record.timestamp()) {
-            minTimestamp = record.timestamp();
-        }
+        minTimestamp = Math.min(minTimestamp(), record.timestamp());
         return true;
     }
 
@@ -206,6 +291,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
+        this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor((ProcessorContext) context, name(), Boolean.TRUE);
+        }
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,
@@ -220,6 +310,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     }
 
     private void logTombstone(final Bytes key) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(wrapped().context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor((ProcessorContext) context, name(), Boolean.TRUE);
+        }
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,

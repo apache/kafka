@@ -34,9 +34,12 @@ import org.rocksdb.WriteBatch;
  */
 public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
 
+    private long minTimestamp;
+
     RocksDBTimeOrderedKeyValueBytesStore(final String name,
                                          final String metricsScope) {
         super(name, metricsScope, Long.MAX_VALUE, Long.MAX_VALUE, new TimeFirstWindowKeySchema(), Optional.empty());
+        minTimestamp = Long.MAX_VALUE;
     }
 
     @Override
@@ -50,6 +53,7 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = WindowKeySchema.extractStoreTimestamp(record.key());
             observedStreamTime = Math.max(observedStreamTime, timestamp);
+            minTimestamp = Math.min(minTimestamp, timestamp);
             final long segmentId = segments.segmentId(timestamp);
             final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
@@ -75,5 +79,9 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
     @Override
     protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator) {
         throw new UnsupportedOperationException("Do not use for TimeOrderedKeyValueStore");
+    }
+
+    protected long minTimestamp() {
+        return minTimestamp;
     }
 }

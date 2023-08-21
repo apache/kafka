@@ -125,10 +125,9 @@ public class JoinGracePeriodDurabilityIntegrationTest {
         final String storeName = "grace";
         final String output = "output" + testId;
 
-        // change this once task bug fixed.
         // create multiple partitions as a trap, in case the buffer doesn't properly set the
         // partition on the records, but instead relies on the default key partitioner
-        cleanStateBeforeTest(CLUSTER, 1, streamInput, tableInput, output);
+        cleanStateBeforeTest(CLUSTER, 2, streamInput, tableInput, output);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream = builder.stream(streamInput, Consumed.with(STRING_SERDE, STRING_SERDE));
@@ -165,7 +164,8 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k2", "v2", scaledTime(0L)),
                     new KeyValueTimestamp<>("k3", "v3", scaledTime(0L)),
                     new KeyValueTimestamp<>("k4", "v4", scaledTime(0L)),
-                    new KeyValueTimestamp<>("k5", "v5", scaledTime(0L))
+                    new KeyValueTimestamp<>("k5", "v5", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k6", "v6", scaledTime(0L))
                 )
             );
             produceSynchronouslyToPartitionZero(
@@ -213,10 +213,11 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                 output,
                 asList(
                     new KeyValueTimestamp<>("k4", "v4+v4", scaledTime(4L)),
-                    new KeyValueTimestamp<>("k5", "v5+v5", scaledTime(5L))
-                )
+                    new KeyValueTimestamp<>("k5", "v5+v5", scaledTime(5L)),
+                    new KeyValueTimestamp<>("k3", "v3+v3", scaledTime(7L))
+                    )
             );
-            assertThat("There should only be 4 output events.", eventCount.get(), is(4));
+            assertThat("There should only be 5 output events.", eventCount.get(), is(5));
 
         } finally {
             driver.close();
