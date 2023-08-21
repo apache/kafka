@@ -605,7 +605,7 @@ public class GroupCoordinatorServiceTest {
     public void testFetchOffsetsWithoutWithoutRequireStable(
         boolean requireStable
     ) throws ExecutionException, InterruptedException, TimeoutException {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
@@ -655,7 +655,7 @@ public class GroupCoordinatorServiceTest {
     public void testFetchAllOffsetsWithoutWithoutRequireStable(
         boolean requireStable
     ) throws ExecutionException, InterruptedException, TimeoutException {
-        CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
