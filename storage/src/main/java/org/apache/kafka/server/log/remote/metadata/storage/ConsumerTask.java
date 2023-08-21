@@ -198,7 +198,7 @@ class ConsumerTask implements Runnable, Closeable {
                             " up the recent assignment", metadataPartition);
                 }
             }
-            isAllInitialized = isAllInitialized && utp.isInitialized;
+            isAllInitialized = isAllInitialized && utp.isAssigned && utp.isInitialized;
         }
         if (isAllInitialized) {
             log.info("Initialized for all the {} assigned user-partitions mapped to the {} meta-partitions in {} ms",

@@ -61,6 +61,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.ConsumerTask.UserTopicIdPartition;
 import static org.apache.kafka.server.log.remote.metadata.storage.ConsumerTask.toRemoteLogPartition;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,8 +94,9 @@ public class ConsumerTaskTest {
     @AfterEach
     public void afterEach() throws InterruptedException {
         if (thread != null) {
-            consumerTask.close();
+            assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
             thread.join(10_000);
+            assertFalse(thread.isAlive(), "Consumer task thread is still alive");
         }
     }
 
