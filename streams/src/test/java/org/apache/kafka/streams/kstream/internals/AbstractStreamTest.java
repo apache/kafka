@@ -53,7 +53,6 @@ public class AbstractStreamTest {
         final ValueTransformerSupplier<?, ?> valueTransformerSupplier = mock(ValueTransformerSupplier.class);
         when(valueTransformerSupplier.get())
             .thenReturn(new NoopValueTransformer<>())
-            .thenReturn(new NoopValueTransformer<>())
             .thenReturn(new NoopValueTransformer<>());
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
