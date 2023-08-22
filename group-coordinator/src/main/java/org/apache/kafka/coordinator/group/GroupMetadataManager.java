@@ -414,7 +414,7 @@ public class GroupMetadataManager {
     /**
      * @return The GenericGroup List filtered by statesFilter or typesFilter.
      */
-    public ListGroupsResponseData listGroups(ListGroupsRequestData request) throws GroupIdNotFoundException {
+    public ListGroupsResponseData listGroups(ListGroupsRequestData request) {
         List<ListGroupsResponseData.ListedGroup> listedGroups = Collections.emptyList();
         Stream<Group> groupStream = groups.values().stream();
         List<String> statesFilter = request.statesFilter();
