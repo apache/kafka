@@ -33,7 +33,7 @@ import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
@@ -50,7 +50,6 @@ import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{doNothing, mock, verify, when}
 
@@ -549,48 +548,38 @@ class DynamicConfigChangeUnitTest {
   @Test
   def testEnableRemoteLogStorageOnTopic(): Unit = {
     val topic = "test-topic"
-    val tp = new TopicPartition(topic, 0)
-    val partition: Partition = mock(classOf[Partition])
-    when(partition.isLeader).thenReturn(true)
+    val topicUuid = Uuid.randomUuid()
     val rlm: RemoteLogManager = mock(classOf[RemoteLogManager])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    val metadataCache = mock(classOf[MetadataCache])
+    when(replicaManager.remoteLogManager).thenReturn(Some(rlm))
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(metadataCache.getTopicId(topic)).thenReturn(topicUuid)
+
+    val tp0 = new TopicPartition(topic, 0)
+    val log0: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition0: Partition = mock(classOf[Partition])
+    when(log0.topicPartition).thenReturn(tp0)
+    when(log0.remoteLogEnabled()).thenReturn(true)
+    when(partition0.isLeader).thenReturn(true)
+    when(replicaManager.onlinePartition(tp0)).thenReturn(Some(partition0))
+
+    val tp1 = new TopicPartition(topic, 1)
+    val log1: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition1: Partition = mock(classOf[Partition])
+    when(log1.topicPartition).thenReturn(tp1)
+    when(log1.remoteLogEnabled()).thenReturn(true)
+    when(partition1.isLeader).thenReturn(false)
+    when(replicaManager.onlinePartition(tp1)).thenReturn(Some(partition1))
+
     val leaderPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val followerPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     doNothing().when(rlm).onLeadershipChange(leaderPartitionsArg.capture(), followerPartitionsArg.capture(), any())
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.remoteLogManager).thenReturn(Some(rlm))
-    when(replicaManager.onlinePartition(tp)).thenReturn(Some(partition))
-    val log: UnifiedLog = mock(classOf[UnifiedLog])
-    when(log.remoteLogEnabled()).thenReturn(true)
-    when(log.topicPartition).thenReturn(tp)
 
     val isRemoteLogEnabledBeforeUpdate = false
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, null)
-    configHandler.maybeBootstrapRemoteLogComponents(Seq(log), isRemoteLogEnabledBeforeUpdate)
-    assertTrue(followerPartitionsArg.getValue.isEmpty)
-    assertEquals(Collections.singleton(partition), leaderPartitionsArg.getValue)
-  }
-
-  @Test
-  def testDisableRemoteLogStorageOnTopic(): Unit = {
-    val topic = "test-topic"
-    val tp = new TopicPartition(topic, 0)
-    val partition: Partition = mock(classOf[Partition])
-    when(partition.isLeader).thenReturn(true)
-    when(partition.isLeader).thenReturn(false)
-    val rlm: RemoteLogManager = mock(classOf[RemoteLogManager])
-    doNothing().when(rlm).stopPartitions(ArgumentMatchers.eq(Set(tp).asJava), ArgumentMatchers.eq(true), any())
-    doNothing().when(rlm).stopPartitions(ArgumentMatchers.eq(Set(tp).asJava), ArgumentMatchers.eq(false), any())
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.remoteLogManager).thenReturn(Some(rlm))
-    when(replicaManager.onlinePartition(tp)).thenReturn(Some(partition))
-    val log: UnifiedLog = mock(classOf[UnifiedLog])
-    when(log.remoteLogEnabled()).thenReturn(false)
-    when(log.maybeIncrementLogStartOffsetAsRemoteLogStorageDisabled()).thenReturn(true)
-    when(log.topicPartition).thenReturn(tp)
-
-    val isRemoteLogEnabledBeforeUpdate = true
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, null)
-    configHandler.maybeBootstrapRemoteLogComponents(Seq(log), isRemoteLogEnabledBeforeUpdate)
-    configHandler.maybeBootstrapRemoteLogComponents(Seq(log), isRemoteLogEnabledBeforeUpdate)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
+    configHandler.maybeBootstrapRemoteLogComponents(topic, Seq(log0, log1), isRemoteLogEnabledBeforeUpdate)
+    assertEquals(Collections.singleton(partition0), leaderPartitionsArg.getValue)
+    assertEquals(Collections.singleton(partition1), followerPartitionsArg.getValue)
   }
 }

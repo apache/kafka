@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import DynamicConfig.Broker._
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
@@ -71,30 +71,23 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
       val wasRemoteLogEnabledBeforeUpdate = logs.head.remoteLogEnabled()
       logs.foreach(_.updateConfig(logConfig))
-      maybeBootstrapRemoteLogComponents(logs, wasRemoteLogEnabledBeforeUpdate)
+      maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
     }
   }
 
-  private[server] def maybeBootstrapRemoteLogComponents(logs: Seq[UnifiedLog],
+  private[server] def maybeBootstrapRemoteLogComponents(topic: String,
+                                                        logs: Seq[UnifiedLog],
                                                         wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
     val isRemoteLogEnabled = logs.head.remoteLogEnabled()
     // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
     if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
       val (leaderPartitions, followerPartitions) =
         logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
+      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
-        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, null))
+        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
     } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
-      logs.map(log => {
-        log.maybeIncrementLogStartOffsetAsRemoteLogStorageDisabled()
-        log.topicPartition
-      })
-        .groupBy(tp => replicaManager.onlinePartition(tp).exists(_.isLeader))
-        .foreach {
-          case (isLeader, partitions) =>
-            replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(partitions.toSet.asJava, isLeader,
-              (tp, ex) => error(s"Error while stopping the partition: $tp, ex: $ex")))
-        }
+      warn(s"Disabling remote log on the topic: $topic is not supported.")
     }
   }
 
