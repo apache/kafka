@@ -56,8 +56,8 @@ public final class RemoteLogManagerConfig {
 
 
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
-    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tier storage functionality in a broker or not. Valid values " +
-            "are `true` or `false` and the default value is false. When it is true broker starts all the services required for tiered storage functionality.";
+    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tiered storage functionality in a broker or not. Valid values " +
+            "are `true` or `false` and the default value is false. When it is true broker starts all the services required for the tiered storage functionality.";
     public static final boolean DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE = false;
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP = "remote.log.storage.manager.class.name";
@@ -197,7 +197,7 @@ public final class RemoteLogManagerConfig {
                                   atLeast(0),
                                   LOW,
                                   REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_DOC)
-                  .define(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
+                  .defineInternal(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES,
                                   atLeast(1),
@@ -215,18 +215,18 @@ public final class RemoteLogManagerConfig {
                                   atLeast(1),
                                   LOW,
                                   REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC)
-                  .define(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP,
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS,
                                   atLeast(1),
                                   LOW,
                                   REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC)
-                  .define(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP,
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS,
                                   atLeast(1), LOW,
                                   REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_DOC)
-                  .define(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP,
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP,
                                   DOUBLE,
                                   DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_JITTER,
                                   between(0, 0.5),
