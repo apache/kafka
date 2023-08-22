@@ -3665,32 +3665,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleConsumerGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
     // TODO: This method is Work-In-Progress
     // It will be finished in the second PR of KAFKA-14509
-    val consumerGroupDescribeRequest = request.body[ConsumerGroupDescribeRequest]
-
-    if (!config.isNewGroupCoordinatorEnabled) {
-      // The API is not supported by the "old" group coordinator (the default). If the
-      // new one is not enabled, we fail directly here.
-      requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else {
-
-//      val response = new ConsumerGroupDescribeResponseData()
-      consumerGroupDescribeRequest.data().groupIds().forEach { groupId =>
-        val describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
-          .setGroupId(groupId)
-
-        // TODO: Check if group id exists
-
-        if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
-          describedGroup.setErrorMessage(new ApiError(Errors.GROUP_AUTHORIZATION_FAILED).message())
-          describedGroup.setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
-        }
-      }
-
-//      This must be changed to handle all groups together instead of foreach
-//      groupCoordinator.describeGroups(request.context, )
-      CompletableFuture.completedFuture[Unit](())
-    }
+    requestHelper.sendMaybeThrottle(request, request.body[ConsumerGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
