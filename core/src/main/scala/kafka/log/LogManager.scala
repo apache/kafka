@@ -877,7 +877,7 @@ class LogManager(logDirs: Seq[File],
     val logs = logsByTopic(topic)
     // Combine the default properties with the overrides in zk to create the new LogConfig
     val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
-    LogConfig.validateTopicLogConfigValues(newLogConfig.values(), isRemoteLogStorageSystemEnabled, true)
+    LogConfig.validateRemoteStorageOnlyIfSystemEnabled(newLogConfig.values(), isRemoteLogStorageSystemEnabled, true)
     if (logs.nonEmpty) {
       logs.foreach { log =>
         val oldLogConfig = log.updateConfig(newLogConfig)

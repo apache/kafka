@@ -548,22 +548,20 @@ public class LogConfig extends AbstractConfig {
      * @param props The properties to be validated
      */
     public static void validateTopicLogConfigValues(Map<?, ?> props,
-                                                    boolean isRemoteLogStorageSystemEnabled,
-                                                    boolean isReceivingConfigFromStore) {
+                                                    boolean isRemoteLogStorageSystemEnabled) {
         validateValues(props);
         boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
-            validateRemoteStorageOnlyIfSystemEnabled(isRemoteLogStorageSystemEnabled, isReceivingConfigFromStore);
-            if (!isReceivingConfigFromStore) {
-                validateNoRemoteStorageForCompactedTopic(props);
-                validateRemoteStorageRetentionSize(props);
-                validateRemoteStorageRetentionTime(props);
-            }
+            validateRemoteStorageOnlyIfSystemEnabled(props, isRemoteLogStorageSystemEnabled, false);
+            validateNoRemoteStorageForCompactedTopic(props);
+            validateRemoteStorageRetentionSize(props);
+            validateRemoteStorageRetentionTime(props);
         }
     }
 
-    private static void validateRemoteStorageOnlyIfSystemEnabled(boolean isRemoteLogStorageSystemEnabled, boolean isReceivingConfigFromStore) {
-        if (!isRemoteLogStorageSystemEnabled) {
+    public static void validateRemoteStorageOnlyIfSystemEnabled(Map<?, ?> props, boolean isRemoteLogStorageSystemEnabled, boolean isReceivingConfigFromStore) {
+        boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+        if (isRemoteLogStorageEnabled && !isRemoteLogStorageSystemEnabled) {
             if (isReceivingConfigFromStore) {
                 throw new ConfigException("You have to disable tiering on all topics with the property remote.storage.enable=true before disabling tiered storage cluster-wide");
             } else {
@@ -632,7 +630,7 @@ public class LogConfig extends AbstractConfig {
             Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
             Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
-            validateTopicLogConfigValues(valueMaps, isRemoteLogStorageSystemEnabled, false);
+            validateTopicLogConfigValues(valueMaps, isRemoteLogStorageSystemEnabled);
         }
     }
 
