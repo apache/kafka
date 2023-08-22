@@ -185,7 +185,9 @@ public enum MetadataVersion {
     // Add KRaft support for Delegation Tokens
     IBP_3_6_IV2(14, "3.6", "IV2", true);
 
-    // NOTE: update the default version in @ClusterTest annotation to point to the latest version
+    // NOTES when adding a new version:
+    //   Update the default version in @ClusterTest annotation to point to the latest version
+    //   Change expected message in org.apache.kafka.tools.FeatureCommandTest in multiple places (search for "Change expected message")
     public static final String FEATURE_NAME = "metadata.version";
 
     /**

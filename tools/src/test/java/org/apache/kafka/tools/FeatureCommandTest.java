@@ -66,8 +66,9 @@ public class FeatureCommandTest {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
         );
+        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 3.6-IV1\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
+                "SupportedMaxVersion: 3.6-IV2\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
     }
 
     @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -124,8 +125,9 @@ public class FeatureCommandTest {
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "disable", "--feature", "metadata.version"))
         );
+        // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
         assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-13", commandOutput);
+                "metadata.version. Local controller 3000 only supports versions 1-14", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
