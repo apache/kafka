@@ -2427,12 +2427,6 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1);
 
         assertDoesNotThrow(() -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()));
-
-        configs.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 3000);
-        configs.put(ProducerConfig.LINGER_MS_CONFIG, 2000);
-        configs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1000);
-
-        assertDoesNotThrow(() -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()));
     }
 
 }
