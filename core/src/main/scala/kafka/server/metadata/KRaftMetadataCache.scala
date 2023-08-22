@@ -282,12 +282,15 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         partition.replicas.map { replicaId =>
           result.put(replicaId, Option(image.cluster().broker(replicaId)) match {
             case None => Node.noNode()
+            case Some(broker) if broker.fenced() => Node.noNode()
             case Some(broker) => broker.node(listenerName.value()).asScala.getOrElse(Node.noNode())
           })
         }
       }
     }
-    result.toMap
+    result.toMap.filter(pair => pair match {
+      case (_, node) => !node.isEmpty
+    })
   }
 
   /**
@@ -378,7 +381,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
-  def setImage(newImage: MetadataImage): Unit = _currentImage = newImage
+  def setImage(newImage: MetadataImage): Unit = {
+    _currentImage = newImage
+  }
 
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)
