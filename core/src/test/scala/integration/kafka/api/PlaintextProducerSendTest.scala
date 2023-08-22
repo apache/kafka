@@ -151,8 +151,8 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("timestampConfigProvider"))
-  def testValidBeforeAndAfterTimestampsAtThreshold(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
+  @MethodSource(Array("quorumAndTimestampConfigProvider"))
+  def testValidBeforeAndAfterTimestampsAtThreshold(quorum: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topicProps = new Properties()
 
     // set the TopicConfig for timestamp validation to be the same as the record timestamp
@@ -171,8 +171,8 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("timestampConfigProvider"))
-  def testValidBeforeAndAfterTimestampsWithinThreshold(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
+  @MethodSource(Array("quorumAndTimestampConfigProvider"))
+  def testValidBeforeAndAfterTimestampsWithinThreshold(quorum: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topicProps = new Properties()
 
     // set the TopicConfig for timestamp validation to have 10 minute threshold. Note that recordTimestamp has 5 minutes diff
