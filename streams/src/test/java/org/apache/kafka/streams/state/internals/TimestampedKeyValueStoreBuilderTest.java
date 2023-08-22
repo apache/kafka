@@ -144,32 +144,23 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldNotThrowNullPointerIfKeySerdeIsNull() {
-        when(supplier.name()).thenReturn("name");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-
         // does not throw
         new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
     @Test
     public void shouldNotThrowNullPointerIfValueSerdeIsNull() {
-        when(supplier.name()).thenReturn("name");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-
         // does not throw
         new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
     @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
-        when(supplier.name()).thenReturn("name");
-
         assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        when(supplier.name()).thenReturn("name");
         when(supplier.metricsScope()).thenReturn(null);
 
         final Exception e = assertThrows(NullPointerException.class,

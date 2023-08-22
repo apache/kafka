@@ -30,6 +30,8 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -78,6 +80,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        verify(rocksIterator, times(3)).value();
+        verify(rocksIterator, times(3)).next();
     }
 
     @Test
@@ -110,6 +114,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        verify(rocksIterator, times(3)).value();
+        verify(rocksIterator, times(3)).prev();
     }
 
     @Test
@@ -147,6 +153,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        verify(rocksIterator, times(4)).value();
+        verify(rocksIterator, times(4)).next();
     }
 
 
@@ -184,6 +192,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        verify(rocksIterator, times(4)).value();
+        verify(rocksIterator, times(4)).prev();
     }
 
 
@@ -252,6 +262,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).next();
     }
 
     @Test
@@ -282,6 +294,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).prev();
     }
 
     @Test
@@ -315,6 +329,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
         assertThrows(NoSuchElementException.class, rocksDBRangeIterator::peekNextKey);
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).next();
     }
 
     @Test
@@ -349,6 +365,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
         assertThrows(NoSuchElementException.class, rocksDBRangeIterator::peekNextKey);
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).prev();
     }
 
     @Test
@@ -366,6 +384,7 @@ public class RocksDBRangeIteratorTest {
         );
         rocksDBRangeIterator.onClose(() -> { });
         rocksDBRangeIterator.close();
+        verify(rocksIterator).close();
     }
 
     @Test
@@ -407,6 +426,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).next();
     }
 
 }
