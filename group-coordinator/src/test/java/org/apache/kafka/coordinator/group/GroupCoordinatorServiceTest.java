@@ -602,7 +602,7 @@ public class GroupCoordinatorServiceTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testFetchOffsetsWithoutWithoutRequireStable(
+    public void testFetchOffsets(
         boolean requireStable
     ) throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
@@ -652,7 +652,7 @@ public class GroupCoordinatorServiceTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testFetchAllOffsetsWithoutWithoutRequireStable(
+    public void testFetchAllOffsets(
         boolean requireStable
     ) throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();

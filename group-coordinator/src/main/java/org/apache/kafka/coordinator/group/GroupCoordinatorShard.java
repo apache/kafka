@@ -260,7 +260,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Fetch offsets for a given Group.
+     * Fetch offsets for a given set of partitions and a given group.
      *
      * @param groupId   The group id.
      * @param topics    The topics to fetch the offsets for.
@@ -278,7 +278,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Fetch all offsets for a given Group.
+     * Fetch all offsets for a given group.
      *
      * @param groupId   The group id.
      * @param epoch     The epoch (or offset) used to read from the

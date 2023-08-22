@@ -1157,7 +1157,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testFetchOffsetsWithCommittedAndUncommittedData() {
+    public void testFetchOffsetsAtDifferentCommittedOffset() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
@@ -1318,7 +1318,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testFetchAllOffsetsWithCommittedAndUncommittedData() {
+    public void testFetchAllOffsetsAtDifferentCommittedOffset() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);

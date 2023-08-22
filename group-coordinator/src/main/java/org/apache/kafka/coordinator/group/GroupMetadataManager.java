@@ -409,7 +409,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * @return The group corresponding to the group id or throw GroupIdNotFoundException.
+     * @return The group corresponding to the group id at the given committed offset
+     *         or throw GroupIdNotFoundException.
      */
     public Group group(String groupId, long committedOffset) throws GroupIdNotFoundException {
         Group group = groups.get(groupId, committedOffset);

@@ -482,7 +482,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        // For backwards compatibility, we support fetch commits for the empty groupId.
+        // For backwards compatibility, we support fetch commits for the empty group id.
         if (groupId == null) {
             return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
         }
@@ -526,7 +526,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        // For backwards compatibility, we support fetch commits for the empty groupId.
+        // For backwards compatibility, we support fetch commits for the empty group id.
         if (groupId == null) {
             return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
         }
