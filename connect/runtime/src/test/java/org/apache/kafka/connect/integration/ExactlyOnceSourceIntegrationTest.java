@@ -625,14 +625,11 @@ public class ExactlyOnceSourceIntegrationTest {
      */
     @Test
     public void testTasksFailOnInabilityToFence() throws Exception {
+        brokerProps.put(KafkaConfig.ListenerSecurityProtocolMapProp(), "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
         brokerProps.put(KafkaConfig.AuthorizerClassNameProp(), "org.apache.kafka.metadata.authorizer.StandardAuthorizer");
         brokerProps.put(KafkaConfig.SaslEnabledMechanismsProp(), "PLAIN");
         brokerProps.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp(), "PLAIN");
         brokerProps.put(KafkaConfig.SaslMechanismControllerProtocolProp(), "PLAIN");
-        brokerProps.put(KafkaConfig.ListenersProp(), "EXTERNAL://localhost:0,CONTROLLER://localhost:0");
-        brokerProps.put(KafkaConfig.InterBrokerListenerNameProp(), "EXTERNAL");
-        brokerProps.put(KafkaConfig.ControllerListenerNamesProp(), "CONTROLLER");
-        brokerProps.put(KafkaConfig.ListenerSecurityProtocolMapProp(), "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
         String listenerSaslJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required "
                 + "username=\"super\" "
                 + "password=\"super_pwd\" "

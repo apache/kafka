@@ -211,8 +211,8 @@ public class EmbeddedKafkaCluster {
     }
 
     public boolean sslEnabled() {
-        final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
-        return listeners != null && listeners.contains("SSL");
+        final String listenerSecurityProtocolMap = brokerConfig.getProperty(KafkaConfig.ListenerSecurityProtocolMapProp());
+        return listenerSecurityProtocolMap != null && listenerSecurityProtocolMap.contains("SSL");
     }
 
     /**
