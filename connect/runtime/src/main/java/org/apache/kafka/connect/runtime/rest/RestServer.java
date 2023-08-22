@@ -348,6 +348,13 @@ public abstract class RestServer {
         log.info("Stopping REST server");
 
         try {
+            for (Handler handler : handlers.getHandlers()) {
+                try {
+                    handler.stop();
+                } catch (Exception e) {
+                    log.warn("Error while stopping " + handler, e);
+                }
+            }
             for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
                 try {
                     connectRestExtension.close();
@@ -358,8 +365,13 @@ public abstract class RestServer {
             jettyServer.stop();
             jettyServer.join();
         } catch (Exception e) {
-            jettyServer.destroy();
             throw new ConnectException("Unable to stop REST server", e);
+        } finally {
+            try {
+                jettyServer.destroy();
+            } catch (Exception e) {
+                log.error("Unable to destroy REST server", e);
+            }
         }
 
         log.info("REST server stopped");
