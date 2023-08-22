@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -644,7 +645,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testListGroupsFailed() throws ExecutionException, InterruptedException {
+    public void testListGroupsFutureFailed() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
                 new LogContext(),
@@ -661,8 +662,7 @@ public class GroupCoordinatorServiceTest {
                 ArgumentMatchers.eq("list_groups"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
                 ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(
-                expectResponseData));
+        )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
                 requestContext(ApiKeys.LIST_GROUPS),

@@ -429,7 +429,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        CompletableFuture<ListGroupsResponseData> responseFuture = new CompletableFuture<>();
         List<CompletableFuture<ListGroupsResponseData>> futures = new java.util.ArrayList<>(Collections.emptyList());
         for (int i = 0; i < numPartitions; i++) {
             futures.add(runtime.scheduleReadOperation("list_groups",
@@ -440,18 +439,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     log.error("ListGroups request {} hit an unexpected exception: {}",
                             request, exception.getMessage());
                 }
-
-                if (!responseFuture.isDone()) {
-                    responseFuture.complete(new ListGroupsResponseData()
-                            .setErrorCode(Errors.forException(exception).code()));
-                }
-                return null;
+                return new ListGroupsResponseData()
+                        .setErrorCode(Errors.forException(exception).code());
             }));
         }
+        CompletableFuture<ListGroupsResponseData> responseFuture = new CompletableFuture<>();
         List<ListGroupsResponseData.ListedGroup> listedGroups = new ArrayList<>();
         futures.forEach(CompletableFuture::join);
         for (CompletableFuture<ListGroupsResponseData> future : futures) {
             try {
+                ListGroupsResponseData data = future.get();
+                if (data.errorCode() != Errors.NONE.code()) {
+                    responseFuture.complete(data);
+                    return responseFuture;
+                }
                 listedGroups.addAll(future.get().groups());
             } catch (InterruptedException | ExecutionException e) {
                 log.error("ListGroups request {} hit an unexpected exception: {}",
