@@ -299,7 +299,8 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             waiter.thenApply((KafkaFuture.BaseFunction<Long, Void>) now -> {
                 try {
                     callable.call();
-                } catch (Throwable ignored) {
+                } catch (Throwable e) {
+                    e.printStackTrace();
                 }
                 return null;
             });
