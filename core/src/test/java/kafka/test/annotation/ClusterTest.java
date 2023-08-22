@@ -41,6 +41,6 @@ public @interface ClusterTest {
     String name() default "";
     SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
-    MetadataVersion metadataVersion() default MetadataVersion.IBP_3_6_IV1;
+    MetadataVersion metadataVersion() default MetadataVersion.IBP_3_6_IV2;
     ClusterConfigProperty[] serverProperties() default {};
 }
