@@ -348,6 +348,13 @@ public abstract class RestServer {
         log.info("Stopping REST server");
 
         try {
+            for (Handler handler : handlers.getHandlers()) {
+                try {
+                    handler.stop();
+                } catch (Exception e) {
+                    log.warn("Error while stopping " + handler, e);
+                }
+            }
             for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
                 try {
                     connectRestExtension.close();
