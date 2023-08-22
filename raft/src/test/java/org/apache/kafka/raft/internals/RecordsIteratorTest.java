@@ -34,8 +34,10 @@ import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -45,6 +47,7 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
@@ -53,6 +56,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -188,6 +192,35 @@ public final class RecordsIteratorTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ControlRecordType.class, names = {"LEADER_CHANGE", "SNAPSHOT_HEADER", "SNAPSHOT_FOOTER"})
+    void testWithAllSupportedControlRecords(ControlRecordType type) {
+        MemoryRecords records = buildControlRecords(type);
+        final ApiMessage expectedMessage;
+        switch (type) {
+            case LEADER_CHANGE:
+                expectedMessage = new LeaderChangeMessage();
+                break;
+            case SNAPSHOT_HEADER:
+                expectedMessage = new SnapshotHeaderRecord();
+                break;
+            case SNAPSHOT_FOOTER:
+                expectedMessage = new SnapshotFooterRecord();
+                break;
+            default:
+                throw new RuntimeException("Should not happen. Poorly configured test");
+        }
+
+        try (RecordsIterator<String> iterator = createIterator(records, BufferSupplier.NO_CACHING, true)) {
+            assertTrue(iterator.hasNext());
+            assertEquals(
+                Collections.singletonList(new ControlRecord(type, expectedMessage)),
+                iterator.next().controlRecords()
+            );
+            assertFalse(iterator.hasNext());
+        }
+    }
+
     @Test
     void testControlRecordTypeValues() {
         // If this test fails then it means that ControlRecordType was changed. Please review the
@@ -272,6 +305,43 @@ public final class RecordsIteratorTest {
         }
 
         return batches;
+    }
+
+    public static MemoryRecords buildControlRecords(ControlRecordType type) {
+        final MemoryRecords records;
+        switch (type) {
+            case LEADER_CHANGE:
+                records = MemoryRecords.withLeaderChangeMessage(
+                    0,
+                    0,
+                    1,
+                    ByteBuffer.allocate(128),
+                    new LeaderChangeMessage()
+                );
+                break;
+            case SNAPSHOT_HEADER:
+                records = MemoryRecords.withSnapshotHeaderRecord(
+                    0,
+                    0,
+                    1,
+                    ByteBuffer.allocate(128),
+                    new SnapshotHeaderRecord()
+                );
+                break;
+            case SNAPSHOT_FOOTER:
+                records = MemoryRecords.withSnapshotFooterRecord(
+                    0,
+                    0,
+                    1,
+                    ByteBuffer.allocate(128),
+                    new SnapshotFooterRecord()
+                );
+                break;
+            default:
+                throw new RuntimeException(String.format("Control record type %s is not supported", type));
+        }
+
+        return records;
     }
 
     public static MemoryRecords buildRecords(

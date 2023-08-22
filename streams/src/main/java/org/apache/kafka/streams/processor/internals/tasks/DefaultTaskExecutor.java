@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -86,12 +87,29 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
             if (currentTask == null) {
                 currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
-            } else {
-                // if a task is no longer processable, ask task-manager to give it another
-                // task in the next iteration
-                if (currentTask.isProcessable(nowMs)) {
+            }
+
+            if (currentTask != null) {
+                boolean progressed = false;
+
+                if (taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
+                    log.trace("processing record for task {}", currentTask.id());
                     currentTask.process(nowMs);
-                } else {
+                    progressed = true;
+                }
+
+                if (taskExecutionMetadata.canPunctuateTask(currentTask)) {
+                    if (currentTask.maybePunctuateStreamTime()) {
+                        log.trace("punctuated stream time for task {} ", currentTask.id());
+                        progressed = true;
+                    }
+                    if (currentTask.maybePunctuateSystemTime()) {
+                        log.trace("punctuated system time for task {} ", currentTask.id());
+                        progressed = true;
+                    }
+                }
+
+                if (!progressed) {
                     unassignCurrentTask();
                 }
             }
@@ -119,13 +137,16 @@ public class DefaultTaskExecutor implements TaskExecutor {
     private StreamTask currentTask = null;
     private TaskExecutorThread taskExecutorThread = null;
     private CountDownLatch shutdownGate;
+    private TaskExecutionMetadata taskExecutionMetadata;
 
     public DefaultTaskExecutor(final TaskManager taskManager,
                                final String name,
-                               final Time time) {
+                               final Time time,
+                               final TaskExecutionMetadata taskExecutionMetadata) {
         this.time = time;
         this.name = name;
         this.taskManager = taskManager;
+        this.taskExecutionMetadata = taskExecutionMetadata;
     }
 
     @Override

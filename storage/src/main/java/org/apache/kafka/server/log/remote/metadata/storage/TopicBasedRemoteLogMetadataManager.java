@@ -58,7 +58,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * This is the {@link RemoteLogMetadataManager} implementation with storage as an internal topic with name {@link TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_TOPIC_NAME}.
  * This is used to publish and fetch {@link RemoteLogMetadata} for the registered user topic partitions with
- * {@link #onPartitionLeadershipChanges(Set, Set)}. Each broker will have an instance of this class and it subscribes
+ * {@link #onPartitionLeadershipChanges(Set, Set)}. Each broker will have an instance of this class, and it subscribes
  * to metadata updates for the registered user topic partitions.
  */
 public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataManager {
@@ -327,6 +327,23 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     @Override
+    public long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException {
+        long remoteLogSize = 0L;
+        // This is a simple-to-understand but not the most optimal solution.
+        // The TopicBasedRemoteLogMetadataManager's remote metadata store is file-based. During design discussions
+        // at https://lists.apache.org/thread/kxd6fffq02thbpd0p5y4mfbs062g7jr6
+        // we reached a consensus that sequential iteration over files on the local file system is performant enough.
+        // Should this stop being the case, the remote log size could be calculated by incrementing/decrementing
+        // counters during API calls for a more performant implementation.
+        Iterator<RemoteLogSegmentMetadata> remoteLogSegmentMetadataIterator = remotePartitionMetadataStore.listRemoteLogSegments(topicIdPartition, leaderEpoch);
+        while (remoteLogSegmentMetadataIterator.hasNext()) {
+            RemoteLogSegmentMetadata remoteLogSegmentMetadata = remoteLogSegmentMetadataIterator.next();
+            remoteLogSize += remoteLogSegmentMetadata.segmentSizeInBytes();
+        }
+        return remoteLogSize;
+    }
+
+    @Override
     public void configure(Map<String, ?> configs) {
         Objects.requireNonNull(configs, "configs can not be null.");
 
@@ -452,7 +469,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
     /**
      * @param topic topic to be created.
-     * @return Returns true if the topic already exists or it is created successfully.
+     * @return Returns true if the topic already exists, or it is created successfully.
      */
     private boolean createTopic(AdminClient adminClient, NewTopic topic) {
         boolean topicCreated = false;

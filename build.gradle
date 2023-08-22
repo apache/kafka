@@ -31,8 +31,9 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.46.0'
+  id 'com.github.ben-manes.versions' version '0.47.0'
   id 'idea'
+  id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.0"
@@ -414,9 +415,8 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
+      "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*"
     ])
   }
@@ -735,9 +735,9 @@ subprojects {
         dependsOn tasks.test
         sourceSets sourceSets.main
         reports {
-          html.enabled = true
-          xml.enabled = true
-          csv.enabled = false
+          html.required = true
+          xml.required = true
+          csv.required = false
         }
       }
 
@@ -808,10 +808,9 @@ if (userEnableTestCoverage) {
     executionData.from = javaProjects.jacocoTestReport.executionData
 
     reports {
-      html.enabled = true
-      xml.enabled = true
+      html.required = true
+      xml.required = true
     }
-
     // workaround to ignore projects that don't have any tests at all
     onlyIf = { true }
     doFirst {
@@ -830,6 +829,7 @@ def connectPkgs = [
     'connect:file',
     'connect:json',
     'connect:runtime',
+    'connect:test-plugins',
     'connect:transforms',
     'connect:mirror',
     'connect:mirror-client'
@@ -893,6 +893,10 @@ project(':core') {
       implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
+      exclude module: 'logback-classic'
+      exclude module: 'logback-core'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     implementation libs.commonsCli
@@ -1634,6 +1638,8 @@ project(':storage:api') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':server-common')
+    implementation libs.metrics
     implementation libs.slf4jApi
 
     testImplementation project(':clients')
@@ -1689,6 +1695,10 @@ project(':storage:api') {
   javadoc {
     include "**/org/apache/kafka/server/log/remote/storage/*"
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
+  }
 }
 
 project(':storage') {
@@ -1713,6 +1723,7 @@ project(':storage') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -1791,6 +1802,10 @@ project(':storage') {
   javadoc {
     enabled = false
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
+  }
 }
 
 project(':tools:tools-api') {
@@ -1854,6 +1869,8 @@ project(':tools') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':connect:api')
+    implementation project(':connect:runtime')
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
@@ -1872,6 +1889,9 @@ project(':tools') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':connect:api')
+    testImplementation project(':connect:runtime')
+    testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2767,6 +2787,8 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':connect:test-plugins')
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi
@@ -3061,6 +3083,18 @@ project(':connect:mirror-client') {
 
   jar {
     dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:test-plugins') {
+  archivesBaseName = "connect-test-plugins"
+
+  dependencies {
+    api project(':connect:api')
+
+    implementation project(':server-common')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
   }
 }
 

@@ -20,6 +20,8 @@ import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -28,7 +30,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
  * A predicate which is true for records with at least one header with the configured name.
  * @param <R> The type of connect record.
  */
-public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R> {
+public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
 
     private static final String NAME_CONFIG = "name";
     public static final String OVERVIEW_DOC = "A predicate which is true for records with at least one header with the configured name.";
@@ -37,6 +39,11 @@ public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R> {
             new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM,
             "The header name.");
     private String name;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public ConfigDef config() {

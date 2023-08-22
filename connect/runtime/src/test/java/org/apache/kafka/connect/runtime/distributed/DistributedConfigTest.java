@@ -21,6 +21,8 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
@@ -52,6 +54,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class DistributedConfigTest {
 
     public Map<String, String> configs() {
@@ -93,10 +96,7 @@ public class DistributedConfigTest {
         doReturn(fakeKeyGenerator)
                 .when(crypto).keyGenerator(fakeKeyGenerationAlgorithm);
 
-        // And for the signature algorithm
-        doThrow(new NoSuchAlgorithmException())
-                .when(crypto).mac(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
-        // Likewise for key verification algorithms
+        // And for the key verification algorithms
         for (String verificationAlgorithm : DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT) {
             doThrow(new NoSuchAlgorithmException())
                     .when(crypto).mac(verificationAlgorithm);

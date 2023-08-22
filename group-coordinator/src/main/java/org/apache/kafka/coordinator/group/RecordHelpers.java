@@ -131,13 +131,24 @@ public class RecordHelpers {
         Map<String, TopicMetadata> newSubscriptionMetadata
     ) {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
+        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
+            List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
+            // If the partition rack information map is empty, store an empty list in the record.
+            if (!topicMetadata.partitionRacks().isEmpty()) {
+                topicMetadata.partitionRacks().forEach((partition, racks) ->
+                    partitionMetadata.add(new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
+                        .setPartition(partition)
+                        .setRacks(new ArrayList<>(racks))
+                    )
+                );
+            }
             value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-            )
-        );
+                .setPartitionMetadata(partitionMetadata)
+            );
+        });
 
         return new Record(
             new ApiMessageAndVersion(
@@ -370,11 +381,13 @@ public class RecordHelpers {
      * Creates a GroupMetadata record.
      *
      * @param group              The generic group.
+     * @param assignment         The generic group assignment.
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static Record newGroupMetadataRecord(
         GenericGroup group,
+        Map<String, byte[]> assignment,
         MetadataVersion metadataVersion
     ) {
         List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>(group.allMembers().size());
@@ -384,10 +397,10 @@ public class RecordHelpers {
                 throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol.");
             }
 
-            byte[] assignment = member.assignment();
-            if (assignment == null) {
+            byte[] memberAssignment = assignment.get(member.memberId());
+            if (memberAssignment == null) {
                 throw new IllegalStateException("Attempted to write member " + member.memberId() +
-                    " of group + " + group.groupId() + " with no assignment.");
+                    " of group " + group.groupId() + " with no assignment.");
             }
 
             members.add(
@@ -399,7 +412,7 @@ public class RecordHelpers {
                     .setSessionTimeout(member.sessionTimeoutMs())
                     .setGroupInstanceId(member.groupInstanceId().orElse(null))
                     .setSubscription(subscription)
-                    .setAssignment(assignment)
+                    .setAssignment(memberAssignment)
             );
         });
 

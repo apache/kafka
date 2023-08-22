@@ -101,4 +101,7 @@
         </subpackage>
     </subpackage>
 
+    <subpackage name="admin">
+        <allow pkg="org.apache.kafka.server.common" />
+    </subpackage>
 </import-control>

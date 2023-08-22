@@ -19,8 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
@@ -28,8 +26,6 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -44,7 +40,6 @@ import java.util.concurrent.LinkedBlockingQueue;
  * {@code BackgroundEvent} from the {@ConsumerBackgroundThread}.
  */
 public class DefaultEventHandler implements EventHandler {
-    private static final String METRIC_GRP_PREFIX = "consumer";
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final DefaultBackgroundThread backgroundThread;
@@ -83,66 +78,16 @@ public class DefaultEventHandler implements EventHandler {
                                final Sensor fetcherThrottleTimeSensor) {
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
-        final ConsumerMetadata metadata = bootstrapMetadata(
-            logContext,
-            clusterResourceListeners,
-            config,
-            subscriptionState
-        );
-        final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-        final Selector selector = new Selector(
-            config.getLong(
-            ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-            metrics,
-            time,
-            METRIC_GRP_PREFIX,
-            channelBuilder,
-            logContext
-        );
-        final NetworkClient networkClient = new NetworkClient(
-            selector,
-            metadata,
-            config.getString(ConsumerConfig.CLIENT_ID_CONFIG),
-            100, // a fixed large enough value will suffice for max
-            // in-flight requests
-            config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-            config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-            config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
-            config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
-            config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-            config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-            config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-            time,
-            true,
-            apiVersions,
-            fetcherThrottleTimeSensor,
-            logContext
-        );
-        this.backgroundThread = new DefaultBackgroundThread(
-            time,
-            config,
-            groupRebalanceConfig,
-            logContext,
-            this.applicationEventQueue,
-            this.backgroundEventQueue,
-            metadata,
-            subscriptionState,
-            networkClient);
-        this.backgroundThread.start();
-    }
 
-    // VisibleForTesting
-    DefaultEventHandler(final Time time,
-                        final ConsumerConfig config,
-                        final GroupRebalanceConfig groupRebalanceConfig,
-                        final LogContext logContext,
-                        final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                        final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                        final SubscriptionState subscriptionState,
-                        final ConsumerMetadata metadata,
-                        final KafkaClient networkClient) {
-        this.applicationEventQueue = applicationEventQueue;
-        this.backgroundEventQueue = backgroundEventQueue;
+        // Bootstrap a metadata object with the bootstrap server IP address, which will be used once for the
+        // subsequent metadata refresh once the background thread has started up.
+        final ConsumerMetadata metadata = new ConsumerMetadata(config,
+                subscriptionState,
+                logContext,
+                clusterResourceListeners);
+        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
+        metadata.bootstrap(addresses);
+
         this.backgroundThread = new DefaultBackgroundThread(
             time,
             config,
@@ -152,7 +97,9 @@ public class DefaultEventHandler implements EventHandler {
             this.backgroundEventQueue,
             metadata,
             subscriptionState,
-            networkClient);
+            apiVersions,
+            metrics,
+            fetcherThrottleTimeSensor);
         backgroundThread.start();
     }
 
@@ -180,27 +127,6 @@ public class DefaultEventHandler implements EventHandler {
     public boolean add(final ApplicationEvent event) {
         backgroundThread.wakeup();
         return applicationEventQueue.add(event);
-    }
-
-    // bootstrap a metadata object with the bootstrap server IP address,
-    // which will be used once for the subsequent metadata refresh once the
-    // background thread has started up.
-    private ConsumerMetadata bootstrapMetadata(
-        final LogContext logContext,
-        final ClusterResourceListeners clusterResourceListeners,
-        final ConsumerConfig config,
-        final SubscriptionState subscriptions) {
-        final ConsumerMetadata metadata = new ConsumerMetadata(
-            config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-            config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
-            !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
-            config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
-            subscriptions,
-            logContext, clusterResourceListeners);
-        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-            config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
-        metadata.bootstrap(addresses);
-        return metadata;
     }
 
     public void close() {

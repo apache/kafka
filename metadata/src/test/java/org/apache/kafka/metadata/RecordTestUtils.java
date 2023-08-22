@@ -70,17 +70,10 @@ public class RecordTestUtils {
                     try {
                         Method method = target.getClass().getMethod("replay",
                             record.getClass(),
-                            Optional.class);
-                        method.invoke(target, record, Optional.empty());
-                    } catch (NoSuchMethodException t) {
-                        try {
-                            Method method = target.getClass().getMethod("replay",
-                                record.getClass(),
-                                long.class);
-                            method.invoke(target, record, 0L);
-                        } catch (NoSuchMethodException i) {
-                            // ignore
-                        }
+                            long.class);
+                        method.invoke(target, record, 0L);
+                    } catch (NoSuchMethodException i) {
+                        // ignore
                     }
                 }
             } catch (InvocationTargetException e) {
@@ -96,6 +89,32 @@ public class RecordTestUtils {
         ApiMessageAndVersion recordAndVersion
     ) {
         replayAll(target, Collections.singletonList(recordAndVersion));
+    }
+
+    public static <T extends ApiMessage> Optional<T> recordAtIndexAs(
+            Class<T> recordClazz,
+            List<ApiMessageAndVersion> recordsAndVersions,
+            int recordIndex
+    ) {
+        if (recordIndex > recordsAndVersions.size() - 1) {
+            return Optional.empty();
+        } else {
+            if (recordIndex == -1) {
+                return recordsAndVersions.stream().map(ApiMessageAndVersion::message)
+                    .filter(record -> record.getClass().isAssignableFrom(recordClazz))
+                    .map(recordClazz::cast)
+                    .findFirst();
+            } else {
+                ApiMessageAndVersion messageAndVersion = recordsAndVersions.get(recordIndex);
+                ApiMessage record = messageAndVersion.message();
+                if (record.getClass().isAssignableFrom(recordClazz)) {
+                    return Optional.of(recordClazz.cast(record));
+                } else {
+                    return Optional.empty();
+                }
+            }
+
+        }
     }
 
     public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {

@@ -37,8 +37,7 @@ public enum PluginType {
     PREDICATE(Predicate.class),
     CONFIGPROVIDER(ConfigProvider.class),
     REST_EXTENSION(ConnectRestExtension.class),
-    CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY(ConnectorClientConfigOverridePolicy.class),
-    UNKNOWN(Object.class);
+    CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY(ConnectorClientConfigOverridePolicy.class);
 
     private final Class<?> klass;
 
@@ -46,17 +45,12 @@ public enum PluginType {
         this.klass = klass;
     }
 
-    public static PluginType from(Class<?> klass) {
-        for (PluginType type : PluginType.values()) {
-            if (type.klass.isAssignableFrom(klass)) {
-                return type;
-            }
-        }
-        return UNKNOWN;
-    }
-
     public String simpleName() {
         return klass.getSimpleName();
+    }
+
+    public Class<?> superClass() {
+        return klass;
     }
 
     @Override
