@@ -358,8 +358,13 @@ public abstract class RestServer {
             jettyServer.stop();
             jettyServer.join();
         } catch (Exception e) {
-            jettyServer.destroy();
             throw new ConnectException("Unable to stop REST server", e);
+        } finally {
+            try {
+                jettyServer.destroy();
+            } catch (Exception e) {
+                log.error("Unable to destroy REST server", e);
+            }
         }
 
         log.info("REST server stopped");
