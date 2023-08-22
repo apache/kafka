@@ -1521,9 +1521,8 @@ public class RemoteLogManager implements Closeable {
             if (retentionMs < 0)
                 throw new IllegalArgumentException("retentionMs should be non negative, but it is " + retentionMs);
 
-            if (retentionMs < cleanupUntilMs) {
-                throw new IllegalArgumentException("retentionMs [" + retentionMs + "] must be greater than cleanupUntilMs [" + cleanupUntilMs + "]");
-            }
+            if (cleanupUntilMs < 0)
+                throw new IllegalArgumentException("cleanupUntilMs should be non negative, but it is " + cleanupUntilMs);
 
             this.retentionMs = retentionMs;
             this.cleanupUntilMs = cleanupUntilMs;

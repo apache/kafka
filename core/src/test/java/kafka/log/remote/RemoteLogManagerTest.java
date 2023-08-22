@@ -1286,7 +1286,7 @@ public class RemoteLogManagerTest {
         Supplier<RemoteLogManager.RetentionTimeData>[] invalidRetentionTimeData =
             new Supplier[] {
                 () -> new RemoteLogManager.RetentionTimeData(-1, 10),
-                () -> new RemoteLogManager.RetentionTimeData(10, 1000),
+                () -> new RemoteLogManager.RetentionTimeData(10, -1),
             };
 
         for (Supplier<RemoteLogManager.RetentionTimeData> invalidRetentionTimeDataEntry : invalidRetentionTimeData) {
