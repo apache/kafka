@@ -162,7 +162,7 @@ public class SynchronizationTest {
         public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
             return AccessController.doPrivileged(
                     (PrivilegedAction<DelegatingClassLoader>) () ->
-                            new SynchronizedDelegatingClassLoader(parent)
+                            new SynchronizedDelegatingClassLoader(parent, dclBreakpoint)
             );
         }
 
@@ -174,18 +174,21 @@ public class SynchronizationTest {
         ) {
             return AccessController.doPrivileged(
                     (PrivilegedAction<PluginClassLoader>) () ->
-                            new SynchronizedPluginClassLoader(pluginLocation, urls, parent)
+                            new SynchronizedPluginClassLoader(pluginLocation, urls, parent, pclBreakpoint)
             );
         }
     }
 
-    private class SynchronizedDelegatingClassLoader extends DelegatingClassLoader {
-        {
+    private static class SynchronizedDelegatingClassLoader extends DelegatingClassLoader {
+        static {
             ClassLoader.registerAsParallelCapable();
         }
 
-        public SynchronizedDelegatingClassLoader(ClassLoader parent) {
+        private final Breakpoint<String> dclBreakpoint;
+
+        public SynchronizedDelegatingClassLoader(ClassLoader parent, Breakpoint<String> dclBreakpoint) {
             super(parent);
+            this.dclBreakpoint = dclBreakpoint;
         }
 
         @Override
@@ -196,14 +199,19 @@ public class SynchronizationTest {
         }
     }
 
-    private class SynchronizedPluginClassLoader extends PluginClassLoader {
-        {
+    private static class SynchronizedPluginClassLoader extends PluginClassLoader {
+        static {
             ClassLoader.registerAsParallelCapable();
         }
 
+        private final Breakpoint<String> pclBreakpoint;
 
-        public SynchronizedPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
+
+        public SynchronizedPluginClassLoader(
+                URL pluginLocation, URL[] urls, ClassLoader parent, Breakpoint<String> pclBreakpoint
+        ) {
             super(pluginLocation, urls, parent);
+            this.pclBreakpoint = pclBreakpoint;
         }
 
         @Override

@@ -34,6 +34,7 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{File, FileInputStream}
 import java.nio.file.Files
+import java.util
 import java.util.Collections
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
@@ -443,8 +444,59 @@ class RemoteIndexCacheTest {
     verifyNoMoreInteractions(rsm)
   }
 
-  private def generateSpyCacheEntry(): RemoteIndexCache.Entry = {
-    val remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition)
+  @Test
+  def testRemoveItem(): Unit = {
+    val segmentId = rlsMetadata.remoteLogSegmentId()
+    val segmentUuid = segmentId.id()
+    // generate and add entry to cache
+    val spyEntry = generateSpyCacheEntry(segmentId)
+    cache.internalCache.put(segmentUuid, spyEntry)
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+    assertFalse(spyEntry.isMarkedForCleanup)
+
+    cache.remove(segmentId.id())
+    assertFalse(cache.internalCache().asMap().containsKey(segmentUuid))
+    TestUtils.waitUntilTrue(() => spyEntry.isMarkedForCleanup, "Failed to mark cache entry for cleanup after invalidation")
+  }
+
+  @Test
+  def testRemoveNonExistentItem(): Unit = {
+    // generate and add entry to cache
+    val segmentId = rlsMetadata.remoteLogSegmentId()
+    val segmentUuid = segmentId.id()
+    // generate and add entry to cache
+    val spyEntry = generateSpyCacheEntry(segmentId)
+    cache.internalCache.put(segmentUuid, spyEntry)
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+
+    // remove a random Uuid
+    cache.remove(Uuid.randomUuid())
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+    assertFalse(spyEntry.isMarkedForCleanup)
+  }
+
+  @Test
+  def testRemoveMultipleItems(): Unit = {
+    // generate and add entry to cache
+    val uuidAndEntryList = new util.HashMap[Uuid, RemoteIndexCache.Entry]()
+    for (_ <- 0 until 10) {
+      val segmentId = RemoteLogSegmentId.generateNew(idPartition)
+      val segmentUuid = segmentId.id()
+      val spyEntry = generateSpyCacheEntry(segmentId)
+      uuidAndEntryList.put(segmentUuid, spyEntry)
+
+      cache.internalCache.put(segmentUuid, spyEntry)
+      assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+      assertFalse(spyEntry.isMarkedForCleanup)
+    }
+    cache.removeAll(uuidAndEntryList.keySet())
+    uuidAndEntryList.values().forEach { entry =>
+      TestUtils.waitUntilTrue(() => entry.isMarkedForCleanup, "Failed to mark cache entry for cleanup after invalidation")
+    }
+  }
+
+  private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
+                                    = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))

@@ -252,9 +252,7 @@ public class PrototypeAsyncConsumerTest {
                 subscriptions,
                 eventHandler,
                 metrics,
-                clusterResourceListeners,
                 Optional.ofNullable(this.groupId),
-                clientId,
                 config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 }

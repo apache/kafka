@@ -27,7 +27,9 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  * In particular, the {@code Filter} transformation can be conditionally applied in order to filter
  * certain records from further processing.
  *
- * <p>Implementations of this interface must be public and have a public constructor with no parameters.
+ * <p>Kafka Connect may discover implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
+ * To support this, implementations of this interface should also contain a service provider configuration file in
+ * {@code META-INF/services/org.apache.kafka.connect.transforms.predicates.Predicate}.
  *
  * @param <R> The type of record.
  */
