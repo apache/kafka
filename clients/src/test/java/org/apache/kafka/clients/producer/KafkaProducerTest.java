@@ -494,6 +494,12 @@ public class KafkaProducerTest {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         assertThrows(ConfigException.class, () -> new KafkaProducer(producerProps));
+
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        // Invalid value null for configuration key.serializer: must be non-null.
+        assertThrows(ConfigException.class, () -> new KafkaProducer<String, String>(configs));
     }
 
     @Test
@@ -2398,16 +2404,6 @@ public class KafkaProducerTest {
                 ioThread
             );
         }
-    }
-
-    @Test
-    void testSerializerMustNoBeANull() {
-        final Map<String, Object> configs = new HashMap<>();
-        configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testSerializerMustNoBeANull");
-        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-
-        // Invalid value null for configuration key.serializer: must be non-null.
-        assertThrows(ConfigException.class, () -> new KafkaProducer<String, String>(configs));
     }
 
     @Test

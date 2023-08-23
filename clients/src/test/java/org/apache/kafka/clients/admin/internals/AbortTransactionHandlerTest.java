@@ -52,7 +52,6 @@ public class AbortTransactionHandlerTest {
     @Test
     public void testInvalidBuildRequestCall() {
         AbortTransactionHandler handler = new AbortTransactionHandler(abortSpec, logContext);
-
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1,
             emptySet()));
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1,
