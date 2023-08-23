@@ -58,27 +58,24 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
                          kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
 
   private def updateLogConfig(topic: String,
-                              topicConfig: Properties,
-                              configNamesToExclude: Set[String]): Unit = {
+                              topicConfig: Properties): Unit = {
     val logManager = replicaManager.logManager
-    logManager.topicConfigUpdated(topic)
-    val logs = logManager.logsByTopic(topic)
-    if (logs.nonEmpty) {
-      val props = new Properties()
-      topicConfig.asScala.forKeyValue { (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
-      }
-      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      val wasRemoteLogEnabledBeforeUpdate = logs.head.remoteLogEnabled()
-      logs.foreach(_.updateConfig(logConfig))
-      maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+    // Validate the configurations.
+    val configNamesToExclude = excludedConfigs(topic, topicConfig)
+    val props = new Properties()
+    topicConfig.asScala.forKeyValue { (key, value) =>
+      if (!configNamesToExclude.contains(key)) props.put(key, value)
     }
+    val logs = logManager.logsByTopic(topic)
+    val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
+    logManager.updateTopicConfig(topic, props)
+    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
   }
 
   private[server] def maybeBootstrapRemoteLogComponents(topic: String,
                                                         logs: Seq[UnifiedLog],
                                                         wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
-    val isRemoteLogEnabled = logs.head.remoteLogEnabled()
+    val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
     if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
       val (leaderPartitions, followerPartitions) =
@@ -92,9 +89,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
   }
 
   def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
-    // Validate the configurations.
-    val configNamesToExclude = excludedConfigs(topic, topicConfig)
-    updateLogConfig(topic, topicConfig, configNamesToExclude)
+    updateLogConfig(topic, topicConfig)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
