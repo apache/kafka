@@ -522,7 +522,7 @@ public class EmbeddedKafkaCluster {
             }
         }
 
-        throw new RuntimeException("Could not find enough records. found " + consumedRecords + ", expected " + n);
+        throw new NotEnoughRecordsException(n, consumedRecords);
     }
 
     /**
@@ -684,6 +684,12 @@ public class EmbeddedKafkaCluster {
     private static void putIfAbsent(final Map<String, Object> props, final String propertyKey, final Object propertyValue) {
         if (!props.containsKey(propertyKey)) {
             props.put(propertyKey, propertyValue);
+        }
+    }
+
+    public static class NotEnoughRecordsException extends ConnectException {
+        public NotEnoughRecordsException(int expected, int actual) {
+            super("Could not find enough records. Found: " + actual + ", Expected: " + expected);
         }
     }
 }
