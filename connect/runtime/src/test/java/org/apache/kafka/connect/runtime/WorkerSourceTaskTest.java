@@ -379,7 +379,8 @@ public class WorkerSourceTaskTest {
         assertPollMetrics(0);
 
         verifyCleanStartup();
-        verify(statusListener).onFailure(taskId, exception);
+        // RuntimeException bubbles up as ConnectException due to retryWithTolerance
+        verify(statusListener).onFailure(eq(taskId), any(ConnectException.class));
         verify(sourceTask).stop();
         assertShouldSkipCommit();
         verifyOffsetFlush(true);

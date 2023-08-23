@@ -30,11 +30,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -83,13 +81,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
-import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -104,7 +100,6 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -112,9 +107,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -295,10 +288,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
-    }
-
-    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore,
@@ -492,37 +481,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyStartup();
         verifyShutdown(true, false);
         assertPollMetrics(0);
-    }
-
-    @Test
-    public void testRetriableExceptionInPoll() throws Exception {
-
-        final ErrorHandlingMetrics errorHandlingMetrics = mock(ErrorHandlingMetrics.class);
-        final RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(30, 15, ALL, SYSTEM, errorHandlingMetrics);
-        createWorkerTask(TargetState.STARTED, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator);
-        final CountDownLatch pollLatch = new CountDownLatch(3);
-
-        final RetriableException retriableException = new RetriableException("Error");
-        final AtomicInteger numPollInvocations = new AtomicInteger(0);
-        when(sourceTask.poll()).thenAnswer(invocation -> {
-            pollLatch.countDown();
-            numPollInvocations.incrementAndGet();
-            throw retriableException;
-        });
-
-        startTaskThread();
-        ConcurrencyUtils.awaitLatch(pollLatch, "task was not polled in time");
-
-        awaitShutdown();
-        assertEquals(pollCount(), numPollInvocations.get());
-        verifyPreflight();
-        verifyStartup();
-        verifyCleanShutdown();
-        verify(sourceTask, atLeast(numPollInvocations.get())).poll();
-        // recordRetry and recordFailure shouldn't exceed the number of poll invocations
-        verify(errorHandlingMetrics, atMost(numPollInvocations.get())).recordRetry();
-        verify(errorHandlingMetrics, atMost(numPollInvocations.get())).recordFailure();
-        verify(errorHandlingMetrics).recordSkipped();
     }
 
     @Test

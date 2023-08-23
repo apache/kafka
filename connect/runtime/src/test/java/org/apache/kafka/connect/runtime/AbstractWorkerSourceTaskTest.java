@@ -29,7 +29,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -51,7 +50,6 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
-import org.apache.kafka.connect.test.util.ConcurrencyUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
@@ -74,9 +72,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -86,6 +82,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.EXCLUDE_REGEX_CONFIG;
@@ -93,7 +90,6 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.ALL_OPERATOR;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -104,8 +100,13 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -526,10 +527,15 @@ public class AbstractWorkerSourceTaskTest {
 
     @Test
     public void testRetriableExceptionInPoll() throws Exception {
-
+        // We set errorRetryTimeout to -1 so that the deadline is set to Long.MAX_VALUE
+        // That makes testing easier
         final ErrorHandlingMetrics errorHandlingMetrics = mock(ErrorHandlingMetrics.class);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(
+                -1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics
+        );
+
         final List<ErrorReporter> errorReporters = Collections.singletonList(mock(ErrorReporter.class));
-        createWorkerTask(keyConverter, valueConverter, headerConverter, ALL_OPERATOR, () -> errorReporters);
+        createWorkerTask(keyConverter, valueConverter, headerConverter, retryWithToleranceOperator, () -> errorReporters);
 
         when(sourceTask.poll())
                 .thenThrow(RetriableException.class)
@@ -537,11 +543,39 @@ public class AbstractWorkerSourceTaskTest {
                 .thenReturn(Collections.emptyList());
 
         workerTask.poll();
-        final int numPollInvocations = 3;
-        verify(sourceTask, times(1)).poll();
-        // recordRetry and recordFailure shouldn't exceed the number of poll invocations
+        // poll is invoked 3 times by virtue of retires.
+        verify(sourceTask, times(3)).poll();
+        // recordRetry and recordFailure invoked twice because the poll call threw RetriableException twice
         verify(errorHandlingMetrics, times(2)).recordRetry();
-        verify(errorHandlingMetrics, atMost(numPollInvocations)).recordFailure();
+        verify(errorHandlingMetrics, times(2)).recordFailure();
+        // The operation isn't marked as failed.
+        assertFalse(retryWithToleranceOperator.failed());
+    }
+
+    @Test
+    public void testNonRetriableExceptionInPoll() throws Exception {
+        // We set errorRetryTimeout to -1 so that the deadline is set to Long.MAX_VALUE
+        // That makes testing easier
+        final ErrorHandlingMetrics errorHandlingMetrics = mock(ErrorHandlingMetrics.class);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(
+                -1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics
+        );
+
+        final List<ErrorReporter> errorReporters = Collections.singletonList(mock(ErrorReporter.class));
+        createWorkerTask(keyConverter, valueConverter, headerConverter, retryWithToleranceOperator, () -> errorReporters);
+
+        when(sourceTask.poll())
+                .thenThrow(RuntimeException.class);
+
+        assertThrows(ConnectException.class, () -> workerTask.poll());
+        // poll is invoked only once
+        verify(sourceTask, times(1)).poll();
+        // recordRetry should not be invoked
+        verify(errorHandlingMetrics, never()).recordRetry();
+        // recordFailure invoked once
+        verify(errorHandlingMetrics, times(1)).recordFailure();
+        // The operation is marked as failed.
+        assertTrue(retryWithToleranceOperator.failed());
     }
 
     @Test
@@ -767,7 +801,7 @@ public class AbstractWorkerSourceTaskTest {
         when(statusBackingStore.getTopic(anyString(), anyString())).thenAnswer((Answer<TopicStatus>) invocation -> {
             String connector = invocation.getArgument(0, String.class);
             String topic = invocation.getArgument(1, String.class);
-            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
+            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), SYSTEM.milliseconds());
         });
     }
 
@@ -855,7 +889,7 @@ public class AbstractWorkerSourceTaskTest {
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
                 sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
+                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), SYSTEM, retryWithToleranceOperator,
                 statusBackingStore, Runnable::run, errorReportersSupplier) {
             @Override
             protected void prepareToInitializeTask() {
