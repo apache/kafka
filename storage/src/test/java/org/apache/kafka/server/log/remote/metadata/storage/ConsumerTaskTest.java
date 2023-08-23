@@ -107,6 +107,7 @@ public class ConsumerTaskTest {
     public void testCloseOnNoAssignment() throws InterruptedException {
         thread.start();
         Thread.sleep(10);
+        assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
     }
 
     @Test
