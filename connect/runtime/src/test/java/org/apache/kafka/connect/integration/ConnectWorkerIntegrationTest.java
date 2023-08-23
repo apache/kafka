@@ -204,15 +204,13 @@ public class ConnectWorkerIntegrationTest {
         // config to get a random free port because in this test we want to stop the Kafka broker and then bring it
         // back up and listening on the same port in order to verify that the Connect cluster can re-connect to Kafka
         // and continue functioning normally. If we were to use port 0 here, the Kafka broker would most likely listen
-        // on a different random free port the second time it is started.
+        // on a different random free port the second time it is started. Note that we can only use the static port
+        // because we have a single broker setup in this test.
         int listenerPort;
         try (ServerSocket s = new ServerSocket(0)) {
             listenerPort = s.getLocalPort();
         }
-        brokerProps.put("listeners", String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));
-        brokerProps.put(KafkaConfig.InterBrokerListenerNameProp(), "EXTERNAL");
-        brokerProps.put(KafkaConfig.ControllerListenerNamesProp(), "CONTROLLER");
-        brokerProps.put(KafkaConfig.ListenerSecurityProtocolMapProp(), "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT");
+        brokerProps.put(KafkaConfig.ListenersProp(), String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));
         connect = connectBuilder.workerProps(workerProps).brokerProps(brokerProps).build();
         // start the clusters
         connect.start();

@@ -175,14 +175,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         String.join(",", brokerNode.logDataDirectories()));
             }
 
-            // We allow configuring the security protocol map via Builder::setConfigProp, and it shouldn't be overridden here
+            // We allow configuring the listeners and related properties via Builder::setConfigProp,
+            // and they shouldn't be overridden here
             props.putIfAbsent(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
                 "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-            props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
-            props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
+            props.putIfAbsent(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
+            props.putIfAbsent(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
                 nodes.interBrokerListenerName().value());
-            props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
-                "CONTROLLER");
+            props.putIfAbsent(KafkaConfig$.MODULE$.ControllerListenerNamesProp(), "CONTROLLER");
 
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string

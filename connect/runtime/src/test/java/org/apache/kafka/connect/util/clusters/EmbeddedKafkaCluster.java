@@ -151,7 +151,8 @@ public class EmbeddedKafkaCluster {
     /**
      * Restarts the Kafka brokers. This can be called after {@link #stopOnlyBrokers()}. Note that if the Kafka brokers
      * need to be listening on the same ports as earlier, the {@link #brokerConfig} should contain the
-     * {@link KafkaConfig#ListenersProp} property and it should use a fixed non-zero free port.
+     * {@link KafkaConfig#ListenersProp} property and it should use a fixed non-zero free port. Also note that this is
+     * only possible when {@code numBrokers} is 1.
      */
     public void restartOnlyBrokers() {
         cluster.brokers().values().forEach(BrokerServer::startup);
