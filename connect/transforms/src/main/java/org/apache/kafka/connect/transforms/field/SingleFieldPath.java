@@ -39,8 +39,6 @@ import java.util.Objects;
  *
  * <p>The field path semantics are defined by the {@link FieldSyntaxVersion syntax version}.
  *
- * <p>Paths are calculated once and cached for further access.
- *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-821%3A+Connect+Transforms+support+for+nested+structures">KIP-821</a>
  * @see FieldSyntaxVersion
  * @see MultiFieldPaths
