@@ -713,7 +713,7 @@ class LocalLogTest {
     val newSegment = log.roll()
 
     // simulate the directory is renamed concurrently
-    doReturn(new File("__NON_EXISTENT__")).when(spyLog).dir
+    doReturn(new File("__NON_EXISTENT__"), Nil: _*).when(spyLog).dir
     assertDoesNotThrow((() => spyLog.flush(newSegment.baseOffset)): Executable)
   }
 
