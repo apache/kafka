@@ -136,8 +136,6 @@ public class SingleFieldPath {
                     idx += 2; // increment by two to include the backtick and the dot after it
                     break;
                 }
-
-
             }
         }
         return steps.toArray(new String[0]);
