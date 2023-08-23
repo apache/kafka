@@ -51,7 +51,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyString}
-import org.mockito.Mockito.{doNothing, mock, verify, when}
+import org.mockito.Mockito.{doNothing, mock, never, verify, when}
 
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq}
@@ -581,5 +581,22 @@ class DynamicConfigChangeUnitTest {
     configHandler.maybeBootstrapRemoteLogComponents(topic, Seq(log0, log1), isRemoteLogEnabledBeforeUpdate)
     assertEquals(Collections.singleton(partition0), leaderPartitionsArg.getValue)
     assertEquals(Collections.singleton(partition1), followerPartitionsArg.getValue)
+  }
+
+  @Test
+  def testEnableRemoteLogStorageOnTopicOnAlreadyEnabledTopic(): Unit = {
+    val topic = "test-topic"
+    val rlm: RemoteLogManager = mock(classOf[RemoteLogManager])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.remoteLogManager).thenReturn(Some(rlm))
+
+    val log0: UnifiedLog = mock(classOf[UnifiedLog])
+    when(log0.remoteLogEnabled()).thenReturn(true)
+    doNothing().when(rlm).onLeadershipChange(any(), any(), any())
+
+    val isRemoteLogEnabledBeforeUpdate = true
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
+    configHandler.maybeBootstrapRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate)
+    verify(rlm, never()).onLeadershipChange(any(), any(), any())
   }
 }
