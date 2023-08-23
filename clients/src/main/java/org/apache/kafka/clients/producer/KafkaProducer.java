@@ -74,6 +74,7 @@ import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -390,15 +391,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.valueSerializer = valueSerializer;
             }
 
-            List<ProducerInterceptor<K, V>> interceptorList = ClientUtils.createConfiguredInterceptors(config,
+            List<ProducerInterceptor<K, V>> interceptorList = ClientUtils.configuredInterceptors(config,
                     ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
             if (interceptors != null)
                 this.interceptors = interceptors;
             else
                 this.interceptors = new ProducerInterceptors<>(interceptorList);
-            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keySerializer,
-                    this.valueSerializer, interceptorList, reporters);
+            ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
+                    interceptorList,
+                    reporters,
+                    Arrays.asList(this.keySerializer, this.valueSerializer));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
@@ -1346,16 +1349,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new KafkaException("Failed to close kafka producer", exception);
         }
         log.debug("Kafka producer has been closed");
-    }
-
-    private ClusterResourceListeners configureClusterResourceListeners(Serializer<K> keySerializer, Serializer<V> valueSerializer, List<?>... candidateLists) {
-        ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
-        for (List<?> candidateList: candidateLists)
-            clusterResourceListeners.maybeAddAll(candidateList);
-
-        clusterResourceListeners.maybeAdd(keySerializer);
-        clusterResourceListeners.maybeAdd(valueSerializer);
-        return clusterResourceListeners;
     }
 
     /**

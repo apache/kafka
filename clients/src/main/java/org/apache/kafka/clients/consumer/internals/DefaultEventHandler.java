@@ -37,7 +37,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
- * {@code BackgroundEvent} from the {@ConsumerBackgroundThread}.
+ * {@code BackgroundEvent} from the {@link DefaultBackgroundThread}.
  */
 public class DefaultEventHandler implements EventHandler {
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
