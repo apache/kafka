@@ -288,10 +288,6 @@ public class RemoteLogManager implements Closeable {
         return remoteLogStorageManager;
     }
 
-    public MetadataCache metadataCache() {
-        return metadataCache;
-    }
-
     private Stream<Partition> filterPartitions(Set<Partition> partitions) {
         // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
         return partitions.stream().filter(partition -> partition.log().exists(UnifiedLog::remoteLogEnabled));
@@ -370,10 +366,7 @@ public class RemoteLogManager implements Closeable {
             }
         });
         remoteLogMetadataManager.onStopPartitions(topicIdPartitions);
-        if (delete) {
-            // NOTE: this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
-//            topicPartitions.forEach(topicIdByPartitionMap::remove);
-        }
+
     }
 
     private void deleteRemoteLogPartition(TopicIdPartition partition) throws RemoteStorageException, ExecutionException, InterruptedException {

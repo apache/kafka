@@ -3635,7 +3635,7 @@ class ReplicaManagerTest {
       brokerTopicStats,
       mockMetadataCache
     )
-    when(remoteLogManager.metadataCache().getTopicId(topic)).thenReturn(topicId)
+    when(mockMetadataCache.getTopicId(topic)).thenReturn(topicId)
     val spyRLM = spy(remoteLogManager)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
