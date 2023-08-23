@@ -525,17 +525,12 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
 
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
-
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
-        when(mockLog.lastStableOffset()).thenReturn(250L);
-
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
@@ -632,6 +627,8 @@ public class RemoteLogManagerTest {
         // create log segment, with 0 as log start offset
         LogSegment segment = mock(LogSegment.class);
 
+        // Segment does not nage timeIndex() what is not acceptable to sanityChecks.
+        // In that case segment won't be copied.
         when(segment.baseOffset()).thenReturn(segmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(segment);
@@ -649,8 +646,10 @@ public class RemoteLogManagerTest {
         verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
     }
 
+
     @Test
     void testCorruptedTimeIndexes() throws Exception {
+        // copyLogSegment is executed in case we have more than 1 segment, what is why we create 2 of them
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
 
@@ -672,6 +671,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
 
+        // Mock all required segment data to be managed by RLMTask
         FileRecords fileRecords = mock(FileRecords.class);
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
@@ -683,12 +683,13 @@ public class RemoteLogManagerTest {
 
         File timeindexFile = TestUtils.tempFile();
 
-        //Corrupting data. Actual entries 0, but we override method with returning 1 entry
         TimeIndex ti = spy(new TimeIndex(timeindexFile, 45L, 12));
         when(ti.entries()).thenReturn(1);
-        // One or checks to detect index being corrupted is checking offset < baseOffset, BaseOffset is 45, offset => 0
+        // One of the checks to detect index being corrupted is checking that:
+        // offset < baseOffset, BaseOffset is 45, offset => 0
         when(ti.lastEntry()).thenReturn(new TimestampOffset(0L, 0L));
 
+        // Initialise timeIndex for oldSegment
         when(oldSegment.timeIndex()).thenReturn(ti);
         when(oldSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile1));
         when(oldSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
@@ -697,7 +698,7 @@ public class RemoteLogManagerTest {
         File txnFile2 = UnifiedLog.transactionIndexFile(tempDir, nextSegmentStartOffset, "");
         txnFile2.createNewFile();
 
-        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), 10000L, 1));
+        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), 45L, 1));
         when(activeSegment.log()).thenReturn(fileRecords);
         when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile2));
         when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
@@ -729,6 +730,8 @@ public class RemoteLogManagerTest {
         doNothing().when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
+        // Just simulate situation when we upload next segment from another leader
+        task.convertToLeader(2);
         // Here CorruptIndex will be thrown and caught by copyLogSegmentsToRemote
         task.copyLogSegmentsToRemote(mockLog);
 
