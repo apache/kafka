@@ -31,8 +31,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A FieldPath is composed by one or many field names, known as steps,
- * to access values within a data object (either {@code Struct} or {@code Map<String, Object>}).a
+ * A SingleFieldPath is composed of one or more field names, known as steps,
+ * to access values within a data object (either {@code Struct} or {@code Map<String, Object>}).
  *
  * <p>If the SMT requires accessing multiple fields on the same data object,
  * use {@link MultiFieldPaths} instead.
