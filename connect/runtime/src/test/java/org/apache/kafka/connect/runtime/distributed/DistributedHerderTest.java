@@ -2839,6 +2839,8 @@ public class DistributedHerderTest {
         herder.connectorConfig(CONN1, connectorConfigCb);
         FutureCallback<List<TaskInfo>> taskConfigsCb = new FutureCallback<>();
         herder.taskConfigs(CONN1, taskConfigsCb);
+        FutureCallback<Map<ConnectorTaskId, Map<String, String>>> tasksConfigCb = new FutureCallback<>();
+        herder.tasksConfig(CONN1, tasksConfigCb);
 
         herder.tick();
         assertTrue(listConnectorsCb.isDone());
@@ -2855,6 +2857,11 @@ public class DistributedHerderTest {
                         new TaskInfo(TASK1, TASK_CONFIG),
                         new TaskInfo(TASK2, TASK_CONFIG)),
                 taskConfigsCb.get());
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig = new HashMap<>();
+        tasksConfig.put(TASK0, TASK_CONFIG);
+        tasksConfig.put(TASK1, TASK_CONFIG);
+        tasksConfig.put(TASK2, TASK_CONFIG);
+        assertEquals(tasksConfig, tasksConfigCb.get());
 
         PowerMock.verifyAll();
     }

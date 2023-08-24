@@ -762,6 +762,7 @@ public class StandaloneHerderTest {
         Callback<ConnectorInfo> connectorInfoCb = PowerMock.createMock(Callback.class);
         Callback<Map<String, String>> connectorConfigCb = PowerMock.createMock(Callback.class);
         Callback<List<TaskInfo>> taskConfigsCb = PowerMock.createMock(Callback.class);
+        Callback<Map<ConnectorTaskId, Map<String, String>>> tasksConfigCb = PowerMock.createMock(Callback.class);
 
         // Check accessors with empty worker
         listConnectorsCb.onCompletion(null, Collections.EMPTY_SET);
@@ -771,6 +772,8 @@ public class StandaloneHerderTest {
         connectorConfigCb.onCompletion(EasyMock.<NotFoundException>anyObject(), EasyMock.isNull());
         EasyMock.expectLastCall();
         taskConfigsCb.onCompletion(EasyMock.<NotFoundException>anyObject(), EasyMock.isNull());
+        EasyMock.expectLastCall();
+        tasksConfigCb.onCompletion(EasyMock.<NotFoundException>anyObject(), EasyMock.isNull());
         EasyMock.expectLastCall();
 
         // Create connector
@@ -792,6 +795,10 @@ public class StandaloneHerderTest {
         taskConfigsCb.onCompletion(null, Arrays.asList(taskInfo));
         EasyMock.expectLastCall();
 
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig = Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0),
+            taskConfig(SourceSink.SOURCE));
+        tasksConfigCb.onCompletion(null, tasksConfig);
+        EasyMock.expectLastCall();
 
         PowerMock.replayAll();
 
@@ -800,6 +807,7 @@ public class StandaloneHerderTest {
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
+        herder.tasksConfig(CONNECTOR_NAME, tasksConfigCb);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
@@ -815,6 +823,7 @@ public class StandaloneHerderTest {
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
+        herder.tasksConfig(CONNECTOR_NAME, tasksConfigCb);
 
         PowerMock.verifyAll();
     }
