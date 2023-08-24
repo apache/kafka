@@ -67,7 +67,7 @@ public class MetadataBatchLoader {
     private int numBatches;
     private long totalBatchElapsedNs;
     private TransactionState transactionState;
-    private boolean empty;
+    private boolean hasSeenRecord;
 
     public MetadataBatchLoader(
         LogContext logContext,
@@ -80,25 +80,26 @@ public class MetadataBatchLoader {
         this.faultHandler = faultHandler;
         this.callback = callback;
         this.resetToImage(MetadataImage.EMPTY);
-        this.empty = true;
+        this.hasSeenRecord = false;
     }
 
     /**
      * @return True if this batch loader has seen at least one record.
      */
-    public boolean isEmpty() {
-        return empty;
+    public boolean hasSeenRecord() {
+        return hasSeenRecord;
     }
 
     /**
      * Reset the state of this batch loader to the given image. Any un-flushed state will be
-     * discarded.
+     * discarded. This is called after applying a delta and passing it back to MetadataLoader, or
+     * when MetadataLoader loads a snapshot.
      *
      * @param image     Metadata image to reset this batch loader's state to.
      */
     public void resetToImage(MetadataImage image) {
         this.image = image;
-        this.empty = false;
+        this.hasSeenRecord = true;
         this.delta = new MetadataDelta.Builder().setImage(image).build();
         this.transactionState = TransactionState.NO_TRANSACTION;
         this.lastOffset = image.provenance().lastContainedOffset();
@@ -252,7 +253,7 @@ public class MetadataBatchLoader {
                     default:
                         break;
                 }
-                empty = false;
+                hasSeenRecord = true;
                 delta.replay(record.message());
         }
     }
