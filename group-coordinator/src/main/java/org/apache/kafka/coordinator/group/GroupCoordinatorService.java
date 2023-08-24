@@ -432,16 +432,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
         List<CompletableFuture<ListGroupsResponseData>> futures = new java.util.ArrayList<>(Collections.emptyList());
         for (TopicPartition tp : runtime.partitions()) {
             futures.add(runtime.scheduleReadOperation(
-                    "list_groups",
-                    tp,
-                    (coordinator, lastCommittedOffset) -> coordinator.listGroups(context, request)
+                "list_groups",
+                tp,
+                (coordinator, lastCommittedOffset) -> coordinator.listGroups(context, request)
             ).exceptionally(exception -> {
                 if (!(exception instanceof KafkaException)) {
                     log.error("ListGroups request {} hit an unexpected exception: {}",
-                            request, exception.getMessage());
+                        request, exception.getMessage());
                 }
                 return new ListGroupsResponseData()
-                        .setErrorCode(Errors.forException(exception).code());
+                    .setErrorCode(Errors.forException(exception).code());
             }));
         }
         CompletableFuture<ListGroupsResponseData> responseFuture = new CompletableFuture<>();
@@ -457,10 +457,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 listedGroups.addAll(future.get().groups());
             } catch (InterruptedException | ExecutionException e) {
                 log.error("ListGroups request {} hit an unexpected exception: {}",
-                        request, e.getMessage());
+                    request, e.getMessage());
                 if (!responseFuture.isDone()) {
                     responseFuture.complete(new ListGroupsResponseData()
-                            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
                     return responseFuture;
                 }
             }

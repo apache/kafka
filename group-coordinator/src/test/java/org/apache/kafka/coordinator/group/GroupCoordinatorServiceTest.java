@@ -604,38 +604,38 @@ public class GroupCoordinatorServiceTest {
     public void testListGroups() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
-                new LogContext(),
-                createConfig(),
-                runtime
+            new LogContext(),
+            createConfig(),
+            runtime
         );
         service.startup(() -> 1);
 
         ListGroupsRequestData request = new ListGroupsRequestData();
 
         ListGroupsResponseData expectResponseData = new ListGroupsResponseData()
-                .setGroups(Arrays.asList(
-                        new ListGroupsResponseData.ListedGroup()
-                                .setGroupId("group1")
-                                .setGroupType(Group.GroupType.GENERIC.toString())
-                                .setGroupState("Stable")
-                                .setProtocolType("protocol1"),
-                        new ListGroupsResponseData.ListedGroup()
-                                .setGroupId("group2")
-                                .setGroupType(Group.GroupType.CONSUMER.toString())
-                                .setGroupState("Empty")
-                                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setGroups(Arrays.asList(
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId("group1")
+                    .setGroupType(Group.GroupType.GENERIC.toString())
+                    .setGroupState("Stable")
+                    .setProtocolType("protocol1"),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId("group2")
+                    .setGroupType(Group.GroupType.CONSUMER.toString())
+                    .setGroupState("Empty")
+                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
 
-                ));
+            ));
         when(runtime.scheduleReadOperation(
-                ArgumentMatchers.eq("list_groups"),
-                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-                ArgumentMatchers.any()
+            ArgumentMatchers.eq("list_groups"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
-                expectResponseData));
+            expectResponseData));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
-                requestContext(ApiKeys.LIST_GROUPS),
-                request
+            requestContext(ApiKeys.LIST_GROUPS),
+            request
         );
 
         assertTrue(responseFuture.isDone());
@@ -646,25 +646,25 @@ public class GroupCoordinatorServiceTest {
     public void testListGroupsFutureFailed() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
-                new LogContext(),
-                createConfig(),
-                runtime
+            new LogContext(),
+            createConfig(),
+            runtime
         );
         service.startup(() -> 1);
 
         ListGroupsRequestData request = new ListGroupsRequestData();
 
         ListGroupsResponseData expectResponseData = new ListGroupsResponseData()
-                .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
         when(runtime.scheduleReadOperation(
-                ArgumentMatchers.eq("list_groups"),
-                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-                ArgumentMatchers.any()
+            ArgumentMatchers.eq("list_groups"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
-                requestContext(ApiKeys.LIST_GROUPS),
-                request
+            requestContext(ApiKeys.LIST_GROUPS),
+            request
         );
 
         responseFuture.get().errorCode();
