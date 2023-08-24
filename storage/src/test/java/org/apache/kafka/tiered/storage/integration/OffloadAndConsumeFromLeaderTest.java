@@ -79,7 +79,7 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                         enableRemoteLogStorage)
                 .withBatchSize(topicA, p0, batchSize)
                 .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k1", "v1"))
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k2", "v2"))
+                .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k2", "v2"))
                 .produce(topicA, p0, new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"),
                         new KeyValueSpec("k3", "v3"))
 

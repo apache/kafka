@@ -32,7 +32,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -52,6 +51,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP;
@@ -107,6 +107,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
                 TopicBasedRemoteLogMetadataManager.class.getName());
         overridingProps.setProperty(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, RLM_TASK_INTERVAL_MS.toString());
+        overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "PLAINTEXT");
 
         overridingProps.setProperty(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, storageConfigPrefix(""));
         overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, metadataConfigPrefix(""));
@@ -153,7 +154,6 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         context = new TieredStorageTestContext(this);
     }
 
-    @Disabled("Disabled until the trunk build is stable to test tiered storage")
     @Test
     public void executeTieredStorageTest() {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
@@ -200,6 +200,8 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
                     if (loaderAwareRSM.delegate() instanceof LocalTieredStorage) {
                         storages.add((LocalTieredStorage) loaderAwareRSM.delegate());
                     }
+                } else if (storageManager instanceof LocalTieredStorage) {
+                    storages.add((LocalTieredStorage) storageManager);
                 }
             } else {
                 throw new AssertionError("Broker " + broker.config().brokerId()
