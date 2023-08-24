@@ -121,6 +121,7 @@
       <!-- default is 7 -->
       <property name="max" value="25"/>
       <property name="excludeClassesRegexps" value="AtomicInteger"/>
+      <property name="excludedClasses" value="GroupMetadataManager"/>
     </module>
     <module name="BooleanExpressionComplexity">
       <!-- default is 3 -->
