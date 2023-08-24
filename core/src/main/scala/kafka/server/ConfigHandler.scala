@@ -18,10 +18,10 @@
 package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import DynamicConfig.Broker._
 import kafka.controller.KafkaController
-import kafka.log.LogManager
+import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
@@ -52,17 +52,44 @@ trait ConfigHandler {
   * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
   * The callback provides the topic name and the full properties set.
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig,
-                         val quotas: QuotaManagers, kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
+class TopicConfigHandler(private val replicaManager: ReplicaManager,
+                         kafkaConfig: KafkaConfig,
+                         val quotas: QuotaManagers,
+                         kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
 
-  def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
+  private def updateLogConfig(topic: String,
+                              topicConfig: Properties): Unit = {
+    val logManager = replicaManager.logManager
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
     val props = new Properties()
     topicConfig.asScala.forKeyValue { (key, value) =>
       if (!configNamesToExclude.contains(key)) props.put(key, value)
     }
+    val logs = logManager.logsByTopic(topic)
+    val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
     logManager.updateTopicConfig(topic, props)
+    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+  }
+
+  private[server] def maybeBootstrapRemoteLogComponents(topic: String,
+                                                        logs: Seq[UnifiedLog],
+                                                        wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
+    val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
+    // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
+    if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
+      val (leaderPartitions, followerPartitions) =
+        logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
+      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
+      replicaManager.remoteLogManager.foreach(rlm =>
+        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
+    } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
+      warn(s"Disabling remote log on the topic: $topic is not supported.")
+    }
+  }
+
+  def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
+    updateLogConfig(topic, topicConfig)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
