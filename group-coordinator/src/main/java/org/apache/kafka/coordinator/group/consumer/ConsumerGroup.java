@@ -747,9 +747,9 @@ public class ConsumerGroup implements Group {
      */
     public ListGroupsResponseData.ListedGroup asListedGroup() {
         return new ListGroupsResponseData.ListedGroup()
-                .setGroupId(groupId)
-                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                .setGroupState(state.toString());
+            .setGroupId(groupId)
+            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setGroupState(state.toString());
     }
 
 }

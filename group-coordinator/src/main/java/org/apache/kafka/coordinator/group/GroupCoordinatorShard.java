@@ -279,12 +279,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      *
      * @param context The request context.
      * @param request The ListGroups request.
-     *
      * @return A Result containing the ListGroupsResponseData response
      */
     public ListGroupsResponseData listGroups(
-            RequestContext context,
-            ListGroupsRequestData request
+        RequestContext context,
+        ListGroupsRequestData request
     ) throws ApiException {
         return groupMetadataManager.listGroups(request);
     }

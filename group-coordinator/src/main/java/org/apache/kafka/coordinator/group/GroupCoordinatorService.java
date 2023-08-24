@@ -430,10 +430,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         List<CompletableFuture<ListGroupsResponseData>> futures = new java.util.ArrayList<>(Collections.emptyList());
-        for (int i = 0; i < numPartitions; i++) {
-            futures.add(runtime.scheduleReadOperation("list_groups",
-                    new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, i),
-                    (coordinator, __) -> coordinator.listGroups(context, request)
+        for (TopicPartition tp : runtime.partitions()) {
+            futures.add(runtime.scheduleReadOperation(
+                    "list_groups",
+                    tp,
+                    (coordinator, lastCommittedOffset) -> coordinator.listGroups(context, request)
             ).exceptionally(exception -> {
                 if (!(exception instanceof KafkaException)) {
                     log.error("ListGroups request {} hit an unexpected exception: {}",
