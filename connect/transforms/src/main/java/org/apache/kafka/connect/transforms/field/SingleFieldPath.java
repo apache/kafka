@@ -73,7 +73,7 @@ public class SingleFieldPath {
             if (pathText.charAt(idx) != BACKTICK) {
                 final int start = idx;
                 idx = pathText.indexOf(String.valueOf(DOT), idx);
-                if (idx > 0) { // get path step and move forward
+                if (idx >= 0) { // get path step and move forward
                     String field = pathText.substring(start, idx);
                     steps.add(field);
                     idx++;
@@ -137,6 +137,8 @@ public class SingleFieldPath {
                 }
             }
         }
+        if (!pathText.isEmpty() && pathText.charAt(pathText.length() - 1) == DOT)
+            steps.add("");
         return steps.toArray(new String[0]);
     }
 

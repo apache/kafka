@@ -196,4 +196,24 @@ class SingleFieldPathTest {
 
         assertEquals(84, fieldPath.valueFrom(updated));
     }
+
+    @Test
+    void shouldIncludeEmptyFieldNames() {
+        assertArrayEquals(
+            new String[] {"", "", ""},
+            new SingleFieldPath("..", FieldSyntaxVersion.V2).path()
+        );
+        assertArrayEquals(
+            new String[] {"foo", "", ""},
+            new SingleFieldPath("foo..", FieldSyntaxVersion.V2).path()
+        );
+        assertArrayEquals(
+            new String[] {"", "bar", ""},
+            new SingleFieldPath(".bar.", FieldSyntaxVersion.V2).path()
+        );
+        assertArrayEquals(
+            new String[] {"", "", "baz"},
+            new SingleFieldPath("..baz", FieldSyntaxVersion.V2).path()
+        );
+    }
 }
