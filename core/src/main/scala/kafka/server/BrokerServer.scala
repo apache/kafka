@@ -673,6 +673,7 @@ class BrokerServer(
         throw e
     } finally {
       maybeChangeStatus(SHUTTING_DOWN, SHUTDOWN)
+      removeMetrics()
     }
   }
 
