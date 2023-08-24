@@ -91,8 +91,7 @@ public class SingleFieldPath {
                         throw new IllegalArgumentException("Incomplete backtick pair in path: " + pathText);
                     }
 
-                    boolean atEndOfPath = idx >= pathText.length() - 1;
-                    if (atEndOfPath) {
+                    if (idx >= pathText.length() - 1) { // at the end of path
                         field.append(pathText, start, idx);
                         // we've reached the end of the path, and the last character is the backtick
                         steps.add(field.toString());
