@@ -252,8 +252,6 @@ public class MirrorConnectorsIntegrationBaseTest {
             for (String x : backup.connectors()) {
                 backup.deleteConnector(x);
             }
-            deleteAllTopics(primary.kafka());
-            deleteAllTopics(backup.kafka());
         } finally {
             shuttingDown = true;
             try {
@@ -821,17 +819,6 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    /*
-     * delete all topics of the input kafka cluster
-     */
-    private static void deleteAllTopics(EmbeddedKafkaCluster cluster) throws Exception {
-        try (final Admin adminClient = cluster.createAdminClient()) {
-            Set<String> topicsToBeDeleted = adminClient.listTopics().names().get();
-            log.debug("Deleting topics: {} ", topicsToBeDeleted);
-            adminClient.deleteTopics(topicsToBeDeleted).all().get();
-        }
-    }
-    
     /*
      * retrieve the config value based on the input cluster, topic and config name
      */
