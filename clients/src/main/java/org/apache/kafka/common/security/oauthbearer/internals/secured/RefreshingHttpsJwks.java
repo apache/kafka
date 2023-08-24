@@ -348,8 +348,8 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
             //     1. Don't try to resolve the key as the large ID will sit in our cache
             //     2. Report the issue in the logs but include only the first N characters
             int actualLength = keyId.length();
-            String s = keyId.substring(0, MISSING_KEY_ID_MAX_KEY_LENGTH);
-            String snippet = String.format("%s (trimmed to first %s characters out of %s total)", s, MISSING_KEY_ID_MAX_KEY_LENGTH, actualLength);
+            String trimmedKeyId = keyId.substring(0, MISSING_KEY_ID_MAX_KEY_LENGTH);
+            String snippet = String.format("%s (trimmed to first %d characters out of %d total)", trimmedKeyId, MISSING_KEY_ID_MAX_KEY_LENGTH, actualLength);
             log.warn("Key ID {} was too long to cache", snippet);
             return false;
         } else {
