@@ -21,11 +21,10 @@ import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager,
-  RemoteLogManagerConfig, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState}
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
@@ -297,6 +296,70 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.waitUntilTrue(() =>
       numPartitions * MyRemoteLogMetadataManager.segmentCountPerPartition == MyRemoteStorageManager.deleteSegmentEventCounter.get(),
       "Remote log segments should be deleted only once by the leader")
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testClusterWideDisablementOfTieredStorageWithEnabledTieredTopicZK(quorum: String): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+      topicConfig = topicConfig)
+
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
+
+    assertThrows(classOf[ConfigException], () => recreateBrokers(startup = true))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabledZK(quorum: String): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
+
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+      topicConfig = topicConfig)
+
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
+
+    recreateBrokers(startup = true)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testClusterWideDisablementOfTieredStorageWithEnabledTieredTopicKRaft(quorum: String): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, true.toString)
+
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+      topicConfig = topicConfig)
+
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
+
+    recreateBrokers(startup = true)
+
+    assertTrue(faultHandler.firstException().getCause.isInstanceOf[ConfigException])
+    // Normally the exception is thrown as part of the TearDown method of the parent class(es). We would like to not do this.
+    faultHandler.setIgnore(true)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabledKRaft(quorum: String): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
+
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+      topicConfig = topicConfig)
+
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
+
+    recreateBrokers(startup = true)
   }
 
   private def assertThrowsException(exceptionType: Class[_ <: Throwable],
