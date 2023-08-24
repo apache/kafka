@@ -137,13 +137,14 @@ class ReplicaFetcherTierStateMachineTest {
     assertEquals(5L, replicaState.logEndOffset)
 
     fetcher.doWork()
-    // Verify that the offset moved to tiered store error is triggered and respective states are truncated to expected.
+    // Verify that the offset moved to tiered store error is triggered and respective states are truncated to expected
+    // positions.
     assertEquals(0L, replicaState.logStartOffset)
     assertEquals(7L, replicaState.localLogStartOffset)
     assertEquals(7L, replicaState.highWatermark)
     assertEquals(7L, replicaState.logEndOffset)
 
-    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    // Only 1 record batch is returned after a poll so call 'n' number of times to get the desired result.
     for (_ <- 1 to 5) fetcher.doWork()
     assertEquals(4, replicaState.log.size)
     assertEquals(5L, replicaState.logStartOffset)
