@@ -177,17 +177,31 @@ public class SingleFieldPath {
      */
     public Object valueFrom(Struct struct) {
         if (path.length == 1) {
-            return struct.get(path[0]);
+            final Field field = struct.schema().field(path[0]);
+            if (field != null) {
+                return struct.get(path[0]);
+            } else {
+                return null;
+            }
         } else {
             Struct current = struct;
             for (int i = 0; i < path.length; i++) {
                 if (current == null) {
                     return null;
                 }
+                final Field field = current.schema().field(path[i]);
                 if (i == path.length - 1) { // get value
-                    return current.get(path[i]);
+                    if (field != null) {
+                        return current.get(path[i]);
+                    } else {
+                        return null;
+                    }
                 } else { // iterate
-                    current = current.getStruct(path[i]);
+                    if (field != null && field.schema().type() == Type.STRUCT) {
+                        current = current.getStruct(path[i]);
+                    } else {
+                        return null;
+                    }
                 }
             }
         }
