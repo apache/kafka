@@ -617,7 +617,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
-  @Disabled // TODO: To be re-enabled once we can make it less flaky: KAFKA-6527
   def testDefaultTopicConfig(): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0)
 
