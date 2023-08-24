@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.apache.kafka.common.utils.Time;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
@@ -44,7 +45,7 @@ import org.slf4j.LoggerFactory;
  * possible to receive a JWT that contains a <code>kid</code> that points to yet-unknown JWK,
  * thus requiring a connection to the OAuth/OIDC provider to be made. Hopefully, in practice,
  * keys are made available for some amount of time before they're used within JWTs.
- *
+ * <p>
  * This instance is created and provided to the
  * {@link org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver} that is used when using
  * an HTTP-/HTTPS-based {@link org.jose4j.keys.resolvers.VerificationKeyResolver}, which is then
@@ -75,7 +76,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
      * JWKS. In some cases, the call to {@link HttpsJwks#getJsonWebKeys()} will trigger a call
      * to {@link HttpsJwks#refresh()} which will block the current thread in network I/O. We cache
      * the JWKS ourselves (see {@link #jsonWebKeys}) to avoid the network I/O.
-     *
+     * <p>
      * We want to be very careful where we use the {@link HttpsJwks} instance so that we don't
      * perform any operation (directly or indirectly) that could cause blocking. This is because
      * the JWKS logic is part of the larger authentication logic which operates on Kafka's network
@@ -121,6 +122,35 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     private boolean isInitialized;
 
     /**
+     * Creates a <code>RefreshingHttpsJwks</code>. It should only be used for testing to pass in a mock executor
+     * service. Otherwise the constructor below should be used.
+     */
+
+    // VisibleForTesting
+    RefreshingHttpsJwks(Time time,
+                        HttpsJwks httpsJwks,
+                        long refreshMs,
+                        long refreshRetryBackoffMs,
+                        long refreshRetryBackoffMaxMs,
+                        ScheduledExecutorService executorService) {
+        if (refreshMs <= 0)
+            throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
+
+        this.httpsJwks = httpsJwks;
+        this.time = time;
+        this.refreshMs = refreshMs;
+        this.refreshRetryBackoffMs = refreshRetryBackoffMs;
+        this.refreshRetryBackoffMaxMs = refreshRetryBackoffMaxMs;
+        this.executorService = executorService;
+        this.missingKeyIds = new LinkedHashMap<String, Long>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return this.size() > MISSING_KEY_ID_CACHE_MAX_ENTRIES;
+            }
+        };
+    }
+
+    /**
      * Creates a <code>RefreshingHttpsJwks</code> that will be used by the
      * {@link RefreshingHttpsJwksVerificationKeyResolver} to resolve new key IDs in JWTs.
      *
@@ -134,25 +164,11 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
      */
 
     public RefreshingHttpsJwks(Time time,
-        HttpsJwks httpsJwks,
-        long refreshMs,
-        long refreshRetryBackoffMs,
-        long refreshRetryBackoffMaxMs) {
-        if (refreshMs <= 0)
-            throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
-
-        this.httpsJwks = httpsJwks;
-        this.time = time;
-        this.refreshMs = refreshMs;
-        this.refreshRetryBackoffMs = refreshRetryBackoffMs;
-        this.refreshRetryBackoffMaxMs = refreshRetryBackoffMaxMs;
-        this.executorService = Executors.newSingleThreadScheduledExecutor();
-        this.missingKeyIds = new LinkedHashMap<String, Long>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
-                return this.size() > MISSING_KEY_ID_CACHE_MAX_ENTRIES;
-            }
-        };
+                               HttpsJwks httpsJwks,
+                               long refreshMs,
+                               long refreshRetryBackoffMs,
+                               long refreshRetryBackoffMaxMs) {
+        this(time, httpsJwks, refreshMs, refreshRetryBackoffMs, refreshRetryBackoffMaxMs, Executors.newSingleThreadScheduledExecutor());
     }
 
     @Override
@@ -180,9 +196,9 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
             //
             // Note: we refer to this as a _scheduled_ refresh.
             executorService.scheduleAtFixedRate(this::refresh,
-                refreshMs,
-                refreshMs,
-                TimeUnit.MILLISECONDS);
+                    refreshMs,
+                    refreshMs,
+                    TimeUnit.MILLISECONDS);
 
             log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
         } finally {
@@ -203,7 +219,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
                 if (!executorService.awaitTermination(SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT)) {
                     log.warn("JWKS validation key refresh thread termination did not end after {} {}",
-                        SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT);
+                            SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT);
                 }
             } catch (InterruptedException e) {
                 log.warn("JWKS validation key refresh thread error during close", e);
@@ -217,13 +233,12 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
      * Our implementation avoids the blocking call within {@link HttpsJwks#refresh()} that is
      * sometimes called internal to {@link HttpsJwks#getJsonWebKeys()}. We want to avoid any
      * blocking I/O as this code is running in the authentication path on the Kafka network thread.
-     *
+     * <p>
      * The list may be stale up to {@link #refreshMs}.
      *
      * @return {@link List} of {@link JsonWebKey} instances
-     *
      * @throws JoseException Thrown if a problem is encountered parsing the JSON content into JWKs
-     * @throws IOException Thrown f a problem is encountered making the HTTP request
+     * @throws IOException   Thrown f a problem is encountered making the HTTP request
      */
 
     public List<JsonWebKey> getJsonWebKeys() throws JoseException, IOException {
