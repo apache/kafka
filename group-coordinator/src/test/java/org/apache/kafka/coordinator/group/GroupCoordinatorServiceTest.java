@@ -616,12 +616,10 @@ public class GroupCoordinatorServiceTest {
             .setGroups(Arrays.asList(
                 new ListGroupsResponseData.ListedGroup()
                     .setGroupId("group1")
-                    .setGroupType(Group.GroupType.GENERIC.toString())
                     .setGroupState("Stable")
                     .setProtocolType("protocol1"),
                 new ListGroupsResponseData.ListedGroup()
                     .setGroupId("group2")
-                    .setGroupType(Group.GroupType.CONSUMER.toString())
                     .setGroupState("Empty")
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
 
