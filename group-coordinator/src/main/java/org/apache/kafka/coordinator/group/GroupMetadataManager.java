@@ -415,15 +415,10 @@ public class GroupMetadataManager {
      * @return The GenericGroup List filtered by statesFilter or typesFilter.
      */
     public ListGroupsResponseData listGroups(ListGroupsRequestData request) {
-        List<ListGroupsResponseData.ListedGroup> listedGroups = Collections.emptyList();
         Stream<Group> groupStream = groups.values().stream();
         List<String> statesFilter = request.statesFilter();
         if (!statesFilter.isEmpty()) {
             groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString()));
-        }
-        List<String> typesFilter = request.statesFilter();
-        if (!typesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> typesFilter.contains(group.type().toString()));
         }
         return new ListGroupsResponseData().setGroups(groupStream.map(Group::asListedGroup).collect(Collectors.toList()));
     }
