@@ -307,7 +307,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             throws RemoteStorageException {
         Callable<Optional<CustomMetadata>> callable = () -> {
             final RemoteLogSegmentId id = metadata.remoteLogSegmentId();
-            final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(COPY_SEGMENT, id);
+            final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(COPY_SEGMENT, metadata);
             RemoteLogSegmentFileset fileset = null;
 
             try {
@@ -501,10 +501,6 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
     String getStorageDirectoryRoot() throws RemoteStorageException {
         return wrap(() -> storageDirectory.getAbsolutePath());
-    }
-
-    private LocalTieredStorageEvent.Builder newEventBuilder(final EventType type, final RemoteLogSegmentId segId) {
-        return LocalTieredStorageEvent.newBuilder(brokerId, type, eventTimestamp.incrementAndGet(), segId);
     }
 
     private LocalTieredStorageEvent.Builder newEventBuilder(final EventType type, final RemoteLogSegmentMetadata md) {
