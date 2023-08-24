@@ -148,27 +148,16 @@ public class SingleFieldPath {
      * If field is not found, then {@code null} is returned.
      */
     public Field fieldFrom(Schema schema) {
-        if (path.size() == 1) {
-            return schema.field(path.get(0));
-        } else {
-            Schema current = schema;
-            for (int i = 0; i < path.size(); i++) {
-                if (current == null) {
-                    return null;
-                }
-                if (i == path.size() - 1) { // get value
-                    return current.field(path.get(i));
-                } else { // iterate
-                    final Field field = current.field(path.get(i));
-                    if (field != null) {
-                        current = field.schema();
-                    } else {
-                        return null;
-                    }
-                }
+        Schema current = schema;
+        for (String pathSegment : path.subList(0, lastStepIndex())) {
+            final Field field = current.field(pathSegment);
+            if (field != null) {
+                current = field.schema();
+            } else {
+                return null;
             }
         }
-        return null;
+        return current.field(lastStep());
     }
 
     /**
@@ -176,36 +165,20 @@ public class SingleFieldPath {
      * If object is not found, then {@code null} is returned.
      */
     public Object valueFrom(Struct struct) {
-        if (path.size() == 1) {
-            final Field field = struct.schema().field(path.get(0));
-            if (field != null) {
-                return struct.get(path.get(0));
-            } else {
+        Struct current = struct;
+        for (String pathSegment : path.subList(0, lastStepIndex())) {
+            // Check to see if the field actually exists
+            if (current.schema().field(pathSegment) == null) {
                 return null;
             }
-        } else {
-            Struct current = struct;
-            for (int i = 0; i < path.size(); i++) {
-                if (current == null) {
-                    return null;
-                }
-                final Field field = current.schema().field(path.get(i));
-                if (i == path.size() - 1) { // get value
-                    if (field != null) {
-                        return current.get(path.get(i));
-                    } else {
-                        return null;
-                    }
-                } else { // iterate
-                    if (field != null && field.schema().type() == Type.STRUCT) {
-                        current = current.getStruct(path.get(i));
-                    } else {
-                        return null;
-                    }
-                }
-            }
+            current = current.getStruct(pathSegment);
         }
-        return null;
+
+        if (current.schema().field(lastStep()) != null) {
+            return current.get(lastStep());
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -222,7 +195,7 @@ public class SingleFieldPath {
                 if (current == null) {
                     return null;
                 }
-                if (i == path.size() - 1) {
+                if (i == lastStepIndex()) {
                     return current.get(path.get(i));
                 } else {
                     current = (Map<String, Object>) current.get(path.get(i));
@@ -271,7 +244,7 @@ public class SingleFieldPath {
             Object fieldValue = entry.getValue();
             if (path.get(step).equals(fieldName)) {
                 found = true;
-                if (step < path.size() - 1) {
+                if (step < lastStepIndex()) {
                     if (fieldValue instanceof Map) {
                         Map<String, Object> updatedField = updateValue(
                             (Map<String, Object>) fieldValue,
@@ -342,7 +315,7 @@ public class SingleFieldPath {
             if (step < path.size()) {
                 if (path.get(step).equals(field.name())) {
                     found = true;
-                    if (step == path.size() - 1) {
+                    if (step == lastStepIndex()) {
                         update.apply(
                             originalValue,
                             field,
@@ -450,7 +423,7 @@ public class SingleFieldPath {
             if (step < path.size()) {
                 if (path.get(step).equals(field.name())) {
                     matched = true;
-                    if (step == path.size() - 1) {
+                    if (step == lastStepIndex()) {
                         matching.apply(builder, field, this);
                     } else {
                         Schema fieldSchema = updateSchema(
@@ -476,7 +449,7 @@ public class SingleFieldPath {
     }
 
     public String last() {
-        return path.get(path.size() - 1);
+        return lastStep();
     }
 
     public boolean isEmpty() {
@@ -492,6 +465,13 @@ public class SingleFieldPath {
         return path.toArray(new String[0]);
     }
 
+    private String lastStep() {
+        return path.get(lastStepIndex());
+    }
+
+    private int lastStepIndex() {
+        return path.size() - 1;
+    }
 
     @Override
     public boolean equals(Object o) {
