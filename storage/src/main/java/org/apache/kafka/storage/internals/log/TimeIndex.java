@@ -72,15 +72,17 @@ public class TimeIndex extends AbstractIndex {
     @Override
     public void sanityCheck() {
         TimestampOffset entry = lastEntry();
+
         long lastTimestamp = entry.timestamp;
         long lastOffset = entry.offset;
-        if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
-            throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
-                + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "
-                + timestamp(mmap(), 0));
+
         if (entries() != 0 && lastOffset < baseOffset())
             throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
                 + "non-zero size but the last offset is " + lastOffset + " which is less than the first offset " + baseOffset());
+        if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
+            throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
+                    + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "
+                    + timestamp(mmap(), 0));
         if (length() % ENTRY_SIZE != 0)
             throw new CorruptIndexException("Time index file " + file().getAbsolutePath() + " is corrupt, found " + length()
                 + " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
@@ -121,6 +123,7 @@ public class TimeIndex extends AbstractIndex {
     public boolean isFull() {
         return entries() >= maxEntries() - 1;
     }
+
 
     public TimestampOffset lastEntry() {
         return lastEntry;
