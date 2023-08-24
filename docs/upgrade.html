@@ -37,6 +37,9 @@
             For more detailed information please refer to the Compatibility, Deprecation, and Migration Plan section in
             <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-902%3A+Upgrade+Zookeeper+to+3.8.1">KIP-902</a>.
         </li>
+        <li>The configuration <code>log.message.timestamp.difference.max.ms</code> is deprecated.
+            Two new configurations, <code>log.message.timestamp.before.max.ms</code> and <code>log.message.timestamp.after.max.ms</code>, have been added.
+            For more detailed information, please refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-937%3A+Improve+Message+Timestamp+Validation">KIP-937</a>.
         <li>
             Kafka Streams has introduced a new task assignor, <code>RackAwareTaskAssignor</code>, for computing task assignments which can minimize
             cross rack traffic under certain conditions. It works with existing <code>StickyTaskAssignor</code> and <code>HighAvailabilityTaskAssignor</code>.
