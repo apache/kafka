@@ -18,9 +18,11 @@ package org.apache.kafka.connect.transforms.field;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Collections;
 import java.util.Map;
+
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -215,5 +217,14 @@ class SingleFieldPathTest {
             new String[] {"", "", "baz"},
             new SingleFieldPath("..baz", FieldSyntaxVersion.V2).path()
         );
+    }
+
+    @Test void shouldReturnNullFieldWhenFieldNotFound() {
+        SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
+        Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
+
+        assertNull(new SingleFieldPath("un.known", FieldSyntaxVersion.V2).fieldFrom(schema));
+        assertNull(new SingleFieldPath("foo.unknown", FieldSyntaxVersion.V2).fieldFrom(schema));
+        assertNull(new SingleFieldPath("unknown", FieldSyntaxVersion.V2).fieldFrom(schema));
     }
 }

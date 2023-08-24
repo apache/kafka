@@ -159,7 +159,12 @@ public class SingleFieldPath {
                 if (i == path.length - 1) { // get value
                     return current.field(path[i]);
                 } else { // iterate
-                    current = current.field(path[i]).schema();
+                    final Field field = current.field(path[i]);
+                    if (field != null) {
+                        current = field.schema();
+                    } else {
+                        return null;
+                    }
                 }
             }
         }
