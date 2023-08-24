@@ -30,7 +30,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Properties;
-import java.util.Random;
 
 import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
@@ -73,7 +72,7 @@ public class StreamsUpgradeTest {
         final Properties config = new Properties();
         config.setProperty(
             StreamsConfig.APPLICATION_ID_CONFIG,
-            "StreamsUpgradeTest-" + new Random().nextLong());
+            "StreamsUpgradeTest");
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         config.putAll(streamsProperties);
 

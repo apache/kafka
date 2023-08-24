@@ -804,7 +804,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             ifNotMember(__ -> {
                 generateCheckForUnsupportedNumTaggedFields("_numTaggedFields > 0");
             }).
-            ifMember(__ -> {
+            ifMember(flexibleVersions -> {
                 buffer.printf("_writable.writeUnsignedVarint(_numTaggedFields);%n");
                 int prevTag = -1;
                 for (FieldSpec field : taggedFields.values()) {
@@ -812,7 +812,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         buffer.printf("_rawWriter.writeRawTags(_writable, %d);%n", field.tag().get());
                     }
                     VersionConditional.
-                        forVersions(field.versions(), field.taggedVersions().intersect(field.versions())).
+                        forVersions(field.taggedVersions().intersect(field.versions()), flexibleVersions).
                         allowMembershipCheckAlwaysFalse(false).
                         ifMember(presentAndTaggedVersions -> {
                             IsNullConditional cond = IsNullConditional.forName(field.camelCaseName()).

@@ -16,10 +16,10 @@
  */
 package kafka.server
 
-import kafka.utils.MockTime
 import org.apache.kafka.clients.{ClientResponse, MockClient, NodeApiVersions}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AbstractRequest
+import org.apache.kafka.server.util.MockTime
 
 class MockBrokerToControllerChannelManager(
   val client: MockClient,

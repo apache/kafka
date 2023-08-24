@@ -19,6 +19,7 @@ package org.apache.kafka.raft.internals;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -26,22 +27,36 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.ControlRecord;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+import org.apache.kafka.snapshot.MockRawSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -129,6 +144,91 @@ public final class RecordsIteratorTest {
         moreFileRecords.close();
     }
 
+    @Test
+    public void testControlRecordIteration() {
+        AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
+        try (RecordsSnapshotWriter<String> snapshot = RecordsSnapshotWriter.createWithHeader(
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf)),
+                4 * 1024,
+                MemoryPool.NONE,
+                new MockTime(),
+                0,
+                CompressionType.NONE,
+                STRING_SERDE
+            )
+        ) {
+            snapshot.append(Arrays.asList("a", "b", "c"));
+            snapshot.append(Arrays.asList("d", "e", "f"));
+            snapshot.append(Arrays.asList("g", "h", "i"));
+            snapshot.freeze();
+        }
+
+        try (RecordsIterator<String> iterator = createIterator(
+                MemoryRecords.readableRecords(buffer.get()),
+                BufferSupplier.NO_CACHING,
+                true
+            )
+        ) {
+            // Check snapshot header control record
+            Batch<String> batch = iterator.next();
+
+            assertEquals(1, batch.controlRecords().size());
+            assertEquals(ControlRecordType.SNAPSHOT_HEADER, batch.controlRecords().get(0).type());
+            assertEquals(new SnapshotHeaderRecord(), batch.controlRecords().get(0).message());
+
+            // Consume the iterator until we find a control record
+            do {
+                batch = iterator.next();
+            }
+            while (batch.controlRecords().isEmpty());
+
+            // Check snapshot footer control record
+            assertEquals(1, batch.controlRecords().size());
+            assertEquals(ControlRecordType.SNAPSHOT_FOOTER, batch.controlRecords().get(0).type());
+            assertEquals(new SnapshotFooterRecord(), batch.controlRecords().get(0).message());
+
+            // Snapshot footer must be last record
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ControlRecordType.class, names = {"LEADER_CHANGE", "SNAPSHOT_HEADER", "SNAPSHOT_FOOTER"})
+    void testWithAllSupportedControlRecords(ControlRecordType type) {
+        MemoryRecords records = buildControlRecords(type);
+        final ApiMessage expectedMessage;
+        switch (type) {
+            case LEADER_CHANGE:
+                expectedMessage = new LeaderChangeMessage();
+                break;
+            case SNAPSHOT_HEADER:
+                expectedMessage = new SnapshotHeaderRecord();
+                break;
+            case SNAPSHOT_FOOTER:
+                expectedMessage = new SnapshotFooterRecord();
+                break;
+            default:
+                throw new RuntimeException("Should not happen. Poorly configured test");
+        }
+
+        try (RecordsIterator<String> iterator = createIterator(records, BufferSupplier.NO_CACHING, true)) {
+            assertTrue(iterator.hasNext());
+            assertEquals(
+                Collections.singletonList(new ControlRecord(type, expectedMessage)),
+                iterator.next().controlRecords()
+            );
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    void testControlRecordTypeValues() {
+        // If this test fails then it means that ControlRecordType was changed. Please review the
+        // implementation for RecordsIterator to see if it needs to be updated based on the changes
+        // to ControlRecordType.
+        assertEquals(6, ControlRecordType.values().length);
+    }
+
     private void testIterator(
         List<TestBatch<String>> expectedBatches,
         Records records,
@@ -136,21 +236,21 @@ public final class RecordsIteratorTest {
     ) {
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
 
-        RecordsIterator<String> iterator = createIterator(
-            records,
-            mockBufferSupplier(allocatedBuffers),
-            validateCrc
-        );
+        try (RecordsIterator<String> iterator = createIterator(
+                records,
+                mockBufferSupplier(allocatedBuffers),
+                validateCrc
+            )
+        ) {
+            for (TestBatch<String> batch : expectedBatches) {
+                assertTrue(iterator.hasNext());
+                assertEquals(batch, TestBatch.from(iterator.next()));
+            }
 
-        for (TestBatch<String> batch : expectedBatches) {
-            assertTrue(iterator.hasNext());
-            assertEquals(batch, TestBatch.from(iterator.next()));
+            assertFalse(iterator.hasNext());
+            assertThrows(NoSuchElementException.class, iterator::next);
         }
 
-        assertFalse(iterator.hasNext());
-        assertThrows(NoSuchElementException.class, iterator::next);
-
-        iterator.close();
         assertEquals(Collections.emptySet(), allocatedBuffers);
     }
 
@@ -205,6 +305,43 @@ public final class RecordsIteratorTest {
         }
 
         return batches;
+    }
+
+    public static MemoryRecords buildControlRecords(ControlRecordType type) {
+        final MemoryRecords records;
+        switch (type) {
+            case LEADER_CHANGE:
+                records = MemoryRecords.withLeaderChangeMessage(
+                    0,
+                    0,
+                    1,
+                    ByteBuffer.allocate(128),
+                    new LeaderChangeMessage()
+                );
+                break;
+            case SNAPSHOT_HEADER:
+                records = MemoryRecords.withSnapshotHeaderRecord(
+                    0,
+                    0,
+                    1,
+                    ByteBuffer.allocate(128),
+                    new SnapshotHeaderRecord()
+                );
+                break;
+            case SNAPSHOT_FOOTER:
+                records = MemoryRecords.withSnapshotFooterRecord(
+                    0,
+                    0,
+                    1,
+                    ByteBuffer.allocate(128),
+                    new SnapshotFooterRecord()
+                );
+                break;
+            default:
+                throw new RuntimeException(String.format("Control record type %s is not supported", type));
+        }
+
+        return records;
     }
 
     public static MemoryRecords buildRecords(

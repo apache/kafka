@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.image.node.AclsImageByIdNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
@@ -26,7 +27,6 @@ import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
 
 
 /**
@@ -76,8 +76,6 @@ public final class AclsImage {
 
     @Override
     public String toString() {
-        return "AclsImage(" + acls.values().stream().
-            map(a -> a.toString()).
-            collect(Collectors.joining(", ")) + ")";
+        return new AclsImageByIdNode(this).stringify();
     }
 }

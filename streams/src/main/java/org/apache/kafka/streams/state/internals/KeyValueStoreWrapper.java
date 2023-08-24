@@ -39,6 +39,9 @@ import org.apache.kafka.streams.state.VersionedRecord;
  */
 public class KeyValueStoreWrapper<K, V> implements StateStore {
 
+    public static final long PUT_RETURN_CODE_IS_LATEST
+        = VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
+
     private TimestampedKeyValueStore<K, V> timestampedStore = null;
     private VersionedKeyValueStore<K, V> versionedStore = null;
 
@@ -81,20 +84,36 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
-    public void put(final K key, final V value, final long timestamp) {
+    public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
+        if (!isVersionedStore()) {
+            throw new UnsupportedOperationException("get(key, timestamp) is only supported for versioned stores");
+        }
+        final VersionedRecord<V> versionedRecord = versionedStore.get(key, asOfTimestamp);
+        return versionedRecord == null ? null : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
+    }
+
+    /**
+     * @return {@code -1} if the put record is the latest for its key, and {@code Long.MIN_VALUE}
+     *         if the put was rejected (i.e., due to grace period having elapsed for a versioned
+     *         store). If neither, any other long value may be returned.
+     */
+    public long put(final K key, final V value, final long timestamp) {
         if (timestampedStore != null) {
             timestampedStore.put(key, ValueAndTimestamp.make(value, timestamp));
-            return;
+            return PUT_RETURN_CODE_IS_LATEST;
         }
         if (versionedStore != null) {
-            versionedStore.put(key, value, timestamp);
-            return;
+            return versionedStore.put(key, value, timestamp);
         }
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
     public StateStore getStore() {
         return store;
+    }
+
+    public boolean isVersionedStore() {
+        return versionedStore != null;
     }
 
     @Override

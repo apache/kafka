@@ -150,7 +150,7 @@ public class ConnectorTopicsIntegrationTest {
         // deleting a connector resets its active topics
         connect.deleteConnector(BAR_CONNECTOR);
 
-        connect.assertions().assertConnectorAndTasksAreStopped(BAR_CONNECTOR,
+        connect.assertions().assertConnectorAndTasksAreNotRunning(BAR_CONNECTOR,
                 "Connector tasks did not stop in time.");
 
         connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, Collections.emptyList(),
@@ -205,7 +205,7 @@ public class ConnectorTopicsIntegrationTest {
         // deleting a connector resets its active topics
         connect.deleteConnector(FOO_CONNECTOR);
 
-        connect.assertions().assertConnectorAndTasksAreStopped(FOO_CONNECTOR,
+        connect.assertions().assertConnectorAndTasksAreNotRunning(FOO_CONNECTOR,
                 "Connector tasks did not stop in time.");
 
         connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),

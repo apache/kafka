@@ -27,7 +27,7 @@ import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.tools.ThroughputThrottler;
+import org.apache.kafka.server.util.ThroughputThrottler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +67,9 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     public static final String TRANSACTION_BOUNDARIES_NULL = "null";
     public static final String TRANSACTION_BOUNDARIES_FAIL = "fail";
 
+    // Boolean valued configuration that determines whether MonitorableSourceConnector::alterOffsets should return true or false
+    public static final String ALTER_OFFSETS_RESULT = "alter.offsets.result";
+
     private String connectorName;
     private ConnectorHandle connectorHandle;
     private Map<String, String> commonConfigs;
@@ -104,6 +107,9 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     public void stop() {
         log.info("Stopped {} connector {}", this.getClass().getSimpleName(), connectorName);
         connectorHandle.recordConnectorStop();
+        if (Boolean.parseBoolean(commonConfigs.getOrDefault("connector.stop.inject.error", "false"))) {
+            throw new RuntimeException("Injecting errors during connector stop");
+        }
     }
 
     @Override
@@ -142,6 +148,11 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             case TRANSACTION_BOUNDARIES_UNSUPPORTED:
                 return ConnectorTransactionBoundaries.UNSUPPORTED;
         }
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        return Boolean.parseBoolean(connectorConfig.get(ALTER_OFFSETS_RESULT));
     }
 
     public static String taskId(String connectorName, int taskId) {
@@ -264,13 +275,17 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             if (context.transactionContext() == null || seqno != nextTransactionBoundary) {
                 return;
             }
+            long transactionSize = nextTransactionBoundary - priorTransactionBoundary;
+
             // If the transaction boundary ends on an even-numbered offset, abort it
             // Otherwise, commit
             boolean abort = nextTransactionBoundary % 2 == 0;
             calculateNextBoundary();
             if (abort) {
+                log.info("Aborting transaction of {} records", transactionSize);
                 context.transactionContext().abortTransaction(record);
             } else {
+                log.info("Committing transaction of {} records", transactionSize);
                 context.transactionContext().commitTransaction(record);
             }
         }

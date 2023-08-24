@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -31,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorCheckpointTaskTest {
@@ -118,7 +118,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testSyncOffset() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
-        Map<String, List<Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
 
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
@@ -147,16 +147,16 @@ public class MirrorCheckpointTaskTest {
         // 'cpC2T2p0' denotes 'checkpoint' of topic2, partition 0 for consumer2
         Checkpoint cpC2T2P0 = new Checkpoint(consumer2, new TopicPartition(topic2, 0), 100, 51, "metadata");
 
-        // 'checkpointListC1' denotes 'checkpoint' list for consumer1
-        List<Checkpoint> checkpointListC1 = new ArrayList<>();
-        checkpointListC1.add(cpC1T1P0);
+        // 'checkpointMapC1' denotes 'checkpoint' map for consumer1
+        Map<TopicPartition, Checkpoint> checkpointMapC1 = new HashMap<>();
+        checkpointMapC1.put(cpC1T1P0.topicPartition(), cpC1T1P0);
 
-        // 'checkpointListC2' denotes 'checkpoint' list for consumer2
-        List<Checkpoint> checkpointListC2 = new ArrayList<>();
-        checkpointListC2.add(cpC2T2P0);
+        // 'checkpointMapC2' denotes 'checkpoint' map for consumer2
+        Map<TopicPartition, Checkpoint> checkpointMapC2 = new HashMap<>();
+        checkpointMapC2.put(cpC2T2P0.topicPartition(), cpC2T2P0);
 
-        checkpointsPerConsumerGroup.put(consumer1, checkpointListC1);
-        checkpointsPerConsumerGroup.put(consumer2, checkpointListC2);
+        checkpointsPerConsumerGroup.put(consumer1, checkpointMapC1);
+        checkpointsPerConsumerGroup.put(consumer2, checkpointMapC2);
 
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup);
@@ -194,5 +194,53 @@ public class MirrorCheckpointTaskTest {
         offsetSyncStore.sync(new TopicPartition("topic1", 0), 1L, 3L);
         Optional<Checkpoint> checkpoint = mirrorCheckpointTask.checkpoint("g1", new TopicPartition("topic1", 0), null);
         assertFalse(checkpoint.isPresent());
+    }
+
+    @Test
+    public void testCheckpointRecordsMonotonicIfStoreRewinds() {
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), checkpointsPerConsumerGroup);
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        TopicPartition targetTP = new TopicPartition("source1.topic1", 0);
+
+        long upstream = 11L;
+        long downstream = 4L;
+        // Emit syncs 0 and 1, and use the sync 1 to translate offsets and commit checkpoints
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        long consumerGroupOffset = upstream;
+        long expectedDownstreamOffset = downstream;
+        assertEquals(OptionalLong.of(expectedDownstreamOffset), offsetSyncStore.translateDownstream("g1", tp, consumerGroupOffset));
+        Map<TopicPartition, Checkpoint> checkpoints = assertCheckpointForTopic(mirrorCheckpointTask, tp, targetTP, consumerGroupOffset, true);
+
+        // the task normally does this, but simulate it here
+        checkpointsPerConsumerGroup.put("g1", checkpoints);
+
+        // Emit syncs 2-6 which will cause the store to drop sync 1, forcing translation to fall back to 0.
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        // The OffsetSyncStore will change its translation of the same offset
+        assertNotEquals(OptionalLong.of(expectedDownstreamOffset), offsetSyncStore.translateDownstream("g1", tp, consumerGroupOffset));
+        // But the task will filter this out and not emit a checkpoint
+        assertCheckpointForTopic(mirrorCheckpointTask, tp, targetTP, consumerGroupOffset, false);
+
+        // If then the upstream offset rewinds in the topic and is still translatable, a checkpoint will be emitted
+        // also rewinding the downstream offsets to match. This will not affect auto-synced groups, only checkpoints.
+        assertCheckpointForTopic(mirrorCheckpointTask, tp, targetTP, consumerGroupOffset - 1, true);
+    }
+
+    private Map<TopicPartition, Checkpoint> assertCheckpointForTopic(
+            MirrorCheckpointTask task, TopicPartition tp, TopicPartition remoteTp, long consumerGroupOffset, boolean truth
+    ) {
+        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets = Collections.singletonMap(tp, new OffsetAndMetadata(consumerGroupOffset));
+        Map<TopicPartition, Checkpoint> checkpoints = task.checkpointsForGroup(consumerGroupOffsets, "g1");
+        assertEquals(truth, checkpoints.containsKey(remoteTp), "should" + (truth ? "" : " not") + " emit offset sync");
+        return checkpoints;
     }
 }

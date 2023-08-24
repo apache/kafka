@@ -36,15 +36,11 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
-import java.util.TreeSet;
 
 import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -108,14 +104,11 @@ public class StandardAuthorizerData {
     private final DefaultRule noAclRule;
 
     /**
-     * Contains all of the current ACLs sorted by (resource type, resource name).
+     * Contains all of the current ACLs
      */
-    private final TreeSet<StandardAcl> aclsByResource;
+    private AclCache aclCache;
 
-    /**
-     * Contains all of the current ACLs indexed by UUID.
-     */
-    private final HashMap<Uuid, StandardAcl> aclsById;
+
 
     private static Logger createLogger(int nodeId) {
         return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
@@ -131,7 +124,7 @@ public class StandardAuthorizerData {
             false,
             Collections.emptySet(),
             DENIED,
-            new TreeSet<>(), new HashMap<>());
+            new AclCache());
     }
 
     private StandardAuthorizerData(Logger log,
@@ -139,16 +132,14 @@ public class StandardAuthorizerData {
                                    boolean loadingComplete,
                                    Set<String> superUsers,
                                    AuthorizationResult defaultResult,
-                                   TreeSet<StandardAcl> aclsByResource,
-                                   HashMap<Uuid, StandardAcl> aclsById) {
+                                   AclCache aclCache) {
         this.log = log;
         this.auditLog = auditLogger();
         this.aclMutator = aclMutator;
         this.loadingComplete = loadingComplete;
         this.superUsers = superUsers;
         this.noAclRule = new DefaultRule(defaultResult);
-        this.aclsByResource = aclsByResource;
-        this.aclsById = aclsById;
+        this.aclCache = aclCache;
     }
 
     StandardAuthorizerData copyWithNewAclMutator(AclMutator newAclMutator) {
@@ -158,8 +149,7 @@ public class StandardAuthorizerData {
             loadingComplete,
             superUsers,
             noAclRule.result,
-            aclsByResource,
-            aclsById);
+            aclCache);
     }
 
     StandardAuthorizerData copyWithNewLoadingComplete(boolean newLoadingComplete) {
@@ -168,8 +158,7 @@ public class StandardAuthorizerData {
             newLoadingComplete,
             superUsers,
             noAclRule.result,
-            aclsByResource,
-            aclsById);
+            aclCache);
     }
 
     StandardAuthorizerData copyWithNewConfig(int nodeId,
@@ -181,35 +170,24 @@ public class StandardAuthorizerData {
             loadingComplete,
             newSuperUsers,
             newDefaultResult,
-            aclsByResource,
-            aclsById);
+            aclCache);
     }
 
-    StandardAuthorizerData copyWithNewAcls(TreeSet<StandardAcl> aclsByResource, HashMap<Uuid,
-        StandardAcl> aclsById) {
+    StandardAuthorizerData copyWithNewAcls(AclCache aclCache) {
         StandardAuthorizerData newData =  new StandardAuthorizerData(
             log,
             aclMutator,
             loadingComplete,
             superUsers,
             noAclRule.result,
-            aclsByResource,
-            aclsById);
-        log.info("Initialized with {} acl(s).", aclsById.size());
+            aclCache);
+        log.info("Initialized with {} acl(s).", aclCache.count());
         return newData;
     }
 
     void addAcl(Uuid id, StandardAcl acl) {
         try {
-            StandardAcl prevAcl = aclsById.putIfAbsent(id, acl);
-            if (prevAcl != null) {
-                throw new RuntimeException("An ACL with ID " + id + " already exists.");
-            }
-            if (!aclsByResource.add(acl)) {
-                aclsById.remove(id);
-                throw new RuntimeException("Unable to add the ACL with ID " + id +
-                    " to aclsByResource");
-            }
+            aclCache = aclCache.addAcl(id, acl);
             log.trace("Added ACL {}: {}", id, acl);
         } catch (Throwable e) {
             log.error("addAcl error", e);
@@ -219,15 +197,9 @@ public class StandardAuthorizerData {
 
     void removeAcl(Uuid id) {
         try {
-            StandardAcl acl = aclsById.remove(id);
-            if (acl == null) {
-                throw new RuntimeException("ID " + id + " not found in aclsById.");
-            }
-            if (!aclsByResource.remove(acl)) {
-                throw new RuntimeException("Unable to remove the ACL with ID " + id +
-                    " from aclsByResource");
-            }
-            log.trace("Removed ACL {}: {}", id, acl);
+            AclCache aclCacheSnapshot = aclCache.removeAcl(id);
+            log.trace("Removed ACL {}: {}", id, aclCacheSnapshot.getAcl(id));
+            aclCache = aclCacheSnapshot;
         } catch (Throwable e) {
             log.error("removeAcl error", e);
             throw e;
@@ -243,7 +215,7 @@ public class StandardAuthorizerData {
     }
 
     int aclCount() {
-        return aclsById.size();
+        return aclCache.count();
     }
 
     /**
@@ -374,7 +346,8 @@ public class StandardAuthorizerData {
             "",
             AclOperation.UNKNOWN,
             AclPermissionType.UNKNOWN);
-        checkSection(action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
+        AclCache aclCacheSnapshot = aclCache;
+        checkSection(aclCacheSnapshot, action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
         if (matchingRuleBuilder.foundDeny()) {
             return matchingRuleBuilder.build();
         }
@@ -390,7 +363,7 @@ public class StandardAuthorizerData {
             "",
             AclOperation.UNKNOWN,
             AclPermissionType.UNKNOWN);
-        checkSection(action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
+        checkSection(aclCacheSnapshot, action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
         return matchingRuleBuilder.build();
     }
 
@@ -409,14 +382,14 @@ public class StandardAuthorizerData {
     }
 
     private void checkSection(
-        Action action,
-        StandardAcl exemplar,
-        Set<KafkaPrincipal> matchingPrincipals,
-        String host,
-        MatchingRuleBuilder matchingRuleBuilder
+            AclCache aclCacheSnapshot, Action action,
+            StandardAcl exemplar,
+            Set<KafkaPrincipal> matchingPrincipals,
+            String host,
+            MatchingRuleBuilder matchingRuleBuilder
     ) {
         String resourceName = action.resourcePattern().name();
-        NavigableSet<StandardAcl> tailSet = aclsByResource.tailSet(exemplar, true);
+        NavigableSet<StandardAcl> tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
         Iterator<StandardAcl> iterator = tailSet.iterator();
         while (iterator.hasNext()) {
             StandardAcl acl = iterator.next();
@@ -446,7 +419,7 @@ public class StandardAuthorizerData {
                     exemplar.host(),
                     exemplar.operation(),
                     exemplar.permissionType());
-                tailSet = aclsByResource.tailSet(exemplar, true);
+                tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
                 iterator = tailSet.iterator();
                 continue;
             }
@@ -525,7 +498,7 @@ public class StandardAuthorizerData {
         }
         // Check if the operation field matches. Here we hit a slight complication.
         // ACLs for various operations (READ, WRITE, DELETE, ALTER), "imply" the presence
-        // of DESCRIBE, even if it isn't explictly stated. A similar rule applies to
+        // of DESCRIBE, even if it isn't explicitly stated. A similar rule applies to
         // DESCRIBE_CONFIGS.
         //
         // But this rule only applies to ALLOW ACLs. So for example, a DENY ACL for READ
@@ -560,14 +533,7 @@ public class StandardAuthorizerData {
      * @return Iterable over AclBindings matching the filter.
      */
     Iterable<AclBinding> acls(AclBindingFilter filter) {
-        List<AclBinding> aclBindingList = new ArrayList<>();
-        aclsByResource.forEach(acl -> {
-            AclBinding aclBinding = acl.toBinding();
-            if (filter.matches(aclBinding)) {
-                aclBindingList.add(aclBinding);
-            }
-        });
-        return aclBindingList;
+        return aclCache.acls(filter);
     }
 
     private interface MatchingRule {
@@ -654,11 +620,7 @@ public class StandardAuthorizerData {
         }
     }
 
-    TreeSet<StandardAcl> getAclsByResource() {
-        return aclsByResource;
-    }
-
-    HashMap<Uuid, StandardAcl> getAclsById() {
-        return aclsById;
+    AclCache getAclCache() {
+        return aclCache;
     }
 }

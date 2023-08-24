@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
 import org.apache.kafka.common.KafkaFuture;
@@ -24,7 +25,9 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -35,27 +38,35 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
+import static org.apache.kafka.connect.mirror.MirrorUtils.PARTITION_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -71,9 +82,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class MirrorSourceConnectorTest {
+    private ConfigPropertyFilter getConfigPropertyFilter() {
+        return new ConfigPropertyFilter() {
+            @Override
+            public boolean shouldReplicateConfigProperty(String prop) {
+                return true;
+            }
+
+        };
+    }
 
     @Test
     public void testReplicatesHeartbeatsByDefault() {
@@ -94,7 +115,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
@@ -107,7 +128,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIdentityReplication() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new IdentityReplicationPolicy(), x -> true, x -> true);
+            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
@@ -127,7 +148,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
@@ -139,7 +160,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclTransformation() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         AclBinding allowAllAclBinding = new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
@@ -209,13 +230,60 @@ public class MirrorSourceConnectorTest {
             new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
         entries.add(new ConfigEntry("min.insync.replicas", "2"));
         Config config = new Config(entries);
-        Config targetConfig = connector.targetConfig(config);
+        Config targetConfig = connector.targetConfig(config, true);
+        assertTrue(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertTrue(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
+        assertFalse(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    @Deprecated
+    public void testConfigPropertyFilteringWithAlterConfigs() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        // When "use.defaults.from" set to "target" by default, the config with default value should be excluded
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config, false);
         assertTrue(targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
         assertFalse(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
+        assertFalse(targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    @Deprecated
+    public void testConfigPropertyFilteringWithAlterConfigsAndSourceDefault() {
+        Map<String, Object> filterConfig = Collections.singletonMap(DefaultConfigPropertyFilter.USE_DEFAULTS_FROM, "source");
+        DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
+        filter.configure(filterConfig);
+
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(),  x -> true, filter);
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        // When "use.defaults.from" explicitly set to "source", the config with default value should be replicated
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config, false);
+        assertTrue(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertTrue(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
+        assertFalse(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
     }
 
     @Test
@@ -259,6 +327,114 @@ public class MirrorSourceConnectorTest {
         }).when(connector).createNewTopics(any());
         connector.createNewTopics(Collections.singleton(topic), Collections.singletonMap(topic, 1L));
         verify(connector).createNewTopics(any(), any());
+    }
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsRequested() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
+        Admin admin = mock(Admin.class);
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
+        doNothing().when(connector).deprecatedAlterConfigs(any());
+        connector.syncTopicConfigs();
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
+        verify(connector).incrementalAlterConfigs(topicConfigs);
+
+        // the next time we sync topic configurations, expect to use the deprecated API
+        connector.syncTopicConfigs();
+        verify(connector, times(1)).deprecatedAlterConfigs(topicConfigs);
+    }
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsRequired() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
+        Admin admin = mock(Admin.class);
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
+        ConfigEntry entryWithNonDefaultValue = new ConfigEntry("name-1", "value-1");
+        ConfigEntry entryWithDefaultValue = new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false,
+                Collections.emptyList(), ConfigEntry.ConfigType.STRING, "");
+        entries.add(entryWithNonDefaultValue);
+        entries.add(entryWithDefaultValue);
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+
+        doAnswer(invocation -> {
+            Map<ConfigResource, Collection<AlterConfigOp>> configOps = invocation.getArgument(0);
+            assertNotNull(configOps);
+            assertEquals(1, configOps.size());
+
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, "source." + topic);
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ops.add(new AlterConfigOp(entryWithNonDefaultValue, AlterConfigOp.OpType.SET));
+            ops.add(new AlterConfigOp(entryWithDefaultValue, AlterConfigOp.OpType.DELETE));
+
+            assertEquals(ops, configOps.get(configResource));
+
+            return alterConfigsResult(configResource);
+        }).when(admin).incrementalAlterConfigs(any());
+
+        connector.syncTopicConfigs();
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
+        verify(connector).incrementalAlterConfigs(topicConfigs);
+    }
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsRequiredButUnsupported() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
+        Admin admin = mock(Admin.class);
+        ConnectorContext connectorContext = mock(ConnectorContext.class);
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
+        connector.initialize(connectorContext);
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
+
+        connector.syncTopicConfigs();
+        verify(connectorContext).raiseError(isA(ConnectException.class));
+    }
+
+
+    @Test
+    @Deprecated
+    public void testIncrementalAlterConfigsNeverUsed() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfigs = new MirrorSourceConfig(props);
+
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), connectorConfigs, new DefaultConfigPropertyFilter(), null));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doNothing().when(connector).deprecatedAlterConfigs(any());
+        connector.syncTopicConfigs();
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
+        verify(connector).deprecatedAlterConfigs(topicConfigs);
+        verify(connector, never()).incrementalAlterConfigs(any());
     }
 
     @Test
@@ -511,5 +687,141 @@ public class MirrorSourceConnectorTest {
         ConfigValue result = results.get(0);
         assertNotNull(result, "Connector should not have record null config value for '" + name + "' property");
         return Optional.of(result);
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectPartitionKey() {
+        MirrorSourceConnector connector = new MirrorSourceConnector();
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+                Collections.singletonMap("unused_partition_key", "unused_partition_value"),
+                MirrorUtils.wrapOffset(10)
+        )));
+
+        // null partitions are invalid
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+                null,
+                MirrorUtils.wrapOffset(10)
+        )));
+    }
+
+    @Test
+    public void testAlterOffsetsMissingPartitionKey() {
+        MirrorSourceConnector connector = new MirrorSourceConnector();
+
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(null, Collections.singletonMap(
+                partition,
+                MirrorUtils.wrapOffset(64)
+        ));
+
+        Map<String, ?> validPartition = sourcePartition("t", 3, "us-east-2");
+        // Sanity check to make sure our valid partition is actually valid
+        assertTrue(alterOffsets.apply(validPartition));
+
+        for (String key : Arrays.asList(SOURCE_CLUSTER_KEY, TOPIC_KEY, PARTITION_KEY)) {
+            Map<String, ?> invalidPartition = new HashMap<>(validPartition);
+            invalidPartition.remove(key);
+            assertThrows(ConnectException.class, () -> alterOffsets.apply(invalidPartition));
+        }
+    }
+
+    @Test
+    public void testAlterOffsetsInvalidPartitionPartition() {
+        MirrorSourceConnector connector = new MirrorSourceConnector();
+        Map<String, Object> partition = sourcePartition("t", 3, "us-west-2");
+        partition.put(PARTITION_KEY, "a string");
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+                partition,
+                MirrorUtils.wrapOffset(49)
+        )));
+    }
+
+    @Test
+    public void testAlterOffsetsMultiplePartitions() {
+        MirrorSourceConnector connector = new MirrorSourceConnector();
+
+        Map<String, ?> partition1 = sourcePartition("t1", 0, "primary");
+        Map<String, ?> partition2 = sourcePartition("t1", 1, "primary");
+
+        Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
+        offsets.put(partition1, MirrorUtils.wrapOffset(50));
+        offsets.put(partition2, MirrorUtils.wrapOffset(100));
+
+        assertTrue(connector.alterOffsets(null, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectOffsetKey() {
+        MirrorSourceConnector connector = new MirrorSourceConnector();
+
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                sourcePartition("t1", 2, "backup"),
+                Collections.singletonMap("unused_offset_key", 0)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsOffsetValues() {
+        MirrorSourceConnector connector = new MirrorSourceConnector();
+
+        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Collections.singletonMap(
+                sourcePartition("t", 5, "backup"),
+                Collections.singletonMap(MirrorUtils.OFFSET_KEY, offset)
+        ));
+
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(null));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(new Object()));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(3.14));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(-420));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("-420"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("10"));
+        assertTrue(() -> alterOffsets.apply(0));
+        assertTrue(() -> alterOffsets.apply(10));
+        assertTrue(() -> alterOffsets.apply(((long) Integer.MAX_VALUE) + 1));
+    }
+
+    @Test
+    public void testSuccessfulAlterOffsets() {
+        MirrorSourceConnector connector = new MirrorSourceConnector();
+
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                sourcePartition("t2", 0, "backup"),
+                MirrorUtils.wrapOffset(5)
+        );
+
+        // Expect no exception to be thrown when a valid offsets map is passed. An empty offsets map is treated as valid
+        // since it could indicate that the offsets were reset previously or that no offsets have been committed yet
+        // (for a reset operation)
+        assertTrue(connector.alterOffsets(null, offsets));
+        assertTrue(connector.alterOffsets(null, Collections.emptyMap()));
+    }
+
+    @Test
+    public void testAlterOffsetsTombstones() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(
+                null,
+                Collections.singletonMap(partition, null)
+        );
+
+        Map<String, Object> partition = sourcePartition("kips", 875, "apache.kafka");
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.put(PARTITION_KEY, "a string");
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.remove(PARTITION_KEY);
+        assertTrue(() -> alterOffsets.apply(partition));
+
+        assertTrue(() -> alterOffsets.apply(null));
+        assertTrue(() -> alterOffsets.apply(Collections.emptyMap()));
+        assertTrue(() -> alterOffsets.apply(Collections.singletonMap("unused_partition_key", "unused_partition_value")));
+    }
+
+    private static Map<String, Object> sourcePartition(String topic, int partition, String sourceClusterAlias) {
+        return MirrorUtils.wrapPartition(
+                new TopicPartition(topic, partition),
+                sourceClusterAlias
+        );
     }
 }

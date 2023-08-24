@@ -20,8 +20,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import java.util.concurrent.{Callable, Executors, Future}
-
-import kafka.common.RequestAndCompletionHandler
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -30,12 +28,13 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{mock, times, verify, when}
+import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -89,6 +88,27 @@ class TransactionMarkerChannelManagerTest {
   }
 
   @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val transactionMarkerChannelManager = new TransactionMarkerChannelManager(
+        KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+        metadataCache,
+        networkClient,
+        txnStateManager,
+        time)
+      transactionMarkerChannelManager.shutdown()
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      TransactionMarkerChannelManager.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      TransactionMarkerChannelManager.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
+  }
+
+  @Test
   def shouldOnlyWriteTxnCompletionOnce(): Unit = {
     mockCache()
 
@@ -129,7 +149,7 @@ class TransactionMarkerChannelManagerTest {
         response)
 
       TestUtils.waitUntilTrue(() => {
-        val requests = channelManager.generateRequests()
+        val requests = channelManager.generateRequests().asScala
         if (requests.nonEmpty) {
           assertEquals(1, requests.size)
           val request = requests.head
@@ -194,7 +214,7 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
-    val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
+    val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
@@ -264,13 +284,13 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
-    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
+    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
     assertEquals(Map(broker2 -> expectedBroker2Request), firstDrainedRequests)
 
-    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
+    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
@@ -345,7 +365,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests().asScala
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -398,7 +418,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests().asScala
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -452,7 +472,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests().asScala
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {

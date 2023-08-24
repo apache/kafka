@@ -115,21 +115,30 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
             }
         }
         changes.apply(metrics);
+        if (delta.featuresDelta() != null) {
+            delta.featuresDelta().getZkMigrationStateChange().ifPresent(state -> metrics.setZkMigrationState(state.value()));
+        }
     }
 
     private void publishSnapshot(MetadataImage newImage) {
         metrics.setGlobalTopicCount(newImage.topics().topicsById().size());
         int fencedBrokers = 0;
         int activeBrokers = 0;
+        int zkBrokers = 0;
         for (BrokerRegistration broker : newImage.cluster().brokers().values()) {
             if (broker.fenced()) {
                 fencedBrokers++;
             } else {
                 activeBrokers++;
             }
+            if (broker.isMigratingZkBroker()) {
+                zkBrokers++;
+            }
         }
         metrics.setFencedBrokerCount(fencedBrokers);
         metrics.setActiveBrokerCount(activeBrokers);
+        metrics.setMigratingZkBrokerCount(zkBrokers);
+
         int totalPartitions = 0;
         int offlinePartitions = 0;
         int partitionsWithoutPreferredLeader = 0;
@@ -147,6 +156,7 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         metrics.setGlobalPartitionCount(totalPartitions);
         metrics.setOfflinePartitionCount(offlinePartitions);
         metrics.setPreferredReplicaImbalanceCount(partitionsWithoutPreferredLeader);
+        metrics.setZkMigrationState(newImage.features().zkMigrationState().value());
     }
 
     @Override

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 import java.util.Objects;
@@ -25,6 +27,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -32,6 +35,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
@@ -43,9 +47,7 @@ import org.apache.kafka.streams.state.VersionedRecord;
  * metrics, and hence its inner {@link VersionedBytesStore} implementation does not need to provide
  * its own metrics collecting functionality. The inner {@code VersionedBytesStore} of this class
  * is a {@link KeyValueStore} of type &lt;Bytes,byte[]&gt;, so we use {@link Serde}s
- * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;. In particular,
- * {@link NullableValueAndTimestampSerde} is used since putting a tombstone to a versioned key-value
- * store requires putting a null value associated with a timestamp.
+ * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;.
  *
  * @param <K> The key type
  * @param <V> The (raw) value type
@@ -60,7 +62,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                                   final String metricScope,
                                   final Time time,
                                   final Serde<K> keySerde,
-                                  final Serde<ValueAndTimestamp<V>> valueSerde) {
+                                  final Serde<V> valueSerde) {
         super(inner);
         internal = new MeteredVersionedKeyValueStoreInternal(inner, metricScope, time, keySerde, valueSerde);
     }
@@ -84,22 +86,37 @@ public class MeteredVersionedKeyValueStore<K, V>
         extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
         private final VersionedBytesStore inner;
+        private final Serde<V> plainValueSerde;
+        private StateSerdes<K, V> plainValueSerdes;
 
         MeteredVersionedKeyValueStoreInternal(final VersionedBytesStore inner,
                                               final String metricScope,
                                               final Time time,
                                               final Serde<K> keySerde,
-                                              final Serde<ValueAndTimestamp<V>> valueSerde) {
-            super(inner, metricScope, time, keySerde, valueSerde);
+                                              final Serde<V> valueSerde) {
+            super(
+                inner,
+                metricScope,
+                time,
+                keySerde,
+                valueSerde == null
+                    ? null
+                    : new ValueAndTimestampSerde<>(valueSerde)
+            );
             this.inner = inner;
+            this.plainValueSerde = valueSerde;
         }
 
-        @Override
-        public void put(final K key, final ValueAndTimestamp<V> value) {
-            if (value == null) {
-                throw new IllegalStateException("Versioned store requires timestamp associated with all puts, including tombstones/deletes");
+        public long put(final K key, final V value, final long timestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                final long validTo = maybeMeasureLatency(() -> inner.put(keyBytes(key), plainValueSerdes.rawValue(value), timestamp), time, putSensor);
+                maybeRecordE2ELatency();
+                return validTo;
+            } catch (final ProcessorStateException e) {
+                final String message = String.format(e.getMessage(), key, value);
+                throw new ProcessorStateException(message, e);
             }
-            super.put(key, value);
         }
 
         public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
@@ -147,16 +164,45 @@ public class MeteredVersionedKeyValueStore<K, V>
             final SerdeGetter getter
         ) {
             if (valueSerde == null) {
-                return new NullableValueAndTimestampSerde<>((Serde<V>) getter.valueSerde());
+                return new ValueAndTimestampSerde<>((Serde<V>) getter.valueSerde());
             } else {
                 return super.prepareValueSerdeForStore(valueSerde, getter);
             }
         }
+
+        @Deprecated
+        @Override
+        protected void initStoreSerde(final ProcessorContext context) {
+            super.initStoreSerde(context);
+
+            // additionally init raw value serde
+            final String storeName = super.name();
+            final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
+            plainValueSerdes = new StateSerdes<>(
+                changelogTopic,
+                prepareKeySerde(keySerde, new SerdeGetter(context)),
+                prepareValueSerde(plainValueSerde, new SerdeGetter(context))
+            );
+        }
+
+        @Override
+        protected void initStoreSerde(final StateStoreContext context) {
+            super.initStoreSerde(context);
+
+            // additionally init raw value serde
+            final String storeName = super.name();
+            final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
+            plainValueSerdes = new StateSerdes<>(
+                changelogTopic,
+                prepareKeySerde(keySerde, new SerdeGetter(context)),
+                prepareValueSerde(plainValueSerde, new SerdeGetter(context))
+            );
+        }
     }
 
     @Override
-    public void put(final K key, final V value, final long timestamp) {
-        internal.put(key, ValueAndTimestamp.makeAllowNullable(value, timestamp));
+    public long put(final K key, final V value, final long timestamp) {
+        return internal.put(key, value, timestamp);
     }
 
     @Override

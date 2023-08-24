@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.jupiter.api.Test;
 
@@ -183,6 +184,9 @@ class ReadOnlyTaskTest {
                     break;
                 case "java.lang.Iterable":
                     parameters[i] = Collections.emptySet();
+                    break;
+                case "org.apache.kafka.common.utils.Time":
+                    parameters[i] = Time.SYSTEM;
                     break;
                 default:
                     parameters[i] = parameterTypes[i].getConstructor().newInstance();

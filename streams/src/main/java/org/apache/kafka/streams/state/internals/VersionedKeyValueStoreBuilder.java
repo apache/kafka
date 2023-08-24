@@ -23,7 +23,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
@@ -54,16 +53,12 @@ public class VersionedKeyValueStoreBuilder<K, V>
             throw new IllegalStateException("VersionedBytesStoreSupplier.get() must return an instance of VersionedBytesStore");
         }
 
-        final Serde<ValueAndTimestamp<V>> valueAndTimestampSerde = valueSerde == null
-            ? null
-            : new NullableValueAndTimestampSerde<>(valueSerde);
-
         return new MeteredVersionedKeyValueStore<>(
             maybeWrapLogging((VersionedBytesStore) store), // no caching layer for versioned stores
             storeSupplier.metricsScope(),
             time,
             keySerde,
-            valueAndTimestampSerde);
+            valueSerde);
     }
 
     @Override

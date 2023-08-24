@@ -32,9 +32,11 @@ import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Random;
 import java.util.stream.IntStream;
 
@@ -78,7 +80,7 @@ public abstract class BaseRecordBatchBenchmark {
     ByteBuffer[] batchBuffers;
     RequestLocal requestLocal;
     LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(
-        new BrokerTopicStats().allTopicsStats());
+        new BrokerTopicStats(Optional.empty()).allTopicsStats());
 
     @Setup
     public void init() {
@@ -101,6 +103,12 @@ public abstract class BaseRecordBatchBenchmark {
             int size = random.nextInt(maxBatchSize) + 1;
             batchBuffers[i] = createBatch(size);
         }
+    }
+
+    @TearDown
+    public void cleanUp() {
+        if (requestLocal != null)
+            requestLocal.close();
     }
 
     private static Header[] createHeaders() {

@@ -91,5 +91,14 @@ public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn,
             return store.get(key);
         }
 
+        @Override
+        public ValueAndTimestamp<VIn> get(final KIn key, final long asOfTimestamp) {
+            return store.get(key, asOfTimestamp);
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return store.isVersionedStore();
+        }
     }
 }

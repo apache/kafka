@@ -24,7 +24,7 @@ import kafka.api.LeaderAndIsr
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.waitUntilTrue
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.metadata.RegisterBrokerRecord
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -38,7 +38,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -231,7 +231,7 @@ class ReplicaManagerConcurrencyTest {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         replicaId,
-        1,
+        defaultBrokerEpoch(replicaId),
         random.nextInt(100),
         1,
         1024 * 1024,
@@ -356,6 +356,7 @@ class ReplicaManagerConcurrencyTest {
             delta.replay(new RegisterBrokerRecord()
               .setBrokerId(brokerId)
               .setFenced(false)
+              .setBrokerEpoch(defaultBrokerEpoch(brokerId))
             )
           }
           topic.initialize(delta)
@@ -463,16 +464,17 @@ class ReplicaManagerConcurrencyTest {
     leaderEpoch: Int = 0,
     partitionEpoch: Int = 0
   ): PartitionRegistration = {
-    new PartitionRegistration(
-      replicaIds.toArray,
-      isr.toArray,
-      Array.empty[Int],
-      Array.empty[Int],
-      leader,
-      leaderRecoveryState,
-      leaderEpoch,
-      partitionEpoch
-    )
+    new PartitionRegistration.Builder().
+      setReplicas(replicaIds.toArray).
+      setIsr(isr.toArray).
+      setLeader(leader).
+      setLeaderRecoveryState(leaderRecoveryState).
+      setLeaderEpoch(leaderEpoch).
+      setPartitionEpoch(partitionEpoch).
+      build();
   }
 
+  private def defaultBrokerEpoch(brokerId: Int): Long = {
+    brokerId + 100L
+  }
 }

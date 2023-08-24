@@ -63,7 +63,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.numUnknownVoterConnections = 0;
         this.logEndOffset = new OffsetAndEpoch(0L, 0);
 
-        this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached");
+        this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached, observer");
         Gauge<String> stateProvider = (mConfig, currentTimeMs) -> {
             if (state.isLeader()) {
                 return "leader";
@@ -72,7 +72,12 @@ public class KafkaRaftMetrics implements AutoCloseable {
             } else if (state.isVoted()) {
                 return "voted";
             } else if (state.isFollower()) {
-                return "follower";
+                // a broker is special kind of follower, as not being a voter, it's an observer
+                if (state.isObserver()) {
+                    return "observer";
+                } else {
+                    return "follower";
+                }
             } else {
                 return "unattached";
             }

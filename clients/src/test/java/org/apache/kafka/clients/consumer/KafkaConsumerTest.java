@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.Deserializers;
 import org.apache.kafka.clients.consumer.internals.FetchConfig;
 import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
@@ -55,6 +56,7 @@ import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -300,6 +302,16 @@ public class KafkaConsumerTest {
                 } else {
                     i++;
                     return super.deserialize(topic, data);
+                }
+            }
+
+            @Override
+            public String deserialize(String topic, Headers headers, ByteBuffer data) {
+                if (i == recordIndex) {
+                    throw new SerializationException();
+                } else {
+                    i++;
+                    return super.deserialize(topic, headers, data);
                 }
             }
         };
@@ -2310,7 +2322,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testListOffsetShouldUpateSubscriptions() {
+    public void testListOffsetShouldUpdateSubscriptions() {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
@@ -2668,8 +2680,7 @@ public class KafkaConsumerTest {
                 maxPollRecords,
                 checkCrcs,
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                keyDeserializer,
-                deserializer,
+                new Deserializers<>(keyDeserializer, deserializer),
                 isolationLevel);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,

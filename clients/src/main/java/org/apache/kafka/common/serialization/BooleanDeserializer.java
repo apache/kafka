@@ -17,6 +17,9 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
 
 public class BooleanDeserializer implements Deserializer<Boolean> {
     private static final byte TRUE = 0x01;
@@ -38,6 +41,26 @@ public class BooleanDeserializer implements Deserializer<Boolean> {
             return false;
         } else {
             throw new SerializationException("Unexpected byte received by BooleanDeserializer: " + data[0]);
+        }
+    }
+
+    @Override
+    public Boolean deserialize(String topic, Headers headers, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+
+        if (data.remaining() != 1) {
+            throw new SerializationException("Size of data received by BooleanDeserializer is not 1");
+        }
+
+        final byte b = data.get(data.position());
+        if (b == TRUE) {
+            return true;
+        } else if (b == FALSE) {
+            return false;
+        } else {
+            throw new SerializationException("Unexpected byte received by BooleanDeserializer: " + b);
         }
     }
 }

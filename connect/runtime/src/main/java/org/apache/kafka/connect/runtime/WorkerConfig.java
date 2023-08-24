@@ -25,7 +25,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.slf4j.Logger;
@@ -35,22 +37,24 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.ONLY_SCAN;
+import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.HYBRID_WARN;
+import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.HYBRID_FAIL;
+import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.SERVICE_LOAD;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
  */
 public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
-
-    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
@@ -124,6 +128,18 @@ public class WorkerConfig extends AbstractConfig {
             + "Do not use config provider variables in this property, since the raw path is used "
             + "by the worker's scanner before config providers are initialized and used to "
             + "replace variables.";
+
+    public static final String PLUGIN_DISCOVERY_CONFIG = "plugin.discovery";
+    protected static final String PLUGIN_DISCOVERY_DOC = "Method to use to discover plugins present in the classpath "
+            + "and plugin.path configuration. This can be one of multiple values with the following meanings:\n"
+            + "* " + ONLY_SCAN + ": Discover plugins only by reflection. "
+            + "Plugins which are not discoverable by ServiceLoader will not impact worker startup.\n"
+            + "* " + HYBRID_WARN + ": Discover plugins reflectively and by ServiceLoader. "
+            + "Plugins which are not discoverable by ServiceLoader will print warnings during worker startup.\n"
+            + "* " + HYBRID_FAIL + ": Discover plugins reflectively and by ServiceLoader. "
+            + "Plugins which are not discoverable by ServiceLoader will cause worker startup to fail.\n"
+            + "* " + SERVICE_LOAD + ": Discover plugins only by ServiceLoader. Faster startup than other modes. "
+            + "Plugins which are not discoverable by ServiceLoader may not be usable.";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
     protected static final String CONFIG_PROVIDERS_DOC =
@@ -202,6 +218,12 @@ public class WorkerConfig extends AbstractConfig {
                         null,
                         Importance.LOW,
                         PLUGIN_PATH_DOC)
+                .define(PLUGIN_DISCOVERY_CONFIG,
+                        Type.STRING,
+                        PluginDiscoveryMode.HYBRID_WARN.toString(),
+                        ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(PluginDiscoveryMode.class)),
+                        Importance.LOW,
+                        PLUGIN_DISCOVERY_DOC)
                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG, Type.LONG,
                         30000, atLeast(0), Importance.LOW,
                         CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
@@ -310,7 +332,7 @@ public class WorkerConfig extends AbstractConfig {
         String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
         // Can't use AbstractConfig::originalsStrings here since some values may be null, which
         // causes that method to fail
-        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
+        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG), null);
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
             log.warn(
                 "Variables cannot be used in the 'plugin.path' property, since the property is "
@@ -400,11 +422,18 @@ public class WorkerConfig extends AbstractConfig {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 
-    public static List<String> pluginLocations(Map<String, String> props) {
-        String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
-        return locationList == null
-                         ? new ArrayList<>()
-                         : Arrays.asList(COMMA_WITH_WHITESPACE.split(locationList.trim(), -1));
+    public static String pluginPath(Map<String, String> props) {
+        return props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
+    }
+
+    public static PluginDiscoveryMode pluginDiscovery(Map<String, String> props) {
+        String value = props.getOrDefault(WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.HYBRID_WARN.toString());
+        try {
+            return PluginDiscoveryMode.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new ConnectException("Invalid " + PLUGIN_DISCOVERY_CONFIG + " value, must be one of "
+                    + Arrays.toString(Utils.enumOptions(PluginDiscoveryMode.class)));
+        }
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {

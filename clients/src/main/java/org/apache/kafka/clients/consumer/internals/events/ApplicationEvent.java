@@ -26,7 +26,7 @@ abstract public class ApplicationEvent {
         this.type = type;
     }
     /**
-     * process the application event. Return true upon succesful execution,
+     * process the application event. Return true upon successful execution,
      * false otherwise.
      * @return true if the event was successfully executed; false otherwise.
      */
@@ -36,6 +36,6 @@ abstract public class ApplicationEvent {
         return type + " ApplicationEvent";
     }
     public enum Type {
-        NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET,
+        NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, ASSIGNMENT_CHANGE,
     }
 }

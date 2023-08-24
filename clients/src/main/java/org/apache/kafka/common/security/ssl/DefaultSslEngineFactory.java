@@ -200,7 +200,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                 case NONE:
                     break;
             }
-            sslEngine.setUseClientMode(false);
         } else {
             sslEngine.setUseClientMode(true);
             SSLParameters sslParams = sslEngine.getSSLParameters();

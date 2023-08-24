@@ -302,10 +302,10 @@ object DumpLogSegments {
                     val endTxnMarker = EndTransactionMarker.deserialize(record)
                     print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
                   case ControlRecordType.SNAPSHOT_HEADER =>
-                    val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(record)
+                    val header = ControlRecordUtils.deserializeSnapshotHeaderRecord(record)
                     print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, header.version())}")
                   case ControlRecordType.SNAPSHOT_FOOTER =>
-                    val footer = ControlRecordUtils.deserializedSnapshotFooterRecord(record)
+                    val footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record)
                     print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")

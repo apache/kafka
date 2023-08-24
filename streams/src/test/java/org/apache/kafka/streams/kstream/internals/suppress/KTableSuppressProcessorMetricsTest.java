@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -129,7 +129,7 @@ public class KTableSuppressProcessorMetricsTest {
     public void shouldRecordMetricsWithBuiltInMetricsVersionLatest() {
         final String storeName = "test-store";
 
-        final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
+        final StateStore buffer = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(
             storeName, Serdes.String(),
             Serdes.Long()
         )

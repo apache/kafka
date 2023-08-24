@@ -31,7 +31,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
-import org.apache.kafka.tools.RecordReader
+import org.apache.kafka.tools.api.RecordReader
 
 import scala.annotation.nowarn
 
@@ -45,7 +45,7 @@ object ConsoleProducer extends Logging {
         r.configure(prop.asInstanceOf[java.util.Map[String, _]])
         r
       case r: MessageReader =>
-        logger.warn("MessageReader is deprecated. Please use org.apache.kafka.tools.RecordReader instead")
+        logger.warn("MessageReader is deprecated. Please use org.apache.kafka.tools.api.RecordReader instead")
         new RecordReader {
           private[this] var initialized = false
 

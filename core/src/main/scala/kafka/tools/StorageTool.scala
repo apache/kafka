@@ -65,7 +65,7 @@ object StorageTool extends Logging {
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported()) {
-              throw new TerseFailure(s"SCRAM is only supported in metadataVersion IBP_3_5_IV0 or later.");
+              throw new TerseFailure(s"SCRAM is only supported in metadataVersion IBP_3_5_IV2 or later.");
             }
             for (record <- userScramCredentialRecords) {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
@@ -119,8 +119,8 @@ object StorageTool extends Logging {
     formatParser.addArgument("--add-scram", "-S").
       action(append()).
       help("""A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
-              |'SCRAM-SHA-256=[user=alice,password=alice-secret]'
-              |'SCRAM-SHA-512=[user=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
+              |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
+              |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
     formatParser.addArgument("--ignore-formatted", "-g").
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
@@ -227,12 +227,20 @@ object StorageTool extends Logging {
     val iterations = getIterations(argMap, scramMechanism)
     val saltedPassword = getSaltedPassword(argMap, scramMechanism, salt, iterations)
 
-    val myrecord = new UserScramCredentialRecord()
-                         .setName(name)
-                         .setMechanism(scramMechanism.`type`)
-                         .setSalt(salt)
-                         .setIterations(iterations)
-                         .setSaltedPassword(saltedPassword)
+    val myrecord = try {
+      val formatter = new ScramFormatter(scramMechanism);
+
+      new UserScramCredentialRecord()
+           .setName(name)
+           .setMechanism(scramMechanism.`type`)
+           .setSalt(salt)
+           .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
+           .setServerKey(formatter.serverKey(saltedPassword))
+           .setIterations(iterations)
+    } catch {
+      case e: Throwable => 
+        throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
+    }
     myrecord
   }
 

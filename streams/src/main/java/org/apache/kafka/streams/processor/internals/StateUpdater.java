@@ -180,7 +180,7 @@ public interface StateUpdater {
      * Returns if the state updater restores active tasks.
      *
      * The state updater restores active tasks if at least one active task was added with {@link StateUpdater#add(Task)},
-     * the task is not paused, and the task was not removed from the state updater with one of the following methods:
+     * and the task was not removed from the state updater with one of the following methods:
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
@@ -189,6 +189,10 @@ public interface StateUpdater {
      *
      * @return {@code true} if the state updater restores active tasks, {@code false} otherwise
      */
+    // TODO: We would still return true if all active tasks to be restored
+    //       are paused, in order to keep consistent behavior compared with
+    //       state updater disabled. In the future we would modify this criterion
+    //       with state updater always enabled to allow mixed processing / restoration.
     boolean restoresActiveTasks();
 
     /**

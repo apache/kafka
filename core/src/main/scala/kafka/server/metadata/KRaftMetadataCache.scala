@@ -18,8 +18,9 @@
 package kafka.server.metadata
 
 import kafka.controller.StateChangeLogger
-import kafka.server.{CachedControllerId, FinalizedFeaturesAndEpoch, KRaftCachedControllerId, MetadataCache}
+import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
@@ -32,12 +33,11 @@ import org.apache.kafka.image.MetadataImage
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.ThreadLocalRandom
-import kafka.admin.BrokerMetadata
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -215,11 +215,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
     image.cluster().brokers().values().asScala.filterNot(_.fenced()).
-      map(b => BrokerMetadata(b.id, b.rack.asScala))
+      map(b => new BrokerMetadata(b.id, b.rack))
   }
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
-    Option(_currentImage.cluster().broker(brokerId)).
+    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
       flatMap(_.node(listenerName.value()).asScala)
   }
 
@@ -228,6 +228,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       flatMap(_.node(listenerName.value()).asScala).toSeq
   }
 
+  // Does NOT include offline replica metadata
   override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     Option(_currentImage.topics().getTopic(topicName)).
       flatMap(topic => Option(topic.partitions().get(partitionId))).
@@ -238,7 +239,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         setLeader(partition.leader).
         setLeaderEpoch(partition.leaderEpoch).
         setIsr(Replicas.toList(partition.isr)).
-        setZkVersion(partition.partitionEpoch)))
+        setZkVersion(partition.partitionEpoch).
+        setReplicas(Replicas.toList(partition.replicas))))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
@@ -308,6 +310,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     } else {
       Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
     }
+  }
+
+  def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
+    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
+      map(brokerRegistration => brokerRegistration.epoch())
   }
 
   override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
@@ -386,15 +393,12 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()
 
-  override def features(): FinalizedFeaturesAndEpoch = {
+  override def features(): Features = {
     val image = _currentImage
-    val features = image.features().finalizedVersions().asScala.map {
-      case (name: String, level: java.lang.Short) => name -> Short2short(level)
-    }
-    features.put(MetadataVersion.FEATURE_NAME, image.features().metadataVersion().featureLevel())
-
-    FinalizedFeaturesAndEpoch(
-      features.toMap,
-      image.highestOffsetAndEpoch().offset)
+    new Features(image.features().metadataVersion(),
+      image.features().finalizedVersions(),
+      image.highestOffsetAndEpoch().offset,
+      true)
   }
 }
+

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -128,7 +129,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
 
-        // tolerate all erros
+        // tolerate all errors
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
 
         // retry for up to one second
@@ -178,7 +179,7 @@ public class ErrorHandlingIntegrationTest {
         }
 
         connect.deleteConnector(CONNECTOR_NAME);
-        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME,
+        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME,
                 "Connector tasks did not stop in time.");
 
     }
@@ -205,7 +206,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
 
-        // tolerate all erros
+        // tolerate all errors
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
 
         // retry for up to one second
@@ -247,7 +248,7 @@ public class ErrorHandlingIntegrationTest {
         ConsumerRecords<byte[], byte[]> messages = connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC);
 
         connect.deleteConnector(CONNECTOR_NAME);
-        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME,
+        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME,
             "Connector tasks did not stop in time.");
     }
 
@@ -282,7 +283,7 @@ public class ErrorHandlingIntegrationTest {
         assertEquals(expected, new String(actual));
     }
 
-    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
         static final ConfigDef CONFIG_DEF = new ConfigDef();
 
@@ -298,6 +299,11 @@ public class ErrorHandlingIntegrationTest {
         static final int BAD_RECORD_VAL = 7;
 
         private boolean shouldFail = true;
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
 
         @Override
         public R apply(R record) {

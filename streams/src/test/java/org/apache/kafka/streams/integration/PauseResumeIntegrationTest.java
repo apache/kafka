@@ -188,12 +188,13 @@ public class PauseResumeIntegrationTest {
         kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, stateUpdaterEnabled);
         kafkaStreams.pause();
         kafkaStreams.start();
-        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, STARTUP_TIMEOUT);
+        waitForApplicationState(singletonList(kafkaStreams), State.REBALANCING, STARTUP_TIMEOUT);
         assertTrue(kafkaStreams.isPaused());
 
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
         waitUntilStreamsHasPolled(kafkaStreams, 2);
+
         assertTopicSize(OUTPUT_STREAM_1, 0);
 
         kafkaStreams.resume();
@@ -282,7 +283,7 @@ public class PauseResumeIntegrationTest {
 
         streamsNamedTopologyWrapper.pauseNamedTopology(TOPOLOGY1);
         streamsNamedTopologyWrapper.start(asList(builder1.build(), builder2.build()));
-        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.RUNNING, STARTUP_TIMEOUT);
+        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.REBALANCING, STARTUP_TIMEOUT);
 
         assertFalse(streamsNamedTopologyWrapper.isPaused());
         assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
@@ -291,29 +292,16 @@ public class PauseResumeIntegrationTest {
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
 
-        awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA);
         assertTopicSize(OUTPUT_STREAM_1, 0);
-
-        streamsNamedTopologyWrapper.pause();
-        assertTrue(streamsNamedTopologyWrapper.isPaused());
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
-
-        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-
-        waitUntilStreamsHasPolled(streamsNamedTopologyWrapper, 2);
-        assertTopicSize(OUTPUT_STREAM_1, 0);
-        assertTopicSize(OUTPUT_STREAM_2, 5);
+        assertTopicSize(OUTPUT_STREAM_2, 0);
 
         streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
         assertFalse(streamsNamedTopologyWrapper.isPaused());
         assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
+        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
 
-        awaitOutput(OUTPUT_STREAM_1, 10, COUNT_OUTPUT_DATA_ALL);
-        assertTopicSize(OUTPUT_STREAM_1, 10);
-        assertTopicSize(OUTPUT_STREAM_2, 5);
+        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
+        awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA);
     }
 
     @ParameterizedTest
@@ -325,17 +313,15 @@ public class PauseResumeIntegrationTest {
         kafkaStreams.pause();
         kafkaStreams.start();
 
-        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, STARTUP_TIMEOUT);
+        waitForApplicationState(singletonList(kafkaStreams), State.REBALANCING, STARTUP_TIMEOUT);
         assertTrue(kafkaStreams.isPaused());
 
         kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_2, stateUpdaterEnabled);
         kafkaStreams2.pause();
         kafkaStreams2.start();
-        waitForApplicationState(singletonList(kafkaStreams2), State.RUNNING, STARTUP_TIMEOUT);
+        waitForApplicationState(singletonList(kafkaStreams2), State.REBALANCING, STARTUP_TIMEOUT);
         assertTrue(kafkaStreams2.isPaused());
 
-        waitUntilStreamsHasPolled(kafkaStreams, 2);
-        waitUntilStreamsHasPolled(kafkaStreams2, 2);
         assertTopicSize(OUTPUT_STREAM_1, 0);
 
         kafkaStreams2.close();

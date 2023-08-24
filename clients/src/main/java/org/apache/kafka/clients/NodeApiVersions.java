@@ -48,6 +48,8 @@ public class NodeApiVersions {
 
     private final Map<String, SupportedVersionRange> supportedFeatures;
 
+    private final boolean zkMigrationEnabled;
+
     /**
      * Create a NodeApiVersions object with the current ApiVersions.
      *
@@ -66,7 +68,7 @@ public class NodeApiVersions {
      */
     public static NodeApiVersions create(Collection<ApiVersion> overrides) {
         List<ApiVersion> apiVersions = new LinkedList<>(overrides);
-        for (ApiKeys apiKey : ApiKeys.zkBrokerApis()) {
+        for (ApiKeys apiKey : ApiKeys.clientApis()) {
             boolean exists = false;
             for (ApiVersion apiVersion : apiVersions) {
                 if (apiVersion.apiKey() == apiKey.id) {
@@ -76,7 +78,7 @@ public class NodeApiVersions {
             }
             if (!exists) apiVersions.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        return new NodeApiVersions(apiVersions, Collections.emptyList());
+        return new NodeApiVersions(apiVersions, Collections.emptyList(), false);
     }
 
 
@@ -95,7 +97,7 @@ public class NodeApiVersions {
                 .setMaxVersion(maxVersion)));
     }
 
-    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions, Collection<SupportedFeatureKey> nodeSupportedFeatures) {
+    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions, Collection<SupportedFeatureKey> nodeSupportedFeatures, boolean zkMigrationEnabled) {
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
@@ -112,6 +114,7 @@ public class NodeApiVersions {
                     new SupportedVersionRange(supportedFeature.minVersion(), supportedFeature.maxVersion()));
         }
         this.supportedFeatures = Collections.unmodifiableMap(supportedFeaturesBuilder);
+        this.zkMigrationEnabled = zkMigrationEnabled;
     }
 
     /**
@@ -169,7 +172,7 @@ public class NodeApiVersions {
 
         // Also handle the case where some apiKey types are not specified at all in the given ApiVersions,
         // which may happen when the remote is too old.
-        for (ApiKeys apiKey : ApiKeys.zkBrokerApis()) {
+        for (ApiKeys apiKey : ApiKeys.clientApis()) {
             if (!apiKeysText.containsKey(apiKey.id)) {
                 StringBuilder bld = new StringBuilder();
                 bld.append(apiKey.name).append("(").
@@ -235,5 +238,9 @@ public class NodeApiVersions {
 
     public Map<String, SupportedVersionRange> supportedFeatures() {
         return supportedFeatures;
+    }
+
+    public boolean zkMigrationEnabled() {
+        return zkMigrationEnabled;
     }
 }

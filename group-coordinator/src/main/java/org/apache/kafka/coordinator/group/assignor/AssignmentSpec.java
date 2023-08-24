@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.Uuid;
-
 import java.util.Map;
 import java.util.Objects;
 
@@ -26,47 +24,39 @@ import java.util.Objects;
  */
 public class AssignmentSpec {
     /**
-     * The members keyed by member id.
+     * The member metadata keyed by member Id.
      */
-    final Map<String, AssignmentMemberSpec> members;
-
-    /**
-     * The topics' metadata keyed by topic id
-     */
-    final Map<Uuid, AssignmentTopicMetadata> topics;
+    private final Map<String, AssignmentMemberSpec> members;
 
     public AssignmentSpec(
-        Map<String, AssignmentMemberSpec> members,
-        Map<Uuid, AssignmentTopicMetadata> topics
+        Map<String, AssignmentMemberSpec> members
     ) {
         Objects.requireNonNull(members);
-        Objects.requireNonNull(topics);
         this.members = members;
-        this.topics = topics;
+    }
+
+    /**
+     * @return Member metadata keyed by member Id.
+     */
+    public Map<String, AssignmentMemberSpec> members() {
+        return members;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         AssignmentSpec that = (AssignmentSpec) o;
-
-        if (!members.equals(that.members)) return false;
-        return topics.equals(that.topics);
+        return members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        int result = members.hashCode();
-        result = 31 * result + topics.hashCode();
-        return result;
+        return members.hashCode();
     }
 
     @Override
     public String toString() {
-        return "AssignmentSpec(members=" + members +
-            ", topics=" + topics +
-            ')';
+        return "AssignmentSpec(members=" + members + ')';
     }
 }

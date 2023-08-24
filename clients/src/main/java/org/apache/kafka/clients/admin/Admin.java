@@ -969,7 +969,7 @@ public interface Admin extends AutoCloseable {
      * Delete consumer groups from the cluster.
      *
      * @param options The options to use when deleting a consumer group.
-     * @return The DeletConsumerGroupResult.
+     * @return The DeleteConsumerGroupsResult.
      */
     DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
 

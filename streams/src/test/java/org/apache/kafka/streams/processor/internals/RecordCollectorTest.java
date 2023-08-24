@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -55,29 +56,31 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
-
-import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.Optional;
-import java.util.Set;
-import java.util.HashSet;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
-
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -90,10 +93,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singletonMap;
 
 public class RecordCollectorTest {
 
@@ -1388,6 +1387,80 @@ public class RecordCollectorTest {
 
         // Flush should not throw as producer is still alive.
         streamsProducer.flush();
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionUsingDefaultExceptionHandler() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new DefaultProductionExceptionHandler());
+            collector.initialize();
+
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () -> collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context)
+            );
+
+            assertThat(error.getCause(), instanceOf(SerializationException.class));
+        }
+    }
+
+    @Test
+    public void shouldDropRecordExceptionUsingAlwaysContinueExceptionHandler() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
+            collector.initialize();
+
+            collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
+
+            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            assertThat(
+                streamsMetrics.metrics().get(new MetricName(
+                    "dropped-records-total",
+                    "stream-task-metrics",
+                    "The total number of dropped records",
+                    mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", taskId.toString())
+                    ))).metricValue(),
+                equalTo(1.0)
+            );
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldNotCallProductionExceptionHandlerOnClassCastException() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
+            collector.initialize();
+
+            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () -> collector.send(topic, true, "val", null, 0, null, (Serializer) errorSerializer, stringSerializer, sinkNodeName, context)
+            );
+
+            assertThat(error.getCause(), instanceOf(ClassCastException.class));
+        }
+    }
+
+    private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {
+        return new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamsProducer,
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+    }
+
+    private static class ErrorStringSerializer extends StringSerializer {
+
+        @Override
+        public byte[] serialize(final String topic, final Headers headers, final String data) {
+            throw new SerializationException("Not Supported");
+        }
     }
 
     private StreamsProducer getExceptionalStreamsProducerOnSend(final Exception exception) {

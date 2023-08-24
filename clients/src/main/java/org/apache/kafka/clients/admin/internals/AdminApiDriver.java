@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
@@ -260,12 +261,31 @@ public class AdminApiDriver<K, V> {
                 .filter(future.lookupKeys()::contains)
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
+        } else if (t instanceof UnsupportedVersionException) {
+            if (spec.scope instanceof FulfillmentScope) {
+                int brokerId = ((FulfillmentScope) spec.scope).destinationBrokerId;
+                Map<K, Throwable> unrecoverableFailures =
+                    handler.handleUnsupportedVersionException(
+                        brokerId,
+                        (UnsupportedVersionException) t,
+                        spec.keys);
+                completeExceptionally(unrecoverableFailures);
+            } else {
+                Map<K, Throwable> unrecoverableLookupFailures =
+                    handler.lookupStrategy().handleUnsupportedVersionException(
+                        (UnsupportedVersionException) t,
+                        spec.keys);
+                completeLookupExceptionally(unrecoverableLookupFailures);
+                Set<K> keysToUnmap = spec.keys.stream()
+                    .filter(k -> !unrecoverableLookupFailures.containsKey(k))
+                    .collect(Collectors.toSet());
+                retryLookup(keysToUnmap);
+            }
         } else {
             Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
                 Function.identity(),
                 key -> t
             ));
-
             if (spec.scope instanceof FulfillmentScope) {
                 completeExceptionally(errors);
             } else {

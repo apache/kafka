@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Logging
@@ -33,7 +32,9 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
+import java.util
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -306,8 +307,10 @@ class BrokerToControllerRequestThread(
   initialNetworkClient,
   Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt,
   time,
-  isInterruptible = false
-) {
+  false
+) with Logging {
+
+  this.logIdent = logPrefix
 
   private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
     if (isNetworkClientForZkController != controllerInformation.isZkController) {
@@ -354,7 +357,7 @@ class BrokerToControllerRequestThread(
     requestQueue.size
   }
 
-  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+  override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     val currentTimeMs = time.milliseconds()
     val requestIter = requestQueue.iterator()
     while (requestIter.hasNext) {
@@ -366,16 +369,16 @@ class BrokerToControllerRequestThread(
         val controllerAddress = activeControllerAddress()
         if (controllerAddress.isDefined) {
           requestIter.remove()
-          return Some(RequestAndCompletionHandler(
+          return util.Collections.singletonList(new RequestAndCompletionHandler(
             time.milliseconds(),
             controllerAddress.get,
             request.request,
-            handleResponse(request)
+            response => handleResponse(request)(response)
           ))
         }
       }
     }
-    None
+    util.Collections.emptyList()
   }
 
   private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
@@ -426,7 +429,7 @@ class BrokerToControllerRequestThread(
         case None =>
           // need to backoff to avoid tight loops
           debug("No controller provided, retrying after backoff")
-          super.pollOnce(maxTimeoutMs = 100)
+          super.pollOnce(100)
       }
     }
   }

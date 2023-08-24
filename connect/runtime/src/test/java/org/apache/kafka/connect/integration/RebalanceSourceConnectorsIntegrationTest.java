@@ -206,7 +206,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME + 3);
 
-        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME + 3,
+        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME + 3,
                 "Connector tasks did not stop in time.");
 
         waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,

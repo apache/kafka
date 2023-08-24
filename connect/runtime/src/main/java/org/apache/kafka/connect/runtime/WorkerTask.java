@@ -169,7 +169,9 @@ abstract class WorkerTask implements Runnable {
     }
 
     protected boolean isStopping() {
-        return stopping;
+        // The target state should never be STOPPED, but if things go wrong and it somehow is,
+        // we handle that identically to a request to shut down the task
+        return stopping || targetState == TargetState.STOPPED;
     }
 
     protected boolean isCancelled() {
@@ -188,7 +190,7 @@ abstract class WorkerTask implements Runnable {
     private void doRun() throws InterruptedException {
         try {
             synchronized (this) {
-                if (stopping)
+                if (isStopping())
                     return;
 
                 if (targetState == TargetState.PAUSED) {
@@ -204,7 +206,7 @@ abstract class WorkerTask implements Runnable {
             failed = true;
             if (cancelled) {
                 log.warn("{} After being scheduled for shutdown, the orphan task threw an uncaught exception. A newer instance of this task might be already running", this, t);
-            } else if (stopping) {
+            } else if (isStopping()) {
                 log.warn("{} After being scheduled for shutdown, task threw an uncaught exception.", this, t);
             } else {
                 log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
@@ -281,7 +283,7 @@ abstract class WorkerTask implements Runnable {
     protected boolean awaitUnpause() throws InterruptedException {
         synchronized (this) {
             while (targetState == TargetState.PAUSED) {
-                if (stopping)
+                if (isStopping())
                     return false;
                 this.wait();
             }
@@ -291,9 +293,21 @@ abstract class WorkerTask implements Runnable {
 
     public void transitionTo(TargetState state) {
         synchronized (this) {
-            // ignore the state change if we are stopping
-            if (stopping)
+            // Ignore the state change if we are stopping.
+            // This has the consequence that, if we ever transition to the STOPPED target state (which
+            // should never happen since whole point of that state is that it comes with a complete
+            // shutdown of all the tasks for the connector), we will never be able to transition out of it.
+            // Since part of transitioning to the STOPPED state is that we shut down the task and all of
+            // its resources (Kafka clients, SMTs, etc.), this is a reasonable way to do things; otherwise,
+            // we'd have to re-instantiate all of those resources to be able to resume (or even just pause)
+            // the task .
+            if (isStopping()) {
+                log.debug("{} Ignoring request to transition stopped task {} to state {}", this, id, state);
                 return;
+            }
+
+            if (targetState == TargetState.STOPPED)
+                log.warn("{} Received unexpected request to transition task {} to state {}; will shut down in response", this, id, TargetState.STOPPED);
 
             this.targetState = state;
             this.notifyAll();

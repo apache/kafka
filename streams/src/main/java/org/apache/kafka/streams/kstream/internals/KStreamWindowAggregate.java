@@ -210,5 +210,10 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
             final W window = (W) windowedKey.window();
             return windowStore.fetch(key, window.start());
         }
+
+        @Override
+        public boolean isVersioned() {
+            return false;
+        }
     }
 }

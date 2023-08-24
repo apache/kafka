@@ -203,7 +203,7 @@ public interface Task {
 
     void clearTaskTimeout();
 
-    void maybeRecordRestored(final Time time, final long numRecords);
+    void recordRestoration(final Time time, final long numRecords, final boolean initRemaining);
 
     // task status inquiry
 

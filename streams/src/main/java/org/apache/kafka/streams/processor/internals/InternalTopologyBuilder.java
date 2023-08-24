@@ -149,7 +149,7 @@ public class InternalTopologyBuilder {
 
     // The name of the topology this builder belongs to, or null if this is not a NamedTopology
     private final String topologyName;
-    // TODO KAFKA-13336: we can remove this referance once we make the Topology/NamedTopology class into an interface and implement it
+    // TODO KAFKA-13336: we can remove this reference once we make the Topology/NamedTopology class into an interface and implement it
     private NamedTopology namedTopology;
 
     // TODO KAFKA-13283: once we enforce all configs be passed in when constructing the topology builder then we can set
@@ -695,6 +695,15 @@ public class InternalTopologyBuilder {
             }
         }
     }
+
+    public Long getHistoryRetention(final String storeName) {
+        return stateFactories.get(storeName).historyRetention();
+    }
+
+    public boolean isStoreVersioned(final String storeName) {
+        return stateFactories.get(storeName).isVersionedStore();
+    }
+
 
     public final void connectProcessorAndStateStores(final String processorName,
                                                      final String... stateStoreNames) {
@@ -2166,7 +2175,7 @@ public class InternalTopologyBuilder {
         return !subscriptionUpdates.isEmpty();
     }
 
-    synchronized void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
+    synchronized void addSubscribedTopicsFromAssignment(final Set<TopicPartition> partitions, final String logPrefix) {
         if (usesPatternSubscription()) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
