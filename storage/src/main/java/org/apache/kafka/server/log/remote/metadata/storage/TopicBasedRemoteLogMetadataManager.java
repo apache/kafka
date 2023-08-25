@@ -405,6 +405,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                         // If the existing topic partition size is not same as configured, mark initialization as failed and exit.
                         if (!isPartitionsCountSameAsConfigured(adminClient, topicName)) {
                             initializationFailed = true;
+                            return;
                         }
                     } catch (Exception e) {
                         log.info("Sleep for : {} ms before it is retried again.", rlmmConfig.initializationRetryIntervalMs());

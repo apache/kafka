@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -44,6 +45,9 @@ import java.util.Optional;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.ConsumerManager.COMMITTED_OFFSETS_FILE_NAME;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
@@ -68,9 +72,26 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         remoteLogMetadataManagerHarness.initialize(Collections.emptySet(), true);
     }
 
-    private void startTopicBasedRemoteLogMetadataManagerHarness(boolean startConsumerThread) {
-        remoteLogMetadataManagerHarness.initializeRemoteLogMetadataManager(Collections.emptySet(), startConsumerThread);
+    private void startTopicBasedRemoteLogMetadataManagerHarness(boolean startConsumerThread,
+                                                                int remoteLogMetadataTopicPartitionCount) {
+        remoteLogMetadataManagerHarness.initializeRemoteLogMetadataManager(Collections.emptySet(), startConsumerThread,
+                remoteLogMetadataTopicPartitionCount);
     }
+
+
+    @Test
+    public void testRLMMInitializeResources() throws Exception {
+        assertTrue(topicBasedRlmm().isInitialized());
+
+        stopTopicBasedRemoteLogMetadataManagerHarness();
+        assertThrows(KafkaException.class, () -> startTopicBasedRemoteLogMetadataManagerHarness(false, TopicBasedRemoteLogMetadataManagerHarness.METADATA_TOPIC_PARTITIONS_COUNT + 1));
+        assertFalse(topicBasedRlmm().isInitialized());
+
+        stopTopicBasedRemoteLogMetadataManagerHarness();
+        startTopicBasedRemoteLogMetadataManagerHarness(false, TopicBasedRemoteLogMetadataManagerHarness.METADATA_TOPIC_PARTITIONS_COUNT);
+        assertTrue(topicBasedRlmm().isInitialized());
+    }
+
 
     @AfterEach
     public void teardown() throws IOException {
@@ -138,7 +159,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
         // Start TopicBasedRemoteLogMetadataManager but do not start consumer thread to check whether the stored metadata is
         // loaded successfully or not.
-        startTopicBasedRemoteLogMetadataManagerHarness(false);
+        startTopicBasedRemoteLogMetadataManagerHarness(false, TopicBasedRemoteLogMetadataManagerHarness.METADATA_TOPIC_PARTITIONS_COUNT);
 
         // Register these partitions to RLMM, which loads the respective metadata snapshots.
         topicBasedRlmm().onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
