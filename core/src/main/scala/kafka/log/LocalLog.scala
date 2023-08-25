@@ -418,6 +418,7 @@ class LocalLog(@volatile private var _dir: File,
 
           fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
           if (fetchDataInfo != null) {
+            fetchDataInfo = fetchDataInfo.withMaxOffsetMetadata(maxOffsetMetadata)
             if (includeAbortedTxns)
               fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
           } else segmentOpt = segments.higherSegment(baseOffset)

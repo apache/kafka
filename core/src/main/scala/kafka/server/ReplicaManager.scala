@@ -61,7 +61,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo}
 
-import java.io.File
+import java.io.{File, IOException}
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
@@ -1399,7 +1399,7 @@ class ReplicaManager(val config: KafkaConfig,
     readFromPurgatory: Boolean): Seq[(TopicIdPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
 
-    def checkFetchDataInfo(partition: Partition, givenFetchedDataInfo: FetchDataInfo) = {
+    def checkAndPrepareFetchDataInfo(partition: Partition, givenFetchedDataInfo: FetchDataInfo) = {
       if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
         // If the partition is being throttled, simply return an empty set.
         new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
@@ -1408,6 +1408,16 @@ class ReplicaManager(val config: KafkaConfig,
         // progress in such cases and don't need to report a `RecordTooLargeException`
         new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
       } else {
+        // For last entries we assume that it is hot enough to still have all data in page cache.
+        // Most of fetch requests are fetching from the tail of the log, so this optimization should save
+        // call of additional sendfile(2) targeting /dev/null for populating page cache significantly.
+        if (givenFetchedDataInfo.nonLastEntry() && givenFetchedDataInfo.records.isInstanceOf[FileRecords]) {
+          try {
+            givenFetchedDataInfo.records.asInstanceOf[FileRecords].prepareForRead()
+          } catch {
+            case e: IOException => debug("failed to prepare cache for read", e)
+          }
+        }
         givenFetchedDataInfo
       }
     }
@@ -1467,7 +1477,7 @@ class ReplicaManager(val config: KafkaConfig,
             minOneMessage = minOneMessage,
             updateFetchState = !readFromPurgatory)
 
-          val fetchDataInfo = checkFetchDataInfo(partition, readInfo.fetchedData)
+          val fetchDataInfo = checkAndPrepareFetchDataInfo(partition, readInfo.fetchedData)
 
           LogReadResult(info = fetchDataInfo,
             divergingEpoch = readInfo.divergingEpoch.asScala,
