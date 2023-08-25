@@ -18,9 +18,11 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -48,6 +50,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -338,8 +341,8 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
                 build()) {
             loader.installPublishers(publishers).get();
-            publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             loadEmptySnapshot(loader, 200);
+            publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             assertEquals(200L, loader.lastAppliedOffset());
             loadEmptySnapshot(loader, 300);
             assertEquals(300L, loader.lastAppliedOffset());
@@ -668,6 +671,7 @@ public class MetadataLoaderTest {
                         .setTopicId(Uuid.fromString("dMCqhcK4T5miGH5wEX7NsQ")), (short) 0)
             )));
             loader.waitForAllEventsToBeHandled();
+            publisher.firstPublish.get(30, TimeUnit.SECONDS);
             assertNull(publisher.latestImage.topics().getTopic("foo"),
                 "Topic should not be visible since we started transaction");
 
@@ -732,6 +736,7 @@ public class MetadataLoaderTest {
 
             // After MetadataLoader is fixed to handle arbitrary transactions, we would expect "foo"
             // to be visible at this point.
+            publisher.firstPublish.get(30, TimeUnit.SECONDS);
             assertNotNull(publisher.latestImage.topics().getTopic("foo"));
         }
         faultHandler.maybeRethrowFirstException();
@@ -758,6 +763,7 @@ public class MetadataLoaderTest {
                         .setTopicId(Uuid.fromString("HQSM3ccPQISrHqYK_C8GpA")), (short) 0)
                 )));
             loader.waitForAllEventsToBeHandled();
+            publisher.firstPublish.get(30, TimeUnit.SECONDS);
             assertNull(publisher.latestImage.topics().getTopic("foo"));
 
             // loading a snapshot discards any in-flight transaction
@@ -770,6 +776,51 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
             assertEquals("Uum7sfhHQP-obSvfywmNUA",
                 publisher.latestImage.topics().getTopic("foo").id().toString());
+        }
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    @Test
+    public void testNoPublishEmptyImage() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("testNoPublishEmptyImage");
+        List<MetadataImage> capturedImages = new ArrayList<>();
+        CompletableFuture<Void> firstPublish = new CompletableFuture<>();
+        MetadataPublisher capturingPublisher = new MetadataPublisher() {
+            @Override
+            public String name() {
+                return "testNoPublishEmptyImage";
+            }
+
+            @Override
+            public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
+                if (!firstPublish.isDone()) {
+                    firstPublish.complete(null);
+                }
+                capturedImages.add(newImage);
+            }
+        };
+
+        try (MetadataLoader loader = new MetadataLoader.Builder().
+                setFaultHandler(faultHandler).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(1)).
+                build()) {
+            loader.installPublishers(Collections.singletonList(capturingPublisher)).get();
+            loader.handleCommit(
+                MockBatchReader.newSingleBatchReader(0, 1, Collections.singletonList(
+                    // Any record will work here
+                    new ApiMessageAndVersion(new ConfigRecord()
+                        .setResourceType(ConfigResource.Type.BROKER.id())
+                        .setResourceName("3000")
+                        .setName("foo")
+                        .setValue("bar"), (short) 0)
+                )));
+            firstPublish.get(30, TimeUnit.SECONDS);
+
+            assertFalse(capturedImages.isEmpty());
+            capturedImages.forEach(metadataImage -> {
+                assertFalse(metadataImage.isEmpty());
+            });
+
         }
         faultHandler.maybeRethrowFirstException();
     }
