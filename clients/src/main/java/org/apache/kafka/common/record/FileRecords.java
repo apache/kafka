@@ -49,7 +49,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         // This is used for warming-up the page-cache by calling FileChannel.transferTo
         // (calls sendfile(2) internally) on request handler threads with setting destination to /dev/null
         // for avoiding slow sendfile(2) call on network threads which may block any requests
-        // which are multiplexed to the socket.
+        // which are multiplexed to the thread.
         //
         // For now, we do warm-up only on Linux because:
         // - In other OS, /dev/null may not exist
