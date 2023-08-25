@@ -27,7 +27,6 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
@@ -231,8 +230,10 @@ public class MirrorMaker {
     private void configureConnector(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         checkHerder(sourceAndTarget);
         Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
-        herders.get(sourceAndTarget)
-                .putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
+        Herder herder = herders.get(sourceAndTarget);
+        herder.connectorConfig(connectorClass.getSimpleName(), (ignored, existingConfig) -> {
+            if (existingConfig == null || !existingConfig.equals(connectorProps)) {
+                herder.putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
                     if (e == null) {
                         log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
                     } else if (e instanceof NotLeaderException) {
@@ -242,6 +243,8 @@ public class MirrorMaker {
                         log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
                     }
                 });
+            }
+        });
     }
 
     private void checkHerder(SourceAndTarget sourceAndTarget) {
@@ -296,7 +299,7 @@ public class MirrorMaker {
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
-        Herder herder = new DistributedHerder(distributedConfig, time, worker,
+        Herder herder = new MirrorHerder(() -> configureConnectors(sourceAndTarget), distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 advertisedUrl, restClient, clientConfigOverridePolicy,
                 restNamespace, sharedAdmin);
