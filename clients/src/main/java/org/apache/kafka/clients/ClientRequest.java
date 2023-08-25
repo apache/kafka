@@ -113,6 +113,10 @@ public final class ClientRequest {
         return correlationId;
     }
 
+    public String clientId() {
+        return clientId;
+    }
+
     public int requestTimeoutMs() {
         return requestTimeoutMs;
     }

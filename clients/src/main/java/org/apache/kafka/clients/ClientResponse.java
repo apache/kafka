@@ -31,7 +31,7 @@ public class ClientResponse {
     private final RequestCompletionHandler callback;
     private final String destination;
     private final long receivedTimeMs;
-    private final long latencyMs;
+    private final long createdTimeMs;
     private final boolean disconnected;
     private final boolean timedOut;
     private final UnsupportedVersionException versionMismatch;
@@ -101,7 +101,7 @@ public class ClientResponse {
         this.callback = callback;
         this.destination = destination;
         this.receivedTimeMs = receivedTimeMs;
-        this.latencyMs = receivedTimeMs - createdTimeMs;
+        this.createdTimeMs = createdTimeMs;
         this.disconnected = disconnected;
         this.timedOut = timedOut;
         this.versionMismatch = versionMismatch;
@@ -146,7 +146,11 @@ public class ClientResponse {
     }
 
     public long requestLatencyMs() {
-        return latencyMs;
+        return Math.max(0, receivedTimeMs - createdTimeMs);
+    }
+
+    public long createdTimeMs() {
+        return createdTimeMs;
     }
 
     public void onComplete() {
@@ -154,11 +158,15 @@ public class ClientResponse {
             callback.onComplete(this);
     }
 
+    public RequestCompletionHandler callback() {
+        return callback;
+    }
+
     @Override
     public String toString() {
         return "ClientResponse(receivedTimeMs=" + receivedTimeMs +
-               ", latencyMs=" +
-               latencyMs +
+               ", createdTimeMs=" +
+               createdTimeMs +
                ", disconnected=" +
                disconnected +
                ", timedOut=" +
