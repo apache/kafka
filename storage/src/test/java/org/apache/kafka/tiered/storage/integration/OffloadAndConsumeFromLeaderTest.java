@@ -129,8 +129,8 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  */
                 // .bounce(broker)
                 .expectFetchFromTieredStorage(broker, topicA, p0, 1)
-                .expectFetchFromTieredStorage(broker, topicB, p0, 2)
                 .consume(topicA, p0, 1L, 2, 1)
+                .expectFetchFromTieredStorage(broker, topicB, p0, 2)
                 .consume(topicB, p0, 1L, 4, 3);
     }
 }
