@@ -69,7 +69,8 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     }.toSet
 
     var expectedControllerId = 0
-    if (!isKRaftTest()) {  // describeCluster in KRaft returns a random broker id as the controller id
+    if (!isKRaftTest()) {
+      // in KRaft mode DescribeClusterRequest will return a random broker id as the controllerId (KIP-590)
       expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
     }
     val expectedClusterId = brokers.last.clusterId
