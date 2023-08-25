@@ -18,7 +18,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ResourceNotReadyException;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
@@ -153,7 +153,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         }
 
         if (!remoteLogMetadataCache.isInitialized()) {
-            throw new ResourceNotReadyException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
+            throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
         }
 
         return remoteLogMetadataCache;
