@@ -71,7 +71,7 @@ public class FetchDataInfo {
                                  maxOffsetMetadata);
     }
 
-    public boolean nonLastEntry() {
+    public boolean isLastSegment() {
         return maxOffsetMetadata != LogOffsetMetadata.UNKNOWN_OFFSET_METADATA &&
                maxOffsetMetadata.segmentBaseOffset == fetchOffsetMetadata.segmentBaseOffset;
     }

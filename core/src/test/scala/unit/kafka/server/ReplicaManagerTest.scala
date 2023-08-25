@@ -76,7 +76,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyMap, anySet, anyString}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyMap, anySet, anyString}
 import org.mockito.Mockito.{doAnswer, doReturn, mock, mockConstruction, never, reset, spy, times, verify, verifyNoMoreInteractions, when}
 
 import scala.collection.{Map, Seq, mutable}
@@ -3693,6 +3693,68 @@ class ReplicaManagerTest {
       assertEquals(3, yammerMetricValue("RemoteLogReaderTaskQueueSize").asInstanceOf[Int])
       // unlock all tasks
       doneLatch.countDown()
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPrepareForRead(fetchFromLastSegment: Boolean): Unit = {
+    val tp0 = new TopicPartition(topic, 0)
+    val tidp0 = new TopicIdPartition(topicId, tp0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), shouldMockLog = true)
+    try {
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val partition0Replicas = Seq[Integer](0, 1).asJava
+      val topicIds = Map(tp0.topic -> topicId).asJava
+      val leaderEpoch = 0
+      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(
+          new LeaderAndIsrPartitionState()
+            .setTopicName(tp0.topic)
+            .setPartitionIndex(tp0.partition)
+            .setControllerEpoch(0)
+            .setLeader(0)
+            .setLeaderEpoch(leaderEpoch)
+            .setIsr(partition0Replicas)
+            .setPartitionEpoch(0)
+            .setReplicas(partition0Replicas)
+            .setIsNew(true)
+        ).asJava,
+        topicIds,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+
+      val records = mock(classOf[FileRecords])
+
+      val startOffset = 0
+      val endOffset = 100;
+      val log = replicaManager.localLog(tp0).get
+
+      when(log.logStartOffset).thenReturn(startOffset)
+      when(log.localLogStartOffset()).thenReturn(startOffset)
+      when(log.logEndOffset).thenReturn(endOffset)
+      when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(Some(new OffsetAndEpoch(endOffset, leaderEpoch)))
+
+      val maxOffsetMetadata = new LogOffsetMetadata(75, 50, 25)
+      val fetchDataInfo = if (fetchFromLastSegment) {
+        new FetchDataInfo(new LogOffsetMetadata(50, 50, 0), records)
+          .withMaxOffsetMetadata(maxOffsetMetadata)
+      } else {
+        new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), records)
+          .withMaxOffsetMetadata(maxOffsetMetadata)
+      }
+      when(log.read(anyLong(), anyInt(), any(), anyBoolean())).thenReturn(fetchDataInfo)
+      val params = new FetchParams(ApiKeys.FETCH.latestVersion, 1, 1, 1000, 0, 100, FetchIsolation.LOG_END, None.asJava)
+      replicaManager.readFromLog(params, Seq(tidp0 -> new PartitionData(topicId, 1, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, false)
+
+      if (fetchFromLastSegment) {
+        verify(records, never()).prepareForRead()
+      } else {
+        verify(records, times(1)).prepareForRead()
+      }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

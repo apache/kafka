@@ -61,7 +61,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo}
 
-import java.io.{File, IOException}
+import java.io.File
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
@@ -1411,11 +1411,11 @@ class ReplicaManager(val config: KafkaConfig,
         // For last entries we assume that it is hot enough to still have all data in page cache.
         // Most of fetch requests are fetching from the tail of the log, so this optimization should save
         // call of additional sendfile(2) targeting /dev/null for populating page cache significantly.
-        if (givenFetchedDataInfo.nonLastEntry() && givenFetchedDataInfo.records.isInstanceOf[FileRecords]) {
+        if (!givenFetchedDataInfo.isLastSegment && givenFetchedDataInfo.records.isInstanceOf[FileRecords]) {
           try {
             givenFetchedDataInfo.records.asInstanceOf[FileRecords].prepareForRead()
           } catch {
-            case e: IOException => debug("failed to prepare cache for read", e)
+            case e: Exception => warn("failed to prepare cache for read", e)
           }
         }
         givenFetchedDataInfo
@@ -1567,7 +1567,7 @@ class ReplicaManager(val config: KafkaConfig,
         val fetchDataInfo =
         new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
           Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
-            fetchInfo, params.isolation, params.hardMaxBytesLimit())))
+            fetchInfo, params.isolation, params.hardMaxBytesLimit())), LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
 
         LogReadResult(fetchDataInfo,
           divergingEpoch = None,
