@@ -54,7 +54,8 @@ class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                     lockOpt: Option[Lock] = None)
+                     lockOpt: Option[Lock] = None,
+                     creationTime: Long = System.currentTimeMillis())
   extends DelayedOperation(delayMs, lockOpt) {
 
   import DelayedOperation._
@@ -95,7 +96,7 @@ class DelayedProduce(delayMs: Long,
             (false, err)
 
           case Right(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+            partition.checkEnoughReplicasReachOffset(status.requiredOffset, creationTime)
         }
 
         // Case B || C.1 || C.2

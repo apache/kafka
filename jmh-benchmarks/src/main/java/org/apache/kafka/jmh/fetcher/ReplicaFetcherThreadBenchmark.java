@@ -166,7 +166,7 @@ public class ReplicaFetcherThreadBenchmark {
             TransferLeaderManager transferLeaderManager = Mockito.mock(TransferLeaderManager.class);
             Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
                     0, Time.SYSTEM, isrChangeListener, new DelayedOperationsMock(tp),
-                    Mockito.mock(MetadataCache.class), logManager, isrChannelManager, transferLeaderManager);
+                    Mockito.mock(MetadataCache.class), logManager, isrChannelManager, transferLeaderManager, 0L);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);
@@ -275,7 +275,7 @@ public class ReplicaFetcherThreadBenchmark {
                         }
                     },
                     Option.empty());
-            
+
             pool = partitions;
         }
 

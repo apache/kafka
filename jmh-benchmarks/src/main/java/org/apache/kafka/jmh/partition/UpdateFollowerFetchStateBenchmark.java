@@ -130,7 +130,7 @@ public class UpdateFollowerFetchStateBenchmark {
         partition = new Partition(topicPartition, 100,
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
                 isrChangeListener, delayedOperations,
-                Mockito.mock(MetadataCache.class), logManager, alterIsrManager, transferLeaderManager);
+                Mockito.mock(MetadataCache.class), logManager, alterIsrManager, transferLeaderManager, 0L);
         partition.makeLeader(partitionState, offsetCheckpoints, topicId);
     }
 

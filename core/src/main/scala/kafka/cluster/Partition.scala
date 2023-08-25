@@ -104,7 +104,9 @@ object Partition extends KafkaMetricsGroup {
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
       alterIsrManager = replicaManager.alterIsrManager,
-      transferLeaderManager = replicaManager.transferLeaderManager)
+      transferLeaderManager = replicaManager.transferLeaderManager,
+      logSlowReplicationThresholdMs = replicaManager.config.longTailProduceRequestLogThresholdMs
+      )
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -228,7 +230,8 @@ class Partition(val topicPartition: TopicPartition,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
                 alterIsrManager: AlterIsrManager,
-                transferLeaderManager: TransferLeaderManager) extends Logging with KafkaMetricsGroup {
+                transferLeaderManager: TransferLeaderManager,
+                logSlowReplicationThresholdMs: Long = Long.MaxValue) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -248,6 +251,12 @@ class Partition(val topicPartition: TopicPartition,
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile private[cluster] var isrState: IsrState = CommittedIsr(Set.empty)
   @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty)
+  @volatile private var logSlowReplicationBucketStartTime: Long = 0
+  @volatile private var logSlowReplicationBucketCounter: Int = 0
+
+  // The bucket size is set to 1 minute, with max log number 300. The logs will hit max QPS at 5, which should be acceptable.
+  val logSlowReplicationBucketLengthMs: Long = 60000
+  val logSlowReplicationBucketMaxLogCount: Int = 300
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
@@ -821,26 +830,12 @@ class Partition(val topicPartition: TopicPartition,
    * fully caught up to the (local) leader's offset corresponding to this produce request before we acknowledge the
    * produce request.
    */
-  def checkEnoughReplicasReachOffset(requiredOffset: Long): (Boolean, Errors) = {
+  def checkEnoughReplicasReachOffset(requiredOffset: Long, requestCreationTime: Long): (Boolean, Errors) = {
     leaderLogIfLocal match {
       case Some(leaderLog) =>
         // keep the current immutable replica list reference
         val curMaximalIsr = isrState.maximalIsr
-
-        if (isTraceEnabled) {
-          def logEndOffsetString: ((Int, Long)) => String = {
-            case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
-          }
-
-          val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
-          val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
-          val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
-          val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
-
-          trace(s"Progress awaiting ISR acks for offset $requiredOffset: " +
-            s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
-            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
-        }
+        maybeLogSlowReplication(curMaximalIsr, requiredOffset, requestCreationTime, leaderLog.topicPartition)
 
         val minIsr = leaderLog.config.minInSyncReplicas
         if (leaderLog.highWatermark >= requiredOffset) {
@@ -857,6 +852,44 @@ class Partition(val topicPartition: TopicPartition,
       case None =>
         (false, Errors.NOT_LEADER_OR_FOLLOWER)
     }
+  }
+
+  def maybeLogSlowReplication(curMaximalIsr: Set[Int], requiredOffset: Long, requestCreationTime: Long, topicPartition: TopicPartition): Unit = {
+    val now = time.milliseconds()
+    val timeElapsedMs = time.milliseconds() - requestCreationTime
+
+    if (timeElapsedMs < logSlowReplicationThresholdMs) {
+      // Only slow replications is worth logging
+      return
+    }
+
+    // Check and maybe create new time bucket for log slow replication
+    if (now - logSlowReplicationBucketStartTime > logSlowReplicationBucketLengthMs) {
+      logSlowReplicationBucketCounter = 0
+      logSlowReplicationBucketStartTime = now
+    }
+
+    if (logSlowReplicationBucketCounter > logSlowReplicationBucketMaxLogCount) {
+      // Stop logging if there are already many logs in a time bucket. This is to avoid logs overwhelming the host.
+      return
+    }
+
+    def logEndOffsetString: ((Int, Long)) => String = {
+      case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
+    }
+
+    val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
+    val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
+    val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
+    val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition {
+      _._2 >= requiredOffset
+    }
+
+    info(s"Progress awaiting ISR acks for partition ${topicPartition} offset $requiredOffset: " +
+      s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+      s"awaiting ${awaitingReplicas.map(logEndOffsetString)}. " +
+      s"Already waited for ${timeElapsedMs} milliseconds so far")
+    logSlowReplicationBucketCounter += 1
   }
 
   /**

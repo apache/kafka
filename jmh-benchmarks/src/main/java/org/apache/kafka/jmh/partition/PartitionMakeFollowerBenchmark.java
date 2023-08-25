@@ -133,7 +133,7 @@ public class PartitionMakeFollowerBenchmark {
         partition = new Partition(tp, 100,
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
             isrChangeListener, delayedOperations,
-            Mockito.mock(MetadataCache.class), logManager, alterIsrManager, transferLeaderManager);
+            Mockito.mock(MetadataCache.class), logManager, alterIsrManager, transferLeaderManager, 0L);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
