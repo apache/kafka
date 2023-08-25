@@ -295,7 +295,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     assertThrowsException(classOf[UnknownTopicOrPartitionException],
       () => TestUtils.describeTopic(createAdminClient(), testTopicName), "Topic should be deleted")
     TestUtils.waitUntilTrue(() =>
-      numPartitions * MyRemoteLogMetadataManager.segmentCount == MyRemoteStorageManager.deleteSegmentEventCounter.get(),
+      numPartitions * MyRemoteLogMetadataManager.segmentCountPerPartition == MyRemoteStorageManager.deleteSegmentEventCounter.get(),
       "Remote log segments should be deleted only once by the leader")
   }
 
@@ -378,7 +378,7 @@ class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
 
   override def listRemoteLogSegments(topicIdPartition: TopicIdPartition): util.Iterator[RemoteLogSegmentMetadata] = {
     val segmentMetadataList = new util.ArrayList[RemoteLogSegmentMetadata]()
-    for (idx <- 0 until segmentCount) {
+    for (idx <- 0 until segmentCountPerPartition) {
       val timestamp = time.milliseconds()
       val startOffset = idx * recordsPerSegment
       val endOffset = startOffset + recordsPerSegment - 1
@@ -392,7 +392,7 @@ class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
 }
 
 object MyRemoteLogMetadataManager {
-  val segmentCount = 10
+  val segmentCountPerPartition = 10
   val recordsPerSegment = 100
   val segmentSize = 1024
 }

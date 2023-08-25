@@ -140,7 +140,7 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
     private SimpleRecord convert(Object recordCandidate) {
         if (recordCandidate instanceof ProducerRecord) {
             ProducerRecord<?, ?> record = (ProducerRecord<?, ?>) recordCandidate;
-            long timestamp = record.timestamp() == null ? RecordBatch.NO_TIMESTAMP : record.timestamp();
+            long timestamp = record.timestamp() != null ? record.timestamp() : RecordBatch.NO_TIMESTAMP;
             ByteBuffer keyBytes =
                     Utils.wrapNullable(keySerde.serializer().serialize(topicPartition.topic(), (K) record.key()));
             ByteBuffer valueBytes =
