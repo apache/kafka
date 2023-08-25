@@ -118,6 +118,7 @@ import java.util.stream.Stream;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -493,6 +494,12 @@ public class KafkaProducerTest {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         assertThrows(ConfigException.class, () -> new KafkaProducer(producerProps));
+
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        // Invalid value null for configuration key.serializer: must be non-null.
+        assertThrows(ConfigException.class, () -> new KafkaProducer<String, String>(configs));
     }
 
     @Test
@@ -2397,6 +2404,25 @@ public class KafkaProducerTest {
                 ioThread
             );
         }
+    }
+
+    @Test
+    void testDeliveryTimeoutAndLingerMsConfig() {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testDeliveryTimeoutAndLingerMsConfig");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 1000);
+        configs.put(ProducerConfig.LINGER_MS_CONFIG, 1000);
+        configs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1);
+
+        // delivery.timeout.ms should be equal to or larger than linger.ms + request.timeout.ms
+        assertThrows(KafkaException.class, () -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()));
+
+        configs.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 1000);
+        configs.put(ProducerConfig.LINGER_MS_CONFIG, 999);
+        configs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1);
+
+        assertDoesNotThrow(() -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()));
     }
 
 }
