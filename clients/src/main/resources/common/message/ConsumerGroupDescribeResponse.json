@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 71,
+  "apiKey": 69,
   "type": "response",
   "name": "ConsumerGroupDescribeResponse",
   "validVersions": "0",
