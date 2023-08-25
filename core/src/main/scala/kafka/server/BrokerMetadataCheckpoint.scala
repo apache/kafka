@@ -34,6 +34,7 @@ object RawMetaProperties {
   val ClusterIdKey = "cluster.id"
   val BrokerIdKey = "broker.id"
   val NodeIdKey = "node.id"
+  val DirectoryIdKey = "directory.id"
   val VersionKey = "version"
 }
 
@@ -63,19 +64,24 @@ class RawMetaProperties(val props: Properties = new Properties()) {
     props.setProperty(NodeIdKey, id.toString)
   }
 
+  def directoryId: Option[String] = {
+    if (props.containsKey(DirectoryIdKey)) {
+      Option(props.getProperty(DirectoryIdKey))
+    } else {
+      None
+    }
+  }
+
+  def directoryId_=(id: String): Unit = {
+    props.setProperty(DirectoryIdKey, id)
+  }
+
   def version: Int = {
     intValue(VersionKey).getOrElse(0)
   }
 
   def version_=(ver: Int): Unit = {
     props.setProperty(VersionKey, ver.toString)
-  }
-
-  def requireVersion(expectedVersion: Int): Unit = {
-    if (version != expectedVersion) {
-      throw new RuntimeException(s"Expected version $expectedVersion, but got "+
-        s"version $version")
-    }
   }
 
   private def intValue(key: String): Option[Int] = {

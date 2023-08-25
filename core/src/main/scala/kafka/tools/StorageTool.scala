@@ -431,7 +431,9 @@ object StorageTool extends Logging {
       }
       val metaPropertiesPath = Paths.get(directory, "meta.properties")
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
-      checkpoint.write(metaProperties.toProperties)
+      val rawProps = new RawMetaProperties(metaProperties.toProperties)
+      rawProps.directoryId = Uuid.randomUuid().toString
+      checkpoint.write(rawProps.props)
 
       val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
       bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
