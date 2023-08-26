@@ -17,15 +17,23 @@
 
 package kafka.server
 
+import kafka.log.UnifiedLog
+import kafka.log.remote.RemoteLogManager
+import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.FencedLeaderEpochException
 import org.apache.kafka.common.message.FetchResponseData
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.server.log.remote.storage.RemoteStorageException
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
-import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
+import org.junit.jupiter.api.{Assertions, Test}
+import org.mockito.Mockito.{mock, when}
 
+import java.util.Properties
 import scala.collection.Map
 
 class ReplicaFetcherTierStateMachineTest {
@@ -120,5 +128,39 @@ class ReplicaFetcherTierStateMachineTest {
     assertTrue(isErrorHandled)
     assertTrue(fetcher.fetchState(partition).isEmpty)
     assertTrue(failedPartitions.contains(partition))
+  }
+
+  @Test
+  def buildRemoteLogAuxStateShouldThrowErrorForUninitializedPartition(): Unit = {
+    val t1p0 = new TopicPartition("topic1", 0)
+
+    val log = mock(classOf[UnifiedLog])
+    when(log.config).thenReturn(createLogConfig())
+    when(log.remoteStorageSystemEnable).thenReturn(true)
+
+    val rlm = mock(classOf[RemoteLogManager])
+    when(rlm.isInitialized(t1p0)).thenReturn(false)
+
+    val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
+    when(replicaManager.localLogOrException(t1p0)).thenReturn(log)
+    when(replicaManager.remoteLogManager).thenReturn(Option.apply(rlm))
+
+    val mockLeaderEndPoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version) {
+      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+        Map(t1p0 -> new EpochEndOffset().setPartition(t1p0.partition).setErrorCode(Errors.NONE.code).setEndOffset(5))
+      }
+    }
+
+    val stateMachine = new ReplicaFetcherTierStateMachine(mockLeaderEndPoint, replicaManager)
+    val exception = assertThrows(classOf[RemoteStorageException],
+      () => stateMachine.buildRemoteLogAuxState(t1p0, 4, 2L, 3, 0L))
+    Assertions.assertEquals("Remote log metadata is not yet initialized for " + t1p0, exception.getMessage)
+  }
+
+  private def createLogConfig(): LogConfig = {
+    val properties = new Properties()
+    properties.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    new LogConfig(properties)
   }
 }

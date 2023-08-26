@@ -421,6 +421,16 @@ public class RemoteLogManager implements Closeable {
         return CompletableFuture.allOf(result.toArray(new CompletableFuture[0]));
     }
 
+    public boolean isInitialized(TopicPartition topicPartition) throws RemoteStorageException {
+        Uuid topicId = topicIdByPartitionMap.get(topicPartition);
+
+        if (topicId == null) {
+            throw new KafkaException("No topic id registered for topic partition: " + topicPartition);
+        }
+
+        return remoteLogMetadataManager.isInitialized(new TopicIdPartition(topicId, topicPartition));
+    }
+
     public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
                                                                             int epochForOffset,
                                                                             long offset) throws RemoteStorageException {

@@ -165,16 +165,17 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
         Utils.atomicMoveWithFallback(tmpSnapshotFile.toPath(), snapshotFile.toPath(), false);
     }
 
+    // Visible for testing
     /**
      * It tries to build the required state for this partition from leader and remote storage so that it can start
      * fetching records from the leader. The return value is the next offset to fetch from the leader, which is the
      * next offset following the end offset of the remote log portion.
      */
-    private Long buildRemoteLogAuxState(TopicPartition topicPartition,
-                                        Integer currentLeaderEpoch,
-                                        Long leaderLocalLogStartOffset,
-                                        Integer epochForLeaderLocalLogStartOffset,
-                                        Long leaderLogStartOffset) throws IOException, RemoteStorageException {
+    Long buildRemoteLogAuxState(TopicPartition topicPartition,
+                                Integer currentLeaderEpoch,
+                                Long leaderLocalLogStartOffset,
+                                Integer epochForLeaderLocalLogStartOffset,
+                                Long leaderLogStartOffset) throws IOException, RemoteStorageException {
 
         UnifiedLog unifiedLog = replicaMgr.localLogOrException(topicPartition);
 
@@ -214,6 +215,10 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 } else {
                     targetEpoch = epochForLeaderLocalLogStartOffset;
                 }
+            }
+
+            if (!rlm.isInitialized(topicPartition)) {
+                throw new RemoteStorageException("Remote log metadata is not yet initialized for " + topicPartition);
             }
 
             Optional<RemoteLogSegmentMetadata> maybeRlsm = rlm.fetchRemoteLogSegmentMetadata(topicPartition, targetEpoch, previousOffsetToLeaderLocalLogStartOffset);

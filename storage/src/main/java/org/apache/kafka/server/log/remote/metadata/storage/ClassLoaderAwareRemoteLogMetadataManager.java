@@ -107,6 +107,11 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
+    public boolean isInitialized(TopicIdPartition topicIdPartition) throws RemoteStorageException {
+        return withClassLoader(() -> delegate.isInitialized(topicIdPartition));
+    }
+
+    @Override
     public void configure(Map<String, ?> configs) {
         withClassLoader(() -> {
             delegate.configure(configs);
