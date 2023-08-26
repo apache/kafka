@@ -798,8 +798,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     consumer.commitSync()
   }
 
-  @Test
-  def testThreadPoolResize(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testThreadPoolResize(quorum: String): Unit = {
     val requestHandlerPrefix = "data-plane-kafka-request-handler-"
     val networkThreadPrefix = "data-plane-kafka-network-thread-"
     val fetcherThreadPrefix = "ReplicaFetcherThread-"
@@ -876,7 +877,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       "", mayReceiveDuplicates = false)
     verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)
-    verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size)
+    // Ignore the data-plane-kafka-socket-acceptor-ListenerName(CONTROLLER)-PLAINTEXT thread when broker is configured
+    // with Kraft and ListenerType.CONTROLLER
+    val leftOverSocketAcceptorThreads = if (quorum.equals("kraft")) 1 else 0
+    verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size, leftOverSocketAcceptorThreads)
 
     verifyProcessorMetrics()
     verifyMarkPartitionsForTruncation()
@@ -918,7 +922,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def verifyMarkPartitionsForTruncation(): Unit = {
     val leaderId = 0
     val partitions = (0 until numPartitions).map(i => new TopicPartition(topic, i)).filter { tp =>
-      zkClient.getLeaderForPartition(tp).contains(leaderId)
+      servers(leaderId).replicaManager.getPartition(tp) match {
+        case HostedPartition.Online(partition) => partition.isLeader
+        case _ => false
+      }
     }
     assertTrue(partitions.nonEmpty, s"Partitions not found with leader $leaderId")
     partitions.foreach { tp =>
