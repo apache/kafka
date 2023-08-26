@@ -47,85 +47,61 @@ public class StoreToProcessorContextAdapterTest {
 
     @Test
     public void shouldThrowOnCurrentSystemTime() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.currentSystemTimeMs();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.currentSystemTimeMs());
     }
 
     @Test
     public void shouldThrowOnCurrentStreamTime() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.currentStreamTimeMs();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.currentStreamTimeMs());
     }
 
     @Test
     public void shouldThrowOnGetStateStore() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.getStateStore("store");
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.getStateStore("store"));
     }
 
     @Test
     public void shouldThrowOnScheduleWithDuration() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator);
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator));
     }
 
     @Test
     public void shouldThrowOnForward() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.forward("key", "value");
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value"));
     }
 
     @Test
     public void shouldThrowOnForwardWithTo() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.forward("key", "value", To.all());
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value", To.all()));
     }
 
     @Test
     public void shouldThrowOnCommit() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.commit();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.commit());
     }
 
     @Test
     public void shouldThrowOnTopic() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.topic();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.topic());
     }
 
     @Test
     public void shouldThrowOnPartition() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.partition();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.partition());
     }
 
     @Test
     public void shouldThrowOnOffset() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.offset();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.offset());
     }
 
     @Test
     public void shouldThrowOnHeaders() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.headers();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.headers());
     }
 
     @Test
     public void shouldThrowOnTimestamp() {
-        assertThrows(UnsupportedOperationException.class, () -> {
-            context.timestamp();
-        });
+        assertThrows(UnsupportedOperationException.class, () -> context.timestamp());
     }
 }
