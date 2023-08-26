@@ -149,17 +149,17 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             }
 
             // If both the leader and follower partitions are mapped to the same metadata partition then it should have at least
-            // 2 messages. That means, received offset should be >= 1 (including duplicate messages if any).
+            // 2 messages. That means, read offset should be >= 1 (including duplicate messages if any).
             if (leaderMetadataPartition == followerMetadataPartition) {
-                if (topicBasedRlmm().receivedOffsetForPartition(leaderMetadataPartition).orElse(-1L) >= 1) {
+                if (topicBasedRlmm().readOffsetForPartition(leaderMetadataPartition).orElse(-1L) >= 1) {
                     break;
                 }
             } else {
                 // If the leader partition and the follower partition are mapped to different metadata partitions then
-                // each of those metadata partitions will have at least 1 message. That means, received offset should
+                // each of those metadata partitions will have at least 1 message. That means, read offset should
                 // be >= 0 (including duplicate messages if any).
-                if (topicBasedRlmm().receivedOffsetForPartition(leaderMetadataPartition).orElse(-1L) >= 0 ||
-                        topicBasedRlmm().receivedOffsetForPartition(followerMetadataPartition).orElse(-1L) >= 0) {
+                if (topicBasedRlmm().readOffsetForPartition(leaderMetadataPartition).orElse(-1L) >= 0 ||
+                        topicBasedRlmm().readOffsetForPartition(followerMetadataPartition).orElse(-1L) >= 0) {
                     break;
                 }
             }
