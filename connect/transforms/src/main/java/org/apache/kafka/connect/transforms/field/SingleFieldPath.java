@@ -136,6 +136,8 @@ public class SingleFieldPath {
      * If field is not found, then {@code null} is returned.
      */
     public Field fieldFrom(Schema schema) {
+        if (schema == null) return null;
+
         Schema current = schema;
         for (String pathSegment : path.subList(0, lastStepIndex())) {
             final Field field = current.field(pathSegment);
@@ -153,6 +155,8 @@ public class SingleFieldPath {
      * If object is not found, then {@code null} is returned.
      */
     public Object valueFrom(Struct struct) {
+        if (struct == null) return null;
+
         Struct current = struct;
         for (String pathSegment : path.subList(0, lastStepIndex())) {
             // Check to see if the field actually exists
@@ -175,6 +179,8 @@ public class SingleFieldPath {
      */
     @SuppressWarnings("unchecked")
     public Object valueFrom(Map<String, Object> map) {
+        if (map == null) return null;
+
         if (path.size() == 1) {
             return map.get(path.get(0));
         } else {
