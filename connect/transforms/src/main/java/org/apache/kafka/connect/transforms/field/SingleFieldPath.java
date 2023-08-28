@@ -99,22 +99,10 @@ public class SingleFieldPath {
                         break;
                     }
 
-                    boolean notFollowedByDot = pathText.charAt(idx + 1) != DOT;
-                    if (notFollowedByDot) {
-                        boolean afterABackslash = pathText.charAt(idx - 1) == BACKSLASH;
-                        if (afterABackslash) {
-                            // this backtick was escaped; include it in the field name, but continue
-                            // looking for an unescaped matching backtick
-                            field.append(pathText, start, idx - 1)
-                                .append(BACKTICK);
-
-                            idx++;
-                            start = idx;
-                        } else {
-                            // this backtick isn't followed by a dot; include it in the field name, but continue
-                            // looking for a matching backtick that is followed by a dot
-                            idx++;
-                        }
+                    if (pathText.charAt(idx + 1) != DOT) { // not followed by a dot
+                        // this backtick isn't followed by a dot; include it in the field name, but continue
+                        // looking for a matching backtick that is followed by a dot
+                        idx++;
                         continue;
                     }
 
