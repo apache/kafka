@@ -136,14 +136,18 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         startTopicBasedRemoteLogMetadataManagerHarness(true);
 
         // Register these partitions to RLMM, which loads the respective metadata snapshots.
-        topicBasedRlmm().onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
+        topicBasedRlmm().onPartitionLeadershipChanges(
+                Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
 
         // Check for the stored entries from the earlier run.
-        Assertions.assertTrue(TestUtils.sameElementsWithoutOrder(Collections.singleton(leaderSegmentMetadata).iterator(),
-                                                                 topicBasedRlmm().listRemoteLogSegments(leaderTopicIdPartition)));
-        Assertions.assertTrue(TestUtils.sameElementsWithoutOrder(Collections.singleton(followerSegmentMetadata).iterator(),
-                                                                 topicBasedRlmm().listRemoteLogSegments(followerTopicIdPartition)));
-
+        TestUtils.waitForCondition(() ->
+            TestUtils.sameElementsWithoutOrder(Collections.singleton(leaderSegmentMetadata).iterator(),
+                    topicBasedRlmm().listRemoteLogSegments(leaderTopicIdPartition)),
+                "Remote log segment metadata not available");
+        TestUtils.waitForCondition(() ->
+            TestUtils.sameElementsWithoutOrder(Collections.singleton(followerSegmentMetadata).iterator(),
+                    topicBasedRlmm().listRemoteLogSegments(followerTopicIdPartition)),
+                "Remote log segment metadata not available");
         // Add one more segment
         RemoteLogSegmentMetadata leaderSegmentMetadata2 = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
@@ -155,5 +159,4 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         Assertions.assertTrue(TestUtils.sameElementsWithoutOrder(Arrays.asList(leaderSegmentMetadata, leaderSegmentMetadata2).iterator(),
                                                                  topicBasedRlmm().listRemoteLogSegments(leaderTopicIdPartition)));
     }
-
 }
