@@ -27,6 +27,7 @@ import org.apache.kafka.connect.mirror.MirrorSourceConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.runtime.AbstractStatus;
+import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -118,6 +119,14 @@ public class DedicatedMirrorIntegrationTest {
         mirror.stop();
     }
 
+
+    public static Herder herder(MirrorMaker mm, SourceAndTarget sourceAndTarget) {
+        if (!mm.herders.containsKey(sourceAndTarget)) {
+            throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
+        }
+        return mm.herders.get(sourceAndTarget);
+    }
+
     /**
      * Tests a single-node cluster without the REST server enabled.
      */
@@ -159,8 +168,6 @@ public class DedicatedMirrorIntegrationTest {
                     put("offset.storage.replication.factor", "1");
                     put("status.storage.replication.factor", "1");
                     put("config.storage.replication.factor", "1");
-                    // For the multi-node case, we wait for reassignment so shorten the delay period.
-                    put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "1000");
                 }};
 
             // Bring up a single-node cluster
@@ -248,6 +255,9 @@ public class DedicatedMirrorIntegrationTest {
                     put("offset.storage.replication.factor", "1");
                     put("status.storage.replication.factor", "1");
                     put("config.storage.replication.factor", "1");
+                    // For the multi-node case, we wait for reassignment so shorten the delay period.
+                    put(a + "." + DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "1000");
+                    put(b + "." + DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "1000");
                 }};
 
             final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
@@ -351,7 +361,7 @@ public class DedicatedMirrorIntegrationTest {
         waitForCondition(() -> {
             try {
                 FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
-                mm.herder(sourceAndTarget).tasksConfig(connName, cb);
+                herder(mm, sourceAndTarget).tasksConfig(connName, cb);
                 return cb.get(MM_START_UP_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                         .values()
                         .stream()
@@ -384,7 +394,7 @@ public class DedicatedMirrorIntegrationTest {
     private boolean isConnectorRunningForMirrorMaker(final Class<?> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
         final String connName = connectorClazz.getSimpleName();
         try {
-            final ConnectorStateInfo connectorStatus = mm.herder(sourceAndTarget).connectorStatus(connName);
+            final ConnectorStateInfo connectorStatus = herder(mm, sourceAndTarget).connectorStatus(connName);
             if (connectorStatus.connector().state().equals(AbstractStatus.State.FAILED.toString())) {
                 throw new NoRetryException(new AssertionError(
                     String.format("Connector %s is in FAILED state for MirrorMaker %s and source->target=%s",
@@ -403,7 +413,7 @@ public class DedicatedMirrorIntegrationTest {
      */
     private <T extends SourceConnector> boolean isTaskRunningForMirrorMakerConnector(final Class<T> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
         final String connName = connectorClazz.getSimpleName();
-        final ConnectorStateInfo connectorStatus = mm.herder(sourceAndTarget).connectorStatus(connName);
+        final ConnectorStateInfo connectorStatus = herder(mm, sourceAndTarget).connectorStatus(connName);
         return isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget)
             // verify that at least one task exists
             && !connectorStatus.tasks().isEmpty()

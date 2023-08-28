@@ -27,7 +27,6 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -106,7 +105,8 @@ public class MirrorMaker {
             MirrorHeartbeatConnector.class,
             MirrorCheckpointConnector.class));
 
-    private final Map<SourceAndTarget, Herder> herders = new HashMap<>();
+    // visible for testing
+    public final Map<SourceAndTarget, Herder> herders = new HashMap<>();
     private CountDownLatch startLatch;
     private CountDownLatch stopLatch;
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
@@ -196,8 +196,7 @@ public class MirrorMaker {
             log.info("Initializing internal REST resources");
             internalServer.initializeInternalResources(herders);
         }
-        log.info("Configuring connectors...");
-        herderPairs.forEach(this::configureConnectors);
+        log.info("Configuring connectors will happen once the worker joins the group as a leader");
         log.info("Kafka MirrorMaker started");
     }
 
@@ -225,36 +224,6 @@ public class MirrorMaker {
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for MirrorMaker to shutdown");
         }
-    }
-
-    private void configureConnector(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
-        checkHerder(sourceAndTarget);
-        Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
-        Herder herder = herders.get(sourceAndTarget);
-        herder.connectorConfig(connectorClass.getSimpleName(), (ignored, existingConfig) -> {
-            if (existingConfig == null || !existingConfig.equals(connectorProps)) {
-                herder.putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
-                    if (e == null) {
-                        log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
-                    } else if (e instanceof NotLeaderException) {
-                        // No way to determine if the herder is a leader or not beforehand.
-                        log.info("This node is a follower for {}. Using existing connector configuration.", sourceAndTarget);
-                    } else {
-                        log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
-                    }
-                });
-            }
-        });
-    }
-
-    private void checkHerder(SourceAndTarget sourceAndTarget) {
-        if (!herders.containsKey(sourceAndTarget)) {
-            throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
-        }
-    }
-
-    private void configureConnectors(SourceAndTarget sourceAndTarget) {
-        CONNECTOR_CLASSES.forEach(x -> configureConnector(sourceAndTarget, x));
     }
 
     private void addHerder(SourceAndTarget sourceAndTarget) {
@@ -299,7 +268,7 @@ public class MirrorMaker {
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
-        Herder herder = new MirrorHerder(() -> configureConnectors(sourceAndTarget), distributedConfig, time, worker,
+        Herder herder = new MirrorHerder(config, sourceAndTarget, distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 advertisedUrl, restClient, clientConfigOverridePolicy,
                 restNamespace, sharedAdmin);
@@ -332,12 +301,6 @@ public class MirrorMaker {
                 MirrorMaker.this.stop();
             }
         }
-    }
-
-    // visible for testing
-    public Herder herder(SourceAndTarget sourceAndTarget) {
-        checkHerder(sourceAndTarget);
-        return herders.get(sourceAndTarget);
     }
 
     public static void main(String[] args) {

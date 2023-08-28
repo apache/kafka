@@ -21,19 +21,30 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
+import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.connect.mirror.MirrorMaker.CONNECTOR_CLASSES;
 
 public class MirrorHerder extends DistributedHerder {
 
-    private final Runnable onLeader;
+    private static final Logger log = LoggerFactory.getLogger(MirrorHerder.class);
 
-    public MirrorHerder(Runnable onLeader, DistributedConfig config, Time time, Worker worker, String kafkaClusterId, StatusBackingStore statusBackingStore, ConfigBackingStore configBackingStore, String restUrl, RestClient restClient, ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy, List<String> restNamespace, AutoCloseable... uponShutdown) {
+    private final MirrorMakerConfig config;
+    private final SourceAndTarget sourceAndTarget;
+    private boolean wasLeader;
+
+    public MirrorHerder(MirrorMakerConfig mirrorConfig, SourceAndTarget sourceAndTarget, DistributedConfig config, Time time, Worker worker, String kafkaClusterId, StatusBackingStore statusBackingStore, ConfigBackingStore configBackingStore, String restUrl, RestClient restClient, ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy, List<String> restNamespace, AutoCloseable... uponShutdown) {
         super(config, time, worker, kafkaClusterId, statusBackingStore, configBackingStore, restUrl, restClient, connectorClientConfigOverridePolicy, restNamespace, uponShutdown);
-        this.onLeader = onLeader;
+        this.config = mirrorConfig;
+        this.sourceAndTarget = sourceAndTarget;
     }
 
     @Override
@@ -42,8 +53,42 @@ public class MirrorHerder extends DistributedHerder {
             return false;
         }
         if (isLeader()) {
-            onLeader.run();
+            if (!wasLeader) {
+                log.info("This node {} is now a leader for {}. Configuring connectors...", this, sourceAndTarget);
+                configureConnectors();
+            }
+            wasLeader = true;
+        } else {
+            wasLeader = false;
         }
         return true;
     }
+
+    private void configureConnectors() {
+        CONNECTOR_CLASSES.forEach(this::maybeConfigureConnector);
+    }
+
+    private void maybeConfigureConnector(Class<?> connectorClass) {
+        Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
+        connectorConfig(connectorClass.getSimpleName(), (e, existingConfig) -> {
+            if (existingConfig == null || !existingConfig.equals(connectorProps)) {
+                configureConnector(connectorClass.getSimpleName(), connectorProps);
+            } else {
+                log.info("This node is a leader for {} and configuration for {} is already up to date.", sourceAndTarget, connectorClass.getSimpleName());
+            }
+        });
+    }
+    private void configureConnector(String connectorName, Map<String, String> connectorProps) {
+        putConnectorConfig(connectorName, connectorProps, true, (e, x) -> {
+            if (e == null) {
+                log.info("{} connector configured for {}.", connectorName, sourceAndTarget);
+            } else if (e instanceof NotLeaderException) {
+                // No way to determine if the herder is a leader or not beforehand.
+                log.info("This node lost leadership for {} while trying to update the connector configuration for {}. Using existing connector configuration.", connectorName, sourceAndTarget);
+            } else {
+                log.error("Failed to configure {} connector for {}", connectorName, sourceAndTarget, e);
+            }
+        });
+    }
+
 }
