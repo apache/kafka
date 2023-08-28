@@ -127,7 +127,7 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *       - For topic B, only one segment is present in the tiered storage, as asserted by the
                  *         previous sub-test-case.
                  */
-                // .bounce(broker)
+                .bounce(broker)
                 .expectFetchFromTieredStorage(broker, topicA, p0, 1)
                 .consume(topicA, p0, 1L, 2, 1)
                 .expectFetchFromTieredStorage(broker, topicB, p0, 2)

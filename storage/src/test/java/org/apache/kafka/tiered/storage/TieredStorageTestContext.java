@@ -229,6 +229,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     public void bounce(int brokerId) {
         harness.killBroker(brokerId);
         harness.startBroker(brokerId);
+        reinitClients();
         initContext();
     }
 
@@ -239,6 +240,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     public void start(int brokerId) {
         harness.startBroker(brokerId);
+        reinitClients();
         initContext();
     }
 
@@ -310,5 +312,16 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        // IntegrationTestHarness closes the clients on tearDown, no need to close them explicitly.
+    }
+
+    private void reinitClients() {
+        // Broker uses a random port (TestUtils.RandomPort) for the listener. If the initial bootstrap-server config
+        // becomes invalid, then the clients won't be able to reconnect to the cluster.
+        // To avoid this, we reinitialize the clients after a broker is bounced.
+        Utils.closeQuietly(producer, "Producer client");
+        Utils.closeQuietly(consumer, "Consumer client");
+        Utils.closeQuietly(admin, "Admin client");
+        initClients();
     }
 }
