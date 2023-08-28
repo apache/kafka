@@ -30,7 +30,7 @@ public class WakeupTrigger {
     private AtomicReference<Wakeupable> pendingTask = new AtomicReference<>(null);
 
     /*
-      Wakeup a pending task.  If there isn't any pending task, return a WakedupFuture, so that the subsequent call
+      Wakeup a pending task.  If there isn't any pending task, return a WakeupFuture, so that the subsequent call
       would know wakeup was previously called.
 
       If there are active tasks, complete it with WakeupException, then unset pending task (return null here.
@@ -39,7 +39,7 @@ public class WakeupTrigger {
     public void wakeup() {
         pendingTask.getAndUpdate(task -> {
             if (task == null) {
-                return new WakedupFuture();
+                return new WakeupFuture();
             } else if (task instanceof ActiveFuture) {
                 ActiveFuture active = (ActiveFuture) task;
                 active.future().completeExceptionally(new WakeupException());
@@ -62,7 +62,7 @@ public class WakeupTrigger {
         pendingTask.getAndUpdate(task -> {
             if (task == null) {
                 return new ActiveFuture(currentTask);
-            } else if (task instanceof WakedupFuture) {
+            } else if (task instanceof WakeupFuture) {
                 currentTask.completeExceptionally(new WakeupException());
                 return null;
             }
@@ -101,5 +101,5 @@ public class WakeupTrigger {
         }
     }
 
-    static class WakedupFuture implements Wakeupable { }
+    static class WakeupFuture implements Wakeupable { }
 }
