@@ -350,10 +350,8 @@ public abstract class RestServer {
         try {
             if (handlers.isRunning()) {
                 for (Handler handler : handlers.getHandlers()) {
-                    try {
-                        handler.stop();
-                    } catch (Exception e) {
-                        log.warn("Error while stopping " + handler, e);
+                    if (handler != null) {
+                        Utils.closeQuietly(handler::stop, handler.toString());
                     }
                 }
             }
