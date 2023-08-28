@@ -31,8 +31,7 @@ import org.junit.runner.RunWith;
 
 import java.time.Duration;
 
-
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StoreToProcessorContextAdapterTest {
     @Mock(MockType.NICE)
     private StateStoreContext delegate;
