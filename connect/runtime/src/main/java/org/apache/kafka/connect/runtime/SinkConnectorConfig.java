@@ -28,9 +28,9 @@ import org.apache.kafka.connect.transforms.util.RegexValidator;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -93,12 +93,14 @@ public class SinkConnectorConfig extends ConnectorConfig {
      * @param props sink configuration properties
      */
     public static void validate(Map<String, String> props) {
-        validate(
-                props,
-                error -> {
-                    throw new ConfigException(error.property, error.value, error.errorMessage);
-                }
-        );
+        Map<String, ConfigValue> validatedConfig = new LinkedHashMap<>();
+        validate(props, validatedConfig);
+        validatedConfig.values().stream()
+                .filter(configValue -> !configValue.errorMessages().isEmpty())
+                .findFirst()
+                .ifPresent(configValue -> {
+                    throw new ConfigException(configValue.name(), configValue.value(), configValue.errorMessages().get(0));
+                });
     }
 
     /**
@@ -111,10 +113,6 @@ public class SinkConnectorConfig extends ConnectorConfig {
      *                        entry if one for the problematic property does not already exist.
      */
     public static void validate(Map<String, String> props, Map<String, ConfigValue> validatedConfig) {
-        validate(props, error -> addErrorMessage(validatedConfig, error));
-    }
-
-    private static void validate(Map<String, String> props, Consumer<ConfigError> onError) {
         final String topicsList = props.get(TOPICS_CONFIG);
         final String topicsRegex = props.get(TOPICS_REGEX_CONFIG);
         final String dlqTopic = props.getOrDefault(DLQ_TOPIC_NAME_CONFIG, "").trim();
@@ -124,14 +122,14 @@ public class SinkConnectorConfig extends ConnectorConfig {
 
         if (hasTopicsConfig && hasTopicsRegexConfig) {
             String errorMessage = TOPICS_CONFIG + " and " + TOPICS_REGEX_CONFIG + " are mutually exclusive options, but both are set.";
-            onError.accept(new ConfigError(TOPICS_CONFIG, topicsList, errorMessage));
-            onError.accept(new ConfigError(TOPICS_REGEX_CONFIG, topicsRegex, errorMessage));
+            addErrorMessage(validatedConfig, TOPICS_CONFIG, topicsList, errorMessage);
+            addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
         }
 
         if (!hasTopicsConfig && !hasTopicsRegexConfig) {
             String errorMessage = "Must configure one of " + TOPICS_CONFIG + " or " + TOPICS_REGEX_CONFIG;
-            onError.accept(new ConfigError(TOPICS_CONFIG, topicsList, errorMessage));
-            onError.accept(new ConfigError(TOPICS_REGEX_CONFIG, topicsRegex, errorMessage));
+            addErrorMessage(validatedConfig, TOPICS_CONFIG, topicsList, errorMessage);
+            addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
         }
 
         if (hasDlqTopicConfig) {
@@ -142,7 +140,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
                             "The DLQ topic '%s' may not be included in the list of topics ('%s=%s') consumed by the connector",
                             dlqTopic, TOPICS_CONFIG, topics
                     );
-                    onError.accept(new ConfigError(TOPICS_CONFIG, topicsList, errorMessage));
+                    addErrorMessage(validatedConfig, TOPICS_CONFIG, topicsList, errorMessage);
                 }
             }
             if (hasTopicsRegexConfig) {
@@ -152,30 +150,18 @@ public class SinkConnectorConfig extends ConnectorConfig {
                             "The DLQ topic '%s' may not be included in the regex matching the topics ('%s=%s') consumed by the connector",
                             dlqTopic, TOPICS_REGEX_CONFIG, topicsRegex
                     );
-                    onError.accept(new ConfigError(TOPICS_REGEX_CONFIG, topicsRegex, errorMessage));
+                    addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
                 }
             }
         }
     }
 
-    private static class ConfigError {
-        public final String property;
-        public final Object value;
-        public final String errorMessage;
-
-        public ConfigError(String property, Object value, String errorMessage) {
-            this.property = property;
-            this.value = value;
-            this.errorMessage = errorMessage;
-        }
-    }
-
-    private static void addErrorMessage(Map<String, ConfigValue> validatedConfig, ConfigError error) {
+    private static void addErrorMessage(Map<String, ConfigValue> validatedConfig, String name, String value, String errorMessage) {
         validatedConfig.computeIfAbsent(
-                error.property,
-                p -> new ConfigValue(error.property, error.value, Collections.emptyList(), new ArrayList<>())
+                name,
+                p -> new ConfigValue(name, value, Collections.emptyList(), new ArrayList<>())
         ).addErrorMessage(
-                error.errorMessage
+                errorMessage
         );
     }
 
