@@ -66,7 +66,7 @@ public class SingleFieldPath {
         }
     }
 
-    private List<String> buildFieldPathV2(String pathText) {
+    private static List<String> buildFieldPathV2(String pathText) {
         final List<String> steps = new ArrayList<>();
         int idx = 0;
         while (idx < pathText.length() && idx >= 0) {
