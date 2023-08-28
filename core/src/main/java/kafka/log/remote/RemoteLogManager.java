@@ -594,13 +594,13 @@ public class RemoteLogManager implements Closeable {
 
         private void maybeUpdateReadOffset(UnifiedLog log) throws RemoteStorageException {
             if (!copiedOffsetOption.isPresent()) {
-                logger.info("Find the highest remote offset for partition: {} after becoming leader, leaderEpoch: {}", topicIdPartition, leaderEpoch);
-
                 // This is found by traversing from the latest leader epoch from leader epoch history and find the highest offset
                 // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
                 // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
                 // epoch cache then it starts copying the segments from the earliest epoch entry's offset.
                 copiedOffsetOption = OptionalLong.of(findHighestRemoteOffset(topicIdPartition, log));
+                logger.info("Found the highest copied remote offset: {} for partition: {} after becoming leader, " +
+                                "leaderEpoch: {}", copiedOffsetOption, topicIdPartition, leaderEpoch);
             }
         }
 
