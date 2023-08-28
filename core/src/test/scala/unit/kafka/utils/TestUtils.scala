@@ -2404,6 +2404,7 @@ object TestUtils extends Logging {
     assertTrue(unexpected.isEmpty,
       s"Found ${unexpected.size} unexpected threads during $context: " +
         s"${unexpected.mkString("`", ",", "`")} , and dataplan:${Thread.getAllStackTraces.keySet.asScala.toList.map(_.getName).filter(_.startsWith("data-plane-kafka-socket-acceptor-"))}")
+    
   }
 
   class TestControllerRequestCompletionHandler(expectedResponse: Option[AbstractResponse] = None)
