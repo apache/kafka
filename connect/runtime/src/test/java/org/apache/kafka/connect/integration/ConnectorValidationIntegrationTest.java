@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Filter;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
@@ -32,6 +33,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -363,8 +365,63 @@ public class ConnectorValidationIntegrationTest {
         );
     }
 
-    public static abstract class TestConverter implements Converter {
+    @Test
+    public void testConnectorHasInvalidHeaderConverterClassType() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, MonitorableSinkConnector.class.getName());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                1,
+                "Connector config should fail preflight validation when a header converter with a class of the wrong type is specified"
+        );
+    }
 
+    @Test
+    public void testConnectorHasAbstractHeaderConverter() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, AbstractTestConverter.class.getName());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                1,
+                "Connector config should fail preflight validation when an abstract header converter class is specified"
+        );
+    }
+
+    @Test
+    public void testConnectorHasHeaderConverterWithNoSuitableConstructor() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithPrivateConstructor.class.getName());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                1,
+                "Connector config should fail preflight validation when a header converter class with no suitable constructor is specified"
+        );
+    }
+
+    @Test
+    public void testConnectorHasHeaderConverterThatThrowsExceptionOnInstantiation() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithConstructorThatThrowsException.class.getName());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                1,
+                "Connector config should fail preflight validation when a header converter class that throws an exception on instantiation is specified"
+        );
+    }
+
+    public static abstract class TestConverter implements Converter, HeaderConverter {
+
+        // Defined by both Converter and HeaderConverter interfaces
+        @Override
+        public ConfigDef config() {
+            return null;
+        }
+
+        // Defined by Converter interface
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
         }
@@ -379,9 +436,23 @@ public class ConnectorValidationIntegrationTest {
             return null;
         }
 
+        // Defined by HeaderConverter interface
         @Override
-        public ConfigDef config() {
+        public void close() throws IOException {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+
+        @Override
+        public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
             return null;
+        }
+
+        @Override
+        public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+            return new byte[0];
         }
     }
 
