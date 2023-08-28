@@ -2399,10 +2399,11 @@ object TestUtils extends Logging {
       allThreads.filter(t => unexpectedThreadNames.exists(s => t.contains(s))).toSet
     }
 
+    System.err.println(s"dataplan-$context:${Thread.getAllStackTraces.keySet.asScala.toList.map(_.getName).filter(_.startsWith("data-plane-kafka-socket-acceptor-"))}")
     val (unexpected, _) = TestUtils.computeUntilTrue(unexpectedThreads)(_.isEmpty)
     assertTrue(unexpected.isEmpty,
       s"Found ${unexpected.size} unexpected threads during $context: " +
-        s"${unexpected.mkString("`", ",", "`")}")
+        s"${unexpected.mkString("`", ",", "`")} , and dataplan:${Thread.getAllStackTraces.keySet.asScala.toList.map(_.getName).filter(_.startsWith("data-plane-kafka-socket-acceptor-"))}")
   }
 
   class TestControllerRequestCompletionHandler(expectedResponse: Option[AbstractResponse] = None)
