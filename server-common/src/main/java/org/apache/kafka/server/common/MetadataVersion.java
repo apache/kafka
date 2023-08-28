@@ -179,10 +179,15 @@ public enum MetadataVersion {
     // Remove leader epoch bump when KRaft controller shrinks the ISR (KAFKA-15021)
     IBP_3_6_IV0(12, "3.6", "IV0", false),
 
-    // Add metadata transactions and KRaft support for Delegation Tokens
-    IBP_3_6_IV1(13, "3.6", "IV1", true);
+    // Add metadata transactions
+    IBP_3_6_IV1(13, "3.6", "IV1", true),
 
-    // NOTE: update the default version in @ClusterTest annotation to point to the latest version
+    // Add KRaft support for Delegation Tokens
+    IBP_3_6_IV2(14, "3.6", "IV2", true);
+
+    // NOTES when adding a new version:
+    //   Update the default version in @ClusterTest annotation to point to the latest version
+    //   Change expected message in org.apache.kafka.tools.FeatureCommandTest in multiple places (search for "Change expected message")
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
@@ -275,7 +280,7 @@ public enum MetadataVersion {
     }
 
     public boolean isDelegationTokenSupported() {
-        return this.isAtLeast(IBP_3_6_IV1);
+        return this.isAtLeast(IBP_3_6_IV2);
     }
 
     public boolean isKRaftSupported() {

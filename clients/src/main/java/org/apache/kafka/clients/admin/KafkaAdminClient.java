@@ -1228,7 +1228,7 @@ public class KafkaAdminClient extends AdminClient {
                         call.fail(now, authException);
                     } else {
                         call.fail(now, new DisconnectException(String.format(
-                            "Cancelled %s request with correlation id %s due to node %s being disconnected",
+                            "Cancelled %s request with correlation id %d due to node %s being disconnected",
                             call.callName, correlationId, response.destination())));
                     }
                 } else {

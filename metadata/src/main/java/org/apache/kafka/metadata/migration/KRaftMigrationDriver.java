@@ -465,6 +465,15 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
+            if (!firstPublish && image.isEmpty()) {
+                // KAFKA-15389 When first loading from an empty log, MetadataLoader can publish an empty image
+                log.debug("Encountered an empty MetadataImage while waiting for the first image to be published. " +
+                        "Ignoring this image since it either does not include bootstrap records or it is a valid " +
+                        "image for an older unsupported metadata version.");
+                completionHandler.accept(null);
+                return;
+            }
+
             KRaftMigrationDriver.this.firstPublish = true;
             MetadataImage prevImage = KRaftMigrationDriver.this.image;
             KRaftMigrationDriver.this.image = image;
@@ -627,7 +636,15 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             Set<Integer> brokersInMetadata = new HashSet<>();
             log.info("Starting ZK migration");
             MigrationManifest.Builder manifestBuilder = MigrationManifest.newBuilder(time);
-            zkRecordConsumer.beginMigration();
+            try {
+                FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, "",
+                    "the metadata layer to begin the migration transaction",
+                    zkRecordConsumer.beginMigration(),
+                    Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
+            } catch (Throwable t) {
+                log.error("Could not start the migration", t);
+                super.handleException(t);
+            }
             try {
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
@@ -669,9 +686,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 // exercising the snapshot handling code in KRaftMigrationZkWriter.
                 transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
             } catch (Throwable t) {
-                zkRecordConsumer.abortMigration();
                 MigrationManifest partialManifest = manifestBuilder.build();
-                log.error("Aborted metadata migration from ZooKeeper to KRaft. {}.", partialManifest);
+                log.error("Aborting the metadata migration from ZooKeeper to KRaft. {}.", partialManifest);
+                zkRecordConsumer.abortMigration(); // This terminates the controller via fatal fault handler
                 super.handleException(t);
             }
         }

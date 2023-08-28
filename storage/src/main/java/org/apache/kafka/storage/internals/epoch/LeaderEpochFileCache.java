@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.TreeMap;
@@ -398,11 +399,23 @@ public class LeaderEpochFileCache {
         }
     }
 
-    // Visible for testing
     public List<EpochEntry> epochEntries() {
         lock.readLock().lock();
         try {
             return new ArrayList<>(epochs.values());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public NavigableMap<Integer, Long> epochWithOffsets() {
+        lock.readLock().lock();
+        try {
+            NavigableMap<Integer, Long> epochWithOffsets = new TreeMap<>();
+            for (EpochEntry epochEntry : epochs.values()) {
+                epochWithOffsets.put(epochEntry.epoch, epochEntry.startOffset);
+            }
+            return epochWithOffsets;
         } finally {
             lock.readLock().unlock();
         }

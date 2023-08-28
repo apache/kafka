@@ -21,22 +21,21 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.To;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertThrows;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StoreToProcessorContextAdapterTest {
-    @Mock(MockType.NICE)
+    @Mock
     private StateStoreContext delegate;
     private ProcessorContext context;
-    @Mock(MockType.NICE)
+    @Mock
     private Punctuator punctuator;
 
     @Before

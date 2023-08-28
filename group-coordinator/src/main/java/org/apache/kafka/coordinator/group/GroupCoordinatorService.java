@@ -61,6 +61,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.group.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter;
@@ -71,6 +72,7 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -480,9 +482,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        // For backwards compatibility, we support fetch commits for the empty group id.
+        if (groupId == null) {
+            return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
+        }
+
+        // The require stable flag when set tells the broker to hold on returning unstable
+        // (or uncommitted) offsets. In the previous implementation of the group coordinator,
+        // the UNSTABLE_OFFSET_COMMIT error is returned when unstable offsets are present. As
+        // the new implementation relies on timeline data structures, the coordinator does not
+        // really know whether offsets are stable or not so it is hard to return the same error.
+        // Instead, we use a write operation when the flag is set to guarantee that the fetch
+        // is based on all the available offsets and to ensure that the response waits until
+        // the pending offsets are committed. Otherwise, we use a read operation.
+        if (requireStable) {
+            return runtime.scheduleWriteOperation(
+                "fetch-offsets",
+                topicPartitionFor(groupId),
+                coordinator -> new CoordinatorResult<>(
+                    Collections.emptyList(),
+                    coordinator.fetchOffsets(groupId, topics, Long.MAX_VALUE)
+                )
+            );
+        } else {
+            return runtime.scheduleReadOperation(
+                "fetch-offsets",
+                topicPartitionFor(groupId),
+                (coordinator, offset) -> coordinator.fetchOffsets(groupId, topics, offset)
+            );
+        }
     }
 
     /**
@@ -498,9 +526,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        // For backwards compatibility, we support fetch commits for the empty group id.
+        if (groupId == null) {
+            return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
+        }
+
+        // The require stable flag when set tells the broker to hold on returning unstable
+        // (or uncommitted) offsets. In the previous implementation of the group coordinator,
+        // the UNSTABLE_OFFSET_COMMIT error is returned when unstable offsets are present. As
+        // the new implementation relies on timeline data structures, the coordinator does not
+        // really know whether offsets are stable or not so it is hard to return the same error.
+        // Instead, we use a write operation when the flag is set to guarantee that the fetch
+        // is based on all the available offsets and to ensure that the response waits until
+        // the pending offsets are committed. Otherwise, we use a read operation.
+        if (requireStable) {
+            return runtime.scheduleWriteOperation(
+                "fetch-all-offsets",
+                topicPartitionFor(groupId),
+                coordinator -> new CoordinatorResult<>(
+                    Collections.emptyList(),
+                    coordinator.fetchAllOffsets(groupId, Long.MAX_VALUE)
+                )
+            );
+        } else {
+            return runtime.scheduleReadOperation(
+                "fetch-all-offsets",
+                topicPartitionFor(groupId),
+                (coordinator, offset) -> coordinator.fetchAllOffsets(groupId, offset)
+            );
+        }
     }
 
     /**

@@ -147,6 +147,7 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.COMPLETES_IN_TRANSACTION;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
 
@@ -613,6 +614,11 @@ public final class QuorumController implements Controller {
     }
 
     // Visible for testing
+    OffsetControlManager offsetControl() {
+        return offsetControl;
+    }
+
+    // Visible for testing
     ReplicationControlManager replicationControl() {
         return replicationControl;
     }
@@ -667,7 +673,16 @@ public final class QuorumController implements Controller {
          * even though the cluster really does have metadata. Very few operations should
          * use this flag.
          */
-        RUNS_IN_PREMIGRATION
+        RUNS_IN_PREMIGRATION,
+
+        /**
+         * This flag signifies that an event will be completed even if it is part of an unfinished transaction.
+         * This is needed for metadata transactions so that external callers can add records to a transaction
+         * and still use the returned future. One example usage of this flag is the batches of migrations records.
+         * The migration driver needs to wait on each submitted batch to avoid overwhelming the controller queue
+         * with events, so it needs events to be completed based on the committed (i.e., not stable) offset.
+         */
+        COMPLETES_IN_TRANSACTION
     }
 
     interface ControllerWriteOperation<T> {
@@ -810,7 +825,11 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
-                deferredEventQueue.add(resultAndOffset.offset(), this);
+                if (flags.contains(COMPLETES_IN_TRANSACTION)) {
+                    deferredUnstableEventQueue.add(resultAndOffset.offset(), this);
+                } else {
+                    deferredEventQueue.add(resultAndOffset.offset(), this);
+                }
             }
         }
 
@@ -926,6 +945,10 @@ public final class QuorumController implements Controller {
     }
 
     class MigrationRecordConsumer implements ZkRecordConsumer {
+        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(
+            RUNS_IN_PREMIGRATION, COMPLETES_IN_TRANSACTION
+        );
+
         private volatile OffsetAndEpoch highestMigrationRecordOffset;
 
         class MigrationWriteOperation implements ControllerWriteOperation<Void> {
@@ -936,7 +959,7 @@ public final class QuorumController implements Controller {
             }
             @Override
             public ControllerResult<Void> generateRecordsAndResult() {
-                return ControllerResult.atomicOf(batch, null);
+                return ControllerResult.of(batch, null);
             }
 
             public void processBatchEndOffset(long offset) {
@@ -944,40 +967,54 @@ public final class QuorumController implements Controller {
             }
         }
         @Override
-        public void beginMigration() {
-            log.info("Starting ZK Migration");
-            // TODO use KIP-868 transaction
+        public CompletableFuture<?> beginMigration() {
+            if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
+                log.info("Starting migration of ZooKeeper metadata to KRaft.");
+                ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
+                    "Begin ZK Migration Transaction",
+                    new MigrationWriteOperation(Collections.singletonList(
+                        new ApiMessageAndVersion(
+                            new BeginTransactionRecord().setName("ZK Migration"), (short) 0))
+                    ), eventFlags);
+                queue.append(batchEvent);
+                return batchEvent.future;
+            } else {
+                log.warn("Starting ZK Migration without metadata transactions enabled. This is not safe since " +
+                    "a controller failover or processing error may lead to partially migrated metadata.");
+                return CompletableFuture.completedFuture(null);
+            }
         }
 
         @Override
         public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
-            if (queue.size() > 100) { // TODO configure this
-                CompletableFuture<Void> future = new CompletableFuture<>();
-                future.completeExceptionally(new NotControllerException("Cannot accept migration record batch. Controller queue is too large"));
-                return future;
-            }
-            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>("ZK Migration Batch",
-                new MigrationWriteOperation(recordBatch), EnumSet.of(RUNS_IN_PREMIGRATION));
+            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>(
+                "ZK Migration Batch",
+                new MigrationWriteOperation(recordBatch), eventFlags);
             queue.append(batchEvent);
             return batchEvent.future;
         }
 
         @Override
         public CompletableFuture<OffsetAndEpoch> completeMigration() {
-            log.info("Completing ZK Migration");
-            // TODO use KIP-868 transaction
-            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Complete ZK Migration",
-                new MigrationWriteOperation(
-                    Collections.singletonList(ZkMigrationState.MIGRATION.toRecord())),
-                EnumSet.of(RUNS_IN_PREMIGRATION));
+            log.info("Completing migration of ZooKeeper metadata to KRaft.");
+            List<ApiMessageAndVersion> records = new ArrayList<>(2);
+            records.add(ZkMigrationState.MIGRATION.toRecord());
+            if (featureControl.metadataVersion().isMetadataTransactionSupported()) {
+                records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
+            }
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
+                "Complete ZK Migration",
+                new MigrationWriteOperation(records),
+                eventFlags);
             queue.append(event);
             return event.future.thenApply(__ -> highestMigrationRecordOffset);
         }
 
         @Override
         public void abortMigration() {
+            // If something goes wrong during the migration, cause the controller to crash and let the
+            // next controller abort the migration transaction (if in use).
             fatalFaultHandler.handleFault("Aborting the ZK migration");
-            // TODO use KIP-868 transaction
         }
     }
 
@@ -998,11 +1035,14 @@ public final class QuorumController implements Controller {
                             // so we don't need to do it here.
                             log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
 
-                            // Complete any events in the purgatory that were waiting for this offset.
-                            deferredEventQueue.completeUpTo(offset);
+                            // Advance the committed and stable offsets then complete any pending purgatory
+                            // items that were waiting for these offsets.
+                            offsetControl.handleCommitBatch(batch);
+                            deferredEventQueue.completeUpTo(offsetControl.lastStableOffset());
+                            deferredUnstableEventQueue.completeUpTo(offsetControl.lastCommittedOffset());
 
                             // The active controller can delete up to the current committed offset.
-                            snapshotRegistry.deleteSnapshotsUpTo(offset);
+                            snapshotRegistry.deleteSnapshotsUpTo(offsetControl.lastStableOffset());
                         } else {
                             // If the controller is a standby, replay the records that were
                             // created by the active controller.
@@ -1025,8 +1065,8 @@ public final class QuorumController implements Controller {
                                 }
                                 recordIndex++;
                             }
+                            offsetControl.handleCommitBatch(batch);
                         }
-                        offsetControl.handleCommitBatch(batch);
                     }
                 } finally {
                     reader.close();
@@ -1161,103 +1201,17 @@ public final class QuorumController implements Controller {
         }
     }
 
-    /**
-     * Generate the set of activation records. Until KIP-868 transactions are supported, these records
-     * are committed to the log as an atomic batch. The records will include the bootstrap metadata records
-     * (including the bootstrap "metadata.version") and may include a ZK migration record.
-     */
-    public static List<ApiMessageAndVersion> generateActivationRecords(
-        Logger log,
-        boolean isLogEmpty,
-        boolean zkMigrationEnabled,
-        BootstrapMetadata bootstrapMetadata,
-        FeatureControlManager featureControl
-    ) {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        if (isLogEmpty) {
-            // If no records have been replayed, we need to write out the bootstrap records.
-            // This will include the new metadata.version, as well as things like SCRAM
-            // initialization, etc.
-            log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
-                "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
-                bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
-            records.addAll(bootstrapMetadata.records());
-
-            if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
-                if (zkMigrationEnabled) {
-                    log.info("Putting the controller into pre-migration mode. No metadata updates will be allowed until " +
-                        "the ZK metadata has been migrated");
-                    records.add(ZkMigrationState.PRE_MIGRATION.toRecord());
-                } else {
-                    log.debug("Setting the ZK migration state to NONE since this is a de-novo KRaft cluster.");
-                    records.add(ZkMigrationState.NONE.toRecord());
-                }
-            } else {
-                if (zkMigrationEnabled) {
-                    throw new RuntimeException("The bootstrap metadata.version " + bootstrapMetadata.metadataVersion() +
-                        " does not support ZK migrations. Cannot continue with ZK migrations enabled.");
-                }
-            }
-        } else {
-            // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
-            if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-                log.info("No metadata.version feature level record was found in the log. " +
-                    "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
-            }
-
-            if (featureControl.metadataVersion().isMigrationSupported()) {
-                log.info("Loaded ZK migration state of {}", featureControl.zkMigrationState());
-                switch (featureControl.zkMigrationState()) {
-                    case NONE:
-                        // Since this is the default state there may or may not be an actual NONE in the log. Regardless,
-                        // it will eventually be persisted in a snapshot, so we don't need to explicitly write it here.
-                        if (zkMigrationEnabled) {
-                            throw new RuntimeException("Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
-                        }
-                        break;
-                    case PRE_MIGRATION:
-                        log.warn("Activating pre-migration controller without empty log. There may be a partial migration");
-                        break;
-                    case MIGRATION:
-                        if (!zkMigrationEnabled) {
-                            // This can happen if controller leadership transfers to a controller with migrations enabled
-                            // after another controller had finalized the migration. For example, during a rolling restart
-                            // of the controller quorum during which the migration config is being set to false.
-                            log.warn("Completing the ZK migration since this controller was configured with " +
-                                "'zookeeper.metadata.migration.enable' set to 'false'.");
-                            records.add(ZkMigrationState.POST_MIGRATION.toRecord());
-                        } else {
-                            log.info("Staying in the ZK migration since 'zookeeper.metadata.migration.enable' is still 'true'.");
-                        }
-                        break;
-                    case POST_MIGRATION:
-                        if (zkMigrationEnabled) {
-                            log.info("Ignoring 'zookeeper.metadata.migration.enable' value of 'true' since the ZK migration" +
-                                "has been completed.");
-                        }
-                        break;
-                    default:
-                        throw new IllegalStateException("Unsupported ZkMigrationState " + featureControl.zkMigrationState());
-                }
-            } else {
-                if (zkMigrationEnabled) {
-                    throw new RuntimeException("Should not have ZK migrations enabled on a cluster running metadata.version " + featureControl.metadataVersion());
-                }
-            }
-        }
-        return records;
-    }
-
     class CompleteActivationEvent implements ControllerWriteOperation<Void> {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
-                List<ApiMessageAndVersion> records = generateActivationRecords(log,
+                return ActivationRecordsGenerator.generate(
+                    log::warn,
                     logReplayTracker.empty(),
+                    offsetControl.transactionStartOffset(),
                     zkMigrationEnabled,
                     bootstrapMetadata,
                     featureControl);
-                return ControllerResult.atomicOf(records, null);
             } catch (Throwable t) {
                 throw fatalFaultHandler.handleFault("exception while completing controller " +
                     "activation", t);
@@ -1285,6 +1239,8 @@ public final class QuorumController implements Controller {
             raftClient.resign(curClaimEpoch);
             curClaimEpoch = -1;
             deferredEventQueue.failAll(ControllerExceptions.
+                    newWrongControllerException(OptionalInt.empty()));
+            deferredUnstableEventQueue.failAll(ControllerExceptions.
                     newWrongControllerException(OptionalInt.empty()));
             offsetControl.deactivate();
             clusterControl.deactivate();
@@ -1629,9 +1585,16 @@ public final class QuorumController implements Controller {
 
     /**
      * The deferred event queue which holds deferred operations which are waiting for the metadata
-     * log's high water mark to advance.  This must be accessed only by the event queue thread.
+     * log's stable offset to advance. This must be accessed only by the event queue thread.
      */
     private final DeferredEventQueue deferredEventQueue;
+
+    /**
+     * The deferred event queue which holds deferred operations which are waiting for the metadata
+     * log's committed offset to advance. This must be accessed only by the event queue thread and
+     * can contain records which are part of an incomplete transaction.
+     */
+    private final DeferredEventQueue deferredUnstableEventQueue;
 
     /**
      * Manages read and write offsets, and in-memory snapshots.
@@ -1811,6 +1774,7 @@ public final class QuorumController implements Controller {
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.deferredEventQueue = new DeferredEventQueue(logContext);
+        this.deferredUnstableEventQueue = new DeferredEventQueue(logContext);
         this.offsetControl = new OffsetControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
