@@ -212,7 +212,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             time,
             faultHandler,
             this::maybePublishMetadata);
-        this.batchLoader.resetToImage(this.image);
         this.eventQueue = new KafkaEventQueue(
             Time.SYSTEM,
             logContext,
@@ -239,6 +238,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         if (highWaterMark.getAsLong() - 1 > offset) {
             log.info("{}: The loader is still catching up because we have loaded up to offset " +
                     offset + ", but the high water mark is {}", where, highWaterMark.getAsLong());
+            return true;
+        }
+        if (!batchLoader.hasSeenRecord()) {
+            log.info("{}: The loader is still catching up because we have not loaded a controller record as of offset " +
+                    offset + " and high water mark is {}", where, highWaterMark.getAsLong());
             return true;
         }
         log.info("{}: The loader finished catching up to the current high water mark of {}",
@@ -387,8 +391,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         image.provenance().lastContainedOffset(),
                         NANOSECONDS.toMicros(manifest.elapsedNs()));
                 MetadataImage image = delta.apply(manifest.provenance());
-                maybePublishMetadata(delta, image, manifest);
                 batchLoader.resetToImage(image);
+                maybePublishMetadata(delta, image, manifest);
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.

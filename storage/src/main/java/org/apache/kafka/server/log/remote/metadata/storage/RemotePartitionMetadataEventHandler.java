@@ -50,4 +50,9 @@ public abstract class RemotePartitionMetadataEventHandler {
 
     public abstract void clearTopicPartition(TopicIdPartition topicIdPartition);
 
+    public abstract void markInitialized(TopicIdPartition partition);
+
+    public abstract boolean isInitialized(TopicIdPartition partition);
+
+    public abstract void maybeLoadPartition(TopicIdPartition partition);
 }
