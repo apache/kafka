@@ -103,7 +103,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public PrototypeAsyncConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-            this(propsToMap(properties), keyDeserializer, valueDeserializer);
+        this(propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
     public PrototypeAsyncConsumer(final Map<String, Object> configs,
