@@ -356,7 +356,19 @@ public class PluginUtils {
 
     public static PluginSource isolatedPluginSource(Path pluginLocation, ClassLoader parent, PluginClassLoaderFactory factory) throws IOException {
         List<URL> pluginUrls = new ArrayList<>();
-        for (Path path : pluginUrls(pluginLocation)) {
+        List<Path> paths = pluginUrls(pluginLocation);
+        // Infer the type of the source
+        PluginSource.Type type;
+        if (paths.size() == 1 && paths.get(0) == pluginLocation) {
+            if (PluginUtils.isArchive(pluginLocation)) {
+                type = PluginSource.Type.SINGLE_JAR;
+            } else {
+                type = PluginSource.Type.CLASS_HIERARCHY;
+            }
+        } else {
+            type = PluginSource.Type.MULTI_JAR;
+        }
+        for (Path path : paths) {
             pluginUrls.add(path.toUri().toURL());
         }
         URL[] urls = pluginUrls.toArray(new URL[0]);
@@ -365,14 +377,14 @@ public class PluginUtils {
                 urls,
                 parent
         );
-        return new PluginSource(pluginLocation, loader, urls);
+        return new PluginSource(pluginLocation, type, loader, urls);
     }
 
     public static PluginSource classpathPluginSource(ClassLoader classLoader) {
         List<URL> parentUrls = new ArrayList<>();
         parentUrls.addAll(ClasspathHelper.forJavaClassPath());
         parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader));
-        return new PluginSource(null, classLoader, parentUrls.toArray(new URL[0]));
+        return new PluginSource(null, PluginSource.Type.CLASSPATH, classLoader, parentUrls.toArray(new URL[0]));
     }
 
     /**

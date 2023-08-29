@@ -57,13 +57,11 @@ public class CoordinatorRequestManager implements RequestManager {
     private long totalDisconnectedMin = 0;
     private Node coordinator;
 
-    public CoordinatorRequestManager(
-        final Time time,
-        final LogContext logContext,
-        final long retryBackoffMs,
-        final ErrorEventHandler errorHandler,
-        final String groupId
-    ) {
+    public CoordinatorRequestManager(final Time time,
+                                     final LogContext logContext,
+                                     final long retryBackoffMs,
+                                     final ErrorEventHandler errorHandler,
+                                     final String groupId) {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());

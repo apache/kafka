@@ -72,4 +72,9 @@ public interface Group {
      * @return the group formatted as a list group response.
      */
     public ListGroupsResponseData.ListedGroup asListedGroup();
+
+    /**
+     * Validates the OffsetFetch request.
+     */
+    void validateOffsetFetch() throws KafkaException;
 }

@@ -33,6 +33,7 @@ import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.ConfigurationsImage;
+import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -140,8 +141,8 @@ public class KRaftMigrationDriverTest {
 
     static class NoOpRecordConsumer implements ZkRecordConsumer {
         @Override
-        public void beginMigration() {
-
+        public CompletableFuture<?> beginMigration() {
+            return CompletableFuture.completedFuture(null);
         }
 
         @Override
@@ -198,6 +199,15 @@ public class KRaftMigrationDriverTest {
         public void clear() {
 
         }
+    }
+
+    static LogDeltaManifest.Builder logDeltaManifestBuilder(MetadataProvenance provenance, LeaderAndEpoch newLeader) {
+        return LogDeltaManifest.newBuilder()
+            .provenance(provenance)
+            .leaderAndEpoch(newLeader)
+            .numBatches(1)
+            .elapsedNs(100)
+            .numBytes(42);
     }
 
     RegisterBrokerRecord zkBrokerRecord(int id) {
@@ -263,7 +273,7 @@ public class KRaftMigrationDriverTest {
             // Publish a delta with this node (3000) as the leader
             LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
             driver.onControllerChange(newLeader);
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                 "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
@@ -306,7 +316,10 @@ public class KRaftMigrationDriverTest {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CountDownLatch claimLeaderAttempts = new CountDownLatch(3);
         CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)),
-                new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient()) {
+                new CapturingTopicMigrationClient(),
+                new CapturingConfigMigrationClient(),
+                new CapturingAclMigrationClient(),
+                new CapturingDelegationTokenMigrationClient()) {
             @Override
             public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
                 if (claimLeaderAttempts.getCount() == 0) {
@@ -342,8 +355,8 @@ public class KRaftMigrationDriverTest {
             // Notify the driver that it is the leader
             driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
             // Publish metadata of all the ZK brokers being ready
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
-                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
             assertTrue(claimLeaderAttempts.await(1, TimeUnit.MINUTES));
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                 "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
@@ -378,7 +391,7 @@ public class KRaftMigrationDriverTest {
             // Publish a delta with this node (3000) as the leader
             LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
             driver.onControllerChange(newLeader);
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
             // Current apiVersions are missing the controller node 6, should stay at WAIT_FOR_CONTROLLER_QUORUM state
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
@@ -399,7 +412,10 @@ public class KRaftMigrationDriverTest {
     public void testSkipWaitForBrokersInDualWrite() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(),
-            new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient());
+            new CapturingTopicMigrationClient(),
+            new CapturingConfigMigrationClient(),
+            new CapturingAclMigrationClient(),
+            new CapturingDelegationTokenMigrationClient());
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
         KRaftMigrationDriver.Builder builder = defaultTestBuilder()
             .setZkMigrationClient(migrationClient)
@@ -423,8 +439,8 @@ public class KRaftMigrationDriverTest {
             image = delta.apply(provenance);
 
             driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
-                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
 
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                 "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
@@ -486,7 +502,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
@@ -503,7 +520,7 @@ public class KRaftMigrationDriverTest {
             // Publish a delta with this node (3000) as the leader
             LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
             driver.onControllerChange(newLeader);
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
             // Wait for migration
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
@@ -538,7 +555,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
@@ -555,7 +573,7 @@ public class KRaftMigrationDriverTest {
             // Publish a delta with this node (3000) as the leader
             LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
             driver.onControllerChange(newLeader);
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
             // Wait for migration
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
@@ -566,7 +584,7 @@ public class KRaftMigrationDriverTest {
             delta = new MetadataDelta(image);
             RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
             image = delta.apply(provenance);
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
             driver.migrationState().get(1, TimeUnit.MINUTES);
 
             assertEquals(1, topicClient.deletedTopics.size());
@@ -590,7 +608,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
@@ -607,7 +626,7 @@ public class KRaftMigrationDriverTest {
             // Publish a delta making a different node the leader
             LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3001), 1);
             driver.onControllerChange(newLeader);
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
             // Fake a complete migration
             migrationClient.setMigrationRecoveryState(
@@ -620,7 +639,7 @@ public class KRaftMigrationDriverTest {
             image = delta.apply(provenance);
 
             // Standby driver does not do anything with this delta besides remember the image
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
             // Standby becomes leader
             newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
@@ -641,8 +660,9 @@ public class KRaftMigrationDriverTest {
         AtomicInteger migrationBeginCalls = new AtomicInteger(0);
         NoOpRecordConsumer recordConsumer = new NoOpRecordConsumer() {
             @Override
-            public void beginMigration() {
+            public CompletableFuture<?> beginMigration() {
                 migrationBeginCalls.incrementAndGet();
+                return CompletableFuture.completedFuture(null);
             }
         };
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
@@ -670,10 +690,10 @@ public class KRaftMigrationDriverTest {
             // Call onMetadataUpdate twice. The first call will trigger the migration to begin (due to presence of brokers)
             // Both calls will "wakeup" the driver and cause a PollEvent to be run. Calling these back-to-back effectively
             // causes two MigrateMetadataEvents to be enqueued. Ensure only one is actually run.
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
-                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
-            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
-                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
 
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                     "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");

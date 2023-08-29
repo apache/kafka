@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -246,13 +247,22 @@ public final class ClientUtils {
         }
     }
 
-    public static <T> List createConfiguredInterceptors(AbstractConfig config,
-                                                        String interceptorClassesConfigName,
-                                                        Class<T> clazz) {
+    public static <T> List configuredInterceptors(AbstractConfig config,
+                                                  String interceptorClassesConfigName,
+                                                  Class<T> clazz) {
         String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         return config.getConfiguredInstances(
                 interceptorClassesConfigName,
                 clazz,
                 Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId));
+    }
+
+    public static ClusterResourceListeners configureClusterResourceListeners(List<?>... candidateLists) {
+        ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
+
+        for (List<?> candidateList: candidateLists)
+            clusterResourceListeners.maybeAddAll(candidateList);
+
+        return clusterResourceListeners;
     }
 }

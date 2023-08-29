@@ -26,7 +26,8 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher,
+DynamicConfigPublisher, ScramPublisher, DelegationTokenPublisher}
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -205,6 +206,14 @@ class ControllerServer(
         QuorumFeatures.defaultFeatureMap(),
         controllerNodes)
 
+      val delegationTokenKeyString = {
+        if (config.tokenAuthEnabled) {
+          config.delegationTokenSecretKey.value
+        } else {
+          null
+        }
+      }
+
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
           OptionalLong.of(TimeUnit.NANOSECONDS.convert(config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS))
@@ -236,7 +245,12 @@ class ControllerServer(
           setBootstrapMetadata(bootstrapMetadata).
           setFatalFaultHandler(sharedServer.fatalQuorumControllerFaultHandler).
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
-          setZkMigrationEnabled(config.migrationEnabled)
+          setZkMigrationEnabled(config.migrationEnabled).
+          setDelegationTokenCache(tokenCache).
+          setDelegationTokenSecretKey(delegationTokenKeyString).
+          setDelegationTokenMaxLifeMs(config.delegationTokenMaxLifeMs).
+          setDelegationTokenExpiryTimeMs(config.delegationTokenExpiryTimeMs).
+          setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs)
       }
       controller = controllerBuilder.build()
 
@@ -330,6 +344,17 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         credentialProvider
+      ))
+
+
+      // Set up the DelegationToken publisher.
+      // We need a tokenManager for the Publisher
+      // The tokenCache in the tokenManager is the same used in DelegationTokenControlManager
+      metadataPublishers.add(new DelegationTokenPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "controller",
+          new DelegationTokenManager(config, tokenCache, time)
       ))
 
       // Set up the metrics publisher.
