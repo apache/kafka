@@ -22,9 +22,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{Exit, Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -34,7 +32,6 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   private val topicCount = 4
   private val offsetTopicPartitionCount = 4
-  protected var admin: Admin = _
 
   override def generateConfigs: collection.Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnectOrNull)
     .map { p =>
@@ -58,22 +55,11 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
       .foreach(msgCount => producer.send(new ProducerRecord[String, String](topicName(i), msgCount % i, null, "val" + msgCount))))
     producer.close()
 
-    admin = TestUtils.createAdminClient(brokers, listenerName,
-      TestUtils.securityConfigs(Mode.CLIENT,
-        securityProtocol,
-        trustStoreFile,
-        "adminClient",
-        TestUtils.SslCertificateCn,
-        clientSaslProperties))
-
-    //TestUtils.createOffsetsTopic(zkClient, servers)
-    TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
+    createOffsetsTopic()
   }
 
   @AfterEach
   override def tearDown(): Unit = {
-    admin.close()
-
     super.tearDown()
   }
 

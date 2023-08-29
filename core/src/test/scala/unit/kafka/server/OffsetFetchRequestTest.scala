@@ -73,12 +73,6 @@ class OffsetFetchRequestTest extends BaseRequestTest {
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
   }
 
-  /*@BeforeEach
-  override def setUp(testInfo: TestInfo): Unit = {
-    doSetup(testInfo, createOffsetsTopic = false)
-
-    TestUtils.createOffsetsTopic(zkClient, servers)
-  }*/
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))

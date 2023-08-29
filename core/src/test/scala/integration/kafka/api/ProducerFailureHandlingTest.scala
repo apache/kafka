@@ -22,12 +22,10 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -42,7 +40,6 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
   val numServers = 2
 
-  protected var admin: Admin = _
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
@@ -82,8 +79,6 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     if (producer2 != null) producer2.close()
     if (producer3 != null) producer3.close()
     if (producer4 != null) producer4.close()
-
-    if(admin != null) admin.close()
 
     super.tearDown()
   }
@@ -231,15 +226,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   def testCannotSendToInternalTopic(quorum: String): Unit = {
 
-    admin = TestUtils.createAdminClient(brokers, listenerName,
-      TestUtils.securityConfigs(Mode.CLIENT,
-        securityProtocol,
-        trustStoreFile,
-        "adminClient",
-        TestUtils.SslCertificateCn,
-        clientSaslProperties))
-    TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
-    //TestUtils.createOffsetsTopic(zkClient, brokers)
+    createOffsetsTopic()
     val thrown = assertThrows(classOf[ExecutionException],
       () => producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get)
     assertTrue(thrown.getCause.isInstanceOf[InvalidTopicException], "Unexpected exception while sending to an invalid topic " + thrown.getCause)
