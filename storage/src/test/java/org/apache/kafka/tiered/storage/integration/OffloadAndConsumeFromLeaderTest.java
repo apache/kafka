@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Test Cases (A):
+ * Test Cases:
  *    Elementary offloads and fetches from tiered storage.
  */
 public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarness {
@@ -53,7 +53,7 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
 
         builder
                 /*
-                 * (A.1) Create a topic which segments contain only one batch and produce three records
+                 * (1) Create a topic which segments contain only one batch and produce three records
                  *       with a batch size of 1.
                  *
                  *       The topic and broker are configured so that the two rolled segments are picked from
@@ -84,7 +84,7 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                         new KeyValueSpec("k3", "v3"))
 
                 /*
-                 * (A.2) Similar scenario as above, but with segments of two records.
+                 * (2) Similar scenario as above, but with segments of two records.
                  *
                  *       Acceptance:
                  *       -----------
@@ -116,7 +116,7 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                         new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"), new KeyValueSpec("k5", "v5"))
 
                 /*
-                 * (A.3) Stops and restarts the broker. The purpose of this test is to a) exercise consumption
+                 * (3) Stops and restarts the broker. The purpose of this test is to a) exercise consumption
                  *       from a given offset and b) verify that upon broker start, existing remote log segments
                  *       metadata are loaded by Kafka and these log segments available.
                  *
