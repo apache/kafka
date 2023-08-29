@@ -1098,6 +1098,23 @@ public final class Utils {
     }
 
     /**
+     * Closes {@code maybeCloseable} if it implements the {@link AutoCloseable} interface,
+     * and if an exception is thrown, it is logged at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
+     */
+    public static void maybeCloseQuietly(Object maybeCloseable, String name) {
+        if (maybeCloseable instanceof AutoCloseable)
+            closeQuietly((AutoCloseable) maybeCloseable, name);
+    }
+
+    /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      * <b>Be cautious when passing method references as an argument.</b> For example:
      * <p>

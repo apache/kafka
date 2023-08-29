@@ -20,8 +20,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.Closeable;
-
 public class InstantiableClassValidator implements ConfigDef.Validator {
 
     @Override
@@ -34,9 +32,7 @@ public class InstantiableClassValidator implements ConfigDef.Validator {
         Class<?> cls = (Class<?>) value;
         try {
             Object o = cls.getDeclaredConstructor().newInstance();
-            if (o instanceof Closeable) {
-                Utils.closeQuietly((Closeable) o, o + " (instantiated for preflight validation)");
-            }
+            Utils.maybeCloseQuietly(o, o + " (instantiated for preflight validation");
         } catch (NoSuchMethodException e) {
             throw new ConfigException(name, cls.getName(), "Could not find a public no-argument constructor for class" + (e.getMessage() != null ? ": " + e.getMessage() : ""));
         } catch (ReflectiveOperationException | RuntimeException e) {
