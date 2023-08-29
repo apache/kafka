@@ -28,42 +28,109 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MultiFieldPathsTest {
-    @Test void shouldBuildPathWithSinglePathV1() {
+
+    @Test void shouldBuildEmptyTrie() {
+        MultiFieldPaths.Trie trie = new MultiFieldPaths.Trie();
+        assertTrue(trie.isEmpty());
+    }
+
+    @Test void shouldBuildMultiPathWithSinglePathV1() {
         SingleFieldPath path = new SingleFieldPath("foo.bar.baz", FieldSyntaxVersion.V1);
         MultiFieldPaths paths = createMultiFieldPaths(path);
-        assertEquals(1, paths.pathTree.size());
-        assertEquals(path, paths.pathTree.get("foo.bar.baz"));
+        assertFalse(paths.trie.isEmpty());
+        assertEquals(1, paths.trie.size());
+
+        final Optional<MultiFieldPaths.TrieNode> maybeFoo = paths.trie.find("foo.bar.baz");
+        assertTrue(maybeFoo.isPresent());
+        assertEquals(path, maybeFoo.get().path);
     }
 
-    @Test void shouldBuildPathWithSamePathV1() {
-        SingleFieldPath path = new SingleFieldPath("foo.bar.baz", FieldSyntaxVersion.V1);
-        MultiFieldPaths paths = createMultiFieldPaths(path, path);
-        assertEquals(1, paths.pathTree.size());
-        assertEquals(path, paths.pathTree.get("foo.bar.baz"));
-    }
-
-    @Test void shouldBuildPathWithSinglePathV2() {
+    @Test void shouldBuildMultiPathWithSinglePathV2() {
         SingleFieldPath path = new SingleFieldPath("foo.bar.baz", FieldSyntaxVersion.V2);
         MultiFieldPaths paths = createMultiFieldPaths(path);
-        assertEquals(1, paths.pathTree.size());
-        assertEquals(path, ((Map<?, ?>) ((Map<?, ?>) paths.pathTree.get("foo")).get("bar")).get("baz"));
+        assertFalse(paths.trie.isEmpty());
+        assertEquals(1, paths.trie.size());
+
+        final Optional<MultiFieldPaths.TrieNode> maybeV1 = paths.trie.find("foo.bar.baz");
+        assertFalse(maybeV1.isPresent());
+        final Optional<MultiFieldPaths.TrieNode> maybeFoo = paths.trie.find("foo");
+        assertTrue(maybeFoo.isPresent());
+        assertFalse(maybeFoo.get().isLeaf());
+        final Optional<MultiFieldPaths.TrieNode> maybeBar = maybeFoo.get().find("bar");
+        assertTrue(maybeBar.isPresent());
+        assertFalse(maybeBar.get().isLeaf());
+        final Optional<MultiFieldPaths.TrieNode> maybeBaz = maybeBar.get().find("baz");
+        assertTrue(maybeBaz.isPresent());
+        assertTrue(maybeBaz.get().isLeaf());
+        assertEquals(path, maybeBaz.get().path);
     }
 
-    @Test void shouldKeepOverlappingPaths() {
-        SingleFieldPath foo = new SingleFieldPath("foo", FieldSyntaxVersion.V2);
-        SingleFieldPath foobar = new SingleFieldPath("foo.bar", FieldSyntaxVersion.V2);
-        MultiFieldPaths path = createMultiFieldPaths(
-            foo,
-            foobar
-        );
-        assertEquals(1, path.pathTree.size());
-        assertEquals(2, ((Map<?, ?>) path.pathTree.get("foo")).size());
-        assertEquals(foo, ((Map<?, ?>) path.pathTree.get("foo")).get(""));
-        assertEquals(foobar, ((Map<?, ?>) path.pathTree.get("foo")).get("bar"));
+
+    @Test void shouldBuildMultiPathWithMultipleSinglePathV2() {
+        MultiFieldPaths paths = createMultiFieldPaths(
+            new SingleFieldPath("foo.bar", FieldSyntaxVersion.V2),
+            new SingleFieldPath("foo.baz", FieldSyntaxVersion.V2),
+            new SingleFieldPath("test", FieldSyntaxVersion.V2));
+        assertFalse(paths.trie.isEmpty());
+        assertEquals(3, paths.trie.size());
+
+        final Optional<MultiFieldPaths.TrieNode> maybeFoo = paths.trie.find("foo");
+        assertTrue(maybeFoo.isPresent());
+        assertFalse(maybeFoo.get().isLeaf());
+        final Optional<MultiFieldPaths.TrieNode> maybeBar = maybeFoo.get().find("bar");
+        assertTrue(maybeBar.isPresent());
+        assertTrue(maybeBar.get().isLeaf());
+        final Optional<MultiFieldPaths.TrieNode> maybeBaz = maybeFoo.get().find("baz");
+        assertTrue(maybeBaz.isPresent());
+        assertTrue(maybeBaz.get().isLeaf());
+        final Optional<MultiFieldPaths.TrieNode> maybeTest = paths.trie.find("test");
+        assertTrue(maybeTest.isPresent());
+        assertTrue(maybeTest.get().isLeaf());
+    }
+
+    @Test void shouldFlatOverlappingPaths() {
+        final SingleFieldPath foo = new SingleFieldPath("foo", FieldSyntaxVersion.V2);
+        final SingleFieldPath fooBar = new SingleFieldPath("foo.bar", FieldSyntaxVersion.V2);
+
+        MultiFieldPaths.Trie trie1 = new MultiFieldPaths.Trie();
+        trie1.insert(foo);
+        trie1.insert(fooBar);
+        assertFalse(trie1.isEmpty());
+        assertEquals(1, trie1.size());
+
+        final Optional<MultiFieldPaths.TrieNode> maybeFoo1 = trie1.find("foo");
+        assertTrue(maybeFoo1.isPresent());
+        final MultiFieldPaths.TrieNode fooNode1 = maybeFoo1.get();
+        assertFalse(fooNode1.isLeaf());
+        final Optional<MultiFieldPaths.TrieNode> maybeBar1 = fooNode1.find("bar");
+        assertTrue(maybeBar1.isPresent());
+        final MultiFieldPaths.TrieNode barNode = maybeBar1.get();
+        assertTrue(barNode.isLeaf());
+        assertEquals(fooBar, barNode.path);
+
+        MultiFieldPaths.Trie trie2 = new MultiFieldPaths.Trie();
+        trie2.insert(fooBar);
+        trie2.insert(foo);
+        assertFalse(trie2.isEmpty());
+        assertEquals(1, trie2.size());
+
+        final Optional<MultiFieldPaths.TrieNode> maybeFoo2 = trie2.find("foo");
+        assertTrue(maybeFoo2.isPresent());
+        final MultiFieldPaths.TrieNode fooNode2 = maybeFoo2.get();
+        assertFalse(fooNode2.isLeaf());
+        final Optional<MultiFieldPaths.TrieNode> barNode2 = fooNode2.find("bar");
+        assertTrue(barNode2.isPresent());
+        assertTrue(barNode2.get().isLeaf());
+        assertEquals(fooBar, barNode2.get().path);
+
+        assertEquals(trie1, trie2);
     }
 
     @Test void shouldRenameSchemaV1Fields() {

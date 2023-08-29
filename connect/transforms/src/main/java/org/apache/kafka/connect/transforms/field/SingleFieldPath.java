@@ -139,7 +139,7 @@ public class SingleFieldPath {
         if (schema == null) return null;
 
         Schema current = schema;
-        for (String pathSegment : path.subList(0, lastStepIndex())) {
+        for (String pathSegment : stepsWithoutLast()) {
             final Field field = current.field(pathSegment);
             if (field != null) {
                 current = field.schema();
@@ -158,7 +158,7 @@ public class SingleFieldPath {
         if (struct == null) return null;
 
         Struct current = struct;
-        for (String pathSegment : path.subList(0, lastStepIndex())) {
+        for (String pathSegment : stepsWithoutLast()) {
             // Check to see if the field actually exists
             if (current.schema().field(pathSegment) == null) {
                 return null;
@@ -171,6 +171,10 @@ public class SingleFieldPath {
         } else {
             return null;
         }
+    }
+
+    List<String> stepsWithoutLast() {
+        return path.subList(0, lastStepIndex());
     }
 
     /**
@@ -459,7 +463,7 @@ public class SingleFieldPath {
         return path.toArray(new String[0]);
     }
 
-    private String lastStep() {
+    String lastStep() {
         return path.get(lastStepIndex());
     }
 
