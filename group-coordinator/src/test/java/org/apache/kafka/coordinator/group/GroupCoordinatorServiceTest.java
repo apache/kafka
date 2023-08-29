@@ -63,6 +63,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
+import org.mockito.internal.util.collections.Sets;
 
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -604,7 +605,6 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
-<<<<<<< HEAD
     @Test
     public void testListGroups() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
@@ -629,6 +629,7 @@ public class GroupCoordinatorServiceTest {
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
 
             ));
+        when(runtime.partitions()).thenReturn(Sets.newSet(new TopicPartition("__consumer_offsets", 0)));
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("list_groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
@@ -659,6 +660,7 @@ public class GroupCoordinatorServiceTest {
 
         ListGroupsResponseData expectResponseData = new ListGroupsResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
+        when(runtime.partitions()).thenReturn(Sets.newSet(new TopicPartition("__consumer_offsets", 0)));
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("list_groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
