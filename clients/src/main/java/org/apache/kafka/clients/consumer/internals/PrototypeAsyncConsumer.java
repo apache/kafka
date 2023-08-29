@@ -199,6 +199,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (final Exception e) {
             throw new RuntimeException(e);
         }
+        // TODO: Once we implement poll(), clear wakeupTrigger in a finally block: wakeupTrigger.clearActiveTask();
 
         return ConsumerRecords.empty();
     }
