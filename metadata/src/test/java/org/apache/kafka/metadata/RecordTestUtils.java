@@ -17,31 +17,12 @@
 
 package org.apache.kafka.metadata;
 
-import java.util.Arrays;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
-import org.apache.kafka.image.AclsDelta;
-import org.apache.kafka.image.AclsImage;
-import org.apache.kafka.image.ClientQuotasDelta;
-import org.apache.kafka.image.ClientQuotasImage;
-import org.apache.kafka.image.ClusterDelta;
-import org.apache.kafka.image.ClusterImage;
-import org.apache.kafka.image.ConfigurationsDelta;
-import org.apache.kafka.image.ConfigurationsImage;
-import org.apache.kafka.image.DelegationTokenDelta;
-import org.apache.kafka.image.DelegationTokenImage;
-import org.apache.kafka.image.FeaturesDelta;
-import org.apache.kafka.image.FeaturesImage;
-import org.apache.kafka.image.ProducerIdsDelta;
-import org.apache.kafka.image.ProducerIdsImage;
-import org.apache.kafka.image.ScramDelta;
-import org.apache.kafka.image.ScramImage;
-import org.apache.kafka.image.TopicsDelta;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
