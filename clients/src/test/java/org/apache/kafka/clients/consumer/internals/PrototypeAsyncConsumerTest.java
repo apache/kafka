@@ -29,6 +29,8 @@ import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplication
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -127,7 +129,7 @@ public class PrototypeAsyncConsumerTest {
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
         PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
-        doReturn(future).when(mockedConsumer).commit(offsets);
+        doReturn(future).when(mockedConsumer).commit(offsets, false);
         mockedConsumer.commitAsync(offsets, null);
         future.complete(null);
         TestUtils.waitForCondition(() -> future.isDone(),
@@ -148,7 +150,7 @@ public class PrototypeAsyncConsumerTest {
 
         PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(consumer);
-        doReturn(future).when(mockedConsumer).commit(offsets);
+        doReturn(future).when(mockedConsumer).commit(offsets, false);
         OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
         mockedConsumer.commitAsync(offsets, customCallback);
         future.complete(null);
@@ -311,6 +313,27 @@ public class PrototypeAsyncConsumerTest {
         assertEquals(expectedResult, result);
         verify(eventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
                 ArgumentMatchers.isA(Timer.class));
+    }
+
+    public void testWakeup_commitSync() {
+        consumer = newConsumer(time, new StringDeserializer(),
+            new StringDeserializer());
+        consumer.wakeup();
+        assertThrows(WakeupException.class, () -> consumer.commitSync());
+        assertNoPendingWakeup(consumer.wakeupTrigger());
+    }
+
+    @Test
+    public void testWakeup_committed() {
+        consumer = newConsumer(time, new StringDeserializer(),
+            new StringDeserializer());
+        consumer.wakeup();
+        assertThrows(WakeupException.class, () -> consumer.committed(mockTopicPartitionOffset().keySet()));
+        assertNoPendingWakeup(consumer.wakeupTrigger());
+    }
+
+    private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
+        assertTrue(wakeupTrigger.getPendingTask() == null);
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
