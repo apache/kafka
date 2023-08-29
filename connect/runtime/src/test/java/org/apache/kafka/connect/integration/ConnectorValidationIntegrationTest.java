@@ -66,6 +66,8 @@ public class ConnectorValidationIntegrationTest {
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connector-validation-connect-cluster")
                 .workerProps(workerProps)
+                .numBrokers(1)
+                .numWorkers(1)
                 .build();
         connect.start();
     }

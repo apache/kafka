@@ -237,6 +237,7 @@ public class EmbeddedConnectClusterAssertions {
      * @param connectorClass the class of the connector to validate
      * @param connConfig     the intended configuration
      * @param numErrors      the number of errors expected
+     * @param detailMessage  the assertion message
      */
     public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
                                                                   int numErrors, String detailMessage) throws InterruptedException {
@@ -249,6 +250,7 @@ public class EmbeddedConnectClusterAssertions {
      * @param connectorClass the class of the connector to validate
      * @param connConfig     the intended configuration
      * @param numErrors      the number of errors expected
+     * @param detailMessage  the assertion message
      * @param timeout        how long to retry for before throwing an exception
      *
      * @throws AssertionError if the exact number of errors is not produced during config

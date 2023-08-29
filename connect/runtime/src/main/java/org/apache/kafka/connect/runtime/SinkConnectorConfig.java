@@ -147,7 +147,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
                 Pattern pattern = Pattern.compile(topicsRegex);
                 if (pattern.matcher(dlqTopic).matches()) {
                     String errorMessage = String.format(
-                            "The DLQ topic '%s' may not be included in the regex matching the topics ('%s=%s') consumed by the connector",
+                            "The DLQ topic '%s' may not be matched by the regex for the topics ('%s=%s') consumed by the connector",
                             dlqTopic, TOPICS_REGEX_CONFIG, topicsRegex
                     );
                     addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
