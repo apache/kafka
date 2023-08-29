@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.To;
 import org.junit.Before;
 import org.junit.Test;
+import static org.junit.Assert.assertThrows;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -42,63 +43,63 @@ public class StoreToProcessorContextAdapterTest {
         context = StoreToProcessorContextAdapter.adapt(delegate);
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCurrentSystemTime() {
-        context.currentSystemTimeMs();
+        assertThrows(UnsupportedOperationException.class, () -> context.currentSystemTimeMs());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCurrentStreamTime() {
-        context.currentStreamTimeMs();
+        assertThrows(UnsupportedOperationException.class, () -> context.currentStreamTimeMs());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnGetStateStore() {
-        context.getStateStore("store");
+        assertThrows(UnsupportedOperationException.class, () -> context.getStateStore("store"));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnScheduleWithDuration() {
-        context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator);
+        assertThrows(UnsupportedOperationException.class, () -> context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnForward() {
-        context.forward("key", "value");
+        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value"));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnForwardWithTo() {
-        context.forward("key", "value", To.all());
+        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value", To.all()));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCommit() {
-        context.commit();
+        assertThrows(UnsupportedOperationException.class, () -> context.commit());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnTopic() {
-        context.topic();
+        assertThrows(UnsupportedOperationException.class, () -> context.topic());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnPartition() {
-        context.partition();
+        assertThrows(UnsupportedOperationException.class, () -> context.partition());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnOffset() {
-        context.offset();
+        assertThrows(UnsupportedOperationException.class, () -> context.offset());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnHeaders() {
-        context.headers();
+        assertThrows(UnsupportedOperationException.class, () -> context.headers());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnTimestamp() {
-        context.timestamp();
+        assertThrows(UnsupportedOperationException.class, () -> context.timestamp());
     }
 }
