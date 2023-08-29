@@ -68,20 +68,21 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *           Log tA-p0                         Log tA-p0
                  *          *-------------------*             *-------------------*
                  *          | base offset = 2   |             |  base offset = 0  |
-                 *          | (k3, v3)          |             |  (k1, v1)         |
+                 *          | (k2, v2)          |             |  (k0, v0)         |
                  *          *-------------------*             *-------------------*
                  *                                            *-------------------*
                  *                                            |  base offset = 1  |
-                 *                                            |  (k2, v2)         |
+                 *                                            |  (k1, v1)         |
                  *                                            *-------------------*
                  */
                 .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
                 .withBatchSize(topicA, p0, batchSize)
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k1", "v1"))
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k2", "v2"))
-                .produce(topicA, p0, new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"),
-                        new KeyValueSpec("k3", "v3"))
+                .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
+                .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
+                .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 2L)
+                .produce(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
+                        new KeyValueSpec("k2", "v2"))
 
                 /*
                  * (2) Similar scenario as above, but with segments of two records.
@@ -95,13 +96,13 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *           Log tB-p0                         Log tB-p0
                  *          *-------------------*             *-------------------*
                  *          | base offset = 4   |             |  base offset = 0  |
-                 *          | (k5, v5)          |             |  (k1, v1)         |
-                 *          *-------------------*             |  (k2, v2)         |
+                 *          | (k4, v4)          |             |  (k0, v0)         |
+                 *          *-------------------*             |  (k1, v1)         |
                  *                                            *-------------------*
                  *                                            *-------------------*
                  *                                            |  base offset = 2  |
+                 *                                            |  (k2, v2)         |
                  *                                            |  (k3, v3)         |
-                 *                                            |  (k4, v4)         |
                  *                                            *-------------------*
                  */
                 .createTopic(topicB, partitionCount, replicationFactor, 2, replicaAssignment,
@@ -109,11 +110,11 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                 .withBatchSize(topicB, p0, batchSize)
                 .expectEarliestLocalOffsetInLogDirectory(topicB, p0, 4L)
                 .expectSegmentToBeOffloaded(broker, topicB, p0, 0,
-                        new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"))
+                        new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"))
                 .expectSegmentToBeOffloaded(broker, topicB, p0, 2,
-                        new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"))
-                .produce(topicB, p0, new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"),
-                        new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"), new KeyValueSpec("k5", "v5"))
+                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"))
+                .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
+                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"))
 
                 /*
                  * (3) Stops and restarts the broker. The purpose of this test is to a) exercise consumption
