@@ -36,8 +36,8 @@ public final class ExpectEmptyRemoteStorageAction implements TieredStorageTestAc
     public void doExecute(TieredStorageTestContext context) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             LocalTieredStorageSnapshot snapshot = context.takeTieredStorageSnapshot();
-            return !snapshot.getTopicPartitions().contains(topicPartition) &&
-                    snapshot.getFilesets(topicPartition).isEmpty();
+            // With KAFKA-15166, snapshot should not contain the topicPartition
+            return snapshot.getFilesets(topicPartition).isEmpty();
         }, 2000L, "Remote storage is not empty for " + topicPartition);
     }
 
