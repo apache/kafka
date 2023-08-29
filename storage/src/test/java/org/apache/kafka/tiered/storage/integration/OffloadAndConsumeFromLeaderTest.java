@@ -46,10 +46,10 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
         final Integer p0 = 0;
         final Integer partitionCount = 1;
         final Integer replicationFactor = 1;
-        final Integer maxBatchCountPerSegment = 1;
+        final Integer oneBatchPerSegment = 1;
+        final Integer twoBatchPerSegment = 2;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
-        final Integer batchSize = 1;
 
         builder
                 /*
@@ -75,9 +75,8 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *                                            |  (k1, v1)         |
                  *                                            *-------------------*
                  */
-                .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
+                .createTopic(topicA, partitionCount, replicationFactor, oneBatchPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
-                .withBatchSize(topicA, p0, batchSize)
                 .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 2L)
@@ -105,9 +104,8 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *                                            |  (k3, v3)         |
                  *                                            *-------------------*
                  */
-                .createTopic(topicB, partitionCount, replicationFactor, 2, replicaAssignment,
+                .createTopic(topicB, partitionCount, replicationFactor, twoBatchPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
-                .withBatchSize(topicB, p0, batchSize)
                 .expectEarliestLocalOffsetInLogDirectory(topicB, p0, 4L)
                 .expectSegmentToBeOffloaded(broker, topicB, p0, 0,
                         new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"))
@@ -125,7 +123,7 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *       -----------
                  *       - For topic A, this offset is defined such that only the second segment is fetched from
                  *         the tiered storage.
-                 *       - For topic B, only one segment is present in the tiered storage, as asserted by the
+                 *       - For topic B, two segments are present in the tiered storage, as asserted by the
                  *         previous sub-test-case.
                  */
                 .bounce(broker)
