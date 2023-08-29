@@ -17,14 +17,15 @@
 
 package kafka.server
 
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.{AbstractResponse, OffsetFetchRequest, OffsetFetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import java.util.Collections.singletonList
@@ -72,15 +73,16 @@ class OffsetFetchRequestTest extends BaseRequestTest {
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
   }
 
-  @BeforeEach
+  /*@BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     doSetup(testInfo, createOffsetsTopic = false)
 
     TestUtils.createOffsetsTopic(zkClient, servers)
-  }
+  }*/
 
-  @Test
-  def testOffsetFetchRequestSingleGroup(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testOffsetFetchRequestSingleGroup(quorum: String): Unit = {
     createTopic(topic)
 
     val tpList = singletonList(new TopicPartition(topic, 0))
@@ -126,8 +128,9 @@ class OffsetFetchRequestTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testOffsetFetchRequestAllOffsetsSingleGroup(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testOffsetFetchRequestAllOffsetsSingleGroup(quorum: String): Unit = {
     createTopic(topic)
 
     val tpList = singletonList(new TopicPartition(topic, 0))
@@ -176,8 +179,9 @@ class OffsetFetchRequestTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testOffsetFetchRequestWithMultipleGroups(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testOffsetFetchRequestWithMultipleGroups(quorum: String): Unit = {
     createTopic(topics(0))
     createTopic(topics(1), numPartitions = 2)
     createTopic(topics(2), numPartitions = 3)

@@ -20,20 +20,23 @@ package kafka.tools
 import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{Exit, Logging, TestUtils}
+import kafka.utils.{Exit, Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   private val topicCount = 4
   private val offsetTopicPartitionCount = 4
+  protected var admin: Admin = _
 
-  override def generateConfigs: collection.Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect)
+  override def generateConfigs: collection.Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnectOrNull)
     .map { p =>
       p.put(KafkaConfig.OffsetsTopicPartitionsProp, Int.box(offsetTopicPartitionCount))
       p
@@ -55,49 +58,72 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
       .foreach(msgCount => producer.send(new ProducerRecord[String, String](topicName(i), msgCount % i, null, "val" + msgCount))))
     producer.close()
 
-    TestUtils.createOffsetsTopic(zkClient, servers)
+    admin = TestUtils.createAdminClient(brokers, listenerName,
+      TestUtils.securityConfigs(Mode.CLIENT,
+        securityProtocol,
+        trustStoreFile,
+        "adminClient",
+        TestUtils.SslCertificateCn,
+        clientSaslProperties))
+
+    //TestUtils.createOffsetsTopic(zkClient, servers)
+    TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
   }
 
-  @Test
-  def testNoFilterOptions(): Unit = {
+  @AfterEach
+  override def tearDown(): Unit = {
+    admin.close()
+
+    super.tearDown()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testNoFilterOptions(quorum: String): Unit = {
     val offsets = executeAndParse(Array())
     assertEquals(expectedOffsetsWithInternal(), offsets)
   }
 
-  @Test
-  def testInternalExcluded(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testInternalExcluded(quorum: String): Unit = {
     val offsets = executeAndParse(Array("--exclude-internal-topics"))
     assertEquals(expectedTestTopicOffsets(), offsets)
   }
 
-  @Test
-  def testTopicNameArg(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicNameArg(quorum: String): Unit = {
     Range(1, topicCount + 1).foreach(i => {
       val offsets = executeAndParse(Array("--topic", topicName(i)))
       assertEquals(expectedOffsetsForTopic(i), offsets, () => "Offset output did not match for " + topicName(i))
     })
   }
 
-  @Test
-  def testTopicPatternArg(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPatternArg(quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic", "topic.*"))
     assertEquals(expectedTestTopicOffsets(), offsets)
   }
 
-  @Test
-  def testPartitionsArg(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPartitionsArg(quorum: String): Unit = {
     val offsets = executeAndParse(Array("--partitions", "0,1"))
     assertEquals(expectedOffsetsWithInternal().filter { case (_, partition, _) => partition <= 1 }, offsets)
   }
 
-  @Test
-  def testTopicPatternArgWithPartitionsArg(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPatternArgWithPartitionsArg(quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic", "topic.*", "--partitions", "0,1"))
     assertEquals(expectedTestTopicOffsets().filter { case (_, partition, _) => partition <= 1 }, offsets)
   }
 
-  @Test
-  def testTopicPartitionsArg(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsArg(quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3"))
     assertEquals(
       List(
@@ -112,8 +138,8 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("-1", "latest"))
-  def testGetLatestOffsets(time: String): Unit = {
+  @CsvSource(value = Array("-1,zk", "-1,kraft", "latest,zk", "latest,kraft"))
+  def testGetLatestOffsets(time: String, quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions", "topic.*:0", "--time", time))
     assertEquals(
       List(
@@ -127,8 +153,8 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("-2", "earliest"))
-  def testGetEarliestOffsets(time: String): Unit = {
+  @CsvSource(value = Array("-2,zk", "-2,kraft", "earliest,zk", "earliest,kraft"))
+  def testGetEarliestOffsets(time: String, quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions", "topic.*:0", "--time", time))
     assertEquals(
       List(
@@ -142,8 +168,8 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("-3", "max-timestamp"))
-  def testGetOffsetsByMaxTimestamp(time: String): Unit = {
+  @CsvSource(value = Array("-3,zk", "-3,kraft", "max-timestamp,zk", "max-timestamp,kraft"))
+  def testGetOffsetsByMaxTimestamp(time: String, quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions", "topic.*", "--time", time))
     offsets.foreach { case (topic, _, timestampOpt) =>
       // We can't know the exact offsets with max timestamp
@@ -151,8 +177,9 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     }
   }
 
-  @Test
-  def testGetOffsetsByTimestamp(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testGetOffsetsByTimestamp(quorum: String): Unit = {
     val time = (System.currentTimeMillis() / 2).toString
     val offsets = executeAndParse(Array("--topic-partitions", "topic.*:0", "--time", time))
     assertEquals(
@@ -166,15 +193,17 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     )
   }
 
-  @Test
-  def testNoOffsetIfTimestampGreaterThanLatestRecord(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testNoOffsetIfTimestampGreaterThanLatestRecord(quorum: String): Unit = {
     val time = (System.currentTimeMillis() * 2).toString
     val offsets = executeAndParse(Array("--topic-partitions", "topic.*", "--time", time))
     assertEquals(List.empty, offsets)
   }
 
-  @Test
-  def testTopicPartitionsArgWithInternalExcluded(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsArgWithInternalExcluded(quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions",
       "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics"))
     assertEquals(
@@ -188,34 +217,40 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     )
   }
 
-  @Test
-  def testTopicPartitionsArgWithInternalIncluded(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsArgWithInternalIncluded(quorum: String): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions", "__.*:0"))
     assertEquals(List(("__consumer_offsets", 0, Some(0))), offsets)
   }
 
-  @Test
-  def testTopicPartitionsNotFoundForNonExistentTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsNotFoundForNonExistentTopic(quorum: String): Unit = {
     assertExitCodeIsOne(Array("--topic", "some_nonexistent_topic"))
   }
 
-  @Test
-  def testTopicPartitionsNotFoundForExcludedInternalTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsNotFoundForExcludedInternalTopic(quorum: String): Unit = {
     assertExitCodeIsOne(Array("--topic", "some_nonexistent_topic:*"))
   }
 
-  @Test
-  def testTopicPartitionsNotFoundForNonMatchingTopicPartitionPattern(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsNotFoundForNonMatchingTopicPartitionPattern(quorum: String): Unit = {
     assertExitCodeIsOne(Array("--topic-partitions", "__consumer_offsets", "--exclude-internal-topics"))
   }
 
-  @Test
-  def testTopicPartitionsFlagWithTopicFlagCauseExit(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsFlagWithTopicFlagCauseExit(quorum: String): Unit = {
     assertExitCodeIsOne(Array("--topic-partitions", "__consumer_offsets", "--topic", "topic1"))
   }
 
-  @Test
-  def testTopicPartitionsFlagWithPartitionsFlagCauseExit(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicPartitionsFlagWithPartitionsFlagCauseExit(quorum: String): Unit = {
     assertExitCodeIsOne(Array("--topic-partitions", "__consumer_offsets", "--partitions", "0"))
   }
 
