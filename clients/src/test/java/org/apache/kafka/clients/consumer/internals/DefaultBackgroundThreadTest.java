@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.TopicPartition;
@@ -41,6 +42,7 @@ import org.mockito.Mockito;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -51,6 +53,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -71,7 +74,7 @@ public class DefaultBackgroundThreadTest {
     private CoordinatorRequestManager coordinatorManager;
     private OffsetsRequestManager offsetsRequestManager;
     private ErrorEventHandler errorEventHandler;
-    private int requestTimeoutMs = 500;
+    private final int requestTimeoutMs = 500;
     private GroupState groupState;
     private CommitRequestManager commitManager;
 
@@ -160,6 +163,20 @@ public class DefaultBackgroundThreadTest {
         backgroundThread.close();
     }
 
+
+    @Test
+    public void testListOffsetsEventIsProcessed() {
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
+        ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true);
+        this.applicationEventsQueue.add(e);
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(ListOffsetsApplicationEvent.class));
+        assertTrue(applicationEventsQueue.isEmpty());
+        backgroundThread.close();
+    }
     @Test
     public void testAssignmentChangeEvent() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
