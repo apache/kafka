@@ -502,7 +502,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         exception.getMessage(),
                         simpleName);
                     // Don't need to request rejoin again for MemberIdRequiredException since we've done that in JoinGroupResponseHandler
-                    if (!MemberIdRequiredException.class.getSimpleName().equals(simpleName)) {
+                    if (!(exception instanceof MemberIdRequiredException)) {
                         requestRejoin(shortReason, fullReason);
                     }
                 }
