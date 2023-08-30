@@ -136,6 +136,59 @@ class LogManagerTest {
     }
   }
 
+  /*
+   * Test that LogManager.shutdown() doesn't create clean shutdown file for a log directory that has not completed
+   * recovery.
+   */
+  @Test
+  def testCleanShutdownFileWhenShutdownCalledBeforeStartupComplete(): Unit = {
+    // 1. create two logs under logDir
+    val topicPartition0 = new TopicPartition(name, 0)
+    val topicPartition1 = new TopicPartition(name, 1)
+    val log0 = logManager.getOrCreateLog(topicPartition0, topicId = None)
+    val log1 = logManager.getOrCreateLog(topicPartition1, topicId = None)
+    val logFile0 = new File(logDir, name + "-0")
+    val logFile1 = new File(logDir, name + "-1")
+    assertTrue(logFile0.exists)
+    assertTrue(logFile1.exists)
+
+    log0.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
+    log0.takeProducerSnapshot()
+
+    log1.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
+    log1.takeProducerSnapshot()
+
+    // 2. simulate unclean shutdown by deleting clean shutdown marker file
+    logManager.shutdown()
+    assertTrue(Files.deleteIfExists(new File(logDir, LogLoader.CleanShutdownFile).toPath))
+
+    // 3. create a new LogManager and start it in a different thread
+    @volatile var loadLogCalled = 0
+    logManager = spy(createLogManager())
+    doAnswer { invocation =>
+      // intercept LogManager.loadLog to sleep 5 seconds so that there is enough time to call LogManager.shutdown
+      // before LogManager.startup completes.
+      Thread.sleep(5000)
+      invocation.callRealMethod().asInstanceOf[UnifiedLog]
+      loadLogCalled = loadLogCalled + 1
+    }.when(logManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
+
+    val t = new Thread() {
+      override def run(): Unit = { logManager.startup(Set.empty) }
+    }
+    t.start()
+
+    // 4. shutdown LogManager after the first log is loaded but before the second log is loaded
+    TestUtils.waitUntilTrue(() => loadLogCalled == 1,
+      "Timed out waiting for only the first log to be loaded")
+    logManager.shutdown()
+    logManager = null
+
+    // 5. verify that CleanShutdownFile is not created under logDir
+    assertFalse(Files.exists(new File(logDir, LogLoader.CleanShutdownFile).toPath))
+  }
+
   /**
    * Test that getOrCreateLog on a non-existent log creates a new log and that we can append to the new log.
    * The LogManager is configured with one invalid log directory which should be marked as offline.

@@ -130,6 +130,12 @@ class LogManager(logDirs: Seq[File],
     logDirsSet
   }
 
+  // A map that stores hadCleanShutdown flag for each log dir.
+  private val hadCleanShutdownFlags = new ConcurrentHashMap[String, Boolean]()
+
+  // A map that tells whether all logs in a log dir had been loaded or not at startup time.
+  private val loadLogsCompletedFlags = new ConcurrentHashMap[String, Boolean]()
+
   @volatile private var _cleaner: LogCleaner = _
   private[kafka] def cleaner: LogCleaner = _cleaner
 
@@ -372,6 +378,7 @@ class LogManager(logDirs: Seq[File],
           Files.deleteIfExists(cleanShutdownFile.toPath)
           hadCleanShutdown = true
         }
+        hadCleanShutdownFlags.put(logDirAbsolutePath, hadCleanShutdown)
 
         var recoveryPoints = Map[TopicPartition, Long]()
         try {
@@ -398,7 +405,8 @@ class LogManager(logDirs: Seq[File],
             !logDir.getName.equals(RemoteIndexCache.DIR_NAME) &&
             UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         numTotalLogs += logsToLoad.length
-        numRemainingLogs.put(dir.getAbsolutePath, logsToLoad.length)
+        numRemainingLogs.put(logDirAbsolutePath, logsToLoad.length)
+        loadLogsCompletedFlags.put(logDirAbsolutePath, logsToLoad.isEmpty)
 
         if (logsToLoad.isEmpty) {
           info(s"No logs found to be loaded in $logDirAbsolutePath")
@@ -427,13 +435,18 @@ class LogManager(logDirs: Seq[File],
                 // And while converting IOException to KafkaStorageException, we've already handled the exception. So we can ignore it here.
             } finally {
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
-              val remainingLogs = decNumRemainingLogs(numRemainingLogs, dir.getAbsolutePath)
+              val remainingLogs = decNumRemainingLogs(numRemainingLogs, logDirAbsolutePath)
               val currentNumLoaded = logsToLoad.length - remainingLogs
               log match {
                 case Some(loadedLog) => info(s"Completed load of $loadedLog with ${loadedLog.numberOfSegments} segments, " +
                   s"local-log-start-offset ${loadedLog.localLogStartOffset()} and log-end-offset ${loadedLog.logEndOffset} in ${logLoadDurationMs}ms " +
                   s"($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
                 case None => info(s"Error while loading logs in $logDir in ${logLoadDurationMs}ms ($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
+              }
+
+              if (remainingLogs == 0) {
+                // loadLog is completed for all logs under the logDdir, mark it.
+                loadLogsCompletedFlags.put(logDirAbsolutePath, true)
               }
             }
           }
@@ -628,9 +641,15 @@ class LogManager(logDirs: Seq[File],
           debug(s"Updating log start offsets at $dir")
           checkpointLogStartOffsetsInDir(dir, logs)
 
-          // mark that the shutdown was clean by creating marker file
-          debug(s"Writing clean shutdown marker at $dir")
-          CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+          // mark that the shutdown was clean by creating marker file for log dirs that:
+          //  1. had clean shutdown marker file; or
+          //  2. had no clean shutdown marker file, but all logs under it have been recovered at startup time
+          val logDirAbsolutePath = dir.getAbsolutePath
+          if (hadCleanShutdownFlags.getOrDefault(logDirAbsolutePath, false) ||
+              loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
+            debug(s"Writing clean shutdown marker at $dir")
+            CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+          }
         }
       }
     } finally {
