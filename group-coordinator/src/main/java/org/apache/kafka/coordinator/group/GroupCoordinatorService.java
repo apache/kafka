@@ -469,13 +469,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#fetchOffsets(RequestContext, String, List, boolean)}.
+     * See {@link GroupCoordinator#fetchOffsets(RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
      */
     @Override
-    public CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchOffsets(
+    public CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
         RequestContext context,
-        String groupId,
-        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     ) {
         if (!isActive.get()) {
@@ -483,7 +482,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
-        if (groupId == null) {
+        if (request.groupId() == null) {
             return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
         }
 
@@ -498,28 +497,28 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (requireStable) {
             return runtime.scheduleWriteOperation(
                 "fetch-offsets",
-                topicPartitionFor(groupId),
+                topicPartitionFor(request.groupId()),
                 coordinator -> new CoordinatorResult<>(
                     Collections.emptyList(),
-                    coordinator.fetchOffsets(groupId, topics, Long.MAX_VALUE)
+                    coordinator.fetchOffsets(request, Long.MAX_VALUE)
                 )
             );
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-offsets",
-                topicPartitionFor(groupId),
-                (coordinator, offset) -> coordinator.fetchOffsets(groupId, topics, offset)
+                topicPartitionFor(request.groupId()),
+                (coordinator, offset) -> coordinator.fetchOffsets(request, offset)
             );
         }
     }
 
     /**
-     * See {@link GroupCoordinator#fetchAllOffsets(RequestContext, String, boolean)}.
+     * See {@link GroupCoordinator#fetchAllOffsets(RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
      */
     @Override
-    public CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchAllOffsets(
+    public CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
         RequestContext context,
-        String groupId,
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     ) {
         if (!isActive.get()) {
@@ -527,7 +526,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
-        if (groupId == null) {
+        if (request.groupId() == null) {
             return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
         }
 
@@ -542,17 +541,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (requireStable) {
             return runtime.scheduleWriteOperation(
                 "fetch-all-offsets",
-                topicPartitionFor(groupId),
+                topicPartitionFor(request.groupId()),
                 coordinator -> new CoordinatorResult<>(
                     Collections.emptyList(),
-                    coordinator.fetchAllOffsets(groupId, Long.MAX_VALUE)
+                    coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
                 )
             );
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-all-offsets",
-                topicPartitionFor(groupId),
-                (coordinator, offset) -> coordinator.fetchAllOffsets(groupId, offset)
+                topicPartitionFor(request.groupId()),
+                (coordinator, offset) -> coordinator.fetchAllOffsets(request, offset)
             );
         }
     }
