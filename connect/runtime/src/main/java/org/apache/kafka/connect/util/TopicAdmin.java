@@ -720,23 +720,23 @@ public class TopicAdmin implements AutoCloseable {
                 String topic = partition.topic();
                 if (cause instanceof AuthorizationException) {
                     String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 } else if (cause instanceof UnsupportedVersionException) {
                     // Should theoretically never happen, because this method is the same as what the consumer uses and therefore
                     // should exist in the broker since before the admin client was added
                     String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers);
-                    throw new UnsupportedVersionException(msg, e);
+                    throw new UnsupportedVersionException(msg, cause);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new TimeoutException(msg, e);
+                    throw new TimeoutException(msg, cause);
                 } else if (cause instanceof LeaderNotAvailableException) {
                     String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new LeaderNotAvailableException(msg, e);
+                    throw new LeaderNotAvailableException(msg, cause);
                 } else if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
                     throw (org.apache.kafka.common.errors.RetriableException) cause;
                 } else {
                     String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 }
             } catch (InterruptedException e) {
                 Thread.interrupted();
@@ -774,7 +774,7 @@ public class TopicAdmin implements AutoCloseable {
             // Older brokers don't support this admin method, so rethrow it without wrapping it
             throw e;
         } catch (Exception e) {
-            throw new ConnectException("Failed to list offsets for topic partitions.", e);
+            throw ConnectUtils.maybeWrap(e, "Failed to list offsets for topic partitions");
         }
     }
 

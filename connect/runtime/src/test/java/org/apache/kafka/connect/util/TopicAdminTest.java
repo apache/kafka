@@ -532,19 +532,31 @@ public class TopicAdminTest {
         Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
+        String bootstrapServers = "localhost:8121";
 
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             Map<TopicPartition, Long> offsetMap = new HashMap<>();
             offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE));
-            Map<String, Object> adminConfig = new HashMap<>();
-            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
-            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
 
-            assertThrows(ConnectException.class, () -> {
-                admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
-            });
+            // This error should be treated as non-retriable and cause TopicAdmin::retryEndOffsets to fail
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.TOPIC_AUTHORIZATION_FAILED, Errors.NONE));
+            // But, in case there's a bug in our logic, prepare a valid response afterward so that TopicAdmin::retryEndOffsets
+            // will return successfully if we retry (which should in turn cause this test to fail)
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResult(tp1, offset));
+
+            TopicAdmin admin = new TopicAdmin(bootstrapServers, env.adminClient());
+            ConnectException exception = assertThrows(ConnectException.class, () ->
+                admin.retryEndOffsets(tps, Duration.ofMillis(100), 1)
+            );
+
+            Throwable cause = exception.getCause();
+            assertNotNull("cause of failure should be preserved", cause);
+            assertTrue(
+                    "cause of failure should be accurately reported; expected topic authorization error, but was " + cause,
+                    cause instanceof TopicAuthorizationException
+            );
         }
     }
 
@@ -555,8 +567,9 @@ public class TopicAdminTest {
         Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
+        String bootstrapServers = "localhost:8121";
 
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             Map<TopicPartition, Long> offsetMap = new HashMap<>();
             offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -564,13 +577,9 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResult(tp1, offset));
 
-            Map<String, Object> adminConfig = new HashMap<>();
-            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
-            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
+            TopicAdmin admin = new TopicAdmin(bootstrapServers, env.adminClient());
             Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
-            assertNotNull(endoffsets);
-            assertTrue(endoffsets.containsKey(tp1));
-            assertEquals(1000L, endoffsets.get(tp1).longValue());
+            assertEquals(Collections.singletonMap(tp1, offset), endoffsets);
         }
     }
 
