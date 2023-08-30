@@ -1149,8 +1149,8 @@ class DynamicRemoteLogManagerConfig(server: KafkaBroker) extends BrokerReconfigu
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    val oldValue = oldConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP)
-    val newValue = newConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP)
+    val oldValue = oldConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
+    val newValue = newConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
     if (oldValue != newValue) {
       val remoteLogManager = server.remoteLogManager
       if (remoteLogManager.nonEmpty) {
@@ -1161,8 +1161,8 @@ class DynamicRemoteLogManagerConfig(server: KafkaBroker) extends BrokerReconfigu
 
   private def getValue(config: KafkaConfig, name: String): Long = {
     name match {
-      case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP =>
-        config.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP)
+      case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP =>
+        config.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
       case n => throw new IllegalStateException(s"Unexpected dynamic remote log manager config $n")
     }
   }
@@ -1170,6 +1170,6 @@ class DynamicRemoteLogManagerConfig(server: KafkaBroker) extends BrokerReconfigu
 
 object DynamicRemoteLogManagerConfig {
   val DynamicRemoteLogManagerConfigs = Set(
-    RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP
+    RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP
   )
 }

@@ -143,15 +143,8 @@ public class RemoteIndexCache implements Closeable {
         lock.writeLock().lock();
         try {
             Cache<Uuid, Entry> newCache = initEmptyCache(remoteLogIndexFileCacheSize);
-            long finalSize = Math.min(remoteLogIndexFileCacheSize, internalCache.estimatedSize());
-            long count = 0;
             for (Map.Entry<Uuid, Entry> entry : internalCache.asMap().entrySet()) {
-                if (count < finalSize) {
-                    newCache.put(entry.getKey(), entry.getValue());
-                    count++;
-                } else {
-                    break;
-                }
+                newCache.put(entry.getKey(), entry.getValue());
             }
             internalCache = newCache;
         } finally {
@@ -161,7 +154,12 @@ public class RemoteIndexCache implements Closeable {
 
     private Cache<Uuid, Entry> initEmptyCache(long maxSize) {
         return Caffeine.newBuilder()
-                .maximumSize(maxSize)
+                .maximumWeight(maxSize)
+                .weigher((Uuid key, Entry entry) -> {
+                    return entry.offsetIndex.sizeInBytes() + (int) entry.offsetIndex.length() +
+                            entry.timeIndex.sizeInBytes() + (int) entry.timeIndex.length() +
+                            (int) entry.txnIndex.file().length();
+                })
                 // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
                 .removalListener((Uuid key, Entry entry, RemovalCause cause) -> {

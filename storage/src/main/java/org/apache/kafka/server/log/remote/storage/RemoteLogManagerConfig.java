@@ -95,10 +95,6 @@ public final class RemoteLogManagerConfig {
             "from remote storage in the local storage.";
     public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES = 1024 * 1024 * 1024L;
 
-    public static final String REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP = "remote.log.index.file.cache.total.size";
-    public static final String REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_DOC = "The total entry size in the local cache storage.";
-    public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE = 1024L;
-
     public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP = "remote.log.manager.thread.pool.size";
     public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks to copy " +
             "segments, fetch remote log indexes and clean up remote log segments.";
@@ -207,12 +203,6 @@ public final class RemoteLogManagerConfig {
                                   atLeast(1),
                                   LOW,
                                   REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_DOC)
-                  .defineInternal(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP,
-                                  LONG,
-                                  DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE,
-                                  atLeast(1),
-                                  LOW,
-                                  REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_DOC)
                   .defineInternal(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP,
                                   INT,
                                   DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE,
@@ -274,7 +264,6 @@ public final class RemoteLogManagerConfig {
     private final String remoteLogMetadataManagerClassName;
     private final String remoteLogMetadataManagerClassPath;
     private final long remoteLogIndexFileCacheTotalSizeBytes;
-    private final long remoteLogIndexFileCacheTotalSize;
     private final int remoteLogManagerThreadPoolSize;
     private final long remoteLogManagerTaskIntervalMs;
     private final long remoteLogManagerTaskRetryBackoffMs;
@@ -297,7 +286,6 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP),
              config.getString(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP),
              config.getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP),
-             config.getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_PROP),
              config.getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP),
@@ -324,7 +312,6 @@ public final class RemoteLogManagerConfig {
                                   String remoteLogMetadataManagerClassPath,
                                   String remoteLogMetadataManagerListenerName,
                                   long remoteLogIndexFileCacheTotalSizeBytes,
-                                  long remoteLogIndexFileCacheTotalSize,
                                   int remoteLogManagerThreadPoolSize,
                                   long remoteLogManagerTaskIntervalMs,
                                   long remoteLogManagerTaskRetryBackoffMs,
@@ -344,7 +331,6 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerClassName = remoteLogMetadataManagerClassName;
         this.remoteLogMetadataManagerClassPath = remoteLogMetadataManagerClassPath;
         this.remoteLogIndexFileCacheTotalSizeBytes = remoteLogIndexFileCacheTotalSizeBytes;
-        this.remoteLogIndexFileCacheTotalSize = remoteLogIndexFileCacheTotalSize;
         this.remoteLogManagerThreadPoolSize = remoteLogManagerThreadPoolSize;
         this.remoteLogManagerTaskIntervalMs = remoteLogManagerTaskIntervalMs;
         this.remoteLogManagerTaskRetryBackoffMs = remoteLogManagerTaskRetryBackoffMs;
@@ -382,10 +368,6 @@ public final class RemoteLogManagerConfig {
 
     public long remoteLogIndexFileCacheTotalSizeBytes() {
         return remoteLogIndexFileCacheTotalSizeBytes;
-    }
-
-    public long getRemoteLogIndexFileCacheTotalSize() {
-        return remoteLogIndexFileCacheTotalSize;
     }
 
     public int remoteLogManagerThreadPoolSize() {
@@ -447,7 +429,6 @@ public final class RemoteLogManagerConfig {
         RemoteLogManagerConfig that = (RemoteLogManagerConfig) o;
         return enableRemoteStorageSystem == that.enableRemoteStorageSystem
                 && remoteLogIndexFileCacheTotalSizeBytes == that.remoteLogIndexFileCacheTotalSizeBytes
-                && remoteLogIndexFileCacheTotalSize == that.getRemoteLogIndexFileCacheTotalSize()
                 && remoteLogManagerThreadPoolSize == that.remoteLogManagerThreadPoolSize
                 && remoteLogManagerTaskIntervalMs == that.remoteLogManagerTaskIntervalMs
                 && remoteLogManagerTaskRetryBackoffMs == that.remoteLogManagerTaskRetryBackoffMs
@@ -474,6 +455,6 @@ public final class RemoteLogManagerConfig {
                             remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
-                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogIndexFileCacheTotalSize);
+                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix);
     }
 }
