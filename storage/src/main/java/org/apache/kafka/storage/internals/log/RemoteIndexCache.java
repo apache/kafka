@@ -141,11 +141,13 @@ public class RemoteIndexCache implements Closeable {
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
         lock.writeLock().lock();
         try {
-            Cache<Uuid, Entry> newCache = initEmptyCache(remoteLogIndexFileCacheSize);
-            for (Map.Entry<Uuid, Entry> entry : internalCache.asMap().entrySet()) {
-                newCache.put(entry.getKey(), entry.getValue());
-            }
-            internalCache = newCache;
+            // When resizing the cache, we always start with an empty cache. There are two main reasons:
+            // 1. Resizing the cache is not a high-frequency operation, and there is no need to fill the data in the old
+            // cache to the new cache in time when resizing inside.
+            // 2. Since the eviction of the caffeine cache is cleared asynchronously, it is possible that after the entry
+            // in the old cache is filled in the new cache, the old cache will clear the entry, and the data in the two caches
+            // will be inconsistent.
+            internalCache = initEmptyCache(remoteLogIndexFileCacheSize);
         } finally {
             lock.writeLock().unlock();
         }
@@ -155,7 +157,7 @@ public class RemoteIndexCache implements Closeable {
         return Caffeine.newBuilder()
                 .maximumWeight(maxSize)
                 .weigher((Uuid key, Entry entry) -> {
-                    return estimatedEntrySize(entry);
+                    return entry.entrySize();
                 })
                 // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
@@ -297,6 +299,8 @@ public class RemoteIndexCache implements Closeable {
                         txnIndex.sanityCheck();
 
                         Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
+                        int entrySize = estimatedEntrySize(entry);
+                        entry.setEntrySize(entrySize);
                         internalCache.put(uuid, entry);
                     } else {
                         // Delete all of them if any one of those indexes is not available for a specific segment id
@@ -415,7 +419,11 @@ public class RemoteIndexCache implements Closeable {
                 }
             });
 
-            return new Entry(offsetIndex, timeIndex, txnIndex);
+            Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
+            int entrySize = estimatedEntrySize(entry);
+            entry.setEntrySize(entrySize);
+
+            return entry;
         } catch (IOException e) {
             throw new KafkaException(e);
         }
@@ -457,7 +465,6 @@ public class RemoteIndexCache implements Closeable {
 
                 // Note that internal cache does not require explicit cleaning/closing. We don't want to invalidate or cleanup
                 // the cache as both would lead to triggering of removal listener.
-                internalCache.cleanUp();
                 log.info("Close completed for RemoteIndexCache");
             } catch (InterruptedException e) {
                 throw new KafkaException(e);
@@ -482,6 +489,8 @@ public class RemoteIndexCache implements Closeable {
         private boolean cleanStarted = false;
 
         private boolean markedForCleanup = false;
+
+        private int entrySize = 0;
 
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
@@ -512,6 +521,14 @@ public class RemoteIndexCache implements Closeable {
         // Visible for testing
         public boolean isMarkedForCleanup() {
             return markedForCleanup;
+        }
+
+        public int entrySize() {
+            return entrySize;
+        }
+
+        public void setEntrySize(int entrySize) {
+            this.entrySize = entrySize;
         }
 
         public OffsetPosition lookupOffset(long targetOffset) {
@@ -690,9 +707,7 @@ public class RemoteIndexCache implements Closeable {
     }
 
     public static int estimatedEntrySize(Entry entry) {
-        return entry.offsetIndex.sizeInBytes() + (int) entry.offsetIndex.length() +
-                entry.timeIndex.sizeInBytes() + (int) entry.timeIndex.length() +
-                (int) entry.txnIndex.file().length();
+        return entry.offsetIndex.sizeInBytes() + entry.timeIndex.sizeInBytes() + (int) entry.txnIndex.file().length();
     }
 
 }
