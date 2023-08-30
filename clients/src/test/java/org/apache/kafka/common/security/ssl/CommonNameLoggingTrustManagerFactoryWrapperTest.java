@@ -441,7 +441,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         }
     }
 
-        @Test
+    @Test
     public void testCommonNameLoggingTrustManagerMixValidAndInvalidCertificates() throws Exception {
         // Setup certificate chain with expired end certificate
         X509Certificate endCertValid = chainWithValidAndInvalidEndCertificates[0];
@@ -557,7 +557,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
                 "SHA512withRSA", true, false, false);
         for (int currIndex = intermediateCertIndex - 1; currIndex >= 0; currIndex--) {
             // When generating multiple end certificates, 
-            boolean endCertValid = currIndex==0 ? endCert0Valid : endCert1Valid;
+            boolean endCertValid = (currIndex == 0) ? endCert0Valid : endCert1Valid;
             if (endCertValid) {
                 // Generate a valid end certificate, i.e. one that is signed by our intermediate
                 // CA
