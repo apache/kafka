@@ -1074,7 +1074,8 @@ project(':core') {
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
                                ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
                                ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
-                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs'], type: Tar) {
+                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
+                               ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc'], type: Tar) {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -1764,6 +1765,20 @@ project(':storage') {
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
+  }
+
+  task genRemoteLogManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_manager_config.html").newOutputStream()
+  }
+
+  task genRemoteLogMetadataManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_metadata_manager_config.html").newOutputStream()
   }
 
   sourceSets {

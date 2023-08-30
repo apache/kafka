@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -24,6 +23,8 @@ import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
@@ -41,9 +42,11 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.OptionalLong;
+
+import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
 
 /**
  * The OffsetMetadataManager manages the offsets of all the groups. It basically maintains
@@ -145,9 +148,9 @@ public class OffsetMetadataManager {
     private final int offsetMetadataMaxSize;
 
     /**
-     * The offsets keyed by topic-partition and group id.
+     * The offsets keyed by group id, topic name and partition id.
      */
-    private final TimelineHashMap<String, TimelineHashMap<TopicPartition, OffsetAndMetadata>> offsetsByGroup;
+    private final TimelineHashMap<String, TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>>> offsetsByGroup;
 
     OffsetMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -219,6 +222,20 @@ public class OffsetMetadataManager {
         }
 
         return group;
+    }
+
+    /**
+     * Validates an OffsetCommit request.
+     *
+     * @param groupId               The group id.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     */
+    private void validateOffsetFetch(
+        String groupId,
+        long lastCommittedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = groupMetadataManager.group(groupId, lastCommittedOffset);
+        group.validateOffsetFetch();
     }
 
     /**
@@ -313,6 +330,109 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Fetch offsets for a given Group.
+     *
+     * @param groupId               The group id.
+     * @param topics                The topics to fetch the offsets for.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     *
+     * @return A List of OffsetFetchResponseTopics response.
+     */
+    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
+        String groupId,
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+        long lastCommittedOffset
+    ) throws ApiException {
+        boolean failAllPartitions = false;
+        try {
+            validateOffsetFetch(groupId, lastCommittedOffset);
+        } catch (GroupIdNotFoundException ex) {
+            failAllPartitions = true;
+        }
+
+        final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>(topics.size());
+        final TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> groupOffsets =
+            failAllPartitions ? null : offsetsByGroup.get(groupId, lastCommittedOffset);
+
+        topics.forEach(topic -> {
+            final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
+                new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name());
+            topicResponses.add(topicResponse);
+
+            final TimelineHashMap<Integer, OffsetAndMetadata> topicOffsets = groupOffsets == null ?
+                null : groupOffsets.get(topic.name(), lastCommittedOffset);
+
+            topic.partitionIndexes().forEach(partitionIndex -> {
+                final OffsetAndMetadata offsetAndMetadata = topicOffsets == null ?
+                    null : topicOffsets.get(partitionIndex, lastCommittedOffset);
+
+                if (offsetAndMetadata == null) {
+                    topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(partitionIndex)
+                        .setCommittedOffset(INVALID_OFFSET)
+                        .setCommittedLeaderEpoch(-1)
+                        .setMetadata(""));
+                } else {
+                    topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(partitionIndex)
+                        .setCommittedOffset(offsetAndMetadata.offset)
+                        .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(-1))
+                        .setMetadata(offsetAndMetadata.metadata));
+                }
+            });
+        });
+
+        return topicResponses;
+    }
+
+    /**
+     * Fetch all offsets for a given Group.
+     *
+     * @param groupId               The group id.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     *
+     * @return A List of OffsetFetchResponseTopics response.
+     */
+    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
+        String groupId,
+        long lastCommittedOffset
+    ) throws ApiException {
+        try {
+            validateOffsetFetch(groupId, lastCommittedOffset);
+        } catch (GroupIdNotFoundException ex) {
+            return Collections.emptyList();
+        }
+
+        final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>();
+        final TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> groupOffsets =
+            offsetsByGroup.get(groupId, lastCommittedOffset);
+
+        if (groupOffsets != null) {
+            groupOffsets.entrySet(lastCommittedOffset).forEach(topicEntry -> {
+                final String topic = topicEntry.getKey();
+                final TimelineHashMap<Integer, OffsetAndMetadata> topicOffsets = topicEntry.getValue();
+
+                final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
+                    new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic);
+                topicResponses.add(topicResponse);
+
+                topicOffsets.entrySet(lastCommittedOffset).forEach(partitionEntry -> {
+                    final int partition = partitionEntry.getKey();
+                    final OffsetAndMetadata offsetAndMetadata = partitionEntry.getValue();
+
+                    topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(partition)
+                        .setCommittedOffset(offsetAndMetadata.offset)
+                        .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(-1))
+                        .setMetadata(offsetAndMetadata.metadata));
+                });
+            });
+        }
+
+        return topicResponses;
+    }
+
+    /**
      * Replays OffsetCommitKey/Value to update or delete the corresponding offsets.
      *
      * @param key   A OffsetCommitKey key.
@@ -323,7 +443,8 @@ public class OffsetMetadataManager {
         OffsetCommitValue value
     ) {
         final String groupId = key.group();
-        final TopicPartition tp = new TopicPartition(key.topic(), key.partition());
+        final String topic = key.topic();
+        final int partition = key.partition();
 
         if (value != null) {
             // The generic or consumer group should exist when offsets are committed or
@@ -337,22 +458,18 @@ public class OffsetMetadataManager {
                 groupMetadataManager.getOrMaybeCreateGenericGroup(groupId, true);
             }
 
-            final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRecord(value);
-            TimelineHashMap<TopicPartition, OffsetAndMetadata> offsets = offsetsByGroup.get(groupId);
-            if (offsets == null) {
-                offsets = new TimelineHashMap<>(snapshotRegistry, 0);
-                offsetsByGroup.put(groupId, offsets);
-            }
-
-            offsets.put(tp, offsetAndMetadata);
+            updateOffset(
+                groupId,
+                topic,
+                partition,
+                OffsetAndMetadata.fromRecord(value)
+            );
         } else {
-            TimelineHashMap<TopicPartition, OffsetAndMetadata> offsets = offsetsByGroup.get(groupId);
-            if (offsets != null) {
-                offsets.remove(tp);
-                if (offsets.isEmpty()) {
-                    offsetsByGroup.remove(groupId);
-                }
-            }
+            removeOffset(
+                groupId,
+                topic,
+                partition
+            );
         }
     }
 
@@ -372,12 +489,67 @@ public class OffsetMetadataManager {
      *
      * package-private for testing.
      */
-    OffsetAndMetadata offset(String groupId, TopicPartition tp) {
-        Map<TopicPartition, OffsetAndMetadata> offsets = offsetsByGroup.get(groupId);
-        if (offsets == null) {
+    OffsetAndMetadata offset(String groupId, String topic, int partition) {
+        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> topicOffsets = offsetsByGroup.get(groupId);
+        if (topicOffsets == null) {
             return null;
         } else {
-            return offsets.get(tp);
+            TimelineHashMap<Integer, OffsetAndMetadata> partitionOffsets = topicOffsets.get(topic);
+            if (partitionOffsets == null) {
+                return null;
+            } else {
+                return partitionOffsets.get(partition);
+            }
         }
+    }
+
+    /**
+     * Updates the offset.
+     *
+     * @param groupId           The group id.
+     * @param topic             The topic name.
+     * @param partition         The partition id.
+     * @param offsetAndMetadata The offset metadata.
+     */
+    private void updateOffset(
+        String groupId,
+        String topic,
+        int partition,
+        OffsetAndMetadata offsetAndMetadata
+    ) {
+        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> topicOffsets = offsetsByGroup
+            .computeIfAbsent(groupId, __ -> new TimelineHashMap<>(snapshotRegistry, 0));
+        TimelineHashMap<Integer, OffsetAndMetadata> partitionOffsets = topicOffsets
+            .computeIfAbsent(topic, __ -> new TimelineHashMap<>(snapshotRegistry, 0));
+        partitionOffsets.put(partition, offsetAndMetadata);
+    }
+
+    /**
+     * Removes the offset.
+     *
+     * @param groupId           The group id.
+     * @param topic             The topic name.
+     * @param partition         The partition id.
+     */
+    private void removeOffset(
+        String groupId,
+        String topic,
+        int partition
+    ) {
+        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> topicOffsets = offsetsByGroup.get(groupId);
+        if (topicOffsets == null)
+            return;
+
+        TimelineHashMap<Integer, OffsetAndMetadata> partitionOffsets = topicOffsets.get(topic);
+        if (partitionOffsets == null)
+            return;
+
+        partitionOffsets.remove(partition);
+
+        if (partitionOffsets.isEmpty())
+            topicOffsets.remove(topic);
+
+        if (topicOffsets.isEmpty())
+            offsetsByGroup.remove(groupId);
     }
 }

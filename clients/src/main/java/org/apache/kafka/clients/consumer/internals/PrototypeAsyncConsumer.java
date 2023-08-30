@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -41,15 +42,16 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,12 +71,14 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createConsumerInterceptors;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createKeyDeserializer;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createValueDeserializer;
+import static org.apache.kafka.common.utils.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.Utils.isBlank;
+import static org.apache.kafka.common.utils.Utils.join;
+import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 /**
  * This prototype consumer uses the EventHandler to process application
@@ -90,16 +94,16 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Time time;
     private final Optional<String> groupId;
     private final Logger log;
-    private final Deserializer<K> keyDeserializer;
-    private final Deserializer<V> valueDeserializer;
+    private final Deserializers<K, V> deserializers;
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    public PrototypeAsyncConsumer(final Properties properties,
-                                  final Deserializer<K> keyDeserializer,
-                                  final Deserializer<V> valueDeserializer) {
-        this(Utils.propsToMap(properties), keyDeserializer, valueDeserializer);
+    private WakeupTrigger wakeupTrigger = new WakeupTrigger();
+    public PrototypeAsyncConsumer(Properties properties,
+                         Deserializer<K> keyDeserializer,
+                         Deserializer<V> valueDeserializer) {
+        this(propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
     public PrototypeAsyncConsumer(final Map<String, Object> configs,
@@ -107,6 +111,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   final Deserializer<V> valDeser) {
         this(new ConsumerConfig(appendDeserializerToConfig(configs, keyDeser, valDeser)), keyDeser, valDeser);
     }
+
     public PrototypeAsyncConsumer(final ConsumerConfig config,
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer) {
@@ -117,13 +122,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.logContext = createLogContext(config, groupRebalanceConfig);
         this.log = logContext.logger(getClass());
-        this.keyDeserializer = createKeyDeserializer(config, keyDeserializer);
-        this.valueDeserializer = createValueDeserializer(config, valueDeserializer);
+        this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
         this.subscriptions = createSubscriptionState(config, logContext);
         this.metrics = createMetrics(config, time);
-        List<ConsumerInterceptor<K, V>> interceptorList = createConsumerInterceptors(config);
-        ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keyDeserializer,
-                this.valueDeserializer, metrics.reporters(), interceptorList);
+        List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
+        ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
+                metrics.reporters(),
+                interceptorList,
+                Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
         this.eventHandler = new DefaultEventHandler(
                 config,
                 groupRebalanceConfig,
@@ -137,27 +143,24 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     // Visible for testing
-    PrototypeAsyncConsumer(
-            Time time,
-            LogContext logContext,
-            ConsumerConfig config,
-            SubscriptionState subscriptionState,
-            EventHandler eventHandler,
-            Metrics metrics,
-            Optional<String> groupId,
-            int defaultApiTimeoutMs) {
+    PrototypeAsyncConsumer(Time time,
+                           LogContext logContext,
+                           ConsumerConfig config,
+                           SubscriptionState subscriptions,
+                           EventHandler eventHandler,
+                           Metrics metrics,
+                           Optional<String> groupId,
+                           int defaultApiTimeoutMs) {
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
-        this.subscriptions = subscriptionState;
+        this.subscriptions = subscriptions;
         this.metrics = metrics;
         this.groupId = groupId;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.keyDeserializer = createKeyDeserializer(config, null);
-        this.valueDeserializer = createValueDeserializer(config, null);
+        this.deserializers = new Deserializers<>(config);
         this.eventHandler = eventHandler;
     }
-
 
     /**
      * poll implementation using {@link EventHandler}.
@@ -196,6 +199,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (final Exception e) {
             throw new RuntimeException(e);
         }
+        // TODO: Once we implement poll(), clear wakeupTrigger in a finally block: wakeupTrigger.clearActiveTask();
 
         return ConsumerRecords.empty();
     }
@@ -238,7 +242,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        CompletableFuture<Void> future = commit(offsets);
+        CompletableFuture<Void> future = commit(offsets, false);
         final OffsetCommitCallback commitCallback = callback == null ? new DefaultOffsetCommitCallback() : callback;
         future.whenComplete((r, t) -> {
             if (t != null) {
@@ -253,9 +257,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     // Visible for testing
-    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets, final boolean isWakeupable) {
         maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
+        if (isWakeupable) {
+            // the task can only be woken up if the top level API call is commitSync
+            wakeupTrigger.setActiveTask(commitEvent.future());
+        }
         eventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -316,6 +324,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
 
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
+        wakeupTrigger.setActiveTask(event.future());
         eventHandler.add(event);
         try {
             return event.future().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -324,10 +333,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } catch (ExecutionException e) {
-            // Execution exception is thrown here
+            if (e.getCause() instanceof WakeupException)
+                throw new WakeupException();
             throw new KafkaException(e);
-        } catch (Exception e) {
-            throw e;
+        } finally {
+            wakeupTrigger.clearActiveTask();
         }
     }
 
@@ -436,7 +446,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void close(Duration timeout) {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
-        Utils.closeQuietly(this.eventHandler, "event handler", firstException);
+        closeQuietly(this.eventHandler, "event handler", firstException);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();
         if (exception != null) {
@@ -449,6 +459,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
+        wakeupTrigger.wakeup();
     }
 
     /**
@@ -469,7 +480,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        CompletableFuture<Void> commitFuture = commit(offsets);
+        CompletableFuture<Void> commitFuture = commit(offsets, true);
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
@@ -477,9 +488,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (final InterruptedException e) {
             throw new InterruptException(e);
         } catch (final ExecutionException e) {
+            if (e.getCause() instanceof WakeupException)
+                throw new WakeupException();
             throw new KafkaException(e);
-        } catch (final Exception e) {
-            throw e;
+        } finally {
+            wakeupTrigger.clearActiveTask();
         }
     }
 
@@ -522,7 +535,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         for (TopicPartition tp : partitions) {
             String topic = (tp != null) ? tp.topic() : null;
-            if (Utils.isBlank(topic))
+            if (isBlank(topic))
                 throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
         }
 
@@ -534,7 +547,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // be no following rebalance
         eventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed(), time.milliseconds()));
 
-        log.info("Assigned to partition(s): {}", Utils.join(partitions, ", "));
+        log.info("Assigned to partition(s): {}", join(partitions, ", "));
         if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
             eventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
     }
@@ -558,6 +571,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     public ConsumerRecords<K, V> poll(long timeout) {
         throw new KafkaException("method not implemented");
+    }
+
+    // Visible for testing
+    WakeupTrigger wakeupTrigger() {
+        return wakeupTrigger;
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(

@@ -3585,8 +3585,24 @@ class UnifiedLogTest {
       log.updateHighWatermark(90L)
       log.maybeIncrementLogStartOffset(20L, LogStartOffsetIncrementReason.SegmentDeletion)
       assertEquals(20, log.logStartOffset)
-      assertEquals(log.logStartOffset, log.localLogStartOffset())
     }
+
+  @Test
+  def testStartOffsetsRemoteLogStorageIsEnabled(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    for (i <- 0 until 100) {
+      val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
+      log.appendAsLeader(records, leaderEpoch = 0)
+    }
+
+    log.updateHighWatermark(80L)
+    val newLogStartOffset = 40L;
+    log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+    assertEquals(newLogStartOffset, log.logStartOffset)
+    assertEquals(log.logStartOffset, log.localLogStartOffset())
+  }
 
   private class MockLogOffsetsListener extends LogOffsetsListener {
     private var highWatermark: Long = -1L

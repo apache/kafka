@@ -55,7 +55,6 @@ class LogManagerTest {
   logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
-  logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.MaxValue.toString)
   val logConfig = new LogConfig(logProps)
   var logDir: File = _
   var logManager: LogManager = _
@@ -631,7 +630,7 @@ class LogManagerTest {
     val newProperties = new Properties()
     newProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
 
-    spyLogManager.updateTopicConfig(topic, newProperties)
+    spyLogManager.updateTopicConfig(topic, newProperties, false)
 
     assertTrue(log0.config.delete)
     assertTrue(log1.config.delete)

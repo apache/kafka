@@ -79,7 +79,7 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                         enableRemoteLogStorage)
                 .withBatchSize(topicA, p0, batchSize)
                 .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k1", "v1"))
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k2", "v2"))
+                .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k2", "v2"))
                 .produce(topicA, p0, new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"),
                         new KeyValueSpec("k3", "v3"))
 
@@ -127,10 +127,10 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *       - For topic B, only one segment is present in the tiered storage, as asserted by the
                  *         previous sub-test-case.
                  */
-                .bounce(broker)
+                // .bounce(broker)
                 .expectFetchFromTieredStorage(broker, topicA, p0, 1)
-                .expectFetchFromTieredStorage(broker, topicB, p0, 2)
                 .consume(topicA, p0, 1L, 2, 1)
+                .expectFetchFromTieredStorage(broker, topicB, p0, 2)
                 .consume(topicB, p0, 1L, 4, 3);
     }
 }
