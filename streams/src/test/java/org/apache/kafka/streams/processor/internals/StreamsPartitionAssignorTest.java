@@ -679,6 +679,60 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
+    public void shouldNotAssignTemporaryStandbyTask() {
+        builder.addSource(null, "source1", null, null, null, "topic1");
+
+        final List<PartitionInfo> localInfos = asList(
+            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 3, Node.noNode(), new Node[0], new Node[0])
+        );
+
+        final Cluster localMetadata = new Cluster(
+            "cluster",
+            Collections.singletonList(Node.noNode()),
+            localInfos,
+            emptySet(),
+            emptySet()
+        );
+
+        final List<String> topics = singletonList("topic1");
+
+        createMockTaskManager(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), emptySet());
+        configureDefaultPartitionAssignor();
+
+        subscriptions.put("consumer10",
+                          new Subscription(
+                              topics,
+                              getInfo(UUID_1, mkSet(TASK_0_0, TASK_0_2), emptySet()).encode(),
+                              asList(t1p0, t1p2)
+                              ));
+        subscriptions.put("consumer11",
+                          new Subscription(
+                              topics,
+                              getInfo(UUID_1, mkSet(TASK_0_1, TASK_0_3), emptySet()).encode(),
+                              asList(t1p1, t1p3)
+                          ));
+        subscriptions.put("consumer20",
+                          new Subscription(
+                              topics,
+                              getInfo(UUID_2, emptySet(), emptySet()).encode(),
+                              emptyList()
+                          ));
+
+        final Map<String, Assignment> assignments = partitionAssignor.assign(localMetadata, new GroupSubscription(subscriptions)).groupAssignment();
+
+        // neither active nor standby tasks should be assigned to consumer 3, which will have to wait until
+        // the followup cooperative rebalance to get the active task(s) it was assigned (and does not need
+        // a standby copy before that since it previously had no tasks at all)
+        final AssignmentInfo info20 = AssignmentInfo.decode(assignments.get("consumer20").userData());
+        assertTrue(info20.activeTasks().isEmpty());
+        assertTrue(info20.standbyTasks().isEmpty());
+
+    }
+
+    @Test
     public void testAssignEmptyMetadata() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
