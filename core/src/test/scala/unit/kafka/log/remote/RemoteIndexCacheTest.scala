@@ -64,7 +64,7 @@ class RemoteIndexCacheTest {
     rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
 
-    cache = new RemoteIndexCache(rsm, tpDir.toString)
+    cache = new RemoteIndexCache(Long.MaxValue, rsm, tpDir.toString)
 
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
       .thenAnswer(ans => {
@@ -159,9 +159,15 @@ class RemoteIndexCacheTest {
   @Test
   def testCacheEntryExpiry(): Unit = {
     // close existing cache created in test setup before creating a new one
+    val cacheForEstimate = new RemoteIndexCache(2L, rsm, tpDir.toString)
+    val tpIdForEstimate = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataListForEstimate = generateRemoteLogSegmentMetadata(size = 1, tpIdForEstimate)
+    val entryForEstimate = cacheForEstimate.getIndexEntry(metadataListForEstimate.head)
+    val estimateEntryBytesSize = RemoteIndexCache.estimatedEntrySize(entryForEstimate)
+    Utils.closeQuietly(cacheForEstimate, "RemoteIndexCache created for estimating entry size")
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(2L, rsm, tpDir.toString)
-    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
     assertCacheSize(0)
@@ -171,13 +177,15 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1)
+    // contains the 1 time for rsm when estimating entry size
+    verifyFetchIndexInvocation(count = 2)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList.head)
     cache.getIndexEntry(metadataList(1))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 2)
+    // contains the 1 time for rsm when estimating entry size
+    verifyFetchIndexInvocation(count = 3)
 
     // Getting index for metadataList.last should call rsm#fetchIndex
     // to populate this entry one of the other 2 entries will be evicted. We don't know which one since it's based on
@@ -185,7 +193,8 @@ class RemoteIndexCacheTest {
     assertNotNull(cache.getIndexEntry(metadataList.last))
     assertAtLeastOnePresent(cache, metadataList(1).remoteLogSegmentId().id(), metadataList.head.remoteLogSegmentId().id())
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 3)
+    // contains the 1 time for rsm when estimating entry size
+    verifyFetchIndexInvocation(count = 4)
 
     // getting index for last expired entry should call rsm#fetchIndex as that entry was expired earlier
     val missingEntryOpt = {
@@ -197,7 +206,8 @@ class RemoteIndexCacheTest {
     assertFalse(missingEntryOpt.isEmpty)
     cache.getIndexEntry(missingEntryOpt.get)
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 4)
+    // contains the 1 time for rsm when estimating entry size
+    verifyFetchIndexInvocation(count = 5)
   }
 
   @Test
@@ -406,9 +416,15 @@ class RemoteIndexCacheTest {
   @Test
   def testReloadCacheAfterClose(): Unit = {
     // close existing cache created in test setup before creating a new one
+    val cacheForEstimate = new RemoteIndexCache(2L, rsm, tpDir.toString)
+    val tpIdForEstimate = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataListForEstimate = generateRemoteLogSegmentMetadata(size = 1, tpIdForEstimate)
+    val entryForEstimate = cacheForEstimate.getIndexEntry(metadataListForEstimate.head)
+    val estimateEntryBytesSize = RemoteIndexCache.estimatedEntrySize(entryForEstimate)
+    Utils.closeQuietly(cacheForEstimate, "RemoteIndexCache created for estimating entry size")
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(2L, rsm, tpDir.toString)
-    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
     assertCacheSize(0)
@@ -418,7 +434,8 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1)
+    // contains the 1 time for rsm when estimating entry size
+    verifyFetchIndexInvocation(count = 2)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(1))
@@ -426,7 +443,8 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(1))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 2)
+    // contains the 1 time for rsm when estimating entry size
+    verifyFetchIndexInvocation(count = 3)
 
     // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex
     // The cache max size is 2, it will remove one entry and keep the overall size to 2
@@ -435,13 +453,14 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(2))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 3)
+    // contains the 1 time for rsm when estimating entry size
+    verifyFetchIndexInvocation(count = 4)
 
     // Close the cache
     cache.close()
 
     // Reload the cache from the disk and check the cache size is same as earlier
-    val reloadedCache = new RemoteIndexCache(2L, rsm, tpDir.toString)
+    val reloadedCache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString)
     assertEquals(2, reloadedCache.internalCache.asMap().size())
     reloadedCache.close()
 

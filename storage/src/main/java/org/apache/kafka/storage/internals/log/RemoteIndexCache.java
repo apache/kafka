@@ -155,9 +155,7 @@ public class RemoteIndexCache implements Closeable {
         return Caffeine.newBuilder()
                 .maximumWeight(maxSize)
                 .weigher((Uuid key, Entry entry) -> {
-                    return entry.offsetIndex.sizeInBytes() + (int) entry.offsetIndex.length() +
-                            entry.timeIndex.sizeInBytes() + (int) entry.timeIndex.length() +
-                            (int) entry.txnIndex.file().length();
+                    return estimatedEntrySize(entry);
                 })
                 // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
@@ -459,7 +457,7 @@ public class RemoteIndexCache implements Closeable {
 
                 // Note that internal cache does not require explicit cleaning/closing. We don't want to invalidate or cleanup
                 // the cache as both would lead to triggering of removal listener.
-
+                internalCache.cleanUp();
                 log.info("Close completed for RemoteIndexCache");
             } catch (InterruptedException e) {
                 throw new KafkaException(e);
@@ -689,6 +687,12 @@ public class RemoteIndexCache implements Closeable {
 
     public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
+    }
+
+    public static int estimatedEntrySize(Entry entry) {
+        return entry.offsetIndex.sizeInBytes() + (int) entry.offsetIndex.length() +
+                entry.timeIndex.sizeInBytes() + (int) entry.timeIndex.length() +
+                (int) entry.txnIndex.file().length();
     }
 
 }
