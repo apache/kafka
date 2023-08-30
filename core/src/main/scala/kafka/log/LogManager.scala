@@ -871,12 +871,17 @@ class LogManager(logDirs: Seq[File],
    * Update the configuration of the provided topic.
    */
   def updateTopicConfig(topic: String,
-                        newTopicConfig: Properties): Unit = {
+                        newTopicConfig: Properties,
+                        isRemoteLogStorageSystemEnabled: Boolean): Unit = {
     topicConfigUpdated(topic)
     val logs = logsByTopic(topic)
+    // Combine the default properties with the overrides in zk to create the new LogConfig
+    val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
+    // We would like to validate the configuration no matter whether the logs have materialised on disk or not.
+    // Otherwise we risk someone creating a tiered-topic, disabling Tiered Storage cluster-wide and the check
+    // failing since the logs for the topic are non-existent.
+    LogConfig.validateRemoteStorageOnlyIfSystemEnabled(newLogConfig.values(), isRemoteLogStorageSystemEnabled, true)
     if (logs.nonEmpty) {
-      // Combine the default properties with the overrides in zk to create the new LogConfig
-      val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
       logs.foreach { log =>
         val oldLogConfig = log.updateConfig(newLogConfig)
         if (oldLogConfig.compact && !newLogConfig.compact) {
