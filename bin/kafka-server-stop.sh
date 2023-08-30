@@ -15,6 +15,10 @@
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
 
+if [[ "$1" == "--process-role" ]]; then
+    ProcessRole="$2"
+fi
+
 OSNAME=$(uname -s)
 if [[ "$OSNAME" == "OS/390" ]]; then
     if [ -z $JOBNAME ]; then
@@ -25,11 +29,22 @@ elif [[ "$OSNAME" == "OS400" ]]; then
     PIDS=$(ps -Af | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $2}')
 else
     PIDS=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk '{print $1}')
+    ConfigFiles=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk 'NF>1{print $NF}')
 fi
 
 if [ -z "$PIDS" ]; then
   echo "No kafka server to stop"
   exit 1
 else
-  kill -s $SIGNAL $PIDS
+  if [ -z "$ConfigFile" ]; then
+    kill -s $SIGNAL $PIDS
+  else
+    keyword="process.roles="
+    for ((i = 0; i < ${#ConfigFiles[@]}; i++)); do
+        PRCRole=$(sed -n "s/$keyword//p" "${ConfigFiles[i]}")
+        if [ "$PRCRole" == "$ProcessRole" ]; then
+          kill -s $SIGNAL ${PIDS[i]}
+        fi
+    done
+  fi
 fi
