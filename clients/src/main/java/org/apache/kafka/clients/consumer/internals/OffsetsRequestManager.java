@@ -168,7 +168,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             return;
         }
         try {
-            List<NetworkClientDelegate.UnsentRequest> unsentRequests = sendListOffsetsRequests(
+            List<NetworkClientDelegate.UnsentRequest> unsentRequests = buildListOffsetsRequests(
                     timestampsToSearch, requireTimestamps, listOffsetsRequestState);
             requestsToSend.addAll(unsentRequests);
         } catch (StaleMetadataException e) {
@@ -192,7 +192,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
-     * Search the offsets by target times for the specified partitions.
+     * Build ListOffsets requests to fetch offsets by target times for the specified partitions.
      *
      * @param timestampsToSearch the mapping between partitions and target time
      * @param requireTimestamps  true if we should fail with an UnsupportedVersionException if the broker does
@@ -201,7 +201,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}
      * that can be polled to obtain the corresponding timestamps and offsets.
      */
-    private List<NetworkClientDelegate.UnsentRequest> sendListOffsetsRequests(
+    private List<NetworkClientDelegate.UnsentRequest> buildListOffsetsRequests(
             final Map<TopicPartition, Long> timestampsToSearch,
             final boolean requireTimestamps,
             final ListOffsetsRequestState listOffsetsRequestState) {
@@ -239,7 +239,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> entry : partitionResetTimestampsByNode.entrySet()) {
             Node node = entry.getKey();
 
-            CompletableFuture<ListOffsetResult> partialResult = sendListOffsetRequestToNode(
+            CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
                     node,
                     entry.getValue(),
                     requireTimestamps,
@@ -257,10 +257,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
-     * Build ListOffsetRequest to send to a specific broker for the partitions and
+     * Build ListOffsets request to send to a specific broker for the partitions and
      * target timestamps. This also adds the request to the list of unsentRequests.
      **/
-    private CompletableFuture<ListOffsetResult> sendListOffsetRequestToNode(
+    private CompletableFuture<ListOffsetResult> buildListOffsetRequestToNode(
             Node node,
             Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> targetTimes,
             boolean requireTimestamps,
