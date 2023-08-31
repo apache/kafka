@@ -97,7 +97,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
-     * Determine if a there are pending fetch offsets requests to be sent and build a
+     * Determine if there are pending fetch offsets requests to be sent and build a
      * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult}
      * containing it.
      */
@@ -194,20 +194,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     /**
      * Search the offsets by target times for the specified partitions.
      *
-     * @param partitionResetTimestamps the mapping between partitions and target time
-     * @param requireTimestamps        true if we should fail with an UnsupportedVersionException if the broker does
-     *                                 not support fetching precise timestamps for offsets
+     * @param timestampsToSearch the mapping between partitions and target time
+     * @param requireTimestamps  true if we should fail with an UnsupportedVersionException if the broker does
+     *                           not support fetching precise timestamps for offsets
      * @return A list of
      * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}
      * that can be polled to obtain the corresponding timestamps and offsets.
      */
     private List<NetworkClientDelegate.UnsentRequest> sendListOffsetsRequests(
-            final Map<TopicPartition, Long> partitionResetTimestamps,
+            final Map<TopicPartition, Long> timestampsToSearch,
             final boolean requireTimestamps,
             final ListOffsetsRequestState listOffsetsRequestState) {
-        log.debug("Building ListOffsets request for partitions {}", partitionResetTimestamps);
+        log.debug("Building ListOffsets request for partitions {}", timestampsToSearch);
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> partitionResetTimestampsByNode =
-                groupListOffsetRequests(partitionResetTimestamps, listOffsetsRequestState);
+                groupListOffsetRequests(timestampsToSearch, listOffsetsRequestState);
         if (partitionResetTimestampsByNode.isEmpty()) {
             throw new StaleMetadataException();
         }
