@@ -20,19 +20,17 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
-import java.lang.reflect.Modifier;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 public class ConcreteSubClassValidator implements ConfigDef.Validator {
     private final Class<?> expectedSuperClass;
+    private final String superClassName;
 
-    private ConcreteSubClassValidator(Class<?> expectedSuperClass) {
+    private ConcreteSubClassValidator(Class<?> expectedSuperClass, String superClassName) {
         this.expectedSuperClass = expectedSuperClass;
+        this.superClassName = superClassName;
     }
 
-    public static ConcreteSubClassValidator forSuperClass(Class<?> expectedSuperClass) {
-        return new ConcreteSubClassValidator(expectedSuperClass);
+    public static ConcreteSubClassValidator forSuperClass(Class<?> expectedSuperClass, String superClassName) {
+        return new ConcreteSubClassValidator(expectedSuperClass, superClassName);
     }
 
     @Override
@@ -47,18 +45,7 @@ public class ConcreteSubClassValidator implements ConfigDef.Validator {
             throw new ConfigException(name, String.valueOf(cls), "Not a " + expectedSuperClass.getSimpleName());
         }
 
-        if (Modifier.isAbstract(cls.getModifiers())) {
-            String childClassNames = Stream.of(cls.getClasses())
-                    .filter(cls::isAssignableFrom)
-                    .filter(c -> !Modifier.isAbstract(c.getModifiers()))
-                    .filter(c -> Modifier.isPublic(c.getModifiers()))
-                    .map(Class::getName)
-                    .collect(Collectors.joining(", "));
-            String message = Utils.isBlank(childClassNames) ?
-                    "Class is abstract and cannot be created." :
-                    "Class is abstract and cannot be created. Did you mean " + childClassNames + "?";
-            throw new ConfigException(name, cls.getName(), message);
-        }
+        Utils.ensureConcrete(cls, superClassName);
     }
 
     @Override

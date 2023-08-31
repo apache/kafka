@@ -37,7 +37,6 @@ import org.apache.kafka.connect.util.InstantiableClassValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -46,7 +45,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
@@ -87,7 +85,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String KEY_CONVERTER_CLASS_DOC = WorkerConfig.KEY_CONVERTER_CLASS_DOC;
     public static final String KEY_CONVERTER_CLASS_DISPLAY = "Key converter class";
     private static final ConfigDef.Validator KEY_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
-            ConcreteSubClassValidator.forSuperClass(Converter.class),
+            ConcreteSubClassValidator.forSuperClass(Converter.class, "Key converter"),
             new InstantiableClassValidator()
     );
 
@@ -95,7 +93,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DOC = WorkerConfig.VALUE_CONVERTER_CLASS_DOC;
     public static final String VALUE_CONVERTER_CLASS_DISPLAY = "Value converter class";
     private static final ConfigDef.Validator VALUE_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
-            ConcreteSubClassValidator.forSuperClass(Converter.class),
+            ConcreteSubClassValidator.forSuperClass(Converter.class, "Value converter"),
             new InstantiableClassValidator()
     );
 
@@ -106,7 +104,7 @@ public class ConnectorConfig extends AbstractConfig {
     // the worker config settings should be used. Thus, we set the default to null here.
     public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
     private static final ConfigDef.Validator HEADER_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
-            ConcreteSubClassValidator.forSuperClass(HeaderConverter.class),
+            ConcreteSubClassValidator.forSuperClass(HeaderConverter.class, "Header converter"),
             new InstantiableClassValidator()
     );
 
@@ -510,18 +508,8 @@ public class ConnectorConfig extends AbstractConfig {
             if (cls == null || !baseClass.isAssignableFrom(cls)) {
                 throw new ConfigException(key, String.valueOf(cls), "Not a " + baseClass.getSimpleName());
             }
-            if (Modifier.isAbstract(cls.getModifiers())) {
-                String childClassNames = Stream.of(cls.getClasses())
-                        .filter(cls::isAssignableFrom)
-                        .filter(c -> !Modifier.isAbstract(c.getModifiers()))
-                        .filter(c -> Modifier.isPublic(c.getModifiers()))
-                        .map(Class::getName)
-                        .collect(Collectors.joining(", "));
-                String message = Utils.isBlank(childClassNames) ?
-                        aliasKind + " is abstract and cannot be created." :
-                        aliasKind + " is abstract and cannot be created. Did you mean " + childClassNames + "?";
-                throw new ConfigException(key, String.valueOf(cls), message);
-            }
+            Utils.ensureConcrete(cls, aliasKind);
+
             T transformation;
             try {
                 transformation = Utils.newInstance(cls, baseClass);
