@@ -87,13 +87,16 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         requireNonNull(logContext);
 
         this.metadata = metadata;
-        this.metadata.addClusterUpdateListener(this);
         this.isolationLevel = isolationLevel;
         this.log = logContext.logger(getClass());
         this.requestsToRetry = new HashSet<>();
         this.requestsToSend = new ArrayList<>();
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
                 time, retryBackoffMs, apiVersions);
+        // Register the cluster metadata update callback. Note this only relies on the
+        // requestsToRetry initialized above, and won't be invoked until all managers are
+        // initialized and the background thread started.
+        this.metadata.addClusterUpdateListener(this);
     }
 
     /**
