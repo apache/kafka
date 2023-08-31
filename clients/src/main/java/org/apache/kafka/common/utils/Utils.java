@@ -1102,7 +1102,7 @@ public final class Utils {
      * and if an exception is thrown, it is logged at the WARN level.
      * <b>Be cautious when passing method references as an argument.</b> For example:
      * <p>
-     * {@code closeQuietly(task::stop, "source task");}
+     * {@code maybeCloseQuietly(task::stop, "source task");}
      * <p>
      * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
      * reference from a null object will result in a {@link NullPointerException}. In the example code above,
