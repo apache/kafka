@@ -96,7 +96,7 @@ public abstract class SourceTask implements Task {
      * should block but return control to the caller regularly (by returning {@code null}) in
      * order for the task to transition to the {@code PAUSED} state if requested to do so.
      * <p>
-     * The task will be {@link #stop() stopped} on a separate thread, and when that happens
+     * The task may be {@link #stop() stopped} on a separate thread, and when that happens
      * this method is expected to unblock, quickly finish up any remaining processing, and
      * return.
      *
