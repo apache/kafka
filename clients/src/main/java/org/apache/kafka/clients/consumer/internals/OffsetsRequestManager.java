@@ -115,14 +115,15 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
-     * Retrieve offsets for the given partitions and timestamp.
+     * Retrieve offsets for the given partitions and timestamp. For each partition, this will
+     * retrieve the offset of the first message whose timestamp is greater than or equals to the
+     * target timestamp.
      *
      * @param timestampsToSearch Partitions and target timestamps to get offsets for
      * @param requireTimestamps  True if this should fail with an UnsupportedVersionException if the
      *                           broker does not support fetching precise timestamps for offsets
      * @return Future containing the map of {@link TopicPartition} and {@link OffsetAndTimestamp}
-     * found (offset of the first message whose timestamp is greater than or equals to the target
-     * timestamp).The future will complete when the requests responses are received and
+     * found .The future will complete when the requests responses are received and
      * processed, following a call to {@link #poll(long)}
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsets(
