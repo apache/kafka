@@ -207,7 +207,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             final ListOffsetsRequestState listOffsetsRequestState) {
         log.debug("Building ListOffsets request for partitions {}", timestampsToSearch);
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> partitionResetTimestampsByNode =
-                groupListOffsetRequests(timestampsToSearch, listOffsetsRequestState);
+                groupListOffsetRequests(timestampsToSearch, Optional.of(listOffsetsRequestState));
         if (partitionResetTimestampsByNode.isEmpty()) {
             throw new StaleMetadataException();
         }
@@ -368,14 +368,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * the leader is not known are kept as `remainingToSearch` in the `listOffsetsRequestState`
      *
      * @param timestampsToSearch      The mapping from partitions to the target timestamps
-     * @param listOffsetsRequestState Request state that will be extended by adding to its
+     * @param listOffsetsRequestState Optional request state that will be extended by adding to its
      *                                `remainingToSearch` map all partitions for which the
      *                                request cannot be performed due to unknown leader (need
      *                                metadata update).
      */
     private Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> groupListOffsetRequests(
             final Map<TopicPartition, Long> timestampsToSearch,
-            final ListOffsetsRequestState listOffsetsRequestState) {
+            final Optional<ListOffsetsRequestState> listOffsetsRequestState) {
         final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> partitionDataMap = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition tp = entry.getKey();
@@ -385,9 +385,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             if (!leaderAndEpoch.leader.isPresent()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
                 metadata.requestUpdate();
-                if (listOffsetsRequestState != null) {
-                    listOffsetsRequestState.remainingToSearch.put(tp, offset);
-                }
+                listOffsetsRequestState.ifPresent(offsetsRequestState -> offsetsRequestState.remainingToSearch.put(tp, offset));
             } else {
                 int currentLeaderEpoch = leaderAndEpoch.epoch.orElse(ListOffsetsResponse.UNKNOWN_EPOCH);
                 partitionDataMap.put(tp, new ListOffsetsRequestData.ListOffsetsPartition()
