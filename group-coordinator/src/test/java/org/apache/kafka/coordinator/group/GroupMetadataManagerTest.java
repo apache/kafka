@@ -3968,8 +3968,10 @@ public class GroupMetadataManagerTest {
 
         // First round of join requests. Generate member ids. All requests will be accepted
         // as the group is still Empty.
-        List<JoinResult> firstRoundJoinResults = IntStream.range(0, groupMaxSize + 1)
-            .mapToObj(i -> context.sendGenericGroupJoin(request, requiredKnownMemberId)).collect(Collectors.toList());
+        List<JoinResult> firstRoundJoinResults = IntStream.range(0, groupMaxSize + 1).mapToObj(i -> context.sendGenericGroupJoin(
+            request,
+            requiredKnownMemberId
+        )).collect(Collectors.toList());
 
         List<String> memberIds = verifyGenericGroupJoinResponses(firstRoundJoinResults, 0, Errors.MEMBER_ID_REQUIRED);
         assertEquals(groupMaxSize + 1, memberIds.size());
@@ -4024,8 +4026,10 @@ public class GroupMetadataManagerTest {
             .build();
 
         // First round of join requests. This will trigger a rebalance.
-        List<JoinResult> firstRoundJoinResults = IntStream.range(0, groupMaxSize + 1)
-            .mapToObj(__ -> context.sendGenericGroupJoin(request, requiredKnownMemberId)).collect(Collectors.toList());
+        List<JoinResult> firstRoundJoinResults = IntStream.range(0, groupMaxSize + 1).mapToObj(i -> context.sendGenericGroupJoin(
+            request,
+            requiredKnownMemberId
+        )).collect(Collectors.toList());
 
         assertEquals(groupMaxSize, group.size());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
@@ -5823,9 +5827,9 @@ public class GroupMetadataManagerTest {
 
         // Old follower rejoins group will match current member.id.
         JoinResult oldFollowerJoinResult = context.sendGenericGroupJoin(
-                request
-                    .setMemberId(rebalanceResult.followerId)
-                    .setGroupInstanceId("follower-instance-id")
+            request
+                .setMemberId(rebalanceResult.followerId)
+                .setGroupInstanceId("follower-instance-id")
         );
 
         assertTrue(oldFollowerJoinResult.records.isEmpty());
@@ -7784,39 +7788,6 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
     }
 
-    private List<JoinGroupResponseMember> toJoinResponseMembers(GenericGroup group) {
-        List<JoinGroupResponseMember> members = new ArrayList<>();
-        String protocolName = group.protocolName().get();
-        group.allMembers().forEach(member -> {
-            members.add(
-                new JoinGroupResponseMember()
-                    .setMemberId(member.memberId())
-                    .setGroupInstanceId(member.groupInstanceId().orElse(""))
-                    .setMetadata(member.metadata(protocolName))
-            );
-        });
-
-        return members;
-    }
-
-    private void checkJoinGroupResponse(
-        JoinGroupResponseData expectedResponse,
-        JoinGroupResponseData actualResponse,
-        GenericGroup group,
-        GenericGroupState expectedState,
-        Set<String> expectedGroupInstanceIds
-    ) {
-        assertEquals(expectedResponse, actualResponse);
-        assertTrue(group.isInState(expectedState));
-
-        Set<String> groupInstanceIds = actualResponse.members()
-            .stream()
-            .map(JoinGroupResponseData.JoinGroupResponseMember::groupInstanceId)
-            .collect(Collectors.toSet());
-
-        assertEquals(expectedGroupInstanceIds, groupInstanceIds);
-    }
-
     @Test
     public void testStaticMemberHeartbeatLeaderWithInvalidMemberId() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -8610,7 +8581,7 @@ public class GroupMetadataManagerTest {
         assertEquals(new HashSet<>(expected), new HashSet<>(actual));
     }
 
-    private void assertResponseEquals(
+    private static void assertResponseEquals(
         ConsumerGroupHeartbeatResponseData expected,
         ConsumerGroupHeartbeatResponseData actual
     ) {
@@ -8622,7 +8593,7 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    private boolean responseEquals(
+    private static boolean responseEquals(
         ConsumerGroupHeartbeatResponseData expected,
         ConsumerGroupHeartbeatResponseData actual
     ) {
@@ -8637,7 +8608,7 @@ public class GroupMetadataManagerTest {
         return responseAssignmentEquals(expected.assignment(), actual.assignment());
     }
 
-    private boolean responseAssignmentEquals(
+    private static boolean responseAssignmentEquals(
         ConsumerGroupHeartbeatResponseData.Assignment expected,
         ConsumerGroupHeartbeatResponseData.Assignment actual
     ) {
@@ -8651,7 +8622,7 @@ public class GroupMetadataManagerTest {
         return Objects.equals(fromAssignment(expected.assignedTopicPartitions()), fromAssignment(actual.assignedTopicPartitions()));
     }
 
-    private Map<Uuid, Set<Integer>> fromAssignment(
+    private static Map<Uuid, Set<Integer>> fromAssignment(
         List<ConsumerGroupHeartbeatResponseData.TopicPartitions> assignment
     ) {
         if (assignment == null) return null;
@@ -8663,7 +8634,7 @@ public class GroupMetadataManagerTest {
         return assignmentMap;
     }
 
-    private void assertRecordsEquals(
+    private static void assertRecordsEquals(
         List<Record> expectedRecords,
         List<Record> actualRecords
     ) {
@@ -8683,7 +8654,7 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    private void assertRecordEquals(
+    private static void assertRecordEquals(
         Record expected,
         Record actual
     ) {
@@ -8698,7 +8669,7 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    private void assertApiMessageAndVersionEquals(
+    private static void assertApiMessageAndVersionEquals(
         ApiMessageAndVersion expected,
         ApiMessageAndVersion actual
     ) {
@@ -8733,7 +8704,7 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    private Map<Uuid, Set<Integer>> fromTopicPartitions(
+    private static Map<Uuid, Set<Integer>> fromTopicPartitions(
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
     ) {
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
@@ -8743,12 +8714,45 @@ public class GroupMetadataManagerTest {
         return assignmentMap;
     }
 
+    private static List<JoinGroupResponseMember> toJoinResponseMembers(GenericGroup group) {
+        List<JoinGroupResponseMember> members = new ArrayList<>();
+        String protocolName = group.protocolName().get();
+        group.allMembers().forEach(member -> {
+            members.add(
+                new JoinGroupResponseMember()
+                    .setMemberId(member.memberId())
+                    .setGroupInstanceId(member.groupInstanceId().orElse(""))
+                    .setMetadata(member.metadata(protocolName))
+            );
+        });
+
+        return members;
+    }
+
+    private static void checkJoinGroupResponse(
+        JoinGroupResponseData expectedResponse,
+        JoinGroupResponseData actualResponse,
+        GenericGroup group,
+        GenericGroupState expectedState,
+        Set<String> expectedGroupInstanceIds
+    ) {
+        assertEquals(expectedResponse, actualResponse);
+        assertTrue(group.isInState(expectedState));
+
+        Set<String> groupInstanceIds = actualResponse.members()
+            .stream()
+            .map(JoinGroupResponseData.JoinGroupResponseMember::groupInstanceId)
+            .collect(Collectors.toSet());
+
+        assertEquals(expectedGroupInstanceIds, groupInstanceIds);
+    }
+
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {
         assertTrue(timeouts.size() <= 1);
         timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result));
     }
 
-    private List<String> verifyGenericGroupJoinResponses(
+    private static List<String> verifyGenericGroupJoinResponses(
         List<JoinResult> joinResults,
         int expectedSuccessCount,
         Errors expectedFailure
@@ -8966,21 +8970,6 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    private static class SyncResult {
-        CompletableFuture<SyncGroupResponseData> syncFuture;
-        List<Record> records;
-        CompletableFuture<Void> appendFuture;
-
-        public SyncResult(
-            CompletableFuture<SyncGroupResponseData> syncFuture,
-            CoordinatorResult<Void, Record> coordinatorResult
-        ) {
-            this.syncFuture = syncFuture;
-            this.records = coordinatorResult.records();
-            this.appendFuture = coordinatorResult.appendFuture();
-        }
-    }
-
     private static class JoinResult {
         CompletableFuture<JoinGroupResponseData> joinFuture;
         List<Record> records;
@@ -8991,6 +8980,21 @@ public class GroupMetadataManagerTest {
             CoordinatorResult<Void, Record> coordinatorResult
         ) {
             this.joinFuture = joinFuture;
+            this.records = coordinatorResult.records();
+            this.appendFuture = coordinatorResult.appendFuture();
+        }
+    }
+
+    private static class SyncResult {
+        CompletableFuture<SyncGroupResponseData> syncFuture;
+        List<Record> records;
+        CompletableFuture<Void> appendFuture;
+
+        public SyncResult(
+            CompletableFuture<SyncGroupResponseData> syncFuture,
+            CoordinatorResult<Void, Record> coordinatorResult
+        ) {
+            this.syncFuture = syncFuture;
             this.records = coordinatorResult.records();
             this.appendFuture = coordinatorResult.appendFuture();
         }
