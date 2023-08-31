@@ -473,7 +473,7 @@ public final class QuorumController implements Controller {
         }
     }
 
-    class QuorumClusterSupportDescriber implements ClusterSupportDescriber {
+    class QuorumClusterFeatureSupportDescriber implements ClusterFeatureSupportDescriber {
         @Override
         public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
             return clusterControl.brokerSupportedFeatures();
@@ -1640,7 +1640,7 @@ public final class QuorumController implements Controller {
     /**
      * Describes the feature versions in the cluster.
      */
-    private final QuorumClusterSupportDescriber clusterSupportDescriber;
+    private final QuorumClusterFeatureSupportDescriber clusterSupportDescriber;
 
     /**
      * An object which stores the controller's view of the cluster.
@@ -1820,7 +1820,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
-        this.clusterSupportDescriber = new QuorumClusterSupportDescriber();
+        this.clusterSupportDescriber = new QuorumClusterFeatureSupportDescriber();
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1831,7 +1831,7 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
-            setClusterSupportDescriber(clusterSupportDescriber).
+            setClusterFeatureSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).

@@ -76,18 +76,18 @@ class ControllerRegistrationManagerTest {
       new ExponentialBackoff(1, 2, 100, 0.02))
   }
 
-  private def registered(manager: ControllerRegistrationManager): Boolean = {
-    val registered = new CompletableFuture[Boolean]
+  private def registeredInLog(manager: ControllerRegistrationManager): Boolean = {
+    val registeredInLog = new CompletableFuture[Boolean]
     manager.eventQueue.append(() => {
-      registered.complete(manager.registered)
+      registeredInLog.complete(manager.registeredInLog)
     })
-    registered.get(30, TimeUnit.SECONDS)
+    registeredInLog.get(30, TimeUnit.SECONDS)
   }
 
-  private def rpcStats(manager: ControllerRegistrationManager): (Long, Long, Long) = {
-    val failedAttempts = new CompletableFuture[(Long, Long, Long)]
+  private def rpcStats(manager: ControllerRegistrationManager): (Boolean, Long, Long) = {
+    val failedAttempts = new CompletableFuture[(Boolean, Long, Long)]
     manager.eventQueue.append(() => {
-      failedAttempts.complete((manager.pendingRpcs, manager.successfulRpcs, manager.failedRpcs))
+      failedAttempts.complete((manager.pendingRpc, manager.successfulRpcs, manager.failedRpcs))
     })
     failedAttempts.get(30, TimeUnit.SECONDS)
   }
@@ -134,8 +134,8 @@ class ControllerRegistrationManagerTest {
   def testCreateAndClose(): Unit = {
     val context = new RegistrationTestContext(configProperties)
     val manager = newControllerRegistrationManager(context)
-    assertFalse(registered(manager))
-    assertEquals((0, 0, 0), rpcStats(manager))
+    assertFalse(registeredInLog(manager))
+    assertEquals((false, 0, 0), rpcStats(manager))
     manager.close()
   }
 
@@ -145,8 +145,8 @@ class ControllerRegistrationManagerTest {
     val manager = newControllerRegistrationManager(context)
     try {
       manager.start(context.mockChannelManager)
-      assertFalse(registered(manager))
-      assertEquals((0, 0, 0), rpcStats(manager))
+      assertFalse(registeredInLog(manager))
+      assertEquals((false, 0, 0), rpcStats(manager))
     } finally {
       manager.close()
     }
@@ -169,31 +169,31 @@ class ControllerRegistrationManagerTest {
         context.controllerNodeProvider.node.set(controller1)
       }
       manager.start(context.mockChannelManager)
-      assertFalse(registered(manager))
-      assertEquals((0, 0, 0), rpcStats(manager))
+      assertFalse(registeredInLog(manager))
+      assertEquals((false, 0, 0), rpcStats(manager))
       val image = doMetadataUpdate(MetadataImage.EMPTY,
         manager,
         metadataVersion,
         r => if (r.controllerId() == 1) None else Some(r))
       if (!metadataVersionSupportsRegistration) {
-        assertFalse(registered(manager))
-        assertEquals((0, 0, 0), rpcStats(manager))
+        assertFalse(registeredInLog(manager))
+        assertEquals((false, 0, 0), rpcStats(manager))
       } else {
         TestUtils.retryOnExceptionWithTimeout(30000, () => {
-          assertEquals((1, 0, 0), rpcStats(manager))
+          assertEquals((true, 0, 0), rpcStats(manager))
         })
         context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
           new ControllerRegistrationResponseData()), controller1)
         TestUtils.retryOnExceptionWithTimeout(30000, () => {
           context.mockChannelManager.poll()
-          assertEquals((0, 1, 0), rpcStats(manager))
+          assertEquals((false, 1, 0), rpcStats(manager))
         })
-        assertFalse(registered(manager))
+        assertFalse(registeredInLog(manager))
         doMetadataUpdate(image,
           manager,
           metadataVersion,
           r => Some(r))
-        assertTrue(registered(manager))
+        assertTrue(registeredInLog(manager))
       }
     } finally {
       manager.close()
@@ -215,14 +215,14 @@ class ControllerRegistrationManagerTest {
         r => if (r.controllerId() == 1) None else Some(r))
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         context.mockChannelManager.poll()
-        assertEquals((0, 1, 0), rpcStats(manager))
+        assertEquals((false, 1, 0), rpcStats(manager))
       })
       image = doMetadataUpdate(image,
         manager,
         MetadataVersion.IBP_3_6_IV2,
         r => Some(r.setIncarnationId(new Uuid(456, r.controllerId()))))
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
-        assertEquals((1, 1, 0), rpcStats(manager))
+        assertEquals((true, 1, 0), rpcStats(manager))
       })
       context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
         new ControllerRegistrationResponseData()), controller1)
@@ -232,8 +232,8 @@ class ControllerRegistrationManagerTest {
         r => Some(r))
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         context.mockChannelManager.poll()
-        assertEquals((0, 2, 0), rpcStats(manager))
-        assertTrue(registered(manager))
+        assertEquals((false, 2, 0), rpcStats(manager))
+        assertTrue(registeredInLog(manager))
       })
     } finally {
       manager.close()
@@ -259,11 +259,7 @@ class ControllerRegistrationManagerTest {
         r => if (r.controllerId() == 1) None else Some(r))
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         context.mockChannelManager.poll()
-        assertEquals((1, 0, 1), rpcStats(manager))
-      })
-      TestUtils.retryOnExceptionWithTimeout(30000, () => {
-        context.mockChannelManager.poll()
-        assertEquals((0, 1, 0), rpcStats(manager))
+        assertEquals((false, 1, 0), rpcStats(manager))
       })
     } finally {
       manager.close()

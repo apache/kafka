@@ -82,9 +82,9 @@ class ControllerRegistrationManager(
   }
 
   /**
-   * The number of RPCs that we are waiting for. Only read or written from the event queue thread.
+   * True if there is a pending RPC. Only read or written from the event queue thread.
    */
-  var pendingRpcs = 0L
+  var pendingRpc = false
 
   /**
    * The number of RPCs that we successfully sent.
@@ -106,7 +106,7 @@ class ControllerRegistrationManager(
   /**
    * True if we're registered. Only read or written from the event queue thread.
    */
-  var registered: Boolean = false
+  var registeredInLog: Boolean = false
 
   /**
    * The channel manager, or null if this manager has not been started yet.  This variable
@@ -193,13 +193,13 @@ class ControllerRegistrationManager(
             val curRegistration = newImage.cluster().controllers().get(nodeId)
             if (curRegistration == null) {
               info(s"Registration removed for this node ID.")
-              registered = false
+              registeredInLog = false
             } else if (!curRegistration.incarnationId().equals(incarnationId)) {
               info(s"Found registration for ${curRegistration.incarnationId()} instead of our incarnation.")
-              registered = false
+              registeredInLog = false
             } else {
               info(s"Our registration has been persisted to the metadata log.")
-              registered = true
+              registeredInLog = true
             }
           }
         }
@@ -211,7 +211,7 @@ class ControllerRegistrationManager(
   }
 
   private def maybeSendControllerRegistration(): Unit = {
-    if (registered) {
+    if (registeredInLog) {
       debug("maybeSendControllerRegistration: controller is already registered.")
     } else if (_channelManager == null) {
       debug("maybeSendControllerRegistration: cannot register yet because the channel manager has " +
@@ -219,7 +219,7 @@ class ControllerRegistrationManager(
     } else if (!metadataVersion.isControllerRegistrationSupported) {
       info("maybeSendControllerRegistration: cannot register yet because the metadata version is " +
           s"still $metadataVersion, which does not support KIP-919 controller registration.")
-    } else if (pendingRpcs > 0) {
+    } else if (pendingRpc) {
       info("maybeSendControllerRegistration: waiting for the previous RPC to complete.");
     } else {
       sendControllerRegistration()
@@ -242,12 +242,12 @@ class ControllerRegistrationManager(
     info(s"sendControllerRegistration: attempting to send $data")
     _channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data),
       new RegistrationResponseHandler())
-    pendingRpcs = pendingRpcs + 1
+    pendingRpc = true
   }
 
   private class RegistrationResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
-      pendingRpcs = pendingRpcs - 1
+      pendingRpc = false
       if (response.authenticationException() != null) {
         error(s"RegistrationResponseHandler: authentication error", response.authenticationException())
         scheduleNextCommunicationAfterFailure()

@@ -143,11 +143,11 @@ public class FeatureControlManagerTest {
             manager.finalizedFeatures(123));
     }
 
-    static ClusterSupportDescriber createFakeClusterSupportDescriber(
+    static ClusterFeatureSupportDescriber createFakeClusterFeatureSupportDescriber(
         List<Map.Entry<Integer, Map<String, VersionRange>>> brokerRanges,
         List<Map.Entry<Integer, Map<String, VersionRange>>> controllerRanges
     ) {
-        return new ClusterSupportDescriber() {
+        return new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Map.Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
                 return brokerRanges.iterator();
@@ -168,7 +168,7 @@ public class FeatureControlManagerTest {
             setLogContext(logContext).
             setQuorumFeatures(features("foo", 1, 5, "bar", 0, 3)).
             setSnapshotRegistry(snapshotRegistry).
-            setClusterSupportDescriber(createFakeClusterSupportDescriber(
+            setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
                 Arrays.asList(new SimpleImmutableEntry<>(5, Collections.singletonMap("bar", VersionRange.of(0, 3)))),
                 Arrays.asList())).
             build();
@@ -389,7 +389,7 @@ public class FeatureControlManagerTest {
         localSupportedFeatures.put("foo", VersionRange.of(0, 2));
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).
-            setClusterSupportDescriber(createFakeClusterSupportDescriber(
+            setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
                 Arrays.asList(new SimpleImmutableEntry<>(1, Collections.singletonMap("foo", VersionRange.of(0, 3)))),
                 Arrays.asList())).
                 build();

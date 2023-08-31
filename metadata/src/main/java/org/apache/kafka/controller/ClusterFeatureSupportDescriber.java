@@ -24,7 +24,8 @@ import java.util.Map;
 import org.apache.kafka.metadata.VersionRange;
 
 
-public interface ClusterSupportDescriber {
+public interface ClusterFeatureSupportDescriber {
     Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported();
     Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported();
 }
+

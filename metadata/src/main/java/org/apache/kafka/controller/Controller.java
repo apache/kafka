@@ -395,9 +395,9 @@ public interface Controller extends AclMutator, AutoCloseable {
      * Attempt to register the given controller.
      *
      * @param context       The controller request context.
-     * @param request      The registration request.
+     * @param request       The registration request.
      *
-     * @return             A future yielding the broker registration reply.
+     * @return              A future yielding the broker registration reply.
      */
     CompletableFuture<Void> registerController(
         ControllerRequestContext context,

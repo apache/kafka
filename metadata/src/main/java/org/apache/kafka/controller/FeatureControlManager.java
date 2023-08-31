@@ -56,7 +56,7 @@ public class FeatureControlManager {
         private QuorumFeatures quorumFeatures = null;
         private MetadataVersion metadataVersion = MetadataVersion.latest();
         private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-        private ClusterSupportDescriber clusterSupportDescriber = new ClusterSupportDescriber() {
+        private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
                 return Collections.<Integer, Map<String, VersionRange>>emptyMap().entrySet().iterator();
@@ -93,7 +93,7 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setClusterSupportDescriber(ClusterSupportDescriber clusterSupportDescriber) {
+        Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
             this.clusterSupportDescriber = clusterSupportDescriber;
             return this;
         }
@@ -149,7 +149,7 @@ public class FeatureControlManager {
     /**
      * Gives information about the supported versions in the cluster.
      */
-    private final ClusterSupportDescriber clusterSupportDescriber;
+    private final ClusterFeatureSupportDescriber clusterSupportDescriber;
 
     private FeatureControlManager(
         LogContext logContext,
@@ -157,7 +157,7 @@ public class FeatureControlManager {
         SnapshotRegistry snapshotRegistry,
         MetadataVersion metadataVersion,
         MetadataVersion minimumBootstrapVersion,
-        ClusterSupportDescriber clusterSupportDescriber
+        ClusterFeatureSupportDescriber clusterSupportDescriber
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;

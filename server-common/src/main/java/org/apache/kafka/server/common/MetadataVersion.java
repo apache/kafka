@@ -333,7 +333,7 @@ public enum MetadataVersion {
     }
 
     public boolean isControllerRegistrationSupported() {
-        return this.isAtLeast(MetadataVersion.IBP_3_6_IV2);
+        return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
     }
 
     public short fetchRequestVersion() {

@@ -329,6 +329,9 @@ class ControllerServer(
       // Set up the controller registrations publisher.
       metadataPublishers.add(controllerRegistrationsPublisher)
 
+      // Set up the registration manager to receive callbacks when the cluster registrations change.
+      metadataPublishers.add(registrationManager)
+
       // Set up the dynamic config publisher. This runs even in combined mode, since the broker
       // has its own separate dynamic configuration object.
       metadataPublishers.add(new DynamicConfigPublisher(
