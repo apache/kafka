@@ -77,25 +77,6 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.canSendRequest(currentTimeMs);
     }
 
-    public NetworkClientDelegate.UnsentRequest makeHeartbeatRequestOnJoin(final long now) {
-        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
-        this.heartbeatRequestState.onSendAttempt(now);
-
-        NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new ConsumerGroupHeartbeatRequest.Builder(data),
-            coordinatorRequestManager.coordinator());
-
-        request.future().whenComplete((response, exception) -> {
-            final long responseTimeMs = time.milliseconds();
-            if (exception != null) {
-                onSuccess((ConsumerGroupHeartbeatResponse) response.responseBody(), responseTimeMs);
-            } else {
-                onFailure(responseTimeMs);
-            }
-        });
-        return request;
-    }
-
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long now) {
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
             .setGroupId(this.memberState.groupId)
@@ -158,6 +139,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 this.memberState.maybeUpdateOnHeartbeatResponse(response.data());
             } catch (KafkaException e) {
                 logger.error("Received unexpected error in heartbeat response: {}", e.getMessage());
+                failFatally(e);
             }
             return;
         }
@@ -174,15 +156,15 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
-            failFatally(Errors.UNRELEASED_INSTANCE_ID);
+            failFatally(Errors.UNRELEASED_INSTANCE_ID.exception());
         }
 
         if (errorCode == Errors.UNSUPPORTED_ASSIGNOR.code()) {
-            failFatally(Errors.UNSUPPORTED_ASSIGNOR);
+            failFatally(Errors.UNSUPPORTED_ASSIGNOR.exception());
         }
 
         if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
-
+            // retry
         }
 
         if (errorCode == Errors.NOT_COORDINATOR.code()) {
@@ -198,7 +180,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         if (errorCode == Errors.INVALID_REQUEST.code()) {
-            failFatally(Errors.INVALID_REQUEST);
+            failFatally(Errors.INVALID_REQUEST.exception());
         }
 
         if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
@@ -207,7 +189,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
     }
 
-    private void failFatally(final Errors error) {
+    private void failFatally(final Exception e) {
         // TODO: send user a fatal failure via queue
     }
 
