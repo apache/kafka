@@ -106,14 +106,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (requestsToSend.isEmpty()) {
-            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
-        }
-
         NetworkClientDelegate.PollResult pollResult =
                 new NetworkClientDelegate.PollResult(Long.MAX_VALUE, new ArrayList<>(requestsToSend));
         this.requestsToSend.clear();
-
         return pollResult;
     }
 
