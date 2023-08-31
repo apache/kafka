@@ -114,13 +114,7 @@ public class ApplicationEventProcessor {
             return false;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.addOffsetFetchRequest(event.partitions()).whenComplete((r, e) -> {
-            if (e != null) {
-                event.future().completeExceptionally(e);
-                return;
-            }
-            event.future().complete(r);
-        });
+        event.chain(manager.addOffsetFetchRequest(event.partitions()));
         return true;
     }
 

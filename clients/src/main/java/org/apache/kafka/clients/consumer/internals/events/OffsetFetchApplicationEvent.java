@@ -19,22 +19,16 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 
-public class OffsetFetchApplicationEvent extends ApplicationEvent {
-    private final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+public class OffsetFetchApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
     private final Set<TopicPartition> partitions;
 
     public OffsetFetchApplicationEvent(final Set<TopicPartition> partitions) {
         super(Type.FETCH_COMMITTED_OFFSET);
-        this.partitions = partitions;
-        this.future = new CompletableFuture<>();
-    }
-
-    public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future() {
-        return future;
+        this.partitions = Collections.unmodifiableSet(partitions);
     }
 
     public Set<TopicPartition> partitions() {
@@ -42,10 +36,29 @@ public class OffsetFetchApplicationEvent extends ApplicationEvent {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        OffsetFetchApplicationEvent that = (OffsetFetchApplicationEvent) o;
+
+        return partitions.equals(that.partitions);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + partitions.hashCode();
+        return result;
+    }
+
+    @Override
     public String toString() {
         return "OffsetFetchApplicationEvent{" +
-            "future=" + future +
-            ", partitions=" + partitions +
-            '}';
+                "partitions=" + partitions +
+                ", future=" + future +
+                ", type=" + type +
+                '}';
     }
 }
