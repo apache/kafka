@@ -37,22 +37,12 @@ import org.apache.kafka.server.common.MetadataVersion
 import scala.jdk.CollectionConverters._
 
 /**
- * The broker lifecycle manager owns the broker state.
- *
- * Its inputs are messages passed in from other parts of the broker and from the
- * controller: requests to start up, or shut down, for example. Its output are the broker
- * state and various futures that can be used to wait for broker state transitions to
- * occur.
- *
- * The lifecycle manager handles registering the broker with the controller, as described
- * in KIP-631. After registration is complete, it handles sending periodic broker
- * heartbeats and processing the responses.
+ * The controller registration manager handles registering this controller with the controller
+ * quorum. This support was added by KIP-919, and requires a metadata version of 3.7 or higher.
  *
  * This code uses an event queue paradigm. Modifications get translated into events, which
  * are placed on the queue to be processed sequentially. As described in the JavaDoc for
  * each variable, most mutable state can be accessed only from that event queue thread.
- * In some cases we expose a volatile variable which can be read from any thread, but only
- * written from the event queue thread.
  */
 class ControllerRegistrationManager(
   val config: KafkaConfig,
@@ -147,9 +137,9 @@ class ControllerRegistrationManager(
   }
 
   /**
-   * Start the BrokerLifecycleManager.
+   * Start the ControllerRegistrationManager.
    *
-   * @param channelManager                The brokerToControllerChannelManager to use.
+   * @param channelManager                The channel manager to use.
    */
   def start(channelManager: BrokerToControllerChannelManager): Unit = {
     eventQueue.append(() => {
@@ -164,14 +154,14 @@ class ControllerRegistrationManager(
   }
 
   /**
-   * Start shutting down the BrokerLifecycleManager, but do not block.
+   * Start shutting down the ControllerRegistrationManager, but do not block.
    */
   def beginShutdown(): Unit = {
     eventQueue.beginShutdown("beginShutdown");
   }
 
   /**
-   * Shut down the BrokerLifecycleManager and block until all threads are joined.
+   * Shut down the ControllerRegistrationManager and block until all threads are joined.
    */
   override def close(): Unit = {
     beginShutdown()
