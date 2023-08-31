@@ -141,7 +141,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         listOffsetsRequestState.globalResult.whenComplete((result, error) -> {
             metadata.clearTransientTopics();
             if (error != null) {
-                log.error("Fetch offsets completed with error for partitions and timestamps {}.",
+                log.debug("Fetch offsets completed with error for partitions and timestamps {}.",
                         timestampsToSearch, error);
             } else {
                 log.debug("Fetch offsets completed successfully for partitions and timestamps {}." +
@@ -279,7 +279,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         CompletableFuture<ListOffsetResult> result = new CompletableFuture<>();
         unsentRequest.future().whenComplete((response, error) -> {
             if (error != null) {
-                log.error("Sending ListOffsetRequest {} to broker {} failed",
+                log.debug("Sending ListOffsetRequest {} to broker {} failed",
                         builder,
                         node,
                         error);
