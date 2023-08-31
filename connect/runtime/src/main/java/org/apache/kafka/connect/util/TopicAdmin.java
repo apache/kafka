@@ -286,18 +286,28 @@ public class TopicAdmin implements AutoCloseable {
      * @param adminConfig the configuration for the {@link Admin}
      */
     public TopicAdmin(Map<String, Object> adminConfig) {
-        this(adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG), Admin.create(adminConfig));
+        this(adminConfig, Admin.create(adminConfig));
     }
 
-    public TopicAdmin(Object bootstrapServers, Admin adminClient) {
-        this(bootstrapServers, adminClient, true);
+    public TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
+        this(bootstrapServers(adminConfig), adminClient, true);
     }
 
     // visible for testing
-    TopicAdmin(Object bootstrapServers, Admin adminClient, boolean logCreation) {
+    TopicAdmin(Admin adminClient) {
+        this(null, adminClient, true);
+    }
+
+    // visible for testing
+    TopicAdmin(String bootstrapServers, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
-        this.bootstrapServers = bootstrapServers != null ? bootstrapServers.toString() : "<unknown>";
+        this.bootstrapServers = bootstrapServers != null ? bootstrapServers : "<unknown>";
         this.logCreation = logCreation;
+    }
+
+    private static String bootstrapServers(Map<String, Object> adminConfig) {
+        Object result = adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
+        return result != null ? result.toString() : null;
     }
 
    /**
