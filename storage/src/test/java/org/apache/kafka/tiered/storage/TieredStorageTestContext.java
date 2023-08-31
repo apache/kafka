@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.tiered.storage;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
@@ -90,15 +92,21 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     @SuppressWarnings("deprecation")
     private void initClients() {
+        // rediscover the new bootstrap-server port incase of broker restarts
+        ListenerName listenerName = harness.listenerName();
+        Properties commonOverrideProps = new Properties();
+        commonOverrideProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, harness.bootstrapServers(listenerName));
+
         // Set a producer linger of 60 seconds, in order to optimistically generate batches of
         // records with a pre-determined size.
         Properties producerOverrideProps = new Properties();
         producerOverrideProps.put(LINGER_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(60)));
-        producer = harness.createProducer(ser, ser, producerOverrideProps);
+        producerOverrideProps.putAll(commonOverrideProps);
 
-        consumer = harness.createConsumer(de, de, new Properties(),
+        producer = harness.createProducer(ser, ser, producerOverrideProps);
+        consumer = harness.createConsumer(de, de, commonOverrideProps,
                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toList());
-        admin = harness.createAdminClient(harness.listenerName(), new Properties());
+        admin = harness.createAdminClient(listenerName, commonOverrideProps);
     }
 
     private void initContext() {

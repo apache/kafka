@@ -26,7 +26,6 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -166,8 +165,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                            configOverrides: Properties = new Properties): KafkaProducer[K, V] = {
     val props = new Properties
     props ++= producerConfig
-    // rediscover the new bootstrap-server port incase of broker restarts
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     props ++= configOverrides
     val producer = new KafkaProducer[K, V](props, keySerializer, valueSerializer)
     producers += producer
@@ -180,8 +177,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                                 configsToRemove: List[String] = List()): PrototypeAsyncConsumer[K, V] = {
     val props = new Properties
     props ++= consumerConfig
-    // rediscover the new bootstrap-server port incase of broker restarts
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     props ++= configOverrides
     configsToRemove.foreach(props.remove(_))
     val consumer = new PrototypeAsyncConsumer[K, V](props, keyDeserializer, valueDeserializer)
@@ -195,8 +190,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                            configsToRemove: List[String] = List()): Consumer[K, V] = {
     val props = new Properties
     props ++= consumerConfig
-    // rediscover the new bootstrap-server port incase of broker restarts
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     props ++= configOverrides
     configsToRemove.foreach(props.remove(_))
     val consumer = new KafkaConsumer[K, V](props, keyDeserializer, valueDeserializer)
@@ -210,8 +203,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   ): Admin = {
     val props = new Properties
     props ++= adminClientConfig
-    // rediscover the new bootstrap-server port incase of broker restarts
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     props ++= configOverrides
     val admin = TestUtils.createAdminClient(brokers, listenerName, props)
     adminClients += admin
@@ -224,8 +215,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   ): Admin = {
     val props = new Properties
     props ++= superuserClientConfig
-    // rediscover the new bootstrap-server port incase of broker restarts
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     props ++= configOverrides
     val admin = TestUtils.createAdminClient(brokers, listenerName, props)
     adminClients += admin
