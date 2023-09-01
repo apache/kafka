@@ -85,17 +85,17 @@ public class FetchCollector<K, V> {
      *         the defaultResetPolicy is NONE
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Fetch<K, V> collectFetch(final FetchBuffer<K, V> fetchBuffer) {
+    public Fetch<K, V> collectFetch(final FetchBuffer fetchBuffer) {
         final Fetch<K, V> fetch = Fetch.empty();
-        final Queue<CompletedFetch<K, V>> pausedCompletedFetches = new ArrayDeque<>();
+        final Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = fetchConfig.maxPollRecords;
 
         try {
             while (recordsRemaining > 0) {
-                final CompletedFetch<K, V> nextInLineFetch = fetchBuffer.nextInLineFetch();
+                final CompletedFetch nextInLineFetch = fetchBuffer.nextInLineFetch();
 
                 if (nextInLineFetch == null || nextInLineFetch.isConsumed()) {
-                    final CompletedFetch<K, V> records = fetchBuffer.peek();
+                    final CompletedFetch records = fetchBuffer.peek();
 
                     if (records == null)
                         break;
@@ -143,7 +143,7 @@ public class FetchCollector<K, V> {
         return fetch;
     }
 
-    private Fetch<K, V> fetchRecords(final CompletedFetch<K, V> nextInLineFetch) {
+    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch) {
         final TopicPartition tp = nextInLineFetch.partition;
 
         if (!subscriptions.isAssigned(tp)) {
@@ -160,7 +160,7 @@ public class FetchCollector<K, V> {
                 throw new IllegalStateException("Missing position for fetchable partition " + tp);
 
             if (nextInLineFetch.nextFetchOffset() == position.offset) {
-                List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig.maxPollRecords);
+                List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig, fetchConfig.maxPollRecords);
 
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
                         partRecords.size(), position, tp);
@@ -205,7 +205,7 @@ public class FetchCollector<K, V> {
     /**
      * Initialize a CompletedFetch object.
      */
-    protected CompletedFetch<K, V> initialize(final CompletedFetch<K, V> completedFetch) {
+    protected CompletedFetch initialize(final CompletedFetch completedFetch) {
         final TopicPartition tp = completedFetch.partition;
         final Errors error = Errors.forCode(completedFetch.partitionData.errorCode());
         boolean recordMetrics = true;
@@ -216,7 +216,7 @@ public class FetchCollector<K, V> {
                 log.debug("Ignoring fetched records for partition {} since it no longer has valid position", tp);
                 return null;
             } else if (error == Errors.NONE) {
-                final CompletedFetch<K, V> ret = handleInitializeSuccess(completedFetch);
+                final CompletedFetch ret = handleInitializeSuccess(completedFetch);
                 recordMetrics = ret == null;
                 return ret;
             } else {
@@ -235,7 +235,7 @@ public class FetchCollector<K, V> {
         }
     }
 
-    private CompletedFetch<K, V> handleInitializeSuccess(final CompletedFetch<K, V> completedFetch) {
+    private CompletedFetch handleInitializeSuccess(final CompletedFetch completedFetch) {
         final TopicPartition tp = completedFetch.partition;
         final long fetchOffset = completedFetch.nextFetchOffset();
 
@@ -299,7 +299,7 @@ public class FetchCollector<K, V> {
         return completedFetch;
     }
 
-    private void handleInitializeErrors(final CompletedFetch<K, V> completedFetch, final Errors error) {
+    private void handleInitializeErrors(final CompletedFetch completedFetch, final Errors error) {
         final TopicPartition tp = completedFetch.partition;
         final long fetchOffset = completedFetch.nextFetchOffset();
 

@@ -585,10 +585,11 @@ public class ConsumerNetworkClient implements NodeStatusDetector, Closeable {
      * should be used.
      * @param node The node to connect to
      */
+    @Override
     public void tryConnect(Node node) {
         lock.lock();
         try {
-            client.ready(node, time.milliseconds());
+            NetworkClientUtils.tryConnect(client, node, time);
         } finally {
             lock.unlock();
         }

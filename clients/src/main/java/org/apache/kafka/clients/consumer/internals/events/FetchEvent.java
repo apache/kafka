@@ -23,7 +23,7 @@ import java.util.Queue;
 /**
  * This event signals the background thread to submit a fetch request.
  */
-public class FetchEvent<K, V> extends CompletableApplicationEvent<Queue<CompletedFetch<K, V>>> {
+public class FetchEvent extends CompletableApplicationEvent<Queue<CompletedFetch>> {
 
     public FetchEvent() {
         super(Type.FETCH);

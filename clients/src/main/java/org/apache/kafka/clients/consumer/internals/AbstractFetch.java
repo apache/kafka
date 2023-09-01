@@ -61,7 +61,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     protected final FetchConfig<K, V> fetchConfig;
     protected final Time time;
     protected final FetchMetricsManager metricsManager;
-    protected final FetchBuffer<K, V> fetchBuffer;
+    protected final FetchBuffer fetchBuffer;
     protected final BufferSupplier decompressionBufferSupplier;
     protected final Set<Integer> nodesWithPendingFetchRequests;
     protected final IdempotentCloser idempotentCloser = new IdempotentCloser();
@@ -82,7 +82,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
         this.decompressionBufferSupplier = BufferSupplier.create();
-        this.fetchBuffer = new FetchBuffer<>(logContext);
+        this.fetchBuffer = new FetchBuffer(logContext);
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingFetchRequests = new HashSet<>();
         this.metricsManager = metricsManager;
@@ -168,10 +168,9 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                 log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                         fetchConfig.isolationLevel, fetchOffset, partition, partitionData);
 
-                CompletedFetch<K, V> completedFetch = new CompletedFetch<>(
+                CompletedFetch completedFetch = new CompletedFetch(
                         logContext,
                         subscriptions,
-                        fetchConfig,
                         decompressionBufferSupplier,
                         partition,
                         partitionData,
@@ -276,7 +275,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
      * @param partition {@link TopicPartition} for which we want to fetch data
      * @param leaderReplica {@link Node} for the leader of the given partition
      * @param currentTimeMs Current time in milliseconds; used to determine if we're within the optional lease window
-     * @return Replic {@link Node node} from which to request the data
+     * @return Replica {@link Node node} from which to request the data
      * @see SubscriptionState#preferredReadReplica
      * @see SubscriptionState#updatePreferredReadReplica
      */
@@ -401,8 +400,8 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     }
 
     /**
-     * This is guaranteed (by the {@link IdempotentCloser} to be executed only once the first time that
-     * any of the {@link #close()} methods are called.
+     * This is guaranteed (by the {@link IdempotentCloser}) to be executed only once the first
+     * time that any of the {@link #close()} methods are called.
      * @param timer Timer to enforce time limit
      */
     // Visible for testing

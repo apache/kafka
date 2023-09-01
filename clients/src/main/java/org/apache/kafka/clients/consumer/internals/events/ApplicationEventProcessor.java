@@ -56,12 +56,11 @@ public class ApplicationEventProcessor<K, V> {
         this.metadata = metadata;
     }
 
-    @SuppressWarnings("unchecked")
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event, "Attempt to process null ApplicationEvent");
         Objects.requireNonNull(event.type(), "Attempt to process ApplicationEvent with null type: " + event);
 
-        log.debug("Processing event {}", event);
+        log.trace("Processing event: {}", event);
 
         // Make sure to use the event's type() method, not the type variable directly. This causes problems when
         // unit tests mock the EventType.
@@ -83,7 +82,7 @@ public class ApplicationEventProcessor<K, V> {
             case LIST_OFFSETS:
                 return process((ListOffsetsApplicationEvent) event);
             case FETCH:
-                return process((FetchEvent<K, V>) event);
+                return process((FetchEvent) event);
             case RESET_POSITIONS:
                 return process((ResetPositionsApplicationEvent) event);
             case VALIDATE_POSITIONS:
@@ -129,10 +128,10 @@ public class ApplicationEventProcessor<K, V> {
         return true;
     }
 
-    private boolean process(final FetchEvent<K, V> event) {
+    private boolean process(final FetchEvent event) {
         // The request manager keeps track of the completed fetches, so we pull any that are ready off, and return
         // them to the application.
-        Queue<CompletedFetch<K, V>> completedFetches = requestManagers.fetchRequestManager.drain();
+        Queue<CompletedFetch> completedFetches = requestManagers.fetchRequestManager.drain();
         event.future().complete(completedFetches);
         return true;
     }

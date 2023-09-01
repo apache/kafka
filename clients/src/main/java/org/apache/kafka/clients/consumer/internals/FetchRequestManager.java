@@ -63,8 +63,6 @@ public class FetchRequestManager<K, V> extends AbstractFetch<K, V> implements Re
 
     @Override
     public PollResult poll(long currentTimeMs) {
-        log.debug("poll - currentTimeMs: {}", currentTimeMs);
-
         List<UnsentRequest> requests;
 
         if (!idempotentCloser.isClosed()) {
@@ -117,9 +115,9 @@ public class FetchRequestManager<K, V> extends AbstractFetch<K, V> implements Re
      *
      * @return {@link Queue} containing zero or more {@link CompletedFetch}
      */
-    public Queue<CompletedFetch<K, V>> drain() {
-        Queue<CompletedFetch<K, V>> q = new LinkedList<>();
-        CompletedFetch<K, V> completedFetch = fetchBuffer.poll();
+    public Queue<CompletedFetch> drain() {
+        Queue<CompletedFetch> q = new LinkedList<>();
+        CompletedFetch completedFetch = fetchBuffer.poll();
 
         while (completedFetch != null) {
             q.add(completedFetch);

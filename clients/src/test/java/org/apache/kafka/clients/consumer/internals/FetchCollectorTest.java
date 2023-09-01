@@ -82,7 +82,7 @@ public class FetchCollectorTest {
     private FetchConfig<String, String> fetchConfig;
     private FetchMetricsManager metricsManager;
     private ConsumerMetadata metadata;
-    private FetchBuffer<String, String> fetchBuffer;
+    private FetchBuffer fetchBuffer;
     private FetchCollector<String, String> fetchCollector;
     private CompletedFetchBuilder completedFetchBuilder;
 
@@ -92,7 +92,7 @@ public class FetchCollectorTest {
         buildDependencies();
         assignAndSeek(topicAPartition0);
 
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .recordCount(recordCount)
                 .build();
 
@@ -151,7 +151,7 @@ public class FetchCollectorTest {
         assertNotNull(subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
         assertEquals(Optional.of(preferredReadReplicaId), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
 
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder.build();
+        CompletedFetch completedFetch = completedFetchBuilder.build();
         fetchBuffer.add(completedFetch);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
@@ -174,7 +174,7 @@ public class FetchCollectorTest {
         assertFalse(subscriptions.hasValidPosition(topicAPartition0));
 
         // Add some valid CompletedFetch records to the FetchBuffer queue and collect them into the Fetch.
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder.build();
+        CompletedFetch completedFetch = completedFetchBuilder.build();
         fetchBuffer.add(completedFetch);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
@@ -197,13 +197,13 @@ public class FetchCollectorTest {
                 time) {
 
             @Override
-            protected CompletedFetch<String, String> initialize(final CompletedFetch<String, String> completedFetch) {
+            protected CompletedFetch initialize(final CompletedFetch completedFetch) {
                 throw expectedException;
             }
         };
 
         // Add the CompletedFetch to the FetchBuffer queue
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .recordCount(recordCount)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -230,7 +230,7 @@ public class FetchCollectorTest {
         subscriptions.pause(topicAPartition0);
         assertTrue(subscriptions.isPaused(topicAPartition0));
 
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder.build();
+        CompletedFetch completedFetch = completedFetchBuilder.build();
 
         // Set the CompletedFetch to the next-in-line fetch, *not* the queue.
         fetchBuffer.setNextInLineFetch(completedFetch);
@@ -265,7 +265,7 @@ public class FetchCollectorTest {
         buildDependencies();
         assignAndSeek(topicAPartition0);
 
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .error(error)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -288,7 +288,7 @@ public class FetchCollectorTest {
         buildDependencies();
         assignAndSeek(topicAPartition0);
 
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder.build();
+        CompletedFetch completedFetch = completedFetchBuilder.build();
         fetchBuffer.add(completedFetch);
 
         // Fetch the data and validate that we get our first batch of records back.
@@ -327,7 +327,7 @@ public class FetchCollectorTest {
         assertNotNull(subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
         assertEquals(Optional.of(preferredReadReplicaId), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
 
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.OFFSET_OUT_OF_RANGE)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -344,7 +344,7 @@ public class FetchCollectorTest {
         assignAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.TOPIC_AUTHORIZATION_FAILED)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -357,7 +357,7 @@ public class FetchCollectorTest {
         assignAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_LEADER_EPOCH)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -371,7 +371,7 @@ public class FetchCollectorTest {
         assignAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_SERVER_ERROR)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -385,7 +385,7 @@ public class FetchCollectorTest {
         assignAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.CORRUPT_MESSAGE)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -398,7 +398,7 @@ public class FetchCollectorTest {
         buildDependencies();
         assignAndSeek(topicAPartition0);
 
-        CompletedFetch<String, String> completedFetch = completedFetchBuilder
+        CompletedFetch completedFetch = completedFetchBuilder
                 .error(error)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -449,7 +449,7 @@ public class FetchCollectorTest {
                 fetchConfig,
                 metricsManager,
                 time);
-        fetchBuffer = new FetchBuffer<>(logContext);
+        fetchBuffer = new FetchBuffer(logContext);
         completedFetchBuilder = new CompletedFetchBuilder();
     }
 
@@ -541,7 +541,7 @@ public class FetchCollectorTest {
             return this;
         }
 
-        private CompletedFetch<String, String> build() {
+        private CompletedFetch build() {
             Records records;
             ByteBuffer allocate = ByteBuffer.allocate(1024);
 
@@ -564,10 +564,9 @@ public class FetchCollectorTest {
                 partitionData.setErrorCode(error.code());
 
             FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
-            return new CompletedFetch<>(
+            return new CompletedFetch(
                     logContext,
                     subscriptions,
-                    fetchConfig,
                     BufferSupplier.create(),
                     topicAPartition0,
                     partitionData,

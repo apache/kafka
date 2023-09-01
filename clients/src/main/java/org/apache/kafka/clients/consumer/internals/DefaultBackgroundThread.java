@@ -121,7 +121,7 @@ public class DefaultBackgroundThread<K, V> extends KafkaThread implements Closea
         applicationEventQueue.drainTo(events);
 
         for (ApplicationEvent event : events) {
-            log.debug("Consuming application event: {}", event);
+            log.trace("Dequeued event: {}", event);
             Objects.requireNonNull(event);
             applicationEventProcessor.process(event);
         }
@@ -133,6 +133,7 @@ public class DefaultBackgroundThread<K, V> extends KafkaThread implements Closea
                 .filter(Objects::nonNull)
                 .map(this::handlePollResult)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
+        networkClientDelegate.maybeTryConnect();
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 

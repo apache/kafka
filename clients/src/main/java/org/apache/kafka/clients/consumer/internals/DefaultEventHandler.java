@@ -64,6 +64,7 @@ public class DefaultEventHandler<K, V> implements EventHandler {
     @Override
     public boolean add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
+        log.trace("Enqueued event: {}", event);
         backgroundThread.wakeup();
         return applicationEventQueue.add(event);
     }

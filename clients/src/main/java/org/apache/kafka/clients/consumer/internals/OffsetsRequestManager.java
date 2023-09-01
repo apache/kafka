@@ -80,6 +80,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final long requestTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
+    private final NodeStatusDetector nodeStatusDetector;
 
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
@@ -88,12 +89,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final long retryBackoffMs,
                                  final long requestTimeoutMs,
                                  final ApiVersions apiVersions,
+                                 final NodeStatusDetector nodeStatusDetector,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
         requireNonNull(isolationLevel);
         requireNonNull(time);
         requireNonNull(apiVersions);
+        requireNonNull(nodeStatusDetector);
         requireNonNull(logContext);
 
         this.metadata = metadata;
@@ -106,6 +109,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.time = time;
         this.requestTimeoutMs = requestTimeoutMs;
         this.apiVersions = apiVersions;
+        this.nodeStatusDetector = nodeStatusDetector;
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
                 time, retryBackoffMs, apiVersions);
     }
@@ -444,6 +448,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
             if (nodeApiVersions == null) {
+                nodeStatusDetector.tryConnect(node);
                 return;
             }
 

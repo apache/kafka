@@ -21,6 +21,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -118,10 +119,12 @@ public class RequestManagers<K, V> implements Closeable {
         return new CachedSupplier<RequestManagers<K, V>>() {
             @Override
             protected RequestManagers<K, V> create() {
+                Deserializer<K> keyDeserializer = new NoopDeserializer<>();
+                Deserializer<V> valueDeserializer = new NoopDeserializer<>();
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
                 final ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
                 final IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
-                final FetchConfig<K, V> fetchConfig = createFetchConfig(config);
+                final FetchConfig<K, V> fetchConfig = createFetchConfig(config, new Deserializers<>(keyDeserializer, valueDeserializer));
                 final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
@@ -131,6 +134,7 @@ public class RequestManagers<K, V> implements Closeable {
                         retryBackoffMs,
                         requestTimeoutMs,
                         apiVersions,
+                        networkClientDelegate,
                         logContext);
                 final TopicMetadataRequestManager topicMetadata = new TopicMetadataRequestManager(logContext, config);
                 final FetchRequestManager<K, V> fetch = new FetchRequestManager<>(logContext,
@@ -162,5 +166,13 @@ public class RequestManagers<K, V> implements Closeable {
                         Optional.ofNullable(commit));
             }
         };
+    }
+
+    private static class NoopDeserializer<T> implements Deserializer<T> {
+
+        @Override
+        public T deserialize(final String topic, final byte[] data) {
+            throw new RuntimeException("who dares call me!?!?!");
+        }
     }
 }

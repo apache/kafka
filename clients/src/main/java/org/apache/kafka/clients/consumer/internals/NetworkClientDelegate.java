@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -54,12 +57,14 @@ import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_METRIC_
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
  */
 public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable {
+
     private final KafkaClient client;
     private final Time time;
     private final Logger log;
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
+    private final Set<Node> tryConnectNodes;
 
     public NetworkClientDelegate(
             final Time time,
@@ -72,6 +77,7 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.tryConnectNodes = new HashSet<>();
     }
 
     protected Queue<UnsentRequest> unsentRequests() {
@@ -86,6 +92,20 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
     @Override
     public void maybeThrowAuthFailure(Node node) {
         NetworkClientUtils.maybeThrowAuthFailure(client, node);
+    }
+
+    @Override
+    public void tryConnect(Node node) {
+        tryConnectNodes.add(node);
+    }
+
+    public void maybeTryConnect() {
+        List<Node> nodes = new ArrayList<>(tryConnectNodes);
+        tryConnectNodes.clear();
+
+        for (Node node : nodes) {
+            NetworkClientUtils.tryConnect(client, node, time);
+        }
     }
 
     /**

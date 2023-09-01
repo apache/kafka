@@ -130,7 +130,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final EventHandler eventHandler;
     private final BackgroundEventProcessor backgroundEventProcessor;
     private final Deserializers<K, V> deserializers;
-    private final FetchBuffer<K, V> fetchBuffer;
+    private final FetchBuffer fetchBuffer;
     private final FetchCollector<K, V> fetchCollector;
     private final ConsumerInterceptors<K, V> interceptors;
     private final IsolationLevel isolationLevel;
@@ -249,7 +249,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             }
             // These are specific to the foreground thread
             FetchConfig<K, V> fetchConfig = createFetchConfig(config, deserializers);
-            this.fetchBuffer = new FetchBuffer<>(logContext);
+            this.fetchBuffer = new FetchBuffer(logContext);
             this.fetchCollector = new FetchCollector<>(logContext,
                     metadata,
                     subscriptions,
@@ -276,7 +276,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public PrototypeAsyncConsumer(LogContext logContext,
                                   String clientId,
                                   Deserializers<K, V> deserializers,
-                                  FetchBuffer<K, V> fetchBuffer,
+                                  FetchBuffer fetchBuffer,
                                   FetchCollector<K, V> fetchCollector,
                                   ConsumerInterceptors<K, V> interceptors,
                                   Time time,
@@ -923,7 +923,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void sendFetches() {
-        FetchEvent<K, V> event = new FetchEvent<>();
+        FetchEvent event = new FetchEvent();
         eventHandler.add(event);
 
         event.future().whenComplete((completedFetches, error) -> {
@@ -960,11 +960,20 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         log.trace("Polling for fetches with timeout {}", pollTimeout);
 
         Timer pollTimer = time.timer(pollTimeout);
-        Queue<CompletedFetch<K, V>> completedFetches = eventHandler.addAndGet(new FetchEvent<>(), pollTimer);
-        if (completedFetches != null && !completedFetches.isEmpty()) {
-            fetchBuffer.addAll(completedFetches);
+
+        // Attempt to fetch any data. It's OK if we time out here; it's a best case effort. The
+        // data may not be immediately available, but the calling method (poll) will correctly
+        // handle the overall timeout.
+        try {
+            Queue<CompletedFetch> completedFetches = eventHandler.addAndGet(new FetchEvent(), pollTimer);
+            if (completedFetches != null && !completedFetches.isEmpty()) {
+                fetchBuffer.addAll(completedFetches);
+            }
+        } catch (TimeoutException e) {
+            log.trace("Timeout during fetch", e);
+        } finally {
+            timer.update(pollTimer.currentTimeMs());
         }
-        timer.update(pollTimer.currentTimeMs());
 
         return fetchCollector.collectFetch(fetchBuffer);
     }

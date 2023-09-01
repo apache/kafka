@@ -47,4 +47,12 @@ public interface NodeStatusDetector {
      * @see NetworkClientUtils#maybeThrowAuthFailure(KafkaClient, Node)
      */
     void maybeThrowAuthFailure(Node node);
+
+    /**
+     * Initiate a connection if currently possible. This is only really useful for resetting
+     * the failed status of a socket.
+     *
+     * @param node The node to connect to
+     */
+    void tryConnect(Node node);
 }

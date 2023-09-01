@@ -34,17 +34,14 @@ import java.util.function.Predicate;
  * <p/>
  *
  * <em>Note</em>: this class is not thread-safe and is intended to only be used from a single thread.
- *
- * @param <K> Record key type
- * @param <V> Record value type
  */
-public class FetchBuffer<K, V> implements Closeable {
+public class FetchBuffer implements Closeable {
 
     private final Logger log;
-    private final ConcurrentLinkedQueue<CompletedFetch<K, V>> completedFetches;
+    private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
 
-    private CompletedFetch<K, V> nextInLineFetch;
+    private CompletedFetch nextInLineFetch;
 
     public FetchBuffer(final LogContext logContext) {
         this.log = logContext.logger(FetchBuffer.class);
@@ -66,31 +63,31 @@ public class FetchBuffer<K, V> implements Closeable {
      *
      * @return {@code true} if there are completed fetches that match the {@link Predicate}, {@code false} otherwise
      */
-    boolean hasCompletedFetches(Predicate<CompletedFetch<K, V>> predicate) {
+    boolean hasCompletedFetches(Predicate<CompletedFetch> predicate) {
         return completedFetches.stream().anyMatch(predicate);
     }
 
-    void add(CompletedFetch<K, V> completedFetch) {
+    void add(CompletedFetch completedFetch) {
         completedFetches.add(completedFetch);
     }
 
-    void addAll(Collection<CompletedFetch<K, V>> completedFetches) {
+    void addAll(Collection<CompletedFetch> completedFetches) {
         this.completedFetches.addAll(completedFetches);
     }
 
-    CompletedFetch<K, V> nextInLineFetch() {
+    CompletedFetch nextInLineFetch() {
         return nextInLineFetch;
     }
 
-    void setNextInLineFetch(CompletedFetch<K, V> completedFetch) {
+    void setNextInLineFetch(CompletedFetch completedFetch) {
         this.nextInLineFetch = completedFetch;
     }
 
-    CompletedFetch<K, V> peek() {
+    CompletedFetch peek() {
         return completedFetches.peek();
     }
 
-    CompletedFetch<K, V> poll() {
+    CompletedFetch poll() {
         return completedFetches.poll();
     }
 
@@ -107,7 +104,7 @@ public class FetchBuffer<K, V> implements Closeable {
             nextInLineFetch = null;
     }
 
-    boolean maybeDrain(final Set<TopicPartition> partitions, final CompletedFetch<K, V> completedFetch) {
+    boolean maybeDrain(final Set<TopicPartition> partitions, final CompletedFetch completedFetch) {
         if (completedFetch != null && !partitions.contains(completedFetch.partition)) {
             log.debug("Removing {} from buffered fetch data as it is not in the set of partitions to retain ({})", completedFetch.partition, partitions);
             completedFetch.drain();

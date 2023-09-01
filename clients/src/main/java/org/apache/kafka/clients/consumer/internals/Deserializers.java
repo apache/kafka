@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.StringJoiner;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -74,5 +75,13 @@ public class Deserializers<K, V> implements AutoCloseable {
             }
             throw new KafkaException("Failed to close deserializers", exception);
         }
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", Deserializers.class.getSimpleName() + "[", "]")
+            .add("keyDeserializer=" + keyDeserializer)
+            .add("valueDeserializer=" + valueDeserializer)
+            .toString();
     }
 }

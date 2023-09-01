@@ -121,7 +121,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         this.subscriptions = createSubscriptionState(config, logContext);
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
-        this.fetchConfig = createFetchConfig(config);
+        this.fetchConfig = createFetchConfig(config, new Deserializers<>(config));
         this.metricsManager = createFetchMetricsManager(metrics);
 
         this.client = new MockClient(time, metadata);
@@ -138,6 +138,7 @@ public class ConsumerTestBuilder implements Closeable {
                 retryBackoffMs,
                 requestTimeoutMs,
                 apiVersions,
+                networkClientDelegate,
                 logContext));
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
         this.coordinatorRequestManager = spy(new CoordinatorRequestManager(time,
@@ -239,7 +240,7 @@ public class ConsumerTestBuilder implements Closeable {
                     logContext,
                     clientId,
                     new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
-                    new FetchBuffer<>(logContext),
+                    new FetchBuffer(logContext),
                     fetchCollector,
                     new ConsumerInterceptors<>(Collections.emptyList()),
                     time,

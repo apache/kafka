@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
@@ -35,7 +34,6 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.clients.consumer.internals.Utils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.Utils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.Utils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.Utils.createSubscriptionState;
@@ -67,8 +65,6 @@ public class FetchBufferTest {
 
     private SubscriptionState subscriptions;
 
-    private FetchConfig<String, String> fetchConfig;
-
     private FetchMetricsManager metricsManager;
 
     @BeforeEach
@@ -81,10 +77,7 @@ public class FetchBufferTest {
         p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         ConsumerConfig config = new ConsumerConfig(p);
 
-        Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-
         subscriptions = createSubscriptionState(config, logContext);
-        fetchConfig = createFetchConfig(config, deserializers);
 
         Metrics metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);
@@ -95,8 +88,8 @@ public class FetchBufferTest {
      */
     @Test
     public void testBasicPeekAndPoll() {
-        try (FetchBuffer<String, String> fetchBuffer = new FetchBuffer<>(logContext)) {
-            CompletedFetch<String, String> completedFetch = completedFetch(topicAPartition0);
+        try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
+            CompletedFetch completedFetch = completedFetch(topicAPartition0);
             assertTrue(fetchBuffer.isEmpty());
             fetchBuffer.add(completedFetch);
             assertTrue(fetchBuffer.hasCompletedFetches(p -> true));
@@ -113,10 +106,10 @@ public class FetchBufferTest {
      */
     @Test
     public void testCloseClearsData() {
-        FetchBuffer<String, String> fetchBuffer = null;
+        FetchBuffer fetchBuffer = null;
 
         try {
-            fetchBuffer = new FetchBuffer<>(logContext);
+            fetchBuffer = new FetchBuffer(logContext);
             assertNull(fetchBuffer.nextInLineFetch());
             assertTrue(fetchBuffer.isEmpty());
 
@@ -139,7 +132,7 @@ public class FetchBufferTest {
      */
     @Test
     public void testPartitions() {
-        try (FetchBuffer<String, String> fetchBuffer = new FetchBuffer<>(logContext)) {
+        try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
             fetchBuffer.add(completedFetch(topicAPartition1));
             fetchBuffer.add(completedFetch(topicAPartition2));
@@ -161,7 +154,7 @@ public class FetchBufferTest {
      */
     @Test
     public void testAddAllAndRetainAll() {
-        try (FetchBuffer<String, String> fetchBuffer = new FetchBuffer<>(logContext)) {
+        try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
             fetchBuffer.addAll(Arrays.asList(completedFetch(topicAPartition1), completedFetch(topicAPartition2)));
             assertEquals(allPartitions, fetchBuffer.partitions());
@@ -177,13 +170,12 @@ public class FetchBufferTest {
         }
     }
 
-    private CompletedFetch<String, String> completedFetch(TopicPartition tp) {
+    private CompletedFetch completedFetch(TopicPartition tp) {
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData();
         FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
-        return new CompletedFetch<>(
+        return new CompletedFetch(
                 logContext,
                 subscriptions,
-                fetchConfig,
                 BufferSupplier.create(),
                 tp,
                 partitionData,

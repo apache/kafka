@@ -46,7 +46,6 @@ yet supported by the async consumer. Disabled tests will be enabled as the async
 evolves. The moment all tests are enabled this file will be deleted. */
 class PlaintextAsyncConsumer extends BaseConsumerTest {
 
-  @Disabled("Needs review for async consumer")
   @Test
   def testHeaders(): Unit = {
     val numRecords = 1
@@ -143,7 +142,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
     assertEquals(Set(tp, tp2), consumer.assignment().asScala)
   }
 
-  @Disabled("Needs review for async consumer")
   @Test
   def testHeadersSerializerDeserializer(): Unit = {
     val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
@@ -632,7 +630,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
     producer.close()
   }
 
-  @Disabled("Needs review for async consumer - flaky")
   @Test
   def testPositionAndCommit(): Unit = {
     val producer = createProducer()
@@ -1327,7 +1324,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0)
   }
 
-  @Disabled("Needs review for async consumer")
   @Test
   def testConsumeMessagesWithLogAppendTime(): Unit = {
     val topicName = "testConsumeMessagesWithLogAppendTime"
@@ -1646,7 +1642,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
     assertNotNull(fetchLag)
   }
 
-  @Disabled("Needs review for async consumer")
   @Test
   def testPerPartitionLeadWithMaxPollRecords(): Unit = {
     val numMessages = 1000
@@ -1692,7 +1687,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
     assertEquals(numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon, s"The lag should be ${numMessages - records.count}")
   }
 
-  @Disabled("Needs review for async consumer")
   @Test
   def testQuotaMetricsNotCreatedIfNoQuotasConfigured(): Unit = {
     val numRecords = 1000
@@ -1841,7 +1835,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
         s"The current assignment is ${consumer.assignment()}")
   }
 
-  @Disabled("Needs review for async consumer - flaky")
   @Test
   def testConsumingWithNullGroupId(): Unit = {
     val topic = "test_topic"
