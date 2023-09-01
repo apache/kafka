@@ -125,7 +125,7 @@ public class OffsetsRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
         // Metadata update not happening within the time boundaries of the request future, so
         // future should time out.
-        assertThrows(TimeoutException.class, () -> fetchOffsetsFuture.get(10L, TimeUnit.MILLISECONDS));
+        assertThrows(TimeoutException.class, () -> fetchOffsetsFuture.get(5L, TimeUnit.MILLISECONDS));
     }
 
     @Test
@@ -418,7 +418,7 @@ public class OffsetsRequestManagerTest {
         clientResponse.onComplete();
 
         assertFalse(fetchOffsetsFuture.isDone());
-        assertThrows(TimeoutException.class, () -> fetchOffsetsFuture.get(10L, TimeUnit.MILLISECONDS));
+        assertThrows(TimeoutException.class, () -> fetchOffsetsFuture.get(5L, TimeUnit.MILLISECONDS));
 
         // Request completed with error. Nothing pending to be sent or retried
         assertEquals(0, requestManager.requestsToRetry());
