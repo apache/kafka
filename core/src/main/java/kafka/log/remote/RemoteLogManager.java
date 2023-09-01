@@ -778,8 +778,7 @@ public class RemoteLogManager implements Closeable {
                     logger.warn("Current thread for topic-partition-id {} is interrupted. Reason: {}", topicIdPartition, ex.getMessage());
                 }
             } catch (RetriableException ex) {
-                logger.debug("Encountered a retryable error while executing current task for topic-partition {}. " +
-                    "Reason: {}", topicIdPartition, ex.getMessage());
+                logger.debug("Encountered a retryable error while executing current task for topic-partition {}", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     logger.warn("Current task for topic-partition {} received error but it will be scheduled. " +
