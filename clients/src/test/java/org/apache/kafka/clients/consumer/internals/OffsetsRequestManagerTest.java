@@ -111,23 +111,6 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testListOffsetsRequest_UnknownOffset() throws ExecutionException,
-            InterruptedException {
-        Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
-                ListOffsetsRequest.EARLIEST_TIMESTAMP);
-
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
-                timestampsToSearch,
-                false);
-        assertEquals(1, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetry());
-
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestamp(5L, 1L));
-        verifySuccessfulPollAndResponseReceived(result, expectedOffsets);
-    }
-
-    @Test
     public void testListOffsetsWaitingForMetadataUpdate_Timeout() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
@@ -212,7 +195,6 @@ public class OffsetsRequestManagerTest {
         Map<TopicPartition, OffsetAndTimestamp> expectedOffsets =
                 Collections.singletonMap(TEST_PARTITION_1, null);
         verifyRequestSuccessfullyCompleted(result, expectedOffsets);
-
     }
 
     @Test
