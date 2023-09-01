@@ -792,9 +792,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         task.convertToLeader(0);
-
-        RemoteLogManager.RLMTask spyTask = spy(task);
-        spyTask.run();
+        task.run();
 
         // verify the remoteLogMetadataManager never add any metadata and remoteStorageManager never copy log segments
         verify(remoteLogMetadataManager, never()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));

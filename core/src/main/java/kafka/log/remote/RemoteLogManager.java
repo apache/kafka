@@ -672,10 +672,7 @@ public class RemoteLogManager implements Closeable {
                 brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
                 brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                 this.cancel();
-            } catch (InterruptedException ex) {
-                throw ex;
-            } catch (RetriableException ex) {
-                logger.debug("Encountered a retryable error while copying log segments of partition: {}", topicIdPartition, ex);
+            } catch (InterruptedException | RetriableException ex) {
                 throw ex;
             } catch (Exception ex) {
                 if (!isCancelled()) {
