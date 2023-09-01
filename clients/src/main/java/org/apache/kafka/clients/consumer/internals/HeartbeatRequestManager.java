@@ -45,7 +45,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private final int rebalanceTimeoutMs;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final Logger logger;
-
+    private boolean revokingInProgress;
 
     public HeartbeatRequestManager(
         final Time time,
@@ -187,7 +187,12 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private void revokePartitions(final Set<TopicPartition> partitions) {
-        // TODO: need to implement the callback mechanism
+        this.revokingInProgress = true;
+        // TODO: implement the callback mechanism
+    }
+
+    public void completeRevocation() {
+        this.revokingInProgress = false;
     }
 
     class HeartbeatRequestState extends RequestState {

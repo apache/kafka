@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.BlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -33,6 +36,8 @@ public class HeartbeatRequestManagerTest {
     private CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
     private Time time = mock(Time.class);
     private HeartbeatRequestManager heartbeatRequestManager;
+    private SubscriptionState subscriptions = mock(SubscriptionState.class);
+    private BlockingQueue<BackgroundEvent> backgroundEventQueue = mock(BlockingQueue.class);
 
     @BeforeEach
     private void setup() {
@@ -42,7 +47,9 @@ public class HeartbeatRequestManagerTest {
             RETRY_BACKOFF_MS,
             HEARTBEAT_INTERVAL_MS,
             memberState,
-            coordinatorRequestManager);
+            coordinatorRequestManager,
+            subscriptions,
+            backgroundEventQueue);
     }
 
     @Test
@@ -56,7 +63,9 @@ public class HeartbeatRequestManagerTest {
         final long retryBackoffMs,
         final long heartbeatIntervalMs,
         final MemberState memberState,
-        final CoordinatorRequestManager coordinatorRequestManager) {
+        final CoordinatorRequestManager coordinatorRequestManager,
+        final SubscriptionState subscriptions,
+        final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
         return spy(new HeartbeatRequestManager(
             time,
             logContext,
@@ -65,8 +74,8 @@ public class HeartbeatRequestManagerTest {
             0, // rebalance timeout
             memberState,
             coordinatorRequestManager,
-            null, // subscriptions
-                null
+            subscriptions, // subscriptions
+            backgroundEventQueue
         ));
     }
 }
