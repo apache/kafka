@@ -18,23 +18,26 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +53,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -57,13 +61,16 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -78,10 +85,8 @@ public class PrototypeAsyncConsumerTest {
     private SubscriptionState subscriptions;
     private EventHandler eventHandler;
     private Metrics metrics;
-    private ClusterResourceListeners clusterResourceListeners;
 
     private String groupId = "group.id";
-    private String clientId = "client-1";
     private ConsumerConfig config;
 
     @BeforeEach
@@ -92,7 +97,6 @@ public class PrototypeAsyncConsumerTest {
         this.subscriptions = mock(SubscriptionState.class);
         this.eventHandler = mock(DefaultEventHandler.class);
         this.metrics = new Metrics(time);
-        this.clusterResourceListeners = new ClusterResourceListeners();
     }
 
     @AfterEach
@@ -220,12 +224,93 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    public void testWakeup_commitSync() {
-        consumer = newConsumer(time, new StringDeserializer(),
-            new StringDeserializer());
-        consumer.wakeup();
-        assertThrows(WakeupException.class, () -> consumer.commitSync());
-        assertNoPendingWakeup(consumer.wakeupTrigger());
+    public void testBeginningOffsetsFailsIfNullPartitions() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(NullPointerException.class, () -> consumer.beginningOffsets(null,
+                Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testBeginningOffsets() {
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        Map<TopicPartition, OffsetAndTimestamp> expectedOffsetsAndTimestamp =
+                mockOffsetAndTimestamp();
+        Set<TopicPartition> partitions = expectedOffsetsAndTimestamp.keySet();
+        doReturn(expectedOffsetsAndTimestamp).when(eventHandler).addAndGet(any(), any());
+        Map<TopicPartition, Long> result =
+                assertDoesNotThrow(() -> consumer.beginningOffsets(partitions,
+                        Duration.ofMillis(1)));
+        Map<TopicPartition, Long> expectedOffsets = expectedOffsetsAndTimestamp.entrySet().stream()
+                .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().offset()));
+        assertEquals(expectedOffsets, result);
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class));
+    }
+
+    @Test
+    public void testBeginningOffsetsThrowsKafkaExceptionForUnderlyingExecutionFailure() {
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        Set<TopicPartition> partitions = mockTopicPartitionOffset().keySet();
+        Throwable eventProcessingFailure = new KafkaException("Unexpected failure " +
+                "processing List Offsets event");
+        doThrow(eventProcessingFailure).when(eventHandler).addAndGet(any(), any());
+        Throwable consumerError = assertThrows(KafkaException.class,
+                () -> consumer.beginningOffsets(partitions,
+                        Duration.ofMillis(1)));
+        assertEquals(eventProcessingFailure, consumerError);
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+    }
+
+    @Test
+    public void testBeginningOffsetsTimeoutOnEventProcessingTimeout() {
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        doThrow(new TimeoutException()).when(eventHandler).addAndGet(any(), any());
+        assertThrows(TimeoutException.class,
+                () -> consumer.beginningOffsets(
+                        Collections.singletonList(new TopicPartition("t1", 0)),
+                        Duration.ofMillis(1)));
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class));
+    }
+
+    @Test
+    public void testOffsetsForTimesOnNullPartitions() {
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(NullPointerException.class, () -> consumer.offsetsForTimes(null,
+                Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testOffsetsForTimes() {
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        Map<TopicPartition, OffsetAndTimestamp> expectedResult = mockOffsetAndTimestamp();
+        Map<TopicPartition, Long> timestampToSearch = mockTimestampToSearch();
+
+        doReturn(expectedResult).when(eventHandler).addAndGet(any(), any());
+        Map<TopicPartition, OffsetAndTimestamp> result =
+                assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ofMillis(1)));
+        assertEquals(expectedResult, result);
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class));
+    }
+
+    // This test ensures same behaviour as the current consumer when offsetsForTimes is called
+    // with 0 timeout. It should return map with all requested partitions as keys, with null
+    // OffsetAndTimestamp as value.
+    @Test
+    public void testOffsetsForTimesWithZeroTimeout() {
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        Map<TopicPartition, OffsetAndTimestamp> expectedResult =
+                Collections.singletonMap(tp, null);
+        Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(tp, 5L);
+
+        Map<TopicPartition, OffsetAndTimestamp> result =
+                assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch,
+                        Duration.ofMillis(0)));
+        assertEquals(expectedResult, result);
+        verify(eventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class));
     }
 
     @Test
@@ -250,9 +335,22 @@ public class PrototypeAsyncConsumerTest {
         return topicPartitionOffsets;
     }
 
-    private ConsumerMetadata createMetadata(SubscriptionState subscription) {
-        return new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
-                subscription, new LogContext(), new ClusterResourceListeners());
+    private HashMap<TopicPartition, OffsetAndTimestamp> mockOffsetAndTimestamp() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = new HashMap<>();
+        offsetAndTimestamp.put(t0, new OffsetAndTimestamp(5L, 1L));
+        offsetAndTimestamp.put(t1, new OffsetAndTimestamp(6L, 3L));
+        return offsetAndTimestamp;
+    }
+
+    private HashMap<TopicPartition, Long> mockTimestampToSearch() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, Long> timestampToSearch = new HashMap<>();
+        timestampToSearch.put(t0, 1L);
+        timestampToSearch.put(t1, 2L);
+        return timestampToSearch;
     }
 
     private void injectConsumerConfigs() {
