@@ -87,7 +87,6 @@ public class PrototypeAsyncConsumerTest {
     private Metrics metrics;
 
     private String groupId = "group.id";
-    private String clientId = "client-1";
     private ConsumerConfig config;
 
     @BeforeEach
@@ -312,14 +311,6 @@ public class PrototypeAsyncConsumerTest {
         assertEquals(expectedResult, result);
         verify(eventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
                 ArgumentMatchers.isA(Timer.class));
-    }
-
-    public void testWakeup_commitSync() {
-        consumer = newConsumer(time, new StringDeserializer(),
-            new StringDeserializer());
-        consumer.wakeup();
-        assertThrows(WakeupException.class, () -> consumer.commitSync());
-        assertNoPendingWakeup(consumer.wakeupTrigger());
     }
 
     @Test

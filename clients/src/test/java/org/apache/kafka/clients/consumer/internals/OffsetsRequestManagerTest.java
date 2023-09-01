@@ -266,16 +266,16 @@ public class OffsetsRequestManagerTest {
     @Test
     public void testRequestNotSupportedErrorReturnsNullOffset() throws ExecutionException,
             InterruptedException {
-        testResponseWithErrorAndUnknownOffsets(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT);
+        testResponseWithErrorCodeAndUnknownOffsets(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT);
     }
 
     @Test
     public void testRequestWithUnknownOffsetInResponseReturnsNullOffset() throws ExecutionException,
             InterruptedException {
-        testResponseWithErrorAndUnknownOffsets(Errors.NONE);
+        testResponseWithErrorCodeAndUnknownOffsets(Errors.NONE);
     }
 
-    private void testResponseWithErrorAndUnknownOffsets(Errors error) throws ExecutionException, InterruptedException {
+    private void testResponseWithErrorCodeAndUnknownOffsets(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
