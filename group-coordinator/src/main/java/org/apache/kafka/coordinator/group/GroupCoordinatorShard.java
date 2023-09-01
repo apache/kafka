@@ -58,7 +58,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -262,35 +261,33 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Fetch offsets for a given set of partitions and a given group.
      *
-     * @param groupId   The group id.
-     * @param topics    The topics to fetch the offsets for.
+     * @param request   The OffsetFetchRequestGroup request.
      * @param epoch     The epoch (or offset) used to read from the
      *                  timeline data structure.
      *
      * @return A List of OffsetFetchResponseTopics response.
      */
-    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
-        String groupId,
-        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchOffsets(
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long epoch
     ) throws ApiException {
-        return offsetMetadataManager.fetchOffsets(groupId, topics, epoch);
+        return offsetMetadataManager.fetchOffsets(request, epoch);
     }
 
     /**
      * Fetch all offsets for a given group.
      *
-     * @param groupId   The group id.
+     * @param request   The OffsetFetchRequestGroup request.
      * @param epoch     The epoch (or offset) used to read from the
      *                  timeline data structure.
      *
      * @return A List of OffsetFetchResponseTopics response.
      */
-    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
-        String groupId,
+    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long epoch
     ) throws ApiException {
-        return offsetMetadataManager.fetchAllOffsets(groupId, epoch);
+        return offsetMetadataManager.fetchAllOffsets(request, epoch);
     }
 
     /**

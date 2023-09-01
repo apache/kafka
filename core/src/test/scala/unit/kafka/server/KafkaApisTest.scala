@@ -4316,28 +4316,33 @@ class KafkaApisTest {
     } else {
       val requestChannelRequest = makeRequest(version)
 
-      val group1Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+      val group1Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
       when(groupCoordinator.fetchOffsets(
         requestChannelRequest.context,
-        "group-1",
-        List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName("foo")
-          .setPartitionIndexes(List[Integer](0, 1).asJava)
-        ).asJava,
+        new OffsetFetchRequestData.OffsetFetchRequestGroup()
+          .setGroupId("group-1")
+          .setTopics(List(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+              .setName("foo")
+              .setPartitionIndexes(List[Integer](0, 1).asJava)).asJava),
         false
       )).thenReturn(group1Future)
 
-      val group2Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+      val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
       when(groupCoordinator.fetchAllOffsets(
         requestChannelRequest.context,
-        "group-2",
+        new OffsetFetchRequestData.OffsetFetchRequestGroup()
+          .setGroupId("group-2")
+          .setTopics(null),
         false
       )).thenReturn(group2Future)
 
-      val group3Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+      val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
       when(groupCoordinator.fetchAllOffsets(
         requestChannelRequest.context,
-        "group-3",
+        new OffsetFetchRequestData.OffsetFetchRequestGroup()
+          .setGroupId("group-3")
+          .setTopics(null),
         false
       )).thenReturn(group3Future)
 
@@ -4388,8 +4393,8 @@ class KafkaApisTest {
       val expectedOffsetFetchResponse = new OffsetFetchResponseData()
         .setGroups(List(group1Response, group2Response, group3Response).asJava)
 
-      group1Future.complete(group1Response.topics)
-      group2Future.complete(group2Response.topics)
+      group1Future.complete(group1Response)
+      group2Future.complete(group2Response)
       group3Future.completeExceptionally(Errors.INVALID_GROUP_ID.exception)
 
       val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
@@ -4418,14 +4423,14 @@ class KafkaApisTest {
 
     val requestChannelRequest = makeRequest(version)
 
-    val future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    val future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
     when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
-      "group-1",
-      List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-        .setName("foo")
-        .setPartitionIndexes(List[Integer](0, 1).asJava)
-      ).asJava,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-1")
+        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName("foo")
+          .setPartitionIndexes(List[Integer](0, 1).asJava)).asJava),
       false
     )).thenReturn(future)
 
@@ -4469,7 +4474,7 @@ class KafkaApisTest {
         ).asJava)
     }
 
-    future.complete(group1Response.topics)
+    future.complete(group1Response)
 
     val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
     assertEquals(expectedOffsetFetchResponse, response.data)
@@ -4493,10 +4498,12 @@ class KafkaApisTest {
 
     val requestChannelRequest = makeRequest(version)
 
-    val future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    val future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
     when(groupCoordinator.fetchAllOffsets(
       requestChannelRequest.context,
-      "group-1",
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-1")
+        .setTopics(null),
       false
     )).thenReturn(future)
 
@@ -4540,7 +4547,7 @@ class KafkaApisTest {
         ).asJava)
     }
 
-    future.complete(group1Response.topics)
+    future.complete(group1Response)
 
     val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
     assertEquals(expectedOffsetFetchResponse, response.data)
@@ -4588,22 +4595,24 @@ class KafkaApisTest {
     }
 
     // group-1 is allowed and bar is allowed.
-    val group1Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    val group1Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
     when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
-      "group-1",
-      List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-        .setName("bar")
-        .setPartitionIndexes(List[Integer](0).asJava)
-      ).asJava,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-1")
+        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName("bar")
+          .setPartitionIndexes(List[Integer](0).asJava)).asJava),
       false
     )).thenReturn(group1Future)
 
     // group-3 is allowed and bar is allowed.
-    val group3Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
     when(groupCoordinator.fetchAllOffsets(
       requestChannelRequest.context,
-      "group-3",
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-3")
+        .setTopics(null),
       false
     )).thenReturn(group3Future)
 
@@ -4690,8 +4699,8 @@ class KafkaApisTest {
           .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
       ).asJava)
 
-    group1Future.complete(group1ResponseFromCoordinator.topics)
-    group3Future.complete(group3ResponseFromCoordinator.topics)
+    group1Future.complete(group1ResponseFromCoordinator)
+    group3Future.complete(group3ResponseFromCoordinator)
 
     val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
     assertEquals(expectedOffsetFetchResponse, response.data)
