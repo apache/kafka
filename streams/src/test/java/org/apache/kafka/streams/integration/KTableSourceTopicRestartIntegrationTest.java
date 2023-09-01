@@ -113,6 +113,7 @@ public class KTableSourceTopicRestartIntegrationTest {
     @AfterEach
     public void after() throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
+        CLUSTER.deleteAllTopicsAndWait(60000L);
     }
 
     @Test
