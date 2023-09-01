@@ -39,6 +39,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.Seq;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -88,6 +89,12 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         for (Properties p : JavaConverters.seqAsJavaList(props)) {
             p.putAll(overridingProps());
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public Seq<Properties> kraftControllerConfigs() {
+        return JavaConverters.asScalaBuffer(Collections.singletonList(overridingProps())).toSeq();
     }
 
     protected int numRemoteLogMetadataPartitions() {
