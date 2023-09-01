@@ -77,6 +77,7 @@ public class RemoteIndexCache implements Closeable {
     private static final String TMP_FILE_SUFFIX = ".tmp";
     public static final String REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD = "remote-log-index-cleaner";
     public static final String DIR_NAME = "remote-log-index-cache";
+    public static final long DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES = 1024 * 1024L;
 
     /**
      * Directory where the index files will be stored on disk.
@@ -115,7 +116,7 @@ public class RemoteIndexCache implements Closeable {
     private final ShutdownableThread cleanerThread;
 
     public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
-        this(1024L, remoteStorageManager, logDir);
+        this(DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES, remoteStorageManager, logDir);
     }
 
     /**
@@ -156,7 +157,7 @@ public class RemoteIndexCache implements Closeable {
         return Caffeine.newBuilder()
                 .maximumWeight(maxSize)
                 .weigher((Uuid key, Entry entry) -> {
-                    return entry.entrySize();
+                    return (int) entry.entrySizeBytes;
                 })
                 // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
@@ -298,8 +299,6 @@ public class RemoteIndexCache implements Closeable {
                         txnIndex.sanityCheck();
 
                         Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
-                        int entrySize = estimatedEntrySize(entry);
-                        entry.setEntrySize(entrySize);
                         internalCache.put(uuid, entry);
                     } else {
                         // Delete all of them if any one of those indexes is not available for a specific segment id
@@ -418,11 +417,7 @@ public class RemoteIndexCache implements Closeable {
                 }
             });
 
-            Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
-            int entrySize = estimatedEntrySize(entry);
-            entry.setEntrySize(entrySize);
-
-            return entry;
+            return new Entry(offsetIndex, timeIndex, txnIndex);
         } catch (IOException e) {
             throw new KafkaException(e);
         }
@@ -489,12 +484,13 @@ public class RemoteIndexCache implements Closeable {
 
         private boolean markedForCleanup = false;
 
-        private int entrySize = 0;
+        private final long entrySizeBytes;
 
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
             this.txnIndex = txnIndex;
+            this.entrySizeBytes = estimatedEntrySize();
         }
 
         // Visible for testing
@@ -522,12 +518,17 @@ public class RemoteIndexCache implements Closeable {
             return markedForCleanup;
         }
 
-        public int entrySize() {
-            return entrySize;
+        public long entrySizeBytes() {
+            return entrySizeBytes;
         }
 
-        public void setEntrySize(int entrySize) {
-            this.entrySize = entrySize;
+        public long estimatedEntrySize() {
+            try {
+                return Files.size(offsetIndex.file().toPath()) + Files.size(timeIndex.file().toPath()) + Files.size(txnIndex.file().toPath());
+            } catch (IOException e) {
+                log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
+                return 0L;
+            }
         }
 
         public OffsetPosition lookupOffset(long targetOffset) {
@@ -703,10 +704,6 @@ public class RemoteIndexCache implements Closeable {
 
     public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
-    }
-
-    public static int estimatedEntrySize(Entry entry) {
-        return entry.offsetIndex.sizeInBytes() + entry.timeIndex.sizeInBytes() + (int) entry.txnIndex.file().length();
     }
 
 }

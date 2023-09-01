@@ -801,7 +801,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.remoteLogManager).thenReturn(remoteLogManagerMockOpt)
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogManagerConfig(serverMock))
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
 
     val props = new Properties()
 

@@ -64,7 +64,7 @@ class RemoteIndexCacheTest {
     rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
 
-    cache = new RemoteIndexCache(Long.MaxValue, rsm, tpDir.toString)
+    cache = new RemoteIndexCache(rsm, tpDir.toString)
 
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
       .thenAnswer(ans => {
@@ -163,7 +163,7 @@ class RemoteIndexCacheTest {
     val tpIdForEstimate = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataListForEstimate = generateRemoteLogSegmentMetadata(size = 1, tpIdForEstimate)
     val entryForEstimate = cacheForEstimate.getIndexEntry(metadataListForEstimate.head)
-    val estimateEntryBytesSize = RemoteIndexCache.estimatedEntrySize(entryForEstimate)
+    val estimateEntryBytesSize = entryForEstimate.entrySizeBytes()
     Utils.closeQuietly(cacheForEstimate, "RemoteIndexCache created for estimating entry size")
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cacheForEstimate.internalCache().cleanUp()
@@ -421,7 +421,7 @@ class RemoteIndexCacheTest {
     val tpIdForEstimate = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataListForEstimate = generateRemoteLogSegmentMetadata(size = 1, tpIdForEstimate)
     val entryForEstimate = cacheForEstimate.getIndexEntry(metadataListForEstimate.head)
-    val estimateEntryBytesSize = RemoteIndexCache.estimatedEntrySize(entryForEstimate)
+    val estimateEntryBytesSize = entryForEstimate.entrySizeBytes()
     Utils.closeQuietly(cacheForEstimate, "RemoteIndexCache created for estimating entry size")
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cacheForEstimate.internalCache().cleanUp()
