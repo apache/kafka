@@ -426,8 +426,8 @@ public class GroupMetadataManager {
     /**
      * @return The GenericGroup List filtered by statesFilter or typesFilter.
      */
-    public ListGroupsResponseData listGroups(ListGroupsRequestData request) {
-        Stream<Group> groupStream = groups.values().stream();
+    public ListGroupsResponseData listGroups(ListGroupsRequestData request, long committedOffset) {
+        Stream<Group> groupStream = groups.values(committedOffset).stream();
         List<String> statesFilter = request.statesFilter();
         if (!statesFilter.isEmpty()) {
             groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString()));

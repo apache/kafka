@@ -320,9 +320,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      */
     public ListGroupsResponseData listGroups(
         RequestContext context,
-        ListGroupsRequestData request
+        ListGroupsRequestData request,
+        long committedOffset
     ) throws ApiException {
-        return groupMetadataManager.listGroups(request);
+        return groupMetadataManager.listGroups(request, committedOffset);
     }
 
     /**

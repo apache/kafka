@@ -435,7 +435,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             futures.add(runtime.scheduleReadOperation(
                 "list_groups",
                 tp,
-                (coordinator, lastCommittedOffset) -> coordinator.listGroups(context, request)
+                (coordinator, lastCommittedOffset) -> coordinator.listGroups(context, request, lastCommittedOffset)
             ).exceptionally(exception -> {
                 if (!(exception instanceof KafkaException)) {
                     log.error("ListGroups request {} hit an unexpected exception: {}",
