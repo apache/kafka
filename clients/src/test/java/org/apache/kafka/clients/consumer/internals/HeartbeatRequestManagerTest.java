@@ -65,7 +65,8 @@ public class HeartbeatRequestManagerTest {
             0, // rebalance timeout
             memberState,
             coordinatorRequestManager,
-            null // subscriptions
+            null, // subscriptions
+                null
         ));
     }
 }

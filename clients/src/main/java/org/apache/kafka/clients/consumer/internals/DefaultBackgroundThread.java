@@ -132,13 +132,23 @@ public class DefaultBackgroundThread extends KafkaThread {
                     networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            this.memberState = new MemberState(rebalanceConfig);
+            MemberState.AssignorSelector assignorSelector = getAssignorFromConfig(config);
+            this.memberState = new MemberState(rebalanceConfig, assignorSelector);
             this.requestManagerRegistry = Collections.unmodifiableMap(buildRequestManagerRegistry(logContext));
             this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry, metadata);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
         }
+    }
+
+    private MemberState.AssignorSelector getAssignorFromConfig(final ConsumerConfig config) {
+        /*
+        1. check assignor config
+        2. construct the correct assignor
+        3. what if the assignor config isn't specified?
+         */
+        return null;
     }
 
     private Map<RequestManager.Type, Optional<RequestManager>> buildRequestManagerRegistry(final LogContext logContext) {

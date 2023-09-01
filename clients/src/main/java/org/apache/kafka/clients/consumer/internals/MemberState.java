@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -29,17 +30,6 @@ import java.util.Optional;
 import static org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID;
 
 public class MemberState {
-    public static final short GROUP_AUTHORIZATION_FAILED = Errors.GROUP_AUTHORIZATION_FAILED.code();
-    public static final short NOT_COORDINATOR = Errors.NOT_COORDINATOR.code();
-    public static final short COORDINATOR_NOT_AVAILABLE = Errors.COORDINATOR_NOT_AVAILABLE.code();
-    public static final short COORDINATOR_LOAD_IN_PROGRESS = Errors.COORDINATOR_LOAD_IN_PROGRESS.code();
-    public static final short INVALID_REQUEST = Errors.INVALID_REQUEST.code();
-    public static final short UNKNOWN_MEMBER_ID = Errors.UNKNOWN_MEMBER_ID.code();
-    public static final short FENCED_MEMBER_EPOCH = Errors.FENCED_MEMBER_EPOCH.code();
-    public static final short UNSUPPORTED_ASSIGNOR = Errors.UNSUPPORTED_ASSIGNOR.code();
-    public static final short UNRELEASED_INSTANCE_ID = Errors.UNRELEASED_INSTANCE_ID.code();
-    public static final short GROUP_MAX_SIZE_REACHED = Errors.GROUP_MAX_SIZE_REACHED.code();
-
     public final String groupId;
     public final Optional<String> groupInstanceId;
     public final AssignorSelector assignor;
@@ -79,12 +69,24 @@ public class MemberState {
 
         if (errorCode == Errors.NONE.code()) {
             this.state = State.JOINED;  // Change joining state here
-            if (this.memberId.isPresent() && !this.memberId.get().equals(responseData.memberId())) {
-                throw new KafkaException("Inconsistent member id returned in heartbeat response: (memberId returned: " +
-                    responseData.memberId() + ", current memberId: " + this.memberId.get() + ")");
-            }
+            validateHeartbeatResponse(responseData, this.memberId, this.memberEpoch);
+
             this.memberId = Optional.of(responseData.memberId());
             setMemberEpoch(responseData.memberEpoch());
+        }
+    }
+
+    private static void validateHeartbeatResponse(final ConsumerGroupHeartbeatResponseData responseData,
+                                                  final Optional<String> memberId,
+                                                  final int memberEpoch) {
+        if (memberId.isPresent() && !memberId.get().equals(responseData.memberId())) {
+            throw new KafkaException("Inconsistent memberId returned in heartbeat response: (memberId returned: " +
+                    responseData.memberId() + ", current memberId: " + memberId.get() + ")");
+        }
+
+        if (memberEpoch > responseData.memberEpoch()) {
+            throw new KafkaException("Invalid memberEpoch in heartbeat response: (memberEpoch returned: " +
+                    responseData.memberEpoch() + " , current memberEpoch: " + memberEpoch);
         }
     }
 
@@ -106,7 +108,12 @@ public class MemberState {
         public Type type;
         public Object activeAssignor;
 
-        public void setClientSideAssignor(List<Assignor> assignors) {
+        public AssignorSelector(Type assignorType, Object assignor) {
+            this.activeAssignor = assignorType;
+            this.type = assignorType;
+        }
+
+        public void setClientSideAssignor(List<ConsumerGroupHeartbeatRequestData.Assignor> assignors) {
             this.type = Type.CLIENT;
             this.activeAssignor = assignors;
         }
@@ -114,41 +121,6 @@ public class MemberState {
         public void setServersideAssignor(String assignorConfig) {
             this.type = Type.SERVER;
             this.activeAssignor = assignorConfig;
-        }
-    }
-
-    public static class Assignor {
-        public final String name;
-        public final byte reason;
-        public final short minVersion;
-        public final short maxVersion;
-        public final short version;
-        public final byte[] metadata;
-
-        public Assignor(String name, byte reason, short minVersion, short maxVersion, short version, byte[] metadata) {
-            this.name = name;
-            this.reason = reason;
-            this.minVersion = minVersion;
-            this.maxVersion = maxVersion;
-            this.version = version;
-            this.metadata = metadata;
-        }
-
-        @Override
-        public String toString() {
-            return "Assignor(name=" + name + ", reason=" + reason + ", minVersion=" + minVersion + ", maxVersion=" + maxVersion + ", version=" + version + ", metadata=" + metadata + ")";
-        }
-
-        @Override
-        public int hashCode() {
-            int result = 1;
-            result = result * 59 + (this.name == null ? 43 : this.name.hashCode());
-            result = result * 59 + this.reason;
-            result = result * 59 + this.minVersion;
-            result = result * 59 + this.maxVersion;
-            result = result * 59 + this.version;
-            result = result * 59 + java.util.Arrays.hashCode(this.metadata);
-            return result;
         }
     }
 

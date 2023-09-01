@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -31,7 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.concurrent.BlockingQueue;
 
 public class HeartbeatRequestManager implements RequestManager {
     final CoordinatorRequestManager coordinatorRequestManager;
@@ -41,6 +43,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private final MemberState memberState;
     private final SubscriptionState subscriptions;
     private final int rebalanceTimeoutMs;
+    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final Logger logger;
 
 
@@ -52,7 +55,8 @@ public class HeartbeatRequestManager implements RequestManager {
         final int rebalanceTimeoutMs,
         final MemberState memberState,
         final CoordinatorRequestManager coordinatorRequestManager,
-        final SubscriptionState subscriptions){
+        final SubscriptionState subscriptions,
+        final BlockingQueue<BackgroundEvent> backgroundEventQueue){
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.time = time;
         this.logContext = logContext;
@@ -61,6 +65,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.subscriptions = subscriptions;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.logger = logContext.logger(HeartbeatRequestManager.class);
+        this.backgroundEventQueue = backgroundEventQueue;
     }
 
     @Override
@@ -68,7 +73,8 @@ public class HeartbeatRequestManager implements RequestManager {
         if (!shouldHeartbeat(currentTimeMs)) {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
         }
-        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs);
+        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
+        this.heartbeatRequestState.onSendAttempt(currentTimeMs);
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.singletonList(request));
     }
 
@@ -77,7 +83,7 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.canSendRequest(currentTimeMs);
     }
 
-    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long now) {
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
             .setGroupId(this.memberState.groupId)
             .setMemberEpoch(this.memberState.memberEpoch)
@@ -93,12 +99,10 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         if (this.memberState.assignor.type == MemberState.AssignorSelector.Type.CLIENT) {
-            data.setClientAssignors(buildAssignors((List<MemberState.Assignor>) memberState.assignor.activeAssignor)); // todo fix
+            data.setClientAssignors((List<ConsumerGroupHeartbeatRequestData.Assignor>) memberState.assignor.activeAssignor); // todo fix
         } else {
             data.setServerAssignor((String) memberState.assignor.activeAssignor);
         }
-
-        this.heartbeatRequestState.onSendAttempt(now);
 
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),
@@ -115,19 +119,6 @@ public class HeartbeatRequestManager implements RequestManager {
         return request;
     }
 
-    private List<ConsumerGroupHeartbeatRequestData.Assignor> buildAssignors(final List<MemberState.Assignor> activeAssignor) {
-        return activeAssignor.stream().map( a -> {
-            ConsumerGroupHeartbeatRequestData.Assignor assignor = new ConsumerGroupHeartbeatRequestData.Assignor()
-                .setName(a.name)
-                .setReason(a.reason)
-                .setMinimumVersion(a.minVersion)
-                .setMaximumVersion(a.maxVersion)
-                .setMetadataVersion(a.version)
-                .setMetadataBytes(a.metadata);
-            return assignor;
-        }).collect(Collectors.toList());
-    }
-
     private void onFailure(final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
     }
@@ -136,10 +127,11 @@ public class HeartbeatRequestManager implements RequestManager {
         if (response.data().errorCode() == Errors.NONE.code()) {
             this.heartbeatRequestState.onSuccessfulAttempt(responseTimeMs);
             try {
+                // Throw if the response contains invalid memberId/memberEpoch
                 this.memberState.maybeUpdateOnHeartbeatResponse(response.data());
             } catch (KafkaException e) {
                 logger.error("Received unexpected error in heartbeat response: {}", e.getMessage());
-                failFatally(e);
+                returnFatalException(e);
             }
             return;
         }
@@ -156,11 +148,11 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
-            failFatally(Errors.UNRELEASED_INSTANCE_ID.exception());
+            returnFatalException(Errors.UNRELEASED_INSTANCE_ID.exception());
         }
 
         if (errorCode == Errors.UNSUPPORTED_ASSIGNOR.code()) {
-            failFatally(Errors.UNSUPPORTED_ASSIGNOR.exception());
+            returnFatalException(Errors.UNSUPPORTED_ASSIGNOR.exception());
         }
 
         if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
@@ -180,7 +172,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         if (errorCode == Errors.INVALID_REQUEST.code()) {
-            failFatally(Errors.INVALID_REQUEST.exception());
+            returnFatalException(Errors.INVALID_REQUEST.exception());
         }
 
         if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
@@ -189,8 +181,9 @@ public class HeartbeatRequestManager implements RequestManager {
         }
     }
 
-    private void failFatally(final Exception e) {
-        // TODO: send user a fatal failure via queue
+    private void returnFatalException(final Exception e) {
+        ErrorBackgroundEvent errorEvent = new ErrorBackgroundEvent(e);
+        backgroundEventQueue.add(errorEvent);
     }
 
     private void revokePartitions(final Set<TopicPartition> partitions) {
