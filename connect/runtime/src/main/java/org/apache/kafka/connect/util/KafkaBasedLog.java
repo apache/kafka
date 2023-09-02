@@ -55,6 +55,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 /**
@@ -109,6 +111,8 @@ public class KafkaBasedLog<K, V> {
     private final java.util.function.Consumer<TopicAdmin> initializer;
     // initialized as false for backward compatibility
     private volatile boolean reportErrorsToCallback = false;
+
+    private final AtomicBoolean workThreadDead;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -182,6 +186,7 @@ public class KafkaBasedLog<K, V> {
         // consumer are at least as high as the (possibly-part-of-a-transaction) end offsets of the topic.
         this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.toString()
                 .equals(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
+        this.workThreadDead = new AtomicBoolean(false);
     }
 
     /**
@@ -353,9 +358,15 @@ public class KafkaBasedLog<K, V> {
      *
      * @param callback the callback to invoke once the end of the log has been reached.
      */
-    public void readToEnd(Callback<Void> callback) {
+    public void readToEnd(Callback<Void> callback)  {
         log.trace("Starting read to end log for topic {}", topic);
         flush();
+        // Before submitting this log read request, we will check if the underneath thread
+        // responsible for processing the requests is alive or not. In case it isn't, we will
+        // not enqueue such requests and cancel it.
+        if (workThreadDead.get()) {
+            cancelReadLogEnd(callback);
+        }
         synchronized (this) {
             readLogEndOffsetCallbacks.add(callback);
         }
@@ -563,6 +574,13 @@ public class KafkaBasedLog<K, V> {
         return consumer.endOffsets(assignment);
     }
 
+    private void cancelReadLogEnd(Callback<Void> callback) {
+        FutureCallback<Void> failedFuture = new FutureCallback<>(callback);
+        // This will throw CancellationException which will eventually throw ConnectException
+        // Which means, we don't need to invoke onComplete on the callback passed.
+        failedFuture.cancel(true);
+    }
+
     private class WorkThread extends Thread {
         public WorkThread() {
             super("KafkaBasedLog Work Thread - " + topic);
@@ -617,6 +635,15 @@ public class KafkaBasedLog<K, V> {
                 }
             } catch (Throwable t) {
                 log.error("Unexpected exception in {}", this, t);
+                workThreadDead.compareAndSet(false, true);
+                log.trace("Marking all topic read request callbacks as done");
+                // The thread responsible for processing the log read operations is dead now. However, there could
+                // be some requests which could have been enqueued and the requesters might be blocked if there's no
+                // timeout set while waiting. We will go over all such requests and cancel them.
+                while (!readLogEndOffsetCallbacks.isEmpty()) {
+                    Callback<Void> cb = readLogEndOffsetCallbacks.poll();
+                    cancelReadLogEnd(cb);
+                }
             }
         }
     }
