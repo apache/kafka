@@ -314,16 +314,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Handles a ListGroups request.
      *
-     * @param context The request context.
-     * @param request The ListGroups request.
+     * @param statesFilter The states of the groups we want to list. If empty all groups are returned with their state.
      * @return A Result containing the ListGroupsResponseData response
      */
     public ListGroupsResponseData listGroups(
-        RequestContext context,
-        ListGroupsRequestData request,
+        List<String> statesFilter,
         long committedOffset
     ) throws ApiException {
-        return groupMetadataManager.listGroups(request, committedOffset);
+        return new ListGroupsResponseData().setGroups(groupMetadataManager.listGroups(statesFilter, committedOffset));
     }
 
     /**

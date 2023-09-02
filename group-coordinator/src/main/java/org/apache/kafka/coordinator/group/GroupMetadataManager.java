@@ -426,13 +426,18 @@ public class GroupMetadataManager {
     /**
      * @return The GenericGroup List filtered by statesFilter or typesFilter.
      */
-    public ListGroupsResponseData listGroups(ListGroupsRequestData request, long committedOffset) {
+    public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
-        List<String> statesFilter = request.statesFilter();
         if (!statesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString()));
+            groupStream = groupStream.filter(group -> {
+                if (group instanceof ConsumerGroup) {
+                    return statesFilter.contains(((ConsumerGroup) group).stateAsString(committedOffset));
+                } else {
+                    return statesFilter.contains(group.stateAsString());
+                }
+            });
         }
-        return new ListGroupsResponseData().setGroups(groupStream.map(Group::asListedGroup).collect(Collectors.toList()));
+        return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }
 
     /**

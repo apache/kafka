@@ -1161,7 +1161,7 @@ public class GenericGroup implements Group {
     /**
      * @return the group formatted as a list group response.
      */
-    public ListGroupsResponseData.ListedGroup asListedGroup() {
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
             .setProtocolType(protocolType.orElse(""))

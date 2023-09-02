@@ -22,10 +22,12 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.KafkaStorageException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -72,14 +74,17 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
+import javax.net.ssl.SSLEngine;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.IntSupplier;
 
 /**
@@ -430,43 +435,48 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        List<CompletableFuture<ListGroupsResponseData>> futures = new java.util.ArrayList<>(Collections.emptyList());
+        List<CompletableFuture<ListGroupsResponseData>> futures = new ArrayList<>();
         for (TopicPartition tp : runtime.partitions()) {
             futures.add(runtime.scheduleReadOperation(
-                "list_groups",
+                "list-groups",
                 tp,
-                (coordinator, lastCommittedOffset) -> coordinator.listGroups(context, request, lastCommittedOffset)
+                (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), lastCommittedOffset)
             ).exceptionally(exception -> {
                 if (!(exception instanceof KafkaException)) {
                     log.error("ListGroups request {} hit an unexpected exception: {}",
                         request, exception.getMessage());
+                    throw new RuntimeException(exception);
                 }
-                return new ListGroupsResponseData()
-                    .setErrorCode(Errors.forException(exception).code());
+                if (exception instanceof CoordinatorLoadInProgressException) {
+                    throw new RuntimeException(exception);
+                } else if (exception instanceof NotCoordinatorException) {
+                    log.warn("ListGroups request {} hit a NotCoordinatorException exception: {}",
+                        request, exception.getMessage());
+                    return new ListGroupsResponseData().setGroups(Collections.emptyList());
+                } else {
+                    return new ListGroupsResponseData().setErrorCode(Errors.forException(exception).code());
+                }
             }));
         }
         CompletableFuture<ListGroupsResponseData> responseFuture = new CompletableFuture<>();
         List<ListGroupsResponseData.ListedGroup> listedGroups = new ArrayList<>();
-        futures.forEach(CompletableFuture::join);
-        for (CompletableFuture<ListGroupsResponseData> future : futures) {
-            try {
-                ListGroupsResponseData data = future.get();
+        FutureUtils.drainFutures(futures, (data, t) -> {
+            if (t != null) {
+                responseFuture.completeExceptionally(new UnknownServerException(t.getMessage()));
+            } else {
                 if (data.errorCode() != Errors.NONE.code()) {
-                    responseFuture.complete(data);
-                    return responseFuture;
-                }
-                listedGroups.addAll(future.get().groups());
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("ListGroups request {} hit an unexpected exception: {}",
-                    request, e.getMessage());
-                if (!responseFuture.isDone()) {
-                    responseFuture.complete(new ListGroupsResponseData()
-                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
-                    return responseFuture;
+                    if (!responseFuture.isDone()) {
+                        responseFuture.complete(data);
+                    }
+                } else {
+                    listedGroups.addAll(data.groups());
                 }
             }
+        });
+        futures.forEach(CompletableFuture::join);
+        if (!responseFuture.isDone()) {
+            responseFuture.complete(new ListGroupsResponseData().setGroups(listedGroups));
         }
-        responseFuture.complete(new ListGroupsResponseData().setGroups(listedGroups));
         return responseFuture;
     }
 

@@ -71,7 +71,7 @@ public interface Group {
     /**
      * @return the group formatted as a list group response.
      */
-    public ListGroupsResponseData.ListedGroup asListedGroup();
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
 
     /**
      * Validates the OffsetFetch request.

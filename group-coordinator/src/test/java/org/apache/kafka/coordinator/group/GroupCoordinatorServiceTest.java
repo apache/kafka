@@ -631,7 +631,7 @@ public class GroupCoordinatorServiceTest {
             ));
         when(runtime.partitions()).thenReturn(Sets.newSet(new TopicPartition("__consumer_offsets", 0)));
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("list_groups"),
+            ArgumentMatchers.eq("list-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
@@ -662,7 +662,7 @@ public class GroupCoordinatorServiceTest {
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
         when(runtime.partitions()).thenReturn(Sets.newSet(new TopicPartition("__consumer_offsets", 0)));
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("list_groups"),
+            ArgumentMatchers.eq("list-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));

@@ -181,6 +181,13 @@ public class ConsumerGroup implements Group {
     public String stateAsString() {
         return state.get().toString();
     }
+    /**
+     * @return The current state as a String with given committedOffset.
+     */
+    public String stateAsString(long committedOffset) {
+        return state.get(committedOffset).toString();
+    }
+
 
     /**
      * @return The group id.
@@ -753,11 +760,11 @@ public class ConsumerGroup implements Group {
     /**
      * @return the group formatted as a list group response.
      */
-    public ListGroupsResponseData.ListedGroup asListedGroup() {
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .setGroupState(state.toString());
+            .setGroupState(state.get(committedOffset).toString());
     }
 
 }

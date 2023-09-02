@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -102,5 +106,13 @@ public class FutureUtils {
         CompletableFuture<T> future = new CompletableFuture<>();
         future.completeExceptionally(ex);
         return future;
+    }
+
+    public static <T> void drainFutures(
+        List<CompletableFuture<T>> futures,
+        BiConsumer<T, Throwable> biConsumer) {
+        for (CompletableFuture<T> future : futures) {
+            future.whenComplete(biConsumer);
+        }
     }
 }
