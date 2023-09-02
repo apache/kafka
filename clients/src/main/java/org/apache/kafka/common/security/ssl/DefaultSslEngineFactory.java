@@ -69,21 +69,21 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
 
-public final class DefaultSslEngineFactory implements SslEngineFactory {
+public class DefaultSslEngineFactory implements SslEngineFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
     public static final String PEM_TYPE = "PEM";
 
     private Map<String, ?> configs;
-    private String protocol;
-    private String provider;
-    private String kmfAlgorithm;
-    private String tmfAlgorithm;
+    protected String protocol;
+    protected String provider;
+    protected String kmfAlgorithm;
+    protected String tmfAlgorithm;
     private SecurityStore keystore;
     private SecurityStore truststore;
     private String[] cipherSuites;
     private String[] enabledProtocols;
-    private SecureRandom secureRandomImplementation;
+    protected SecureRandom secureRandomImplementation;
     private SSLContext sslContext;
     private SslClientAuth sslClientAuth;
 
@@ -233,7 +233,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         }
     }
 
-    private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
+    protected SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
         try {
             SSLContext sslContext;
             if (provider != null)
