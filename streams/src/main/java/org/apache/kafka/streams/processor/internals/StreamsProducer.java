@@ -371,6 +371,7 @@ public class StreamsProducer {
 
     void close() {
         producer.close();
+        transactionInFlight = false;
     }
 
     // for testing only
