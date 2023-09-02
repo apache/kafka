@@ -212,10 +212,24 @@ public class StreamsProducerTest {
         // given:
         eosBetaStreamsProducer.send(
             new ProducerRecord<>("topic", new byte[1]), (metadata, error) -> { });
-        assertThat(eosBetaStreamsProducer.eosEnabled(), is(true));
+        assertThat(eosBetaStreamsProducer.transactionInFlight(), is(true));
 
         // when:
         eosBetaStreamsProducer.close();
+
+        // then:
+        assertThat(eosBetaStreamsProducer.transactionInFlight(), is(false));
+    }
+
+    @Test
+    public void shouldResetTransactionInFlightOnReset() {
+        // given:
+        eosBetaStreamsProducer.send(
+            new ProducerRecord<>("topic", new byte[1]), (metadata, error) -> { });
+        assertThat(eosBetaStreamsProducer.transactionInFlight(), is(true));
+
+        // when:
+        eosBetaStreamsProducer.resetProducer();
 
         // then:
         assertThat(eosBetaStreamsProducer.transactionInFlight(), is(false));
