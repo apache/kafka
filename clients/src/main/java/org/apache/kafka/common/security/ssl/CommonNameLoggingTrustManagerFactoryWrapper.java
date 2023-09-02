@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -114,15 +115,15 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
 
         final private X509TrustManager origTm;
         final int nrOfRememberedBadCerts;
-        final private LinkedHashMap<MessageDigest, String> previouslyRejectedClientCertChains;
+        final private LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
 
         public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager, int nrOfRememberedBadCerts) {
             this.origTm = originalTrustManager;
             this.nrOfRememberedBadCerts = nrOfRememberedBadCerts;
             // Restrict maximal size of the LinkedHashMap to avoid security attacks causing OOM
-            this.previouslyRejectedClientCertChains = new LinkedHashMap<MessageDigest, String>() {
+            this.previouslyRejectedClientCertChains = new LinkedHashMap<ByteBuffer, String>() {
                 @Override
-                protected boolean removeEldestEntry(final Map.Entry<MessageDigest, String> eldest) {
+                protected boolean removeEldestEntry(final Map.Entry<ByteBuffer, String> eldest) {
                     return size() > nrOfRememberedBadCerts;
                 }
             };
@@ -136,7 +137,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
         public void checkClientTrusted(X509Certificate[] chain, String authType)
                 throws CertificateException {
             CertificateException origException = null;
-            MessageDigest chainDigest = calcDigestForCertificateChain(chain);
+            ByteBuffer chainDigest = calcDigestForCertificateChain(chain);
             if (chainDigest != null) {
                 String errorMessage = this.previouslyRejectedClientCertChains.get(chainDigest);
                 if (errorMessage != null) {
@@ -176,7 +177,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
             }
         }
 
-        private MessageDigest calcDigestForCertificateChain(X509Certificate[] chain) throws CertificateEncodingException {
+        public static ByteBuffer calcDigestForCertificateChain(X509Certificate[] chain) throws CertificateEncodingException {
             MessageDigest md;
             try {
                 md = MessageDigest.getInstance("SHA-256");
@@ -186,10 +187,10 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
             for (X509Certificate cert: chain) {
                 md.update(cert.getEncoded());
             }
-            return md;
+            return ByteBuffer.wrap(md.digest());
         }
 
-        private void addRejectedClientCertChains(MessageDigest chainDigest, String errorMessage, boolean removeIfExisting) {
+        private void addRejectedClientCertChains(ByteBuffer chainDigest, String errorMessage, boolean removeIfExisting) {
             if (removeIfExisting) {
                 this.previouslyRejectedClientCertChains.remove(chainDigest);
             }
