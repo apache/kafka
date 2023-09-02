@@ -424,7 +424,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * @return The GenericGroup List filtered by statesFilter or typesFilter.
+     * @return The GenericGroup List filtered by statesFilter and committedOffset.
      */
     public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();

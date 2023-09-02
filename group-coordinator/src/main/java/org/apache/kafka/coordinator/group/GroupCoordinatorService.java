@@ -74,17 +74,14 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
-import javax.net.ssl.SSLEngine;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
 
 /**
@@ -460,23 +457,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
         CompletableFuture<ListGroupsResponseData> responseFuture = new CompletableFuture<>();
         List<ListGroupsResponseData.ListedGroup> listedGroups = new ArrayList<>();
+        AtomicInteger succeedFutureCount = new AtomicInteger();
         FutureUtils.drainFutures(futures, (data, t) -> {
-            if (t != null) {
-                responseFuture.completeExceptionally(new UnknownServerException(t.getMessage()));
-            } else {
-                if (data.errorCode() != Errors.NONE.code()) {
-                    if (!responseFuture.isDone()) {
-                        responseFuture.complete(data);
-                    }
+            synchronized (runtime) {
+                if (t != null) {
+                    responseFuture.completeExceptionally(new UnknownServerException(t.getMessage()));
                 } else {
-                    listedGroups.addAll(data.groups());
+                    if (data.errorCode() != Errors.NONE.code()) {
+                        if (!responseFuture.isDone()) {
+                            responseFuture.complete(data);
+                        }
+                    } else {
+                        listedGroups.addAll(data.groups());
+                        if (succeedFutureCount.addAndGet(1) == runtime.partitions().size()) {
+                            responseFuture.complete(new ListGroupsResponseData().setGroups(listedGroups));
+                        }
+                    }
                 }
             }
         });
-        futures.forEach(CompletableFuture::join);
-        if (!responseFuture.isDone()) {
-            responseFuture.complete(new ListGroupsResponseData().setGroups(listedGroups));
-        }
         return responseFuture;
     }
 

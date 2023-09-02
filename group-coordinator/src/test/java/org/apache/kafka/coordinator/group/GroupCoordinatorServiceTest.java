@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.KafkaStorageException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -646,8 +647,8 @@ public class GroupCoordinatorServiceTest {
         assertEquals(expectResponseData, responseFuture.get().duplicate());
     }
 
-    @Test
-    public void testListGroupsFutureFailed() throws ExecutionException, InterruptedException {
+    private void testListGroupsFailedWithException(Throwable t, ListGroupsResponseData expectResponseData)
+        throws InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -657,25 +658,44 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         ListGroupsRequestData request = new ListGroupsRequestData();
-
-        ListGroupsResponseData expectResponseData = new ListGroupsResponseData()
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
         when(runtime.partitions()).thenReturn(Sets.newSet(new TopicPartition("__consumer_offsets", 0)));
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("list-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
+        )).thenReturn(FutureUtils.failedFuture(t));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
             requestContext(ApiKeys.LIST_GROUPS),
             request
         );
-
-        responseFuture.get().errorCode();
+        ListGroupsResponseData actualResponseData = new ListGroupsResponseData();
+        try {
+            actualResponseData = responseFuture.get();
+        } catch (ExecutionException e) {
+            actualResponseData.setErrorCode(Errors.forException(e.getCause()).code());
+        }
         assertTrue(responseFuture.isDone());
-        assertEquals(expectResponseData, responseFuture.get().duplicate());
+        assertEquals(expectResponseData, actualResponseData);
 
+    }
+
+    @Test
+    public void testListGroupsFutureFailed() throws InterruptedException {
+        testListGroupsFailedWithException(new RuntimeException(""), new ListGroupsResponseData()
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
+        for (Errors errors : Errors.values()) {
+            if (errors.code() != Errors.NONE.code()) {
+                if (errors.code() == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {
+                    testListGroupsFailedWithException(errors.exception(),
+                        new ListGroupsResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
+                } else if (errors.code() == Errors.NOT_COORDINATOR.code()) {
+                    testListGroupsFailedWithException(new NotCoordinatorException(""), new ListGroupsResponseData());
+                } else {
+                    testListGroupsFailedWithException(errors.exception(), new ListGroupsResponseData().setErrorCode(errors.code()));
+                }
+            }
+        }
     }
 
     @ParameterizedTest
