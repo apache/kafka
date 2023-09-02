@@ -1240,14 +1240,25 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)));
         assertEquals("TopicPartitions must be empty when (re-)joining.", ex.getMessage());
 
-        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
+        // SubscribedTopicNames or SubscribedTopicRegex must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setTopicPartitions(Collections.emptyList())));
-        assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
+        assertEquals("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.", ex.getMessage());
+
+        // SubscribedTopicNames or SubscribedTopicRegex should not be set at the same time
+        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId("foo")
+                        .setMemberEpoch(0)
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicNames(Collections.singletonList("bar"))
+                        .setSubscribedTopicRegex("regex")
+                        .setTopicPartitions(Collections.emptyList())));
+        assertEquals("SubscribedTopicNames or SubscribedTopicRegex should not be set at the same time.", ex.getMessage());
 
         // MemberId must be non-empty in all requests except for the first one where it
         // could be empty (epoch != 0).

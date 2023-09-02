@@ -394,11 +394,13 @@ public class ConsumerGroupTest {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         Uuid zarTopicId = Uuid.randomUuid();
+        Uuid foodTopicId = Uuid.randomUuid();
 
         MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
             .addTopic(fooTopicId, "foo", 1)
             .addTopic(barTopicId, "bar", 2)
             .addTopic(zarTopicId, "zar", 3)
+            .addTopic(foodTopicId, "food", 4)
             .addRacks()
             .build();
 
@@ -410,6 +412,12 @@ public class ConsumerGroupTest {
             .build();
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
             .setSubscribedTopicNames(Collections.singletonList("zar"))
+            .build();
+        ConsumerGroupMember member4 = new ConsumerGroupMember.Builder("member4")
+            .setSubscribedTopicRegex("^foo.*")
+            .build();
+        ConsumerGroupMember member5 = new ConsumerGroupMember.Builder("member4")
+            .setSubscribedTopicRegex("^bar.*")
             .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
@@ -553,6 +561,56 @@ public class ConsumerGroupTest {
                 image.topics(),
                 image.cluster()
             )
+        );
+
+        // Removing member1 results in returning bar and zar.
+        assertEquals(
+                mkMap(
+                        mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
+                        mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                ),
+                consumerGroup.computeSubscriptionMetadata(
+                        member1,
+                        null,
+                        image.topics(),
+                        image.cluster()
+                )
+        );
+
+        // Updating group with removal of member1.
+        consumerGroup.removeMember(member1.memberId());
+
+        // Compute while taking into account member 4
+        assertEquals(
+                mkMap(
+                        mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
+                        mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3))),
+                        mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                        mkEntry("food", new TopicMetadata(foodTopicId, "food", 4, mkMapOfPartitionRacks(4)))
+                ),
+                consumerGroup.computeSubscriptionMetadata(
+                        null,
+                        member4,
+                        image.topics(),
+                        image.cluster()
+                )
+        );
+
+        // Updating group with member5.
+        consumerGroup.updateMember(member5);
+
+        // It should return bar and zar.
+        assertEquals(
+                mkMap(
+                        mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
+                        mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                ),
+                consumerGroup.computeSubscriptionMetadata(
+                        null,
+                        null,
+                        image.topics(),
+                        image.cluster()
+                )
         );
     }
 

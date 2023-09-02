@@ -25,7 +25,7 @@ import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.{CommonClientConfigs, SubscriptionPattern}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
@@ -52,7 +52,7 @@ object ConsumerGroupCommand extends Logging {
       CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
       // should have exactly one action
-      val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
+      val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt, opts.verifyRegexOpt).count(opts.options.has)
       if (actions != 1)
         CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
 
@@ -82,6 +82,9 @@ object ConsumerGroupCommand extends Logging {
       }
       else if (opts.options.has(opts.deleteOffsetsOpt)) {
         consumerGroupService.deleteOffsets()
+      }
+      else if (opts.options.has(opts.verifyRegexOpt)) {
+        consumerGroupService.verifyRegex()
       }
     } catch {
       case e: IllegalArgumentException =>
@@ -542,6 +545,15 @@ object ConsumerGroupCommand extends Logging {
       ).describedGroups().asScala.map {
         case (groupId, groupDescriptionFuture) => (groupId, groupDescriptionFuture.get())
       }
+    }
+
+    def verifyRegex(): Unit = {
+      val regex = opts.options.valueOf(opts.verifyRegexOpt)
+      val subscriptionPattern = new SubscriptionPattern(regex)
+      if (subscriptionPattern.isValidPattern)
+        println(s"$regex is a valid regular expression")
+      else
+        println(s"$regex is an invalid regular expression")
     }
 
     /**
@@ -1014,6 +1026,8 @@ object ConsumerGroupCommand extends Logging {
       "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
       "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
       "This option may be used with '--describe', '--list' and '--bootstrap-server' options only."
+    val VerifyRegexDoc = "Verify the regular expression" +
+      "Example: --regex expression"
     val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
 
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
@@ -1080,6 +1094,10 @@ object ConsumerGroupCommand extends Logging {
                          .availableIf(describeOpt, listOpt)
                          .withOptionalArg()
                          .ofType(classOf[String])
+    val verifyRegexOpt = parser.accepts("verify-regex", VerifyRegexDoc)
+                               .withRequiredArg()
+                               .describedAs("regex")
+                               .ofType(classOf[String])
 
     options = parser.parse(args : _*)
 

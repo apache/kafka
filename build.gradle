@@ -1344,6 +1344,7 @@ project(':clients') {
   dependencies {
     implementation libs.zstd
     implementation libs.lz4
+    implementation libs.re2j
     implementation libs.snappy
     implementation libs.slf4jApi
 

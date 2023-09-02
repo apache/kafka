@@ -202,6 +202,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="com.google.re2j" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />

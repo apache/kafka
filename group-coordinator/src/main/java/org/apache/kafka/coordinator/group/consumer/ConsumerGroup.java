@@ -36,6 +36,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A Consumer Group. All the metadata in this class are backed by
@@ -444,11 +447,10 @@ public class ConsumerGroup implements Group {
     ) {
         // Copy and update the current subscriptions.
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
-        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
+        maybeUpdateSubscribedTopicNames(topicsImage, subscribedTopicNames, oldMember, newMember);
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
-
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
@@ -618,7 +620,7 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
+        maybeUpdateSubscribedTopicNames(null, subscribedTopicNames, oldMember, newMember);
     }
 
     /**
@@ -629,6 +631,7 @@ public class ConsumerGroup implements Group {
      * @param newMember             The new member.
      */
     private static void maybeUpdateSubscribedTopicNames(
+        TopicsImage topics,
         Map<String, Integer> subscribedTopicCount,
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
@@ -640,6 +643,11 @@ public class ConsumerGroup implements Group {
         }
 
         if (newMember != null) {
+            if (topics != null) {
+                getRegexSubscribedTopics(topics, newMember.subscribedTopicRegex()).forEach(topicName -> {
+                    subscribedTopicCount.compute(topicName, ConsumerGroup::incValue);
+                });
+            }
             newMember.subscribedTopicNames().forEach(topicName ->
                 subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
             );
@@ -730,6 +738,15 @@ public class ConsumerGroup implements Group {
                 return partitionsOrNull;
             });
         });
+    }
+
+    private static List<String> getRegexSubscribedTopics(TopicsImage topics, String regex) {
+        Pattern pattern = Pattern.compile(regex);
+        return topics.topicsByName().entrySet()
+                .stream()
+                .filter(entry -> pattern.matcher(entry.getKey()).matches())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
     }
 
     /**

@@ -19,8 +19,8 @@ package kafka.admin
 
 import java.util
 import java.util.{Collections, Optional}
-
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.common.{ConsumerGroupState, KafkaFuture, Node, TopicPartition, TopicPartitionInfo}
@@ -33,6 +33,7 @@ import org.mockito.ArgumentMatcher
 
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.internals.KafkaFutureImpl
+
 
 class ConsumerGroupServiceTest {
 
@@ -171,6 +172,24 @@ class ConsumerGroupServiceTest {
     verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
     verify(admin, times(1)).describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified.asJava), any())
     verify(admin, times(1)).listOffsets(offsetsArgMatcher, any())
+  }
+
+  @Test
+  def testVerifyValidRegex(): Unit = {
+    val regex = "^test.*"
+    val args = Array("--bootstrap-server", "localhost:9092", "--verify-regex", regex)
+    val groupService = consumerGroupService(args)
+    val output = TestUtils.grabConsoleOutput(groupService.verifyRegex())
+    assertEquals(s"$regex is a valid regular expression" ,output)
+  }
+
+  @Test
+  def testVerifyInvalidRegex(): Unit = {
+    val regex = "/?[a-z]/ -> /[a-z]?/"
+    val args = Array("--bootstrap-server", "localhost:9092", "--verify-regex", regex)
+    val groupService = consumerGroupService(args)
+    val output = TestUtils.grabConsoleOutput(groupService.verifyRegex())
+    assertEquals(s"$regex is an invalid regular expression", output)
   }
 
   private def consumerGroupService(args: Array[String]): ConsumerGroupService = {

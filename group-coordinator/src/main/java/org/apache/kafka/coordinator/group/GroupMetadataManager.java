@@ -554,7 +554,6 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-        throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
         throwIfNotNull(request.clientAssignors(), "Client side assignors are not supported yet.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == -1) {
@@ -567,7 +566,12 @@ public class GroupMetadataManager {
                 throw new InvalidRequestException("TopicPartitions must be empty when (re-)joining.");
             }
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
-                throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
+                if (request.subscribedTopicRegex() == null || request.subscribedTopicRegex().isEmpty()) {
+                    throw new InvalidRequestException("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.");
+                }
+            }
+            if (request.subscribedTopicRegex() != null && !request.subscribedTopicNames().isEmpty()  && !isEmpty(request.subscribedTopicRegex())) {
+                throw new InvalidRequestException("SubscribedTopicNames or SubscribedTopicRegex should not be set at the same time.");
             }
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
@@ -2959,5 +2963,9 @@ public class GroupMetadataManager {
      */
     static String genericGroupSyncKey(String groupId) {
         return "sync-" + groupId;
+    }
+
+    static boolean isEmpty(String str) {
+        return str == null || str.isEmpty();
     }
 }
