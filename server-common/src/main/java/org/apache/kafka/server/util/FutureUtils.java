@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.server.util;
 
-import org.apache.kafka.common.message.ListGroupsResponseData;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
