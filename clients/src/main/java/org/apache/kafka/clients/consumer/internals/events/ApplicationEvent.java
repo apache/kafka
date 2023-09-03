@@ -25,17 +25,14 @@ abstract public class ApplicationEvent {
     protected ApplicationEvent(Type type) {
         this.type = type;
     }
-    /**
-     * process the application event. Return true upon successful execution,
-     * false otherwise.
-     * @return true if the event was successfully executed; false otherwise.
-     */
 
     @Override
     public String toString() {
         return type + " ApplicationEvent";
     }
+
     public enum Type {
         NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, ASSIGNMENT_CHANGE,
+        LIST_OFFSETS,
     }
 }

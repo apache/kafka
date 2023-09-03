@@ -42,6 +42,7 @@ import java.util.concurrent.BlockingQueue;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -81,7 +82,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final NetworkClientDelegate networkClient,
                             final GroupState groupState,
                             final CoordinatorRequestManager coordinatorManager,
-                            final CommitRequestManager commitRequestManager) {
+                            final CommitRequestManager commitRequestManager,
+                            final OffsetsRequestManager offsetsRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.running = true;
@@ -95,7 +97,9 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.errorEventHandler = errorEventHandler;
         this.groupState = groupState;
 
-        this.requestManagers = new RequestManagers(Optional.ofNullable(coordinatorManager),
+        this.requestManagers = new RequestManagers(
+                offsetsRequestManager,
+                Optional.ofNullable(coordinatorManager),
                 Optional.ofNullable(commitRequestManager));
     }
 
@@ -144,27 +148,44 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.groupState = new GroupState(rebalanceConfig);
             long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
+            OffsetsRequestManager offsetsRequestManager =
+                    new OffsetsRequestManager(
+                            subscriptionState,
+                            metadata,
+                            configuredIsolationLevel(config),
+                            time,
+                            retryBackoffMs,
+                            apiVersions,
+                            logContext);
+            CoordinatorRequestManager coordinatorRequestManager = null;
+            CommitRequestManager commitRequestManager = null;
+
             if (groupState.groupId != null) {
-                CoordinatorRequestManager coordinatorManager = new CoordinatorRequestManager(
+                coordinatorRequestManager = new CoordinatorRequestManager(
                         this.time,
                         logContext,
                         retryBackoffMs,
                         this.errorEventHandler,
                         groupState.groupId);
-                CommitRequestManager commitRequestManager = new CommitRequestManager(
+                commitRequestManager = new CommitRequestManager(
                         this.time,
                         logContext,
                         subscriptionState,
                         config,
-                        coordinatorManager,
+                        coordinatorRequestManager,
                         groupState);
-                this.requestManagers = new RequestManagers(Optional.of(coordinatorManager),
-                        Optional.of(commitRequestManager));
-            } else {
-                this.requestManagers = new RequestManagers(Optional.empty(), Optional.empty());
             }
 
-            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagers, metadata);
+            this.requestManagers = new RequestManagers(
+                    offsetsRequestManager,
+                    Optional.ofNullable(coordinatorRequestManager),
+                    Optional.ofNullable(commitRequestManager));
+
+            this.applicationEventProcessor = new ApplicationEventProcessor(
+                    backgroundEventQueue,
+                    requestManagers,
+                    metadata);
+
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.tasks;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -105,6 +106,31 @@ public class DefaultTaskExecutorTest {
         taskExecutor.start();
 
         verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(2)).process(anyLong());
+        verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).recordProcessBatchTime(anyLong());
+    }
+
+
+    @Test
+    public void shouldClearTaskTimeoutOnProcessed() {
+        when(taskExecutionMetadata.canProcessTask(any(), anyLong())).thenReturn(true);
+        when(task.isProcessable(anyLong())).thenReturn(true);
+        when(task.process(anyLong())).thenReturn(true);
+
+        taskExecutor.start();
+
+        verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).clearTaskTimeout();
+    }
+
+    @Test
+    public void shouldSetTaskTimeoutOnTimeoutException() {
+        final TimeoutException e = new TimeoutException();
+        when(taskExecutionMetadata.canProcessTask(any(), anyLong())).thenReturn(true);
+        when(task.isProcessable(anyLong())).thenReturn(true);
+        when(task.process(anyLong())).thenReturn(true).thenThrow(e);
+
+        taskExecutor.start();
+        verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).process(anyLong());
+        verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).maybeInitTaskTimeoutOrThrow(anyLong(), eq(e));
     }
 
     @Test

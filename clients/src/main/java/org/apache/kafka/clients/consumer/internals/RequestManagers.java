@@ -21,6 +21,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import static java.util.Objects.requireNonNull;
+
 /**
  * {@code RequestManagers} provides a means to pass around the set of {@link RequestManager} instances in the system.
  * This allows callers to both use the specific {@link RequestManager} instance, or to iterate over the list via
@@ -30,16 +32,21 @@ public class RequestManagers {
 
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
+    public final OffsetsRequestManager offsetsRequestManager;
     private final List<Optional<? extends RequestManager>> entries;
 
-    public RequestManagers(Optional<CoordinatorRequestManager> coordinatorRequestManager,
+    public RequestManagers(OffsetsRequestManager offsetsRequestManager,
+                           Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager) {
+        this.offsetsRequestManager = requireNonNull(offsetsRequestManager,
+                "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
+        list.add(Optional.of(offsetsRequestManager));
         entries = Collections.unmodifiableList(list);
     }
 

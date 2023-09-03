@@ -69,7 +69,6 @@ import org.mockito.internal.util.collections.Sets;
 import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -714,40 +713,43 @@ public class GroupCoordinatorServiceTest {
 
         service.startup(() -> 1);
 
-        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topicsRequest =
-            Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                .setName("foo")
-                .setPartitionIndexes(Collections.singletonList(0)));
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(Collections.singletonList(0))));
 
-        List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicsResponse =
-            Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
-                .setPartitions(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                    .setPartitionIndex(0)
-                    .setCommittedOffset(100L))));
+        OffsetFetchResponseData.OffsetFetchResponseGroup response =
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName("foo")
+                    .setPartitions(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(0)
+                        .setCommittedOffset(100L)))));
 
         if (requireStable) {
             when(runtime.scheduleWriteOperation(
                 ArgumentMatchers.eq("fetch-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
                 ArgumentMatchers.any()
-            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+            )).thenReturn(CompletableFuture.completedFuture(response));
         } else {
             when(runtime.scheduleReadOperation(
                 ArgumentMatchers.eq("fetch-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
                 ArgumentMatchers.any()
-            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+            )).thenReturn(CompletableFuture.completedFuture(response));
         }
 
-        CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> future = service.fetchOffsets(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
-            "group",
-            topicsRequest,
+            request,
             requireStable
         );
 
-        assertEquals(topicsResponse, future.get(5, TimeUnit.SECONDS));
+        assertEquals(response, future.get(5, TimeUnit.SECONDS));
     }
 
     @ParameterizedTest
@@ -763,33 +765,39 @@ public class GroupCoordinatorServiceTest {
         );
         service.startup(() -> 1);
 
-        List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicsResponse =
-            Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
-                .setPartitions(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                    .setPartitionIndex(0)
-                    .setCommittedOffset(100L))));
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group");
+
+        OffsetFetchResponseData.OffsetFetchResponseGroup response =
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName("foo")
+                    .setPartitions(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(0)
+                        .setCommittedOffset(100L)))));
 
         if (requireStable) {
             when(runtime.scheduleWriteOperation(
                 ArgumentMatchers.eq("fetch-all-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
                 ArgumentMatchers.any()
-            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+            )).thenReturn(CompletableFuture.completedFuture(response));
         } else {
             when(runtime.scheduleReadOperation(
                 ArgumentMatchers.eq("fetch-all-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
                 ArgumentMatchers.any()
-            )).thenReturn(CompletableFuture.completedFuture(topicsResponse));
+            )).thenReturn(CompletableFuture.completedFuture(response));
         }
 
-        CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> future = service.fetchAllOffsets(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchAllOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
-            "group",
+            request,
             requireStable
         );
 
-        assertEquals(topicsResponse, future.get(5, TimeUnit.SECONDS));
+        assertEquals(response, future.get(5, TimeUnit.SECONDS));
     }
 }

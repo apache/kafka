@@ -332,29 +332,27 @@ public class OffsetMetadataManager {
     /**
      * Fetch offsets for a given Group.
      *
-     * @param groupId               The group id.
-     * @param topics                The topics to fetch the offsets for.
+     * @param request               The OffsetFetchRequestGroup request.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
      *
      * @return A List of OffsetFetchResponseTopics response.
      */
-    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
-        String groupId,
-        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchOffsets(
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long lastCommittedOffset
     ) throws ApiException {
         boolean failAllPartitions = false;
         try {
-            validateOffsetFetch(groupId, lastCommittedOffset);
+            validateOffsetFetch(request.groupId(), lastCommittedOffset);
         } catch (GroupIdNotFoundException ex) {
             failAllPartitions = true;
         }
 
-        final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>(topics.size());
+        final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>(request.topics().size());
         final TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> groupOffsets =
-            failAllPartitions ? null : offsetsByGroup.get(groupId, lastCommittedOffset);
+            failAllPartitions ? null : offsetsByGroup.get(request.groupId(), lastCommittedOffset);
 
-        topics.forEach(topic -> {
+        request.topics().forEach(topic -> {
             final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
                 new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name());
             topicResponses.add(topicResponse);
@@ -382,30 +380,34 @@ public class OffsetMetadataManager {
             });
         });
 
-        return topicResponses;
+        return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId(request.groupId())
+            .setTopics(topicResponses);
     }
 
     /**
      * Fetch all offsets for a given Group.
      *
-     * @param groupId               The group id.
+     * @param request               The OffsetFetchRequestGroup request.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
      *
      * @return A List of OffsetFetchResponseTopics response.
      */
-    public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
-        String groupId,
+    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long lastCommittedOffset
     ) throws ApiException {
         try {
-            validateOffsetFetch(groupId, lastCommittedOffset);
+            validateOffsetFetch(request.groupId(), lastCommittedOffset);
         } catch (GroupIdNotFoundException ex) {
-            return Collections.emptyList();
+            return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId(request.groupId())
+                .setTopics(Collections.emptyList());
         }
 
         final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>();
         final TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> groupOffsets =
-            offsetsByGroup.get(groupId, lastCommittedOffset);
+            offsetsByGroup.get(request.groupId(), lastCommittedOffset);
 
         if (groupOffsets != null) {
             groupOffsets.entrySet(lastCommittedOffset).forEach(topicEntry -> {
@@ -429,7 +431,9 @@ public class OffsetMetadataManager {
             });
         }
 
-        return topicResponses;
+        return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId(request.groupId())
+            .setTopics(topicResponses);
     }
 
     /**

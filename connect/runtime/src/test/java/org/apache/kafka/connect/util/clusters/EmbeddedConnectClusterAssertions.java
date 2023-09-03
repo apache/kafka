@@ -237,9 +237,27 @@ public class EmbeddedConnectClusterAssertions {
      * @param connectorClass the class of the connector to validate
      * @param connConfig     the intended configuration
      * @param numErrors      the number of errors expected
+     * @param detailMessage  the assertion message
      */
     public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
-        int numErrors, String detailMessage) throws InterruptedException {
+                                                                  int numErrors, String detailMessage) throws InterruptedException {
+        assertExactlyNumErrorsOnConnectorConfigValidation(connectorClass, connConfig, numErrors, detailMessage, VALIDATION_DURATION_MS);
+    }
+
+    /**
+     * Assert that the required number of errors are produced by a connector config validation.
+     *
+     * @param connectorClass the class of the connector to validate
+     * @param connConfig     the intended configuration
+     * @param numErrors      the number of errors expected
+     * @param detailMessage  the assertion message
+     * @param timeout        how long to retry for before throwing an exception
+     *
+     * @throws AssertionError if the exact number of errors is not produced during config
+     * validation before the timeout expires
+     */
+    public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
+        int numErrors, String detailMessage, long timeout) throws InterruptedException {
         try {
             waitForCondition(
                 () -> checkValidationErrors(
@@ -248,7 +266,7 @@ public class EmbeddedConnectClusterAssertions {
                     numErrors,
                     (actual, expected) -> actual == expected
                 ).orElse(false),
-                VALIDATION_DURATION_MS,
+                timeout,
                 "Didn't meet the exact requested number of validation errors: " + numErrors);
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
