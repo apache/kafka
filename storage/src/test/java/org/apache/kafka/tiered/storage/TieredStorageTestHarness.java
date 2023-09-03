@@ -32,7 +32,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -155,7 +154,6 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         context = new TieredStorageTestContext(this);
     }
 
-    @Disabled
     @Test
     public void executeTieredStorageTest() {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
