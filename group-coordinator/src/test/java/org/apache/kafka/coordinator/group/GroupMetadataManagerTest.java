@@ -8622,7 +8622,7 @@ public class GroupMetadataManagerTest {
                 .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap.size(), actualAllGroupMap.size());
-        for(Map.Entry<String, ListGroupsResponseData.ListedGroup> entry : expectAllGroupMap.entrySet()) {
+        for (Map.Entry<String, ListGroupsResponseData.ListedGroup> entry : expectAllGroupMap.entrySet()) {
             assertEquals(entry.getValue(), actualAllGroupMap.get(entry.getKey()));
         }
     }

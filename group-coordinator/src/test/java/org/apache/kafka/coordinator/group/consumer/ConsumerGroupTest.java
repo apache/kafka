@@ -16,15 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.internals.GroupState;
-import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
