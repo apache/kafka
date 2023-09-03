@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -38,6 +39,8 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
+import org.apache.kafka.common.message.ListGroupsRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -101,6 +104,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -112,8 +116,10 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -433,6 +439,18 @@ public class GroupMetadataManagerTest {
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
         }
 
+        public void updateLastWrittenOffset(
+            long offset
+        ) {
+            lastWrittenOffset = offset;
+            snapshotRegistry.getOrCreateSnapshot(offset);
+        }
+
+        public void getOrCreateSnapshot() {
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+        }
+
+
         public ConsumerGroup.ConsumerGroupState consumerGroupState(
             String groupId
         ) {
@@ -536,6 +554,10 @@ public class GroupMetadataManagerTest {
 
         GenericGroup createGenericGroup(String groupId) {
             return groupMetadataManager.getOrMaybeCreateGenericGroup(groupId, true);
+        }
+
+        ConsumerGroup createConsumerGroup(String groupId) {
+            return groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, true);
         }
 
         public CoordinatorResult<Void, Record> sendGenericGroupJoin(
@@ -1040,6 +1062,10 @@ public class GroupMetadataManagerTest {
                 context,
                 request
             );
+        }
+
+        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter) {
+            return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
         }
 
         public void verifyHeartbeat(
@@ -9118,5 +9144,35 @@ public class GroupMetadataManagerTest {
 
         HeartbeatResponseData heartbeatResponse = context.sendGenericGroupHeartbeat(heartbeatRequest);
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResponse.errorCode());
+    }
+
+    @Test
+    public void testListGroups() {
+        String genericGroupId = "generic-group-id";
+        String consumerGroupId = "consumer-group-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.updateLastWrittenOffset(context.lastWrittenOffset);
+        GenericGroup genericGroup = context.createGenericGroup(genericGroupId);
+        ConsumerGroup consumerGroup = context.createConsumerGroup(consumerGroupId);
+        context.updateLastWrittenOffset(context.lastWrittenOffset + 2);
+        List<ListGroupsResponseData.ListedGroup> actualNoGroups = context.sendListGroups(Collections.emptyList());
+        assertEquals(Collections.emptyList(), actualNoGroups);
+        context.commit();
+        Map<String, ListGroupsResponseData.ListedGroup> actualAllGroupMap = context.sendListGroups(Collections.emptyList())
+            .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        Map<String, ListGroupsResponseData.ListedGroup> expectAllGroupMap =
+            Stream.of(new ListGroupsResponseData.ListedGroup()
+                        .setGroupId(genericGroup.groupId())
+                        .setGroupState(genericGroup.stateAsString()),
+                    new ListGroupsResponseData.ListedGroup()
+                        .setGroupId(consumerGroup.groupId())
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setGroupState(consumerGroup.stateAsString()))
+                .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap.size(), actualAllGroupMap.size());
+        for(Map.Entry<String, ListGroupsResponseData.ListedGroup> entry : expectAllGroupMap.entrySet()) {
+            assertEquals(entry.getValue(), actualAllGroupMap.get(entry.getKey()));
+        }
     }
 }

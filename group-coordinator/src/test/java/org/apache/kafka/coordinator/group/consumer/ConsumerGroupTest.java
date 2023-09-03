@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.internals.GroupState;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -630,5 +634,20 @@ public class ConsumerGroupTest {
 
         // This should succeed.
         group.validateOffsetCommit("member-id", "", 0);
+    }
+
+    @Test
+    public void testAsListedGroup() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
+        snapshotRegistry.getOrCreateSnapshot(0);
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
+        group.updateMember(new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build());
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
+        snapshotRegistry.getOrCreateSnapshot(1);
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE.toString(), group.stateAsString(1));
+
     }
 }

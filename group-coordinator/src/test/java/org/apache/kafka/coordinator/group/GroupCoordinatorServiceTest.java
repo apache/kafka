@@ -690,9 +690,11 @@ public class GroupCoordinatorServiceTest {
                     testListGroupsFailedWithException(errors.exception(),
                         new ListGroupsResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
                 } else if (errors.code() == Errors.NOT_COORDINATOR.code()) {
-                    testListGroupsFailedWithException(new NotCoordinatorException(""), new ListGroupsResponseData());
+                    testListGroupsFailedWithException(new NotCoordinatorException(""),
+                        new ListGroupsResponseData());
                 } else {
-                    testListGroupsFailedWithException(errors.exception(), new ListGroupsResponseData().setErrorCode(errors.code()));
+                    testListGroupsFailedWithException(errors.exception(),
+                        new ListGroupsResponseData().setErrorCode(errors.code()));
                 }
             }
         }
