@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.clients.consumer.internals.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -39,7 +38,6 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
-import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
@@ -105,7 +103,6 @@ import org.opentest4j.AssertionFailedError;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -558,9 +555,6 @@ public class GroupMetadataManagerTest {
             return groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, true);
         }
 
-        public CoordinatorResult<Void, Record> sendGenericGroupJoin(
-            JoinGroupRequestData request,
-            CompletableFuture<JoinGroupResponseData> responseFuture
         public JoinResult sendGenericGroupJoin(
             JoinGroupRequestData request
         ) {
@@ -8630,7 +8624,9 @@ public class GroupMetadataManagerTest {
         assertEquals(expectAllGroupMap.size(), actualAllGroupMap.size());
         for(Map.Entry<String, ListGroupsResponseData.ListedGroup> entry : expectAllGroupMap.entrySet()) {
             assertEquals(entry.getValue(), actualAllGroupMap.get(entry.getKey()));
-}
+        }
+    }
+
     public static <T> void assertUnorderedListEquals(
         List<T> expected,
         List<T> actual
@@ -9056,3 +9052,4 @@ public class GroupMetadataManagerTest {
             this.appendFuture = coordinatorResult.appendFuture();
         }
     }
+}
