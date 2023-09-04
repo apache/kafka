@@ -173,8 +173,11 @@ class LocalLog(@volatile private var _dir: File,
       val segmentsToFlush = segments.values(currentRecoveryPoint, offset)
       segmentsToFlush.foreach(_.flush())
       // If there are any new segments, we need to flush the parent directory for crash consistency.
-      if (segmentsToFlush.exists(_.baseOffset >= currentRecoveryPoint))
-        Utils.flushDir(dir.toPath)
+      if (segmentsToFlush.exists(_.baseOffset >= currentRecoveryPoint)) {
+        // The directory might be renamed concurrently for topic deletion, which may cause NoSuchFileException here.
+        // Since the directory is to be deleted anyways, we just swallow NoSuchFileException and let it go.
+        Utils.flushDirIfExists(dir.toPath)
+      }
     }
   }
 
@@ -593,7 +596,7 @@ class LocalLog(@volatile private var _dir: File,
 object LocalLog extends Logging {
 
   /** a file that is scheduled to be deleted */
-  private[log] val DeletedFileSuffix = ".deleted"
+  private[log] val DeletedFileSuffix = LogFileUtils.DELETED_FILE_SUFFIX
 
   /** A temporary file that is being used for log cleaning */
   private[log] val CleanedFileSuffix = ".cleaned"

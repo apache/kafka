@@ -2038,7 +2038,7 @@ public class RequestResponseTest {
                 .setGroupId("group1")
                 .setMemberId("consumer1")
                 .setGroupInstanceId(null)
-                .setGenerationId(100)
+                .setGenerationIdOrMemberEpoch(100)
                 .setTopics(singletonList(
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                 .setName("test")

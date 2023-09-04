@@ -16,23 +16,25 @@
  */
 package kafka.log.remote
 
-import kafka.log.UnifiedLog
+import kafka.utils.TestUtils
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
-import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Assertions.{assertTrue, _}
+import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
+import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
+import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.io.{File, FileInputStream}
+import java.io.{File, FileInputStream, IOException}
 import java.nio.file.Files
+import java.util
 import java.util.Collections
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
@@ -40,29 +42,29 @@ import scala.collection.mutable
 class RemoteIndexCacheTest {
   private val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
   private val time = new MockTime()
-  private val partition = new TopicPartition("foo", 0)
   private val brokerId = 1
-  private val baseOffset = 45L
-  private val lastOffset = 75L
-  private val segmentSize = 1024
+  private val baseOffset: Long = Int.MaxValue.toLong + 101337 // start with a base offset which is a long
+  private val lastOffset: Long = baseOffset + 30L
+  private val segmentSize: Int = 1024
   private val rsm: RemoteStorageManager = mock(classOf[RemoteStorageManager])
   private var cache: RemoteIndexCache = _
   private var rlsMetadata: RemoteLogSegmentMetadata = _
   private var logDir: File = _
   private var tpDir: File = _
+  private var idPartition: TopicIdPartition = _
 
   @BeforeEach
   def setup(): Unit = {
-    val idPartition = new TopicIdPartition(Uuid.randomUuid(), partition)
-    logDir = TestUtils.tempDir()
+    idPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    logDir = JTestUtils.tempDirectory(s"kafka-${this.getClass.getSimpleName}")
     tpDir = new File(logDir, idPartition.toString)
     Files.createDirectory(tpDir.toPath)
 
-    val remoteLogSegmentId = new RemoteLogSegmentId(idPartition, Uuid.randomUuid())
+    val remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition)
     rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
 
-    cache = new RemoteIndexCache(remoteStorageManager = rsm, logDir = logDir.toString)
+    cache = new RemoteIndexCache(rsm, tpDir.toString)
 
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
       .thenAnswer(ans => {
@@ -70,12 +72,12 @@ class RemoteIndexCacheTest {
         val indexType = ans.getArgument[IndexType](1)
         val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
         val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val trxIdx = createTxIndexForSegmentMetadata(metadata)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
           case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
-          case IndexType.TRANSACTION => new FileInputStream(trxIdx.file)
+          case IndexType.TRANSACTION => new FileInputStream(txnIdx.file)
           case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
           case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
         }
@@ -89,9 +91,38 @@ class RemoteIndexCacheTest {
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     // best effort to delete the per-test resource. Even if we don't delete, it is ok because the parent directory
     // will be deleted at the end of test.
-    Utils.delete(logDir)
-    // Verify no lingering threads
-    TestUtils.assertNoNonDaemonThreads(RemoteIndexCache.remoteLogIndexCacheCleanerThread)
+    try {
+      Utils.delete(logDir)
+    } catch {
+      case _: IOException => // ignore
+    }
+    // Verify no lingering threads. It is important to have this as the very last statement in the @aftereach
+    // because this may throw an exception and prevent cleanup after it
+    TestUtils.assertNoNonDaemonThreads(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD)
+  }
+
+  @Test
+  def testIndexFileNameAndLocationOnDisk(): Unit = {
+    val entry = cache.getIndexEntry(rlsMetadata)
+    val offsetIndexFile = entry.offsetIndex.file().toPath
+    val txnIndexFile = entry.txnIndex.file().toPath
+    val timeIndexFile = entry.timeIndex.file().toPath
+
+    val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
+    val expectedTimeIndexFileName: String = remoteTimeIndexFileName(rlsMetadata)
+    val expectedTxnIndexFileName: String = remoteTransactionIndexFileName(rlsMetadata)
+
+    assertEquals(expectedOffsetIndexFileName, offsetIndexFile.getFileName.toString)
+    assertEquals(expectedTxnIndexFileName, txnIndexFile.getFileName.toString)
+    assertEquals(expectedTimeIndexFileName, timeIndexFile.getFileName.toString)
+
+    // assert that parent directory for the index files is correct
+    assertEquals(RemoteIndexCache.DIR_NAME, offsetIndexFile.getParent.getFileName.toString,
+      s"offsetIndex=$offsetIndexFile is created under incorrect parent")
+    assertEquals(RemoteIndexCache.DIR_NAME, txnIndexFile.getParent.getFileName.toString,
+      s"txnIndex=$txnIndexFile is created under incorrect parent")
+    assertEquals(RemoteIndexCache.DIR_NAME, timeIndexFile.getParent.getFileName.toString,
+      s"timeIndex=$timeIndexFile is created under incorrect parent")
   }
 
   @Test
@@ -129,7 +160,7 @@ class RemoteIndexCacheTest {
   def testCacheEntryExpiry(): Unit = {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -174,7 +205,7 @@ class RemoteIndexCacheTest {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
 
-    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -215,9 +246,9 @@ class RemoteIndexCacheTest {
     val cacheEntry = generateSpyCacheEntry()
 
     // verify index files on disk
-    assertTrue(getIndexFileFromDisk(UnifiedLog.IndexFileSuffix).isPresent, s"Offset index file should be present on disk at ${tpDir.toPath}")
-    assertTrue(getIndexFileFromDisk(UnifiedLog.TxnIndexFileSuffix).isPresent, s"Txn index file should be present on disk at ${tpDir.toPath}")
-    assertTrue(getIndexFileFromDisk(UnifiedLog.TimeIndexFileSuffix).isPresent, s"Time index file should be present on disk at ${tpDir.toPath}")
+    assertTrue(getIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent, s"Offset index file should be present on disk at ${tpDir.toPath}")
+    assertTrue(getIndexFileFromDisk(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent, s"Txn index file should be present on disk at ${tpDir.toPath}")
+    assertTrue(getIndexFileFromDisk(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent, s"Time index file should be present on disk at ${tpDir.toPath}")
 
     // add the spied entry into the cache, it will overwrite the non-spied entry
     cache.internalCache.put(internalIndexKey, cacheEntry)
@@ -229,9 +260,9 @@ class RemoteIndexCacheTest {
     cache.internalCache.invalidate(internalIndexKey)
 
     // wait until entry is marked for deletion
-    TestUtils.waitUntilTrue(() => cacheEntry.markedForCleanup,
+    TestUtils.waitUntilTrue(() => cacheEntry.isMarkedForCleanup,
       "Failed to mark cache entry for cleanup after invalidation")
-    TestUtils.waitUntilTrue(() => cacheEntry.cleanStarted,
+    TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
 
     // first it will be marked for cleanup, second time markForCleanup is called when cleanup() is called
@@ -245,14 +276,47 @@ class RemoteIndexCacheTest {
     verify(cacheEntry.txnIndex).renameTo(any(classOf[File]))
 
     // verify no index files on disk
-    assertFalse(getIndexFileFromDisk(UnifiedLog.IndexFileSuffix).isPresent,
+    assertFalse(getIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
       s"Offset index file should not be present on disk at ${tpDir.toPath}")
-    assertFalse(getIndexFileFromDisk(UnifiedLog.TxnIndexFileSuffix).isPresent,
+    assertFalse(getIndexFileFromDisk(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent,
       s"Txn index file should not be present on disk at ${tpDir.toPath}")
-    assertFalse(getIndexFileFromDisk(UnifiedLog.TimeIndexFileSuffix).isPresent,
+    assertFalse(getIndexFileFromDisk(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent,
       s"Time index file should not be present on disk at ${tpDir.toPath}")
     assertFalse(getIndexFileFromDisk(LogFileUtils.DELETED_FILE_SUFFIX).isPresent,
       s"Index file marked for deletion should not be present on disk at ${tpDir.toPath}")
+  }
+
+  @Test
+  def testCleanerThreadShutdown(): Unit = {
+    // cache is empty at beginning
+    assertTrue(cache.internalCache.asMap().isEmpty)
+    // verify that cleaner thread is running
+    TestUtils.numThreadsRunning(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, isDaemon = true)
+    // create a new entry
+    val spyEntry = generateSpyCacheEntry()
+    // an exception should not close the cleaner thread
+    when(spyEntry.cleanup()).thenThrow(new RuntimeException("kaboom! I am expected exception in unit test."))
+    val key = Uuid.randomUuid()
+    cache.internalCache.put(key, spyEntry)
+    // trigger cleanup
+    cache.internalCache.invalidate(key)
+    // wait for cleanup to start
+    TestUtils.waitUntilTrue(() => spyEntry.isCleanStarted, "Failed while waiting for clean up to start")
+    // Give the thread cleaner thread some time to throw an exception
+    Thread.sleep(100)
+    // Verify that Cleaner thread is still running even when exception is thrown in doWork()
+    var threads = TestUtils.numThreadsRunning(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, isDaemon = true)
+    assertEquals(1, threads.size,
+      s"Found unexpected ${threads.size} threads=${threads.map(t => t.getName).mkString(", ")}")
+
+    // close the cache properly
+    cache.close()
+
+    // verify that the thread is closed properly
+    threads = TestUtils.numThreadsRunning(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, isDaemon = true)
+    assertTrue(threads.isEmpty, s"Found unexpected ${threads.size} threads=${threads.map(t => t.getName).mkString(", ")}")
+    // if the thread is correctly being shutdown it will not be running
+    assertFalse(cache.cleanerThread.isRunning, "Unexpected thread state=running. Check error logs.")
   }
 
   @Test
@@ -343,7 +407,7 @@ class RemoteIndexCacheTest {
   def testReloadCacheAfterClose(): Unit = {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -377,18 +441,72 @@ class RemoteIndexCacheTest {
     cache.close()
 
     // Reload the cache from the disk and check the cache size is same as earlier
-    val reloadedCache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    val reloadedCache = new RemoteIndexCache(2, rsm, tpDir.toString)
     assertEquals(2, reloadedCache.internalCache.asMap().size())
     reloadedCache.close()
 
     verifyNoMoreInteractions(rsm)
   }
 
-  private def generateSpyCacheEntry(): Entry = {
+  @Test
+  def testRemoveItem(): Unit = {
+    val segmentId = rlsMetadata.remoteLogSegmentId()
+    val segmentUuid = segmentId.id()
+    // generate and add entry to cache
+    val spyEntry = generateSpyCacheEntry(segmentId)
+    cache.internalCache.put(segmentUuid, spyEntry)
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+    assertFalse(spyEntry.isMarkedForCleanup)
+
+    cache.remove(segmentId.id())
+    assertFalse(cache.internalCache().asMap().containsKey(segmentUuid))
+    TestUtils.waitUntilTrue(() => spyEntry.isMarkedForCleanup, "Failed to mark cache entry for cleanup after invalidation")
+  }
+
+  @Test
+  def testRemoveNonExistentItem(): Unit = {
+    // generate and add entry to cache
+    val segmentId = rlsMetadata.remoteLogSegmentId()
+    val segmentUuid = segmentId.id()
+    // generate and add entry to cache
+    val spyEntry = generateSpyCacheEntry(segmentId)
+    cache.internalCache.put(segmentUuid, spyEntry)
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+
+    // remove a random Uuid
+    cache.remove(Uuid.randomUuid())
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+    assertFalse(spyEntry.isMarkedForCleanup)
+  }
+
+  @Test
+  def testRemoveMultipleItems(): Unit = {
+    // generate and add entry to cache
+    val uuidAndEntryList = new util.HashMap[Uuid, RemoteIndexCache.Entry]()
+    for (_ <- 0 until 10) {
+      val segmentId = RemoteLogSegmentId.generateNew(idPartition)
+      val segmentUuid = segmentId.id()
+      val spyEntry = generateSpyCacheEntry(segmentId)
+      uuidAndEntryList.put(segmentUuid, spyEntry)
+
+      cache.internalCache.put(segmentUuid, spyEntry)
+      assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+      assertFalse(spyEntry.isMarkedForCleanup)
+    }
+    cache.removeAll(uuidAndEntryList.keySet())
+    uuidAndEntryList.values().forEach { entry =>
+      TestUtils.waitUntilTrue(() => entry.isMarkedForCleanup, "Failed to mark cache entry for cleanup after invalidation")
+    }
+  }
+
+  private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
+                                    = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
+    val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
+      time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
     val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
     val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
-    spy(new Entry(offsetIndex, timeIndex, txIndex))
+    spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txIndex))
   }
 
   private def assertAtLeastOnePresent(cache: RemoteIndexCache, uuids: Uuid*): Unit = {
@@ -416,21 +534,19 @@ class RemoteIndexCacheTest {
   }
 
   private def createTxIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TransactionIndex = {
-    val txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix)
+    val txnIdxFile = remoteTransactionIndexFile(tpDir, metadata)
     txnIdxFile.createNewFile()
     new TransactionIndex(metadata.startOffset(), txnIdxFile)
   }
 
   private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TimeIndex = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix),
-      metadata.startOffset(), maxEntries * 12)
+    new TimeIndex(remoteTimeIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 12)
   }
 
   private def createOffsetIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata) = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix),
-      metadata.startOffset(), maxEntries * 8)
+    new OffsetIndex(remoteOffsetIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 8)
   }
 
   private def generateRemoteLogSegmentMetadata(size: Int,

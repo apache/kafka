@@ -16,15 +16,18 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -37,8 +40,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.mockito.MockedConstruction;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -46,6 +51,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -53,6 +59,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -63,7 +70,7 @@ import static org.mockito.Mockito.when;
 
 public class PrototypeAsyncConsumerTest {
 
-    private Consumer<?, ?> consumer;
+    private PrototypeAsyncConsumer<?, ?> consumer;
     private Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
@@ -116,7 +123,7 @@ public class PrototypeAsyncConsumerTest {
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
         PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
-        doReturn(future).when(mockedConsumer).commit(offsets);
+        doReturn(future).when(mockedConsumer).commit(offsets, false);
         mockedConsumer.commitAsync(offsets, null);
         future.complete(null);
         TestUtils.waitForCondition(() -> future.isDone(),
@@ -137,7 +144,7 @@ public class PrototypeAsyncConsumerTest {
 
         PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(consumer);
-        doReturn(future).when(mockedConsumer).commit(offsets);
+        doReturn(future).when(mockedConsumer).commit(offsets, false);
         OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
         mockedConsumer.commitAsync(offsets, customCallback);
         future.complete(null);
@@ -145,21 +152,93 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testCommitted() {
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
-        mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
-            when(mock.complete(any())).thenReturn(new HashMap<>());
-        });
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-        assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
-        verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction =
+                 mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
+                     when(mock.future()).thenReturn(committedFuture);
+                 })) {
+            committedFuture.complete(mockTopicPartitionOffset());
+            consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+            assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1000)));
+            verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        }
     }
 
     @Test
-    public void testUnimplementedException() {
+    public void testCommitted_ExceptionThrown() {
+        Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction =
+                 mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
+                     when(mock.future()).thenReturn(committedFuture);
+                 })) {
+            committedFuture.completeExceptionally(new KafkaException("Test exception"));
+            consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+            assertThrows(KafkaException.class, () -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1000)));
+            verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        }
+    }
+
+    @Test
+    public void testAssign() {
+        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
+        this.consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        final TopicPartition tp = new TopicPartition("foo", 3);
+        consumer.assign(singleton(tp));
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().contains(tp));
+        verify(eventHandler).add(any(AssignmentChangeApplicationEvent.class));
+        verify(eventHandler).add(any(NewTopicsMetadataUpdateRequestEvent.class));
+    }
+
+    @Test
+    public void testAssignOnNullTopicPartition() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-        assertThrows(KafkaException.class, consumer::assignment, "not implemented exception");
+        assertThrows(IllegalArgumentException.class, () -> consumer.assign(null));
+    }
+
+    @Test
+    public void testAssignOnEmptyTopicPartition() {
+        consumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
+        consumer.assign(Collections.emptyList());
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testAssignOnNullTopicInPartition() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition(null, 0))));
+    }
+
+    @Test
+    public void testAssignOnEmptyTopicInPartition() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
+    }
+
+    @Test
+    public void testWakeup_commitSync() {
+        consumer = newConsumer(time, new StringDeserializer(),
+            new StringDeserializer());
+        consumer.wakeup();
+        assertThrows(WakeupException.class, () -> consumer.commitSync());
+        assertNoPendingWakeup(consumer.wakeupTrigger());
+    }
+
+    @Test
+    public void testWakeup_committed() {
+        consumer = newConsumer(time, new StringDeserializer(),
+            new StringDeserializer());
+        consumer.wakeup();
+        assertThrows(WakeupException.class, () -> consumer.committed(mockTopicPartitionOffset().keySet()));
+        assertNoPendingWakeup(consumer.wakeupTrigger());
+    }
+
+    private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
+        assertTrue(wakeupTrigger.getPendingTask() == null);
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
@@ -196,9 +275,7 @@ public class PrototypeAsyncConsumerTest {
                 subscriptions,
                 eventHandler,
                 metrics,
-                clusterResourceListeners,
                 Optional.ofNullable(this.groupId),
-                clientId,
                 config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 }
