@@ -22,15 +22,18 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -127,6 +130,14 @@ public class DefaultEventHandler implements EventHandler {
     public boolean add(final ApplicationEvent event) {
         backgroundThread.wakeup();
         return applicationEventQueue.add(event);
+    }
+
+    @Override
+    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer) {
+        Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
+        Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
+        add(event);
+        return event.get(timer);
     }
 
     public void close() {
