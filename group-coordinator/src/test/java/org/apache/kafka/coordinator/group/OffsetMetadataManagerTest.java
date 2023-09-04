@@ -184,7 +184,7 @@ public class OffsetMetadataManagerTest {
         ) {
             return fetchOffsets(
                 groupId,
-                "",
+                null,
                 -1,
                 topics,
                 committedOffset
@@ -216,7 +216,7 @@ public class OffsetMetadataManagerTest {
         ) {
             return fetchAllOffsets(
                 groupId,
-                "",
+                null,
                 -1,
                 committedOffset
             );
@@ -1480,6 +1480,41 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
+    public void testConsumerGroupOffsetFetchFromAdminClient() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        // Create consumer group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        // Create member.
+        group.getOrMaybeCreateMember("member", true);
+        // Commit offset.
+        context.commitOffset("group", "foo", 0, 100L, 1);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
     public void testConsumerGroupOffsetFetchWithUnknownMemberId() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
@@ -1491,10 +1526,15 @@ public class OffsetMetadataManagerTest {
                 .setPartitionIndexes(Collections.singletonList(0))
         );
 
+        // Fetch offsets cases.
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchOffsets("group", "", 0, topics, Long.MAX_VALUE));
         assertThrows(UnknownMemberIdException.class,
             () -> context.fetchOffsets("group", "member", 0, topics, Long.MAX_VALUE));
 
-        // Fetch all offsets case.
+        // Fetch all offsets cases.
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchAllOffsets("group", "", 0, Long.MAX_VALUE));
         assertThrows(UnknownMemberIdException.class,
             () -> context.fetchAllOffsets("group", "member", 0, Long.MAX_VALUE));
     }
@@ -1512,6 +1552,7 @@ public class OffsetMetadataManagerTest {
                 .setPartitionIndexes(Collections.singletonList(0))
         );
 
+        // Fetch offsets case.
         assertThrows(StaleMemberEpochException.class,
             () -> context.fetchOffsets("group", "member", 10, topics, Long.MAX_VALUE));
 

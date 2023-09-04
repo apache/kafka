@@ -553,9 +553,10 @@ public class ConsumerGroup implements Group {
         int memberEpoch,
         long lastCommittedOffset
     ) throws UnknownMemberIdException, StaleMemberEpochException {
-        // When the member epoch is -1, the request comes from the admin client. In this case,
-        // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0) return;
+        // When the member id is null and the member epoch is -1, the request either comes
+        // from the admin client or from a client which does not provide them. In this case,
+        // the fetch request is accepted.
+        if (memberId == null && memberEpoch < 0) return;
 
         final ConsumerGroupMember member = members.get(memberId, lastCommittedOffset);
         if (member == null) {
