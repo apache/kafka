@@ -242,6 +242,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -777,29 +779,27 @@ public class RequestResponseTest {
         }
     }
 
-    @Test
-    public void testOffsetFetchRequestBuilderToStringV8AndAbove() {
-        List<Boolean> stableFlags = asList(true, false);
-        for (Boolean requireStable : stableFlags) {
-            String allTopicPartitionsString = new OffsetFetchRequest.Builder(
-                Collections.singletonMap("someGroup", null),
-                requireStable,
-                false)
-                .toString();
-            assertTrue(allTopicPartitionsString.contains("groups=[OffsetFetchRequestGroup"
-                + "(groupId='someGroup', topics=null)], requireStable=" + requireStable));
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testOffsetFetchRequestBuilderToStringV8AndAbove(boolean requireStable) {
+        String allTopicPartitionsString = new OffsetFetchRequest.Builder(
+            Collections.singletonMap("someGroup", null),
+            requireStable,
+            false
+        ).toString();
+        assertTrue(allTopicPartitionsString.contains("groups=[OffsetFetchRequestGroup"
+            + "(groupId='someGroup', memberId='', memberEpoch=-1, topics=null)], requireStable=" + requireStable));
 
-            String subsetTopicPartitionsString = new OffsetFetchRequest.Builder(
-                Collections.singletonMap(
-                    "group1",
-                    singletonList(new TopicPartition("test11", 1))),
-                requireStable,
-                false)
-                .toString();
-            assertTrue(subsetTopicPartitionsString.contains("test11"));
-            assertTrue(subsetTopicPartitionsString.contains("group1"));
-            assertTrue(subsetTopicPartitionsString.contains("requireStable=" + requireStable));
-        }
+        String subsetTopicPartitionsString = new OffsetFetchRequest.Builder(
+            Collections.singletonMap(
+                "group1",
+                singletonList(new TopicPartition("test11", 1))),
+            requireStable,
+            false
+        ).toString();
+        assertTrue(subsetTopicPartitionsString.contains("test11"));
+        assertTrue(subsetTopicPartitionsString.contains("group1"));
+        assertTrue(subsetTopicPartitionsString.contains("requireStable=" + requireStable));
     }
 
     @Test
