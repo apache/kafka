@@ -302,7 +302,7 @@ public class RemoteLogManager implements Closeable {
 
     private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
         Uuid previousTopicId = topicIdByPartitionMap.put(topicIdPartition.topicPartition(), topicIdPartition.topicId());
-        if (previousTopicId != null && previousTopicId != topicIdPartition.topicId()) {
+        if (previousTopicId != null && !previousTopicId.equals(topicIdPartition.topicId())) {
             LOGGER.info("Previous cached topic id {} for {} does not match updated topic id {}",
                     previousTopicId, topicIdPartition.topicPartition(), topicIdPartition.topicId());
         }
