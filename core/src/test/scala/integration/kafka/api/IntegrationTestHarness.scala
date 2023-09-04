@@ -30,7 +30,7 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, TestInfo}
 
 import scala.collection.mutable
 import scala.collection.Seq
@@ -235,4 +235,24 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     super.tearDown()
   }
 
+}
+
+object IntegrationTestHarness {
+  /**
+   * Verify that a previous test that doesn't use IntegrationTestHarness hasn't left behind an unexpected thread.
+   * This assumes that brokers, ZooKeeper clients, producers and consumers are not created in another @BeforeClass,
+   * which is true for core tests where this harness is used.
+   */
+  @BeforeAll
+  def setUpClass(): Unit = {
+    TestUtils.verifyNoUnexpectedThreads("@BeforeAll")
+  }
+
+  /**
+   * Verify that tests from the current test class using IntegrationTestHarness haven't left behind an unexpected thread
+   */
+  @AfterAll
+  def tearDownClass(): Unit = {
+    TestUtils.verifyNoUnexpectedThreads("@AfterAll")
+  }
 }

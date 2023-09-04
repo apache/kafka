@@ -115,6 +115,9 @@ object TestUtils extends Logging {
   private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
   private val abortedValue : Array[Byte] = "aborted".getBytes(StandardCharsets.UTF_8)
 
+  private val dataPlaneAcceptorThreadPrefix = "data-plane-"
+  private val controlPlaneAcceptorThreadPrefix = "control-plane-"
+
   sealed trait LogDirFailureType
   case object Roll extends LogDirFailureType
   case object Checkpoint extends LogDirFailureType
@@ -2391,7 +2394,9 @@ object TestUtils extends Logging {
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
       QuorumTestHarness.ZkClientEventThreadSuffix,
-      QuorumController.CONTROLLER_THREAD_SUFFIX
+      QuorumController.CONTROLLER_THREAD_SUFFIX,
+      dataPlaneAcceptorThreadPrefix,
+      controlPlaneAcceptorThreadPrefix
     )
 
     def unexpectedThreads: Set[String] = {
