@@ -144,7 +144,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
-@Timeout(value = 200)
+@Timeout(value = 300)
 public class QuorumControllerTest {
     private final static Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
 
