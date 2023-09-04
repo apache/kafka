@@ -21,9 +21,10 @@ import org.apache.kafka.common.config.TopicConfig;
 import java.util.Collections;
 import java.util.Map;
 
-public final class DeleteSegmentsByRetentionTimeTest extends DeleteSegmentsByRetentionSizeTest {
+public final class DeleteSegmentsByRetentionTimeTest extends BaseDeleteSegmentsTest {
 
-    protected Map<String, String> topicConfigs() {
+    @Override
+    protected Map<String, String> configsToBeAdded() {
         return Collections.singletonMap(TopicConfig.RETENTION_MS_CONFIG, "1");
     }
 }

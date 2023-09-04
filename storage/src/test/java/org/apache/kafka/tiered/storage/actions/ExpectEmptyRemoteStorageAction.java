@@ -36,7 +36,11 @@ public final class ExpectEmptyRemoteStorageAction implements TieredStorageTestAc
     public void doExecute(TieredStorageTestContext context) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             LocalTieredStorageSnapshot snapshot = context.takeTieredStorageSnapshot();
-            // With KAFKA-15166, snapshot should not contain the topicPartition
+            // We don't differentiate the case between segment deletion and topic deletion so the underlying
+            // remote-storage-manager (RSM) doesn't know when to remove any topic-level marker files/folders.
+            // In case of LocalTieredStorage (RSM), there will be empty partition directories.
+            // With KAFKA-15166, the RSM will be able to delete the topic-level marker folders, then the
+            // `LocalTieredStorageSnapshot` should not contain the partition directories.
             return snapshot.getFilesets(topicPartition).isEmpty();
         }, 2000L, "Remote storage is not empty for " + topicPartition);
     }

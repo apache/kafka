@@ -17,53 +17,14 @@
 package org.apache.kafka.tiered.storage.integration;
 
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
-import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
-
-public class DeleteSegmentsByRetentionSizeTest extends TieredStorageTestHarness {
+public final class DeleteSegmentsByRetentionSizeTest extends BaseDeleteSegmentsTest {
 
     @Override
-    public int brokerCount() {
-        return 1;
-    }
-
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
-        final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer maxBatchCountPerSegment = 1;
-        final Map<Integer, List<Integer>> replicaAssignment = null;
-        final boolean enableRemoteLogStorage = true;
-        final int beginEpoch = 0;
-        final long startOffset = 3;
-
-        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
-                enableRemoteLogStorage)
-                .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
-                .expectSegmentToBeOffloaded(broker0, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
-                .expectSegmentToBeOffloaded(broker0, topicA, p0, 2, new KeyValueSpec("k2", "v2"))
-                .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
-                .produce(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
-                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"))
-                .updateTopicConfig(topicA, topicConfigs(), Collections.emptyList())
-                .expectDeletionInRemoteStorage(broker0, topicA, p0, DELETE_SEGMENT, 3)
-                .waitForRemoteLogSegmentDeletion(topicA)
-                .expectLeaderEpochCheckpoint(broker0, topicA, p0, beginEpoch, startOffset)
-                .expectFetchFromTieredStorage(broker0, topicA, p0, 0)
-                .consume(topicA, p0, 0L, 1, 0);
-    }
-
-    protected Map<String, String> topicConfigs() {
+    protected Map<String, String> configsToBeAdded() {
         return Collections.singletonMap(TopicConfig.RETENTION_BYTES_CONFIG, "1");
     }
 }
