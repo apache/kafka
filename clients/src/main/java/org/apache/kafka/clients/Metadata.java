@@ -474,7 +474,9 @@ public class Metadata implements Closeable {
                 // If the received leader epoch is at least the same as the previous one, update the metadata
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
-                this.equivalentResponseCount = 0;
+                if (newEpoch > currentEpoch) {
+                    this.equivalentResponseCount = 0;
+                }
                 return Optional.of(partitionMetadata);
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
