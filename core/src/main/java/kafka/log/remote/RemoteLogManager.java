@@ -350,7 +350,9 @@ public class RemoteLogManager implements Closeable {
     }
 
     /**
-     * Deletes the internal topic partition info if delete flag is set as true.
+     * Stop the remote-log-manager task for the given partitions. And, calls the
+     * {@link RemoteLogMetadataManager#onStopPartitions(Set)} when {@link StopPartition#deleteLocalLog()} is true.
+     * Deletes the partitions from the remote storage when {@link StopPartition#deleteRemoteLog()} is true.
      *
      * @param stopPartitions topic partitions that needs to be stopped.
      * @param errorHandler   callback to handle any errors while stopping the partitions.
