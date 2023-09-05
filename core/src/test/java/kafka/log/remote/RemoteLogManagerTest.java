@@ -23,6 +23,7 @@ import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
+import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -896,12 +897,12 @@ public class RemoteLogManagerTest {
         verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
 
         // Evicts from topicId cache
-        remoteLogManager.stopPartitions(Collections.singleton(leaderTopicIdPartition.topicPartition()), true, (tp, ex) -> { });
+        remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true)), (tp, ex) -> { });
         verifyNotInCache(leaderTopicIdPartition);
         verifyInCache(followerTopicIdPartition);
 
         // Evicts from topicId cache
-        remoteLogManager.stopPartitions(Collections.singleton(followerTopicIdPartition.topicPartition()), true, (tp, ex) -> { });
+        remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(followerTopicIdPartition.topicPartition(), true, true)), (tp, ex) -> { });
         verifyNotInCache(leaderTopicIdPartition, followerTopicIdPartition);
     }
 
@@ -1351,14 +1352,14 @@ public class RemoteLogManagerTest {
     @Test
     public void testStopPartitionsWithoutDeletion() throws RemoteStorageException {
         BiConsumer<TopicPartition, Throwable> errorHandler = (topicPartition, throwable) -> fail("shouldn't be called");
-        Set<TopicPartition> partitions = new HashSet<>();
-        partitions.add(leaderTopicIdPartition.topicPartition());
-        partitions.add(followerTopicIdPartition.topicPartition());
+        Set<StopPartition> partitions = new HashSet<>();
+        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false));
+        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, false));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
                 Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
 
-        remoteLogManager.stopPartitions(partitions, false, errorHandler);
-        verify(remoteLogMetadataManager, times(0)).onStopPartitions(any());
+        remoteLogManager.stopPartitions(partitions, errorHandler);
+        verify(remoteLogMetadataManager, times(1)).onStopPartitions(any());
         verify(remoteStorageManager, times(0)).deleteLogSegmentData(any());
         verify(remoteLogMetadataManager, times(0)).updateRemoteLogSegmentMetadata(any());
     }
@@ -1367,9 +1368,9 @@ public class RemoteLogManagerTest {
     public void testStopPartitionsWithDeletion() throws RemoteStorageException {
         BiConsumer<TopicPartition, Throwable> errorHandler =
                 (topicPartition, ex) -> fail("shouldn't be called: " + ex);
-        Set<TopicPartition> partitions = new HashSet<>();
-        partitions.add(leaderTopicIdPartition.topicPartition());
-        partitions.add(followerTopicIdPartition.topicPartition());
+        Set<StopPartition> partitions = new HashSet<>();
+        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true));
+        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
                 Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition)))
@@ -1381,7 +1382,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any()))
                 .thenReturn(dummyFuture);
 
-        remoteLogManager.stopPartitions(partitions, true, errorHandler);
+        remoteLogManager.stopPartitions(partitions, errorHandler);
         verify(remoteLogMetadataManager, times(1)).onStopPartitions(any());
         verify(remoteStorageManager, times(8)).deleteLogSegmentData(any());
         verify(remoteLogMetadataManager, times(16)).updateRemoteLogSegmentMetadata(any());

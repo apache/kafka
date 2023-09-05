@@ -23,6 +23,7 @@ import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
+import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -351,39 +352,40 @@ public class RemoteLogManager implements Closeable {
     /**
      * Deletes the internal topic partition info if delete flag is set as true.
      *
-     * @param topicPartitions topic partitions that needs to be stopped.
-     * @param delete         flag to indicate whether the given topic partitions to be deleted or not.
+     * @param stopPartitions topic partitions that needs to be stopped.
      * @param errorHandler   callback to handle any errors while stopping the partitions.
      */
-    public void stopPartitions(Set<TopicPartition> topicPartitions,
-                               boolean delete,
+    public void stopPartitions(Set<StopPartition> stopPartitions,
                                BiConsumer<TopicPartition, Throwable> errorHandler) {
-        LOGGER.debug("Stopping {} partitions, delete: {}", topicPartitions.size(), delete);
-        Set<TopicIdPartition> topicIdPartitions = topicPartitions.stream()
-                .filter(topicIdByPartitionMap::containsKey)
-                .map(tp -> new TopicIdPartition(topicIdByPartitionMap.get(tp), tp))
-                .collect(Collectors.toSet());
-
-        topicIdPartitions.forEach(tpId -> {
+        LOGGER.debug("Stop partitions: {}", stopPartitions);
+        for (StopPartition stopPartition: stopPartitions) {
+            TopicPartition tp = stopPartition.topicPartition();
+            TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
             try {
                 RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
                 if (task != null) {
                     LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
                     task.cancel();
                 }
-                if (delete) {
+                if (stopPartition.deleteRemoteLog()) {
                     LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                     deleteRemoteLogPartition(tpId);
                 }
             } catch (Exception ex) {
                 errorHandler.accept(tpId.topicPartition(), ex);
-                LOGGER.error("Error while stopping the partition: {}, delete: {}", tpId.topicPartition(), delete, ex);
+                LOGGER.error("Error while stopping the partition: {}", stopPartition, ex);
             }
-        });
-        if (delete) {
-            // NOTE: this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
-            remoteLogMetadataManager.onStopPartitions(topicIdPartitions);
-            topicPartitions.forEach(topicIdByPartitionMap::remove);
+        }
+        // Note `deleteLocalLog` will always be true when `deleteRemoteLog` is true but not the other way around.
+        Set<TopicIdPartition> deleteLocalPartitions = stopPartitions.stream()
+                .filter(sp -> sp.deleteLocalLog() && topicIdByPartitionMap.containsKey(sp.topicPartition()))
+                .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
+                .collect(Collectors.toSet());
+        if (!deleteLocalPartitions.isEmpty()) {
+            // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
+            // ReplicaDeletionStarted
+            remoteLogMetadataManager.onStopPartitions(deleteLocalPartitions);
+            deleteLocalPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
         }
     }
 
