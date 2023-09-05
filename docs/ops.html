@@ -1851,49 +1851,49 @@ $ bin/kafka-acls.sh \
         <th>Mbean name</th>
       </tr>
       <tr>
-        <td>The number of bytes read from remote storage per second</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchBytesPerSec,topic=([-.\w]+)</td>
+        <td>Remote Fetch Bytes Per Sec</td>
         <td>Rate of bytes read from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchBytesPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>The number of remote storage read requests per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Remote Fetch Requests Per Sec</td>
         <td>Rate of read requests from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchRequestsPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>The number of remote storage read errors per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchErrorsPerSec,topic=([-.\w]+)</td>
+        <td>Remote Fetch Errors Per Sec</td>
         <td>Rate of read errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchErrorsPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>The number of bytes copied to remote storage per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyBytesPerSec,topic=([-.\w]+)</td>
+        <td>Remote Copy Bytes Per Sec</td>
         <td>Rate of bytes copied to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyBytesPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>The number of remote storage write requests per second</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Remote Copy Requests Per Sec</td>
         <td>Rate of write requests to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyRequestsPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>The number of remote storage write errors per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyErrorsPerSec,topic=([-.\w]+)</td>
+        <td>Remote Copy Errors Per Sec</td>
         <td>Rate of write errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyErrorsPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>Number of remote storage read tasks pending for execution</td>
-        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderTaskQueueSize</td>
+        <td>RemoteLogReader Task Queue Size</td>
         <td>Size of the queue holding remote storage read tasks</td>
+        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderTaskQueueSize</td>
       </tr>
       <tr>
-        <td>Average idle percent of the remote storage reader thread pool</td>
-        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderAvgIdlePercent</td>
+        <td>RemoteLogReader Avg Idle Percent</td>
         <td>Average idle percent of thread pool for processing remote storage read tasks</td>
+        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderAvgIdlePercent</td>
       </tr>
       <tr>
-        <td>Average idle percent of RemoteLogManager thread pool</td>
-        <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogManagerTasksAvgIdlePercent</td>
+        <td>RemoteLogManager Tasks Avg Idle Percent</td>
         <td>Average idle percent of thread pool for copying data to remote storage</td>
+        <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogManagerTasksAvgIdlePercent</td>
       </tr>
     </tbody>
   </table>
