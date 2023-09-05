@@ -129,7 +129,7 @@ public class DefaultTaskManagerTest {
         final Thread awaitingThread = new Thread(awaitingRunnable);
         awaitingThread.start();
 
-        assertFalse(awaitingRunnable.awaitDone.await(100, TimeUnit.MILLISECONDS));
+        assertFalse(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
     }

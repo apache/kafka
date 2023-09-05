@@ -110,7 +110,7 @@ public class DefaultTaskManager implements TaskManager {
 
                     assignedTasks.put(task.id(), executor);
 
-                    log.info("Assigned {} to executor {}", task.id(), executor.name());
+                    log.debug("Assigned task {} to executor {}", task.id(), executor.name());
 
                     return (StreamTask) task;
                 }
@@ -128,20 +128,20 @@ public class DefaultTaskManager implements TaskManager {
                     !lockedTasks.contains(task.id()) &&
                     canProgress((StreamTask) task, time.milliseconds())
                 ) {
-                    log.info("Await unblocked: returning early from await since a processable task {} was found", task.id());
+                    log.debug("Await unblocked: returning early from await since a processable task {} was found", task.id());
                     return false;
                 }
             }
             try {
-                log.info("Await blocking");
+                log.debug("Await blocking");
                 tasksCondition.await();
             } catch (final InterruptedException ignored) {
                 // we interrupt the thread for shut down and pause.
                 // we can ignore this exception.
-                log.info("Await unblocked: Interrupted while waiting for processable tasks");
+                log.debug("Await unblocked: Interrupted while waiting for processable tasks");
                 return true;
             }
-            log.info("Await unblocked: Woken up to check for processable tasks");
+            log.debug("Await unblocked: Woken up to check for processable tasks");
             return false;
         });
 
@@ -151,7 +151,7 @@ public class DefaultTaskManager implements TaskManager {
     }
 
     public void signalProcessableTasks() {
-        log.info("Waking up task executors");
+        log.debug("Waking up task executors");
         executeWithTasksLocked(tasksCondition::signalAll);
     }
 
@@ -169,7 +169,7 @@ public class DefaultTaskManager implements TaskManager {
 
             assignedTasks.remove(task.id());
 
-            log.info("Unassigned {} from executor {}", task.id(), executor.name());
+            log.debug("Unassigned {} from executor {}", task.id(), executor.name());
             tasksCondition.signalAll();
         });
     }
@@ -228,7 +228,7 @@ public class DefaultTaskManager implements TaskManager {
     public void unlockTasks(final Set<TaskId> taskIds) {
         executeWithTasksLocked(() -> {
             lockedTasks.removeAll(taskIds);
-            log.info("Waking up task executors");
+            log.debug("Waking up task executors");
             tasksCondition.signalAll();
         });
     }
@@ -244,7 +244,7 @@ public class DefaultTaskManager implements TaskManager {
             for (final StreamTask task : tasksToAdd) {
                 tasks.addTask(task);
             }
-            log.info("Waking up task executors");
+            log.debug("Waking up task executors");
             tasksCondition.signalAll();
         });
 
@@ -305,7 +305,7 @@ public class DefaultTaskManager implements TaskManager {
             return result;
         });
 
-        log.info("Drained {} uncaught exceptions", returnValue.size());
+        log.debug("Drained {} uncaught exceptions", returnValue.size());
 
         return returnValue;
     }
