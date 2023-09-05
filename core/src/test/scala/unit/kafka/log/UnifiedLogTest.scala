@@ -3771,6 +3771,66 @@ class UnifiedLogTest {
   }
 
   @Test
+  def testDisabledVerificationClearsVerificationGuard(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
+    assertNotNull(verificationGuard)
+
+    producerStateManagerConfig.setTransactionVerificationEnabled(false)
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      0,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0)
+
+    assertTrue(log.hasOngoingTransaction(producerId))
+    assertNull(log.verificationGuard(producerId))
+  }
+
+  @Test
+  def testEnablingVerificationWhenRequestIsAtLogLayer(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, false)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val sequence = 4
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+
+    producerStateManagerConfig.setTransactionVerificationEnabled(true)
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+    assertThrows(classOf[InvalidTxnStateException], () => log.appendAsLeader(transactionalRecords, leaderEpoch = 0))
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertNull(log.verificationGuard(producerId))
+
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    assertNotNull(verificationGuard)
+
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
+    assertTrue(log.hasOngoingTransaction(producerId))
+    assertNull(log.verificationGuard(producerId))
+  }
+
+  @Test
   def testAllowNonZeroSequenceOnFirstAppendNonZeroEpoch(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
