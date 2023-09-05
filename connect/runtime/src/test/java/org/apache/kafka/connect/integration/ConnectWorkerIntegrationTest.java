@@ -51,6 +51,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -379,6 +380,9 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector did not stop in time"
         );
+        // If the connector is truly stopped, we should also see an empty set of tasks and task configs
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Transition to RUNNING
         connect.resumeConnector(CONNECTOR_NAME);
@@ -406,6 +410,8 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector did not stop in time"
         );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Transition to PAUSED
         connect.pauseConnector(CONNECTOR_NAME);
@@ -463,6 +469,9 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector did not stop in time"
         );
+        // If the connector is truly stopped, we should also see an empty set of tasks and task configs
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Can resume a connector after its Connector has failed before shutdown after receiving a stop request
         props.remove("connector.start.inject.error");
@@ -483,6 +492,8 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector did not stop in time"
         );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Can resume a connector after its Connector has failed during shutdown after receiving a stop request
         connect.resumeConnector(CONNECTOR_NAME);

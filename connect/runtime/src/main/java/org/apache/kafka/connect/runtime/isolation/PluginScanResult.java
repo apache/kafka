@@ -88,7 +88,7 @@ public class PluginScanResult {
         );
     }
 
-    private static <R extends Comparable<R>> SortedSet<R> merge(List<PluginScanResult> results, Function<PluginScanResult, SortedSet<R>> accessor) {
+    private static <R extends Comparable<?>> SortedSet<R> merge(List<PluginScanResult> results, Function<PluginScanResult, SortedSet<R>> accessor) {
         SortedSet<R> merged = new TreeSet<>();
         for (PluginScanResult element : results) {
             merged.addAll(accessor.apply(element));

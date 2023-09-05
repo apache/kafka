@@ -27,7 +27,9 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -43,6 +45,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerGroupMemberTest {
     @Mock
     private ConfigBackingStore configBackingStore;

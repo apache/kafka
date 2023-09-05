@@ -31,7 +31,9 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.{doReturn, spy}
 
 import scala.jdk.CollectionConverters._
 
@@ -699,6 +701,20 @@ class LocalLogTest {
     // expect an error because of attempt to roll to a new offset (1L) that's lower than the
     // base offset (3L) of the active segment
     assertThrows(classOf[KafkaException], () => log.roll())
+  }
+
+  @Test
+  def testFlushingNonExistentDir(): Unit = {
+    val spyLog = spy(log)
+
+    val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
+    appendRecords(List(record))
+    mockTime.sleep(1)
+    val newSegment = log.roll()
+
+    // simulate the directory is renamed concurrently
+    doReturn(new File("__NON_EXISTENT__"), Nil: _*).when(spyLog).dir
+    assertDoesNotThrow((() => spyLog.flush(newSegment.baseOffset)): Executable)
   }
 
   private def createLocalLogWithActiveSegment(dir: File = logDir,

@@ -35,7 +35,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
-import org.apache.kafka.controller.QuorumController
+import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer._
@@ -1153,7 +1153,7 @@ class KRaftClusterTest {
       val controller = cluster.controllers().values().iterator().next()
       controller.controller.waitForReadyBrokers(3).get()
       TestUtils.retry(60000) {
-        val latch = controller.controller.asInstanceOf[QuorumController].pause()
+        val latch = QuorumControllerIntegrationTestUtils.pause(controller.controller.asInstanceOf[QuorumController])
         Thread.sleep(1001)
         latch.countDown()
         assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())

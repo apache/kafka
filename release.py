@@ -332,8 +332,8 @@ def command_release_announcement_email():
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
-    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | sort --ignore-case" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers --no-merges %s..%s | uniq | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
+    contributors = subprocess.check_output("git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers  --no-merges %s..%s | cut -f2 | sort --ignore-case | uniq" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
@@ -391,7 +391,7 @@ Apache Kafka is in use at large and small companies worldwide, including
 Capital One, Goldman Sachs, ING, LinkedIn, Netflix, Pinterest, Rabobank,
 Target, The New York Times, Uber, Yelp, and Zalando, among others.
 
-A big thank you for the following %(number_of_contributors)d contributors to this release!
+A big thank you for the following %(number_of_contributors)d contributors to this release! (Please report an unintended omission)
 
 %(contributors)s
 
@@ -404,7 +404,8 @@ Thank you!
 
 Regards,
 
-<YOU>""" % release_announcement_data
+<YOU>
+Release Manager for Apache Kafka %(release_version)s""" % release_announcement_data
 
     print()
     print("*****************************************************************")
@@ -721,6 +722,7 @@ Release notes for the %(release_version)s release:
 https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/RELEASE_NOTES.html
 
 *** Please download, test and vote by <VOTING DEADLINE, e.g. Monday, March 28, 9am PT>
+<THE RELEASE POLICY (https://www.apache.org/legal/release-policy.html#release-approval) REQUIRES VOTES TO BE OPEN FOR MINIMUM OF 3 DAYS THEREFORE VOTING DEADLINE SHOULD BE AT LEAST 72 HOURS FROM THE TIME THIS EMAIL IS SENT.>
 
 Kafka's KEYS file containing PGP keys we use to sign the release:
 https://kafka.apache.org/KEYS

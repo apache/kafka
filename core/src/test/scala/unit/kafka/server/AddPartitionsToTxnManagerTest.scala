@@ -201,7 +201,7 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(expectedDisconnectedErrors, transaction1Errors)
     assertEquals(expectedDisconnectedErrors, transaction2Errors)
 
-    val expectedTopLevelErrors = topicPartitions.map(_ -> Errors.INVALID_RECORD).toMap
+    val expectedTopLevelErrors = topicPartitions.map(_ -> Errors.INVALID_TXN_STATE).toMap
     val topLevelErrorAddPartitionsResponse = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()))
     val topLevelErrorResponse = clientResponse(topLevelErrorAddPartitionsResponse)
     addTransactionsToVerify()
@@ -212,9 +212,9 @@ class AddPartitionsToTxnManagerTest {
     val preConvertedTransaction1Errors = topicPartitions.map(_ -> Errors.PRODUCER_FENCED).toMap
     val expectedTransaction1Errors = topicPartitions.map(_ -> Errors.INVALID_PRODUCER_EPOCH).toMap
     val preConvertedTransaction2Errors = Map(new TopicPartition("foo", 1) -> Errors.NONE,
-      new TopicPartition("foo", 2) -> Errors.INVALID_RECORD,
+      new TopicPartition("foo", 2) -> Errors.INVALID_TXN_STATE,
       new TopicPartition("foo", 3) -> Errors.NONE)
-    val expectedTransaction2Errors = Map(new TopicPartition("foo", 2) -> Errors.INVALID_RECORD)
+    val expectedTransaction2Errors = Map(new TopicPartition("foo", 2) -> Errors.INVALID_TXN_STATE)
 
     val transaction1ErrorResponse = AddPartitionsToTxnResponse.resultForTransaction(transactionalId1, preConvertedTransaction1Errors.asJava)
     val transaction2ErrorResponse = AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, preConvertedTransaction2Errors.asJava)

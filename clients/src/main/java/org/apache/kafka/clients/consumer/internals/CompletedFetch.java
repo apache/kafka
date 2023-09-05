@@ -295,9 +295,9 @@ class CompletedFetch<K, V> {
             long timestamp = record.timestamp();
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
-            K key = keyBytes == null ? null : fetchConfig.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
+            K key = keyBytes == null ? null : fetchConfig.deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
             ByteBuffer valueBytes = record.value();
-            V value = valueBytes == null ? null : fetchConfig.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
+            V value = valueBytes == null ? null : fetchConfig.deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
                     timestamp, timestampType,
                     keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),

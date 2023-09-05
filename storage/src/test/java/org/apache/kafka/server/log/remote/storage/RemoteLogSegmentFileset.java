@@ -59,9 +59,9 @@ import static org.slf4j.LoggerFactory.getLogger;
  * the local tiered storage:
  *
  * <code>
- * / storage-directory / topic-partition-uuidBase64 / oAtiIQ95REujbuzNd_lkLQ.log
- *                                                  . oAtiIQ95REujbuzNd_lkLQ.index
- *                                                  . oAtiIQ95REujbuzNd_lkLQ.timeindex
+ * / storage-directory / topic-partition-uuidBase64 / 00000000000000000011-oAtiIQ95REujbuzNd_lkLQ.log
+ *                                                  . 00000000000000000011-oAtiIQ95REujbuzNd_lkLQ.index
+ *                                                  . 00000000000000000011-oAtiIQ95REujbuzNd_lkLQ.timeindex
  * </code>
  */
 public final class RemoteLogSegmentFileset {
@@ -73,9 +73,9 @@ public final class RemoteLogSegmentFileset {
      * The name of each of the files under the scope of a log segment (the log file, its indexes, etc.)
      * follows the structure UUID-FileType.
      */
-    private static final Pattern FILENAME_FORMAT = compile("([a-zA-Z0-9_-]{22})(\\.[a-z_]+)");
-    private static final int GROUP_UUID = 1;
-    private static final int GROUP_FILE_TYPE = 2;
+    private static final Pattern FILENAME_FORMAT = compile("(\\d+-)([a-zA-Z0-9_-]{22})(\\.[a-z_]+)");
+    private static final int GROUP_UUID = 2;
+    private static final int GROUP_FILE_TYPE = 3;
 
     /**
      * Characterises the type of a file in the local tiered storage copied from Apache Kafka's standard storage.
@@ -98,10 +98,10 @@ public final class RemoteLogSegmentFileset {
 
         /**
          * Provides the name of the file of this type for the given UUID in the local tiered storage,
-         * e.g. uuid.log.
+         * e.g. 0-uuid.log.
          */
-        public String toFilename(final Uuid uuid) {
-            return uuid.toString() + suffix;
+        public String toFilename(final String startOffset, final Uuid uuid) {
+            return startOffset + "-" + uuid.toString() + suffix;
         }
 
         /**
@@ -155,19 +155,21 @@ public final class RemoteLogSegmentFileset {
      * the log segment offloaded are not created on the file system until transfer happens.
      *
      * @param storageDir The root directory of the local tiered storage.
-     * @param id Remote log segment id assigned to a log segment in Kafka.
+     * @param metadata Remote log metadata about a topic partition's remote log.
      * @return A new fileset instance.
      */
-    public static RemoteLogSegmentFileset openFileset(final File storageDir, final RemoteLogSegmentId id) {
+    public static RemoteLogSegmentFileset openFileset(final File storageDir, final RemoteLogSegmentMetadata metadata) {
 
-        final RemoteTopicPartitionDirectory tpDir = openTopicPartitionDirectory(id.topicIdPartition(), storageDir);
+        final RemoteTopicPartitionDirectory tpDir = openTopicPartitionDirectory(
+                metadata.remoteLogSegmentId().topicIdPartition(), storageDir);
         final File partitionDirectory = tpDir.getDirectory();
-        final Uuid uuid = id.id();
+        final Uuid uuid = metadata.remoteLogSegmentId().id();
+        final String startOffset = LogFileUtils.filenamePrefixFromOffset(metadata.startOffset());
 
         final Map<RemoteLogSegmentFileType, File> files = stream(RemoteLogSegmentFileType.values())
-                .collect(toMap(identity(), type -> new File(partitionDirectory, type.toFilename(uuid))));
+                .collect(toMap(identity(), type -> new File(partitionDirectory, type.toFilename(startOffset, uuid))));
 
-        return new RemoteLogSegmentFileset(tpDir, id, files);
+        return new RemoteLogSegmentFileset(tpDir, metadata.remoteLogSegmentId(), files);
     }
 
     /**
@@ -183,7 +185,7 @@ public final class RemoteLogSegmentFileset {
         try {
             final Map<RemoteLogSegmentFileType, File> files =
                     Files.list(tpDirectory.getDirectory().toPath())
-                            .filter(path -> path.getFileName().toString().startsWith(uuid.toString()))
+                            .filter(path -> path.getFileName().toString().contains(uuid.toString()))
                             .collect(toMap(path -> getFileType(path.getFileName().toString()), Path::toFile));
 
             final Set<RemoteLogSegmentFileType> expectedFileTypes = stream(RemoteLogSegmentFileType.values())
