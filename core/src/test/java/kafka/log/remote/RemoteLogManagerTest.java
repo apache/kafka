@@ -108,6 +108,8 @@ import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RE
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1357,8 +1359,12 @@ public class RemoteLogManagerTest {
         partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, false));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
                 Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+        assertNotNull(remoteLogManager.task(leaderTopicIdPartition));
+        assertNotNull(remoteLogManager.task(followerTopicIdPartition));
 
         remoteLogManager.stopPartitions(partitions, errorHandler);
+        assertNull(remoteLogManager.task(leaderTopicIdPartition));
+        assertNull(remoteLogManager.task(followerTopicIdPartition));
         verify(remoteLogMetadataManager, times(1)).onStopPartitions(any());
         verify(remoteStorageManager, times(0)).deleteLogSegmentData(any());
         verify(remoteLogMetadataManager, times(0)).updateRemoteLogSegmentMetadata(any());
@@ -1373,6 +1379,9 @@ public class RemoteLogManagerTest {
         partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
                 Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+        assertNotNull(remoteLogManager.task(leaderTopicIdPartition));
+        assertNotNull(remoteLogManager.task(followerTopicIdPartition));
+
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition)))
                 .thenReturn(listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024).iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(followerTopicIdPartition)))
@@ -1383,6 +1392,8 @@ public class RemoteLogManagerTest {
                 .thenReturn(dummyFuture);
 
         remoteLogManager.stopPartitions(partitions, errorHandler);
+        assertNull(remoteLogManager.task(leaderTopicIdPartition));
+        assertNull(remoteLogManager.task(followerTopicIdPartition));
         verify(remoteLogMetadataManager, times(1)).onStopPartitions(any());
         verify(remoteStorageManager, times(8)).deleteLogSegmentData(any());
         verify(remoteLogMetadataManager, times(16)).updateRemoteLogSegmentMetadata(any());

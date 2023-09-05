@@ -1461,6 +1461,11 @@ public class RemoteLogManager implements Closeable {
         LOGGER.info("Shutting down of thread pool {} is completed", poolName);
     }
 
+    //Visible for testing
+    RLMTaskWithFuture task(TopicIdPartition partition) {
+        return leaderOrFollowerTasks.get(partition);
+    }
+
     static class RLMScheduledThreadPool {
 
         private static final Logger LOGGER = LoggerFactory.getLogger(RLMScheduledThreadPool.class);
