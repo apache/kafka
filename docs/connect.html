@@ -1065,6 +1065,7 @@ Struct struct = new Struct(schema)
     <li><b>UNASSIGNED:</b> The connector/task has not yet been assigned to a worker.</li>
     <li><b>RUNNING:</b> The connector/task is running.</li>
     <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
+    <li><b>STOPPED:</b> The connector has been stopped. Note that this state is not applicable to tasks because the tasks for a stopped connector are shut down and won't be visible in the status API.</li>
     <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
     <li><b>RESTARTING:</b> The connector/task is either actively restarting or is expected to restart soon</li>
     </ul>
