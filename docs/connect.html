@@ -953,7 +953,7 @@ if (inputsChanged())
 
     <p><code>SinkConnectors</code> usually only have to handle the addition of streams, which may translate to new entries in their outputs (e.g., a new database table). The framework manages any changes to the Kafka input, such as when the set of input topics changes because of a regex subscription. <code>SinkTasks</code> should expect new input streams, which may require creating new resources in the downstream system, such as a new table in a database. The trickiest situation to handle in these cases may be conflicts between multiple <code>SinkTasks</code> seeing a new input stream for the first time and simultaneously trying to create the new resource. <code>SinkConnectors</code>, on the other hand, will generally require no special code for handling a dynamic set of streams.</p>
 
-    <h4><a id="connect_configs" href="#connect_configs">Connect Configuration Validation</a></h4>
+    <h4><a id="connect_configs" href="#connect_configs">Configuration Validation</a></h4>
 
     <p>Kafka Connect allows you to validate connector configurations before submitting a connector to be executed and can provide feedback about errors and recommended values. To take advantage of this, connector developers need to provide an implementation of <code>config()</code> to expose the configuration definition to the framework.</p>
 
@@ -999,7 +999,7 @@ Struct struct = new Struct(schema)
 
     <p>Sink connectors are usually simpler because they are consuming data and therefore do not need to create schemas. However, they should take just as much care to validate that the schemas they receive have the expected format. When the schema does not match -- usually indicating the upstream producer is generating invalid data that cannot be correctly translated to the destination system -- sink connectors should throw an exception to indicate this error to the system.</p>
 
-    <h4><a id="connect_administration" href="#connect_administration">Kafka Connect Administration</a></h4>
+    <h3><a id="connect_administration" href="#connect_administration">8.4 Administration</a></h3>
 
     <p>
     Kafka Connect's <a href="#connect_rest">REST layer</a> provides a set of APIs to enable administration of the cluster. This includes APIs to view the configuration of connectors and the status of their tasks, as well as to alter their current behavior (e.g. changing configuration and restarting tasks).
