@@ -39,7 +39,8 @@ import java.util.Map;
 public class ConsumerGroupDescribeResponse extends AbstractResponse {
 
     private final ConsumerGroupDescribeResponseData data;
-    protected ConsumerGroupDescribeResponse(ConsumerGroupDescribeResponseData data) {
+
+    public ConsumerGroupDescribeResponse(ConsumerGroupDescribeResponseData data) {
         super(ApiKeys.CONSUMER_GROUP_DESCRIBE);
         this.data = data;
     }

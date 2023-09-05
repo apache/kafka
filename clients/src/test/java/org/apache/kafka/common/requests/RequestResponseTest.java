@@ -1149,6 +1149,17 @@ public class RequestResponseTest {
 
     private ConsumerGroupDescribeResponse createConsumerGroupDescribeResponse() {
         ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData()
+            .setGroups(Arrays.asList(
+                new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId("group")
+                    .setErrorCode((short) 0)
+                    .setErrorMessage(Errors.forCode((short) 0).message())
+                    .setGroupState(ConsumerGroupState.EMPTY.toString())
+                    .setGroupEpoch(0)
+                    .setAssignmentEpoch(0)
+                    .setAssignorName("range")
+                    .setMembers(new ArrayList<ConsumerGroupDescribeResponseData.Member>(0))
+            ))
             .setThrottleTimeMs(1000);
         return new ConsumerGroupDescribeResponse(data);
     }

@@ -6191,4 +6191,19 @@ class KafkaApisTest {
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
+
+  @Test
+  def testConsumerGroupDescribeReturnsUnsupportedVersion(): Unit = {
+    // Arrange
+    val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
+    consumerGroupDescribeRequestData.groupIds.add("group0")
+    val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+
+    // Act
+    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
+
+    // Assert
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, response.data.groups.get(0).errorCode)
+  }
 }
