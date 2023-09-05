@@ -83,7 +83,8 @@ public final class PartitionsExpandTest extends TieredStorageTestHarness {
                         new KeyValueSpec("k2", "v2"))
 
                 // produce some more events to partition 0 and expect the segments to be offloaded
-                // NOTE: Support needs to be added to capture the offloaded segment event for already sent message (k2, v2)
+                // KAFKA-15431: Support needs to be added to capture the offloaded segment event for already sent
+                // message (k2, v2)
                 // .expectSegmentToBeOffloaded(broker0, topicA, p0, 2, new KeyValueSpec("k2", "v2"))
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 3, new KeyValueSpec("k3", "v3"))
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 4, new KeyValueSpec("k4", "v4"))

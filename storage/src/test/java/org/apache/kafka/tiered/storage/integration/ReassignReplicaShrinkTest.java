@@ -86,12 +86,14 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
                 .expectLeader(topicA, p0, broker1, false)
                 .expectLeader(topicA, p1, broker0, false)
                 // produce some more events to partition 0
-                // NOTE: Support needs to be added to capture the offloaded segment event for already sent message (k2, v2)
+                // KAFKA-15431: Support needs to be added to capture the offloaded segment event for already sent
+                // message (k2, v2)
                 // .expectSegmentToBeOffloaded(broker1, topicA, p0, 2, new KeyValueSpec("k2", "v2"))
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
                 .produce(topicA, p0, new KeyValueSpec("k3", "v3"))
                 // produce some more events to partition 1
-                // NOTE: Support needs to be added to capture the offloaded segment event for already sent message (k2, v2)
+                // KAFKA-15431: Support needs to be added to capture the offloaded segment event for already sent
+                // message (k2, v2)
                 // .expectSegmentToBeOffloaded(broker0, topicA, p1, 2, new KeyValueSpec("k2", "v2"))
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p1, 3L)
                 .produce(topicA, p1, new KeyValueSpec("k3", "v3"))

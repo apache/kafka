@@ -80,8 +80,8 @@ public abstract class BaseReassignReplicaTest extends TieredStorageTestHarness {
                 .expectEarliestLocalOffsetInLogDirectory(topicB, p0, 2L)
                 .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
-                // expand the topicB RF=2, the newly created replica gets mapped to one of the metadata partition
-                // which is being actively consumed by both the brokers
+                // The newly created replica gets mapped to one of the metadata partition which is being actively
+                // consumed by both the brokers
                 .reassignReplica(topicB, p0, replicaIds())
                 .expectLeader(topicB, p0, broker1, true)
                 // produce some more events and verify the earliest local offset
