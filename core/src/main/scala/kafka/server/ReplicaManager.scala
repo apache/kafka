@@ -586,9 +586,10 @@ class ReplicaManager(val config: KafkaConfig,
       logManager.asyncDelete(partitionsToDelete, (tp, e) => errorMap.put(tp, e))
     }
     remoteLogManager.foreach { rlm =>
-      // NOTE: Check whether to exclude the partitions which faces error while deleting the local log
-      if (partitionsToStop.nonEmpty) {
-        rlm.stopPartitions(partitionsToStop.asJava, (tp, e) => errorMap.put(tp, e))
+      // exclude the partitions with offline/error state
+      val partitions = partitionsToStop.filterNot(sp => errorMap.contains(sp.topicPartition)).toSet.asJava
+      if (!partitions.isEmpty) {
+        rlm.stopPartitions(partitions, (tp, e) => errorMap.put(tp, e))
       }
     }
     errorMap
