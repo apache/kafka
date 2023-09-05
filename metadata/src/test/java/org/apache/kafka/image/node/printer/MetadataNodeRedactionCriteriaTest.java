@@ -68,6 +68,21 @@ public class MetadataNodeRedactionCriteriaTest {
     }
 
     @Test
+    public void testStrictRedactsDelegationToken() {
+        assertTrue(STRICT.shouldRedactDelegationToken());
+    }
+
+    @Test
+    public void testNormalRedactsDelegationToken() {
+        assertTrue(NORMAL.shouldRedactDelegationToken());
+    }
+
+    @Test
+    public void testDisabledDoesNotRedactDelegationToken() {
+        assertFalse(DISABLED.shouldRedactDelegationToken());
+    }
+
+    @Test
     public void testStrictRedactsNonSensitiveConfig() {
         assertTrue(STRICT.shouldRedactConfig(BROKER, "non.secret"));
     }

@@ -625,18 +625,24 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
-        log.info("{} members participating in this rebalance: \n{}.",
-                clientStates.size(),
-                clientStates.entrySet().stream()
-                        .sorted(comparingByKey())
-                        .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
-                        .collect(Collectors.joining(Utils.NL)));
+
+        log.info("{} client nodes and {} consumers participating in this rebalance: \n{}.",
+                 clientStates.size(),
+                 clientStates.values().stream().map(ClientState::capacity).reduce(Integer::sum),
+                 clientStates.entrySet().stream()
+                     .sorted(comparingByKey())
+                     .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
+                     .collect(Collectors.joining(Utils.NL)));
 
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         statefulTasks.addAll(changelogTopics.statefulTaskIds());
 
-        log.debug("Assigning tasks {} including stateful {} to clients {} with number of replicas {}",
-            allTasks, statefulTasks, clientStates, numStandbyReplicas());
+        log.info("Assigning stateful tasks: {}\n"
+                     + "and stateless tasks: {}",
+                 statefulTasks,
+                 allTasks.stream().filter(t -> !statefulTasks.contains(t)));
+        log.debug("Assigning tasks and {} standby replicas to client nodes {}",
+                  numStandbyReplicas(), clientStates);
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
@@ -656,15 +662,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                    rackAwareTaskAssignor,
                                                                    assignmentConfigs);
 
-        log.info("{} assigned tasks {} including stateful {} to {} clients as: \n{}.",
-                allTasks.size(),
-                allTasks,
-                statefulTasks,
-                clientStates.size(),
-                clientStates.entrySet().stream()
-                        .sorted(comparingByKey())
-                        .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
-                        .collect(Collectors.joining(Utils.NL)));
+        // Break this up into multiple logs to make sure the summary info gets through, which helps avoid
+        // info loss for example due to long line truncation with large apps
+        log.info("Assigned {} total tasks including {} stateful tasks to {} client nodes.",
+                 allTasks.size(),
+                 statefulTasks.size(),
+                 clientStates.size());
+        log.info("Assignment of tasks to nodes: {}",
+                 clientStates.entrySet().stream()
+                     .sorted(comparingByKey())
+                     .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
+                     .collect(Collectors.joining(Utils.NL)));
 
         return probingRebalanceNeeded;
     }
@@ -1081,9 +1089,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         for (final TaskId task : revokedTasks) {
-            if (allStatefulTasks.contains(task)) {
-                log.info("Adding removed stateful active task {} as a standby for {} before it is revoked in followup rebalance",
-                        task, consumer);
+            // If this task is stateful and already owned by the consumer, but can't (yet) be assigned as an active
+            // task during this rebalance as it must be revoked from another consumer first, place a temporary
+            // standby task here until it can receive the active task to avoid closing the state store (and losing
+            // all of the accumulated state in the case of in-memory stores)
+            if (clientState.previouslyOwnedStandby(task) && allStatefulTasks.contains(task)) {
+                log.info("Adding removed stateful active task {} as a standby for {} until it is revoked and can "
+                             + "be transitioned to active in a followup rebalance", task, consumer);
 
                 // This has no effect on the assignment, as we'll never consult the ClientState again, but
                 // it does perform a useful assertion that the it's legal to assign this task as a standby to this instance

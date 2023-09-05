@@ -66,4 +66,9 @@ public interface Group {
         String groupInstanceId,
         int generationIdOrMemberEpoch
     ) throws KafkaException;
+
+    /**
+     * Validates the OffsetFetch request.
+     */
+    void validateOffsetFetch() throws KafkaException;
 }

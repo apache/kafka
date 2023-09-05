@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -23,21 +25,30 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
 
-public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<RocksDBTimeOrderedKeyValueBytesStore, Object, Object> implements TimeOrderedKeyValueBuffer<K, V, V> {
-
+public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyValueBuffer<K, V, V> {
+    private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
+    private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private final long gracePeriod;
+    private final RocksDBTimeOrderedKeyValueBytesStore store;
     private long bufferSize;
     private long minTimestamp;
     private int numRecords;
@@ -45,17 +56,101 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     private Serde<V> valueSerde;
     private final String topic;
     private int seqnum;
+    private final boolean loggingEnabled;
+    private int partition;
+    private String changelogTopic;
+    private InternalProcessorContext context;
+    private boolean minValid;
+
+    public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
+
+        private final String storeName;
+        private boolean loggingEnabled = true;
+        private Map<String, String> logConfig = new HashMap<>();
+        private final Duration grace;
+        private final String topic;
+
+        public Builder(final String storeName, final Duration grace, final String topic) {
+            this.storeName = storeName;
+            this.grace = grace;
+            this.topic = topic;
+        }
+
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         * <p>
+         * It's currently a no-op.
+         */
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withCachingEnabled() {
+            return this;
+        }
+
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         * <p>
+         * It's currently a no-op.
+         */
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withCachingDisabled() {
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withLoggingEnabled(final Map<String, String> config) {
+            logConfig = config;
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> withLoggingDisabled() {
+            loggingEnabled = false;
+            return this;
+        }
+
+        @Override
+        public TimeOrderedKeyValueBuffer<K, V, V> build() {
+            return new RocksDBTimeOrderedKeyValueBuffer<>(
+                new RocksDBTimeOrderedKeyValueBytesStoreSupplier(storeName).get(),
+                grace,
+                topic,
+                loggingEnabled);
+        }
+
+        @Override
+        public Map<String, String> logConfig() {
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
+        }
+
+        @Override
+        public boolean loggingEnabled() {
+            return loggingEnabled;
+        }
+
+        @Override
+        public String name() {
+            return storeName;
+        }
+    }
+
 
     public RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueBytesStore store,
                                             final Duration gracePeriod,
-                                            final String topic) {
-        super(store);
+                                            final String topic,
+                                            final boolean loggingEnabled) {
+        this.store = store;
         this.gracePeriod = gracePeriod.toMillis();
-        minTimestamp = Long.MAX_VALUE;
+        minTimestamp = store.minTimestamp();
+        minValid = false;
         numRecords = 0;
         bufferSize = 0;
         seqnum = 0;
         this.topic = topic;
+        this.loggingEnabled = loggingEnabled;
     }
 
     @SuppressWarnings("unchecked")
@@ -65,15 +160,54 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         valueSerde = valueSerde == null ? getter.valueSerde() : valueSerde;
     }
 
+    private long observedStreamTime() {
+        return store.observedStreamTime;
+    }
+
+    @Override
+    public String name() {
+        return store.name();
+    }
+
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        wrapped().init(context, wrapped());
+        store.init(context, root);
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        }
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        wrapped().init(context, wrapped());
+        store.init(context, root);
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        partition = context.taskId().partition();
+        if (loggingEnabled) {
+            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        }
+    }
+
+    @Override
+    public void flush() {
+        store.flush();
+    }
+
+    @Override
+    public void close() {
+        store.close();
+    }
+
+    @Override
+    public boolean persistent() {
+        return store.persistent();
+    }
+
+    @Override
+    public boolean isOpen() {
+        return store.isOpen();
     }
 
     @Override
@@ -81,8 +215,12 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         KeyValue<Bytes, byte[]> keyValue;
 
         if (predicate.get()) {
-            try (final KeyValueIterator<Bytes, byte[]> iterator = wrapped()
-                .fetchAll(0, wrapped().observedStreamTime - gracePeriod)) {
+            long start = 0;
+            if (minValid) {
+                start = minTimestamp();
+            }
+            try (final KeyValueIterator<Bytes, byte[]> iterator = store
+                .fetchAll(start, observedStreamTime() - gracePeriod)) {
                 while (iterator.hasNext() && predicate.get()) {
                     keyValue = iterator.next();
 
@@ -90,26 +228,32 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                     final K key = keySerde.deserializer().deserialize(topic,
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
 
-                    if (bufferValue.context().timestamp() < minTimestamp) {
+                    if (bufferValue.context().timestamp() < minTimestamp && minValid) {
                         throw new IllegalStateException(
                             "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
                                 bufferValue.context().timestamp() + "]"
                         );
                     }
                     minTimestamp = bufferValue.context().timestamp();
+                    minValid = true;
 
                     final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
 
                     callback.accept(new Eviction<>(key, value, bufferValue.context()));
 
-                    wrapped().remove(keyValue.key);
+                    store.remove(keyValue.key);
+
+                    if (loggingEnabled) {
+                        logTombstone(keyValue.key);
+                    }
+
                     numRecords--;
                     bufferSize = bufferSize - computeRecordSize(keyValue.key, bufferValue);
                 }
                 if (numRecords == 0) {
                     minTimestamp = Long.MAX_VALUE;
                 } else {
-                    minTimestamp = wrapped().observedStreamTime - gracePeriod + 1;
+                    minTimestamp = observedStreamTime() - gracePeriod + 1;
                 }
             }
         }
@@ -126,7 +270,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(record.key(), "key cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
-        if (wrapped().observedStreamTime - gracePeriod > record.timestamp()) {
+        if (observedStreamTime() - gracePeriod > record.timestamp()) {
             return false;
         }
         maybeUpdateSeqnumForDups();
@@ -136,12 +280,16 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                 seqnum).get());
         final byte[] valueBytes = valueSerde.serializer().serialize(topic, record.value());
         final BufferValue buffered = new BufferValue(null, null, valueBytes, recordContext);
-        wrapped().put(serializedKey, buffered.serialize(0).array());
+        store.put(serializedKey, buffered.serialize(0).array());
+
+        if (loggingEnabled) {
+            final BufferKey key = new BufferKey(0L, serializedKey);
+            logValue(serializedKey, key, buffered);
+        }
+
         bufferSize += computeRecordSize(serializedKey, buffered);
         numRecords++;
-        if (minTimestamp() > record.timestamp()) {
-            minTimestamp = record.timestamp();
-        }
+        minTimestamp = Math.min(minTimestamp(), record.timestamp());
         return true;
     }
 
@@ -172,4 +320,37 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     private void maybeUpdateSeqnumForDups() {
         seqnum = (seqnum + 1) & 0x7FFFFFFF;
     }
+
+    private void logValue(final Bytes key, final BufferKey bufferKey, final BufferValue value) {
+        final int sizeOfBufferTime = Long.BYTES;
+        final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
+        buffer.putLong(bufferKey.time());
+        final byte[] array = buffer.array();
+        ((RecordCollector.Supplier) context).recordCollector().send(
+            changelogTopic,
+            key,
+            array,
+            null,
+            partition,
+            null,
+            KEY_SERIALIZER,
+            VALUE_SERIALIZER,
+            null,
+            null);
+    }
+
+    private void logTombstone(final Bytes key) {
+        ((RecordCollector.Supplier) context).recordCollector().send(
+            changelogTopic,
+            key,
+            null,
+            null,
+            partition,
+            null,
+            KEY_SERIALIZER,
+            VALUE_SERIALIZER,
+            null,
+            null);
+    }
+
 }

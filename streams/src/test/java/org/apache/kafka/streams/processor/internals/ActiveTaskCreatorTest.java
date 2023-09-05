@@ -33,11 +33,10 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockClientSupplier;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.File;
 import java.util.Collections;
@@ -50,10 +49,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -61,15 +56,17 @@ import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertThrows;
 import static java.util.Collections.emptySet;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ActiveTaskCreatorTest {
 
-    @Mock(type = MockType.NICE)
+    @Mock
     private InternalTopologyBuilder builder;
-    @Mock(type = MockType.NICE)
+    @Mock
     private StateDirectory stateDirectory;
-    @Mock(type = MockType.NICE)
+    @Mock
     private ChangelogReader changeLogReader;
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
@@ -476,21 +473,16 @@ public class ActiveTaskCreatorTest {
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         final SourceNode sourceNode = mock(SourceNode.class);
 
-        reset(builder, stateDirectory);
-        expect(builder.topologyConfigs()).andStubReturn(new TopologyConfig(new StreamsConfig(properties)));
-        expect(builder.buildSubtopology(0)).andReturn(topology).anyTimes();
-        expect(topology.sinkTopics()).andStubReturn(emptySet());
-        expect(stateDirectory.getOrCreateDirectoryForTask(task00)).andReturn(mock(File.class));
-        expect(stateDirectory.checkpointFileFor(task00)).andReturn(mock(File.class));
-        expect(stateDirectory.getOrCreateDirectoryForTask(task01)).andReturn(mock(File.class));
-        expect(stateDirectory.checkpointFileFor(task01)).andReturn(mock(File.class));
-        expect(topology.storeToChangelogTopic()).andReturn(Collections.emptyMap()).anyTimes();
-        expect(topology.source("topic")).andReturn(sourceNode).anyTimes();
-        expect(sourceNode.getTimestampExtractor()).andReturn(mock(TimestampExtractor.class)).anyTimes();
-        expect(topology.globalStateStores()).andReturn(Collections.emptyList()).anyTimes();
-        expect(topology.terminalNodes()).andStubReturn(Collections.singleton(sourceNode.name()));
-        expect(topology.sources()).andStubReturn(Collections.singleton(sourceNode));
-        replay(builder, stateDirectory, topology, sourceNode);
+        when(builder.topologyConfigs()).thenReturn(new TopologyConfig(new StreamsConfig(properties)));
+        when(builder.buildSubtopology(0)).thenReturn(topology);
+        when(topology.sinkTopics()).thenReturn(emptySet());
+        when(stateDirectory.getOrCreateDirectoryForTask(task00)).thenReturn(mock(File.class));
+        when(stateDirectory.checkpointFileFor(task00)).thenReturn(mock(File.class));
+        when(stateDirectory.getOrCreateDirectoryForTask(task01)).thenReturn(mock(File.class));
+        when(stateDirectory.checkpointFileFor(task01)).thenReturn(mock(File.class));
+        when(topology.source("topic")).thenReturn(sourceNode);
+        when(sourceNode.getTimestampExtractor()).thenReturn(mock(TimestampExtractor.class));
+        when(topology.sources()).thenReturn(Collections.singleton(sourceNode));
 
         final StreamsConfig config = new StreamsConfig(properties);
         activeTaskCreator = new ActiveTaskCreator(

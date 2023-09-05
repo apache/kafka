@@ -35,6 +35,7 @@
     <allow pkg="java.security" />
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
+    <allow pkg="javax.crypto" />
     <allow pkg="org.ietf.jgss" />
     <allow pkg="net.jqwik.api" />
 

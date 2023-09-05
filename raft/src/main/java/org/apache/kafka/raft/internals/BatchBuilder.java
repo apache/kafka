@@ -328,7 +328,7 @@ public class BatchBuilder<T> {
             if (expectedNextOffset - baseOffset >= Integer.MAX_VALUE) {
                 throw new IllegalArgumentException(
                     String.format(
-                        "Adding %s records to a batch with base offset of %s and next offset of %s",
+                        "Adding %d records to a batch with base offset of %d and next offset of %d",
                         records.size(),
                         baseOffset,
                         expectedNextOffset
