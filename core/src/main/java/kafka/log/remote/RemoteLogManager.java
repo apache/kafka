@@ -380,9 +380,9 @@ public class RemoteLogManager implements Closeable {
                 LOGGER.error("Error while stopping the partition: {}, delete: {}", tpId.topicPartition(), delete, ex);
             }
         });
-        remoteLogMetadataManager.onStopPartitions(topicIdPartitions);
         if (delete) {
             // NOTE: this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
+            remoteLogMetadataManager.onStopPartitions(topicIdPartitions);
             topicPartitions.forEach(topicIdByPartitionMap::remove);
         }
     }

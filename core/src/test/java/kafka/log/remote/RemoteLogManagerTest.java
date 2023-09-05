@@ -1358,7 +1358,7 @@ public class RemoteLogManagerTest {
                 Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
 
         remoteLogManager.stopPartitions(partitions, false, errorHandler);
-        verify(remoteLogMetadataManager, times(1)).onStopPartitions(any());
+        verify(remoteLogMetadataManager, times(0)).onStopPartitions(any());
         verify(remoteStorageManager, times(0)).deleteLogSegmentData(any());
         verify(remoteLogMetadataManager, times(0)).updateRemoteLogSegmentMetadata(any());
     }
