@@ -1546,51 +1546,6 @@ $ bin/kafka-acls.sh \
         <td>Rejected byte rate per topic, due to the record batch size being greater than max.message.bytes configuration. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
-        <td>The number of bytes read from remote storage per second</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchBytesPerSec,topic=([-.\w]+)</td>
-        <td>Rate of bytes read from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
-      </tr>
-      <tr>
-        <td>The number of remote storage read requests per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Rate of read requests from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
-      </tr>
-      <tr>
-        <td>The number of remote storage read errors per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchErrorsPerSec,topic=([-.\w]+)</td>
-        <td>Rate of read errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
-      </tr>
-      <tr>
-        <td>The number of bytes copied to remote storage per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyBytesPerSec,topic=([-.\w]+)</td>
-        <td>Rate of bytes copied to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
-      </tr>
-      <tr>
-        <td>The number of remote storage write requests per second</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Rate of write requests to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
-      </tr>
-      <tr>
-        <td>The number of remote storage write errors per second.</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyErrorsPerSec,topic=([-.\w]+)</td>
-        <td>Rate of write errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
-      </tr>
-      <tr>
-        <td>Number of remote storage read tasks pending for execution</td>
-        <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogReaderTaskQueueSize</td>
-        <td>Size of the queue holding remote storage read tasks</td>
-      </tr>
-      <tr>
-        <td>Average idle percent of the remote storage reader thread pool</td>
-        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderAvgIdlePercent</td>
-        <td>Average idle percent of thread pool for processing remote storage read tasks</td>
-      </tr>
-      <tr>
-        <td>Average idle percent of RemoteLogManager thread pool</td>
-        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogManagerTasksAvgIdlePercent</td>
-        <td>Average idle percent of thread pool for copying data to remote storage</td>
-      </tr>
-      <tr>
         <td>Message validation failure rate due to no key specified for compacted topic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec</td>
         <td>0</td>
@@ -1885,6 +1840,63 @@ $ bin/kafka-acls.sh \
         <td>The last offset in a partition.</td>
       </tr>
   </tbody></table>
+
+<h4 class="anchor-heading"><a id="tiered_storage_monitoring" class="anchor-link"></a><a href="#tiered_storage_monitoring">Tiered Storage Monitoring Metrics</a></h4>
+  The following set of metrics are available for monitoring of the tiered storage feature:<br/><br/>
+  <table class="data-table">
+    <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>The number of bytes read from remote storage per second</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchBytesPerSec,topic=([-.\w]+)</td>
+        <td>Rate of bytes read from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+      </tr>
+      <tr>
+        <td>The number of remote storage read requests per second.</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Rate of read requests from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+      </tr>
+      <tr>
+        <td>The number of remote storage read errors per second.</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchErrorsPerSec,topic=([-.\w]+)</td>
+        <td>Rate of read errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+      </tr>
+      <tr>
+        <td>The number of bytes copied to remote storage per second.</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyBytesPerSec,topic=([-.\w]+)</td>
+        <td>Rate of bytes copied to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+      </tr>
+      <tr>
+        <td>The number of remote storage write requests per second</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Rate of write requests to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+      </tr>
+      <tr>
+        <td>The number of remote storage write errors per second.</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyErrorsPerSec,topic=([-.\w]+)</td>
+        <td>Rate of write errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+      </tr>
+      <tr>
+        <td>Number of remote storage read tasks pending for execution</td>
+        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderTaskQueueSize</td>
+        <td>Size of the queue holding remote storage read tasks</td>
+      </tr>
+      <tr>
+        <td>Average idle percent of the remote storage reader thread pool</td>
+        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderAvgIdlePercent</td>
+        <td>Average idle percent of thread pool for processing remote storage read tasks</td>
+      </tr>
+      <tr>
+        <td>Average idle percent of RemoteLogManager thread pool</td>
+        <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogManagerTasksAvgIdlePercent</td>
+        <td>Average idle percent of thread pool for copying data to remote storage</td>
+      </tr>
+    </tbody>
+  </table>
 
 <h4 class="anchor-heading"><a id="kraft_monitoring" class="anchor-link"></a><a href="#kraft_monitoring">KRaft Monitoring Metrics</a></h4>
 The set of metrics that allow monitoring of the KRaft quorum and the metadata log.<br>
