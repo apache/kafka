@@ -80,6 +80,7 @@ public final class ProduceAction implements TieredStorageTestAction {
                         COPY_SEGMENT,
                         spec.getSourceBrokerId(),
                         spec.getTopicPartition(),
+                        spec.getBaseOffset(),
                         false))
                 .collect(Collectors.toList());
 

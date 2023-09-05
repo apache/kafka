@@ -334,7 +334,7 @@ public class QuorumControllerTest {
         List<Integer> brokersToFence = Collections.singletonList(3);
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
-        long sessionTimeoutMillis = 1000;
+        long sessionTimeoutMillis = 2000;
         long leaderImbalanceCheckIntervalNs = 1_000_000_000;
 
         try (

@@ -63,11 +63,12 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         // Call setup to start the cluster.
         super.setUp(new EmptyTestInfo());
 
-        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread);
+        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread, null);
     }
 
     public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
-                                                   boolean startConsumerThread) {
+                                                   boolean startConsumerThread,
+                                                   RemoteLogMetadataTopicPartitioner remoteLogMetadataTopicPartitioner) {
         String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
         topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(startConsumerThread) {
             @Override
@@ -104,6 +105,9 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         log.debug("TopicBasedRemoteLogMetadataManager configs after adding overridden properties: {}", configs);
 
         topicBasedRemoteLogMetadataManager.configure(configs);
+        if (remoteLogMetadataTopicPartitioner != null) {
+            topicBasedRemoteLogMetadataManager.setRlmTopicPartitioner(remoteLogMetadataTopicPartitioner);
+        }
         try {
             waitUntilInitialized(60_000);
         } catch (TimeoutException e) {

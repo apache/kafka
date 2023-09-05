@@ -1452,17 +1452,17 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def fetchAllOffsetsForGroup(
     requestContext: RequestContext,
-    groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
+    offsetFetchRequest: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     groupCoordinator.fetchAllOffsets(
       requestContext,
-      groupOffsetFetch.groupId,
+      offsetFetchRequest,
       requireStable
-    ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (offsets, exception) =>
+    ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (offsetFetchResponse, exception) =>
       if (exception != null) {
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId(groupOffsetFetch.groupId)
+          .setGroupId(offsetFetchRequest.groupId)
           .setErrorCode(Errors.forException(exception).code)
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
@@ -1470,19 +1470,16 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestContext,
           DESCRIBE,
           TOPIC,
-          offsets.asScala
+          offsetFetchResponse.topics.asScala
         )(_.name)
-
-        new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId(groupOffsetFetch.groupId)
-          .setTopics(authorizedOffsets.asJava)
+        offsetFetchResponse.setTopics(authorizedOffsets.asJava)
       }
     }
   }
 
   private def fetchOffsetsForGroup(
     requestContext: RequestContext,
-    groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
+    offsetFetchRequest: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     // Clients are not allowed to see offsets for topics that are not authorized for Describe.
@@ -1490,25 +1487,25 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestContext,
       DESCRIBE,
       TOPIC,
-      groupOffsetFetch.topics.asScala
+      offsetFetchRequest.topics.asScala
     )(_.name)
 
     groupCoordinator.fetchOffsets(
       requestContext,
-      groupOffsetFetch.groupId,
-      authorizedTopics.asJava,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId(offsetFetchRequest.groupId)
+        .setTopics(authorizedTopics.asJava),
       requireStable
-    ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (topicOffsets, exception) =>
+    ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (offsetFetchResponse, exception) =>
       if (exception != null) {
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId(groupOffsetFetch.groupId)
+          .setGroupId(offsetFetchRequest.groupId)
           .setErrorCode(Errors.forException(exception).code)
       } else {
-        val response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId(groupOffsetFetch.groupId)
-
-        response.topics.addAll(topicOffsets)
-
+        val topics = new util.ArrayList[OffsetFetchResponseData.OffsetFetchResponseTopics](
+          offsetFetchResponse.topics.size + unauthorizedTopics.size
+        )
+        topics.addAll(offsetFetchResponse.topics)
         unauthorizedTopics.foreach { topic =>
           val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)
           topic.partitionIndexes.forEach { partitionIndex =>
@@ -1517,17 +1514,19 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setCommittedOffset(-1)
               .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code))
           }
-          response.topics.add(topicResponse)
+          topics.add(topicResponse)
         }
-
-        response
+        offsetFetchResponse.setTopics(topics)
       }
     }
   }
 
-  private def partitionByAuthorized(seq: Seq[TopicPartition], context: RequestContext):
-  (Seq[TopicPartition], Seq[TopicPartition]) =
+  private def partitionByAuthorized(
+    seq: Seq[TopicPartition],
+    context: RequestContext
+  ): (Seq[TopicPartition], Seq[TopicPartition]) = {
     authHelper.partitionSeqByAuthorized(context, DESCRIBE, TOPIC, seq)(_.topic)
+  }
 
   def handleFindCoordinatorRequest(request: RequestChannel.Request): Unit = {
     val version = request.header.apiVersion

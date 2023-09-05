@@ -16,18 +16,27 @@
  */
 package org.apache.kafka.raft;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.OptionalInt;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileBasedStateStoreTest {
@@ -89,6 +98,54 @@ public class FileBasedStateStoreTest {
         stateStore.clear();
         assertFalse(stateFile.exists());
     }
+
+    @Test
+    public void testCantReadVersionQuorumState() throws IOException {
+        String jsonString = "{\"leaderId\":9990,\"leaderEpoch\":3012,\"votedId\":-1," +
+                "\"appliedOffset\": 0,\"currentVoters\":[{\"voterId\":9990},{\"voterId\":9991},{\"voterId\":9992}]," +
+                "\"data_version\":2}";
+        assertCantReadQuorumStateVersion(jsonString);
+    }
+
+    public void assertCantReadQuorumStateVersion(String jsonString) throws IOException {
+        final File stateFile = TestUtils.tempFile();
+        stateStore = new FileBasedStateStore(stateFile);
+
+        // We initialized a state from the metadata log
+        assertTrue(stateFile.exists());
+
+        final int epoch = 3012;
+        final int leaderId = 9990;
+        final int follower1 = leaderId + 1;
+        final int follower2 = follower1 + 1;
+        Set<Integer> voters = Utils.mkSet(leaderId, follower1, follower2);
+        writeToStateFile(stateFile, jsonString);
+
+        assertThrows(UnsupportedVersionException.class, () -> {
+            stateStore.readElectionState(); });
+
+        stateStore.clear();
+        assertFalse(stateFile.exists());
+    }
+
+    private void writeToStateFile(final File stateFile, String jsonString) {
+        try (final FileOutputStream fileOutputStream = new FileOutputStream(stateFile);
+             final BufferedWriter writer = new BufferedWriter(
+                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(jsonString);
+
+            writer.write(node.toString());
+            writer.flush();
+            fileOutputStream.getFD().sync();
+
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                    String.format("Error while writing to Quorum state file %s",
+                            stateFile.getAbsolutePath()), e);
+        }
+    }
+
 
     @AfterEach
     public void cleanup() throws IOException {

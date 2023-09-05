@@ -159,7 +159,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @return true if update succeeded, false otherwise.
      */
     public boolean awaitMetadataUpdate(Timer timer) {
-        int version = this.metadata.requestUpdate();
+        int version = this.metadata.requestUpdate(false);
         do {
             poll(timer);
         } while (this.metadata.updateVersion() == version && timer.notExpired());
