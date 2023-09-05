@@ -584,8 +584,10 @@ public class RemoteLogManager implements Closeable {
             return leaderEpoch >= 0;
         }
 
-        // The copiedOffsetOption is OptionalLong.empty() initially for a new leader RLMTask, and needs to be fetched inside the task's run() method.
+        // The copied and log-start offset is empty initially for a new leader RLMTask, and needs to be fetched inside
+        // the task's run() method.
         private volatile OptionalLong copiedOffsetOption = OptionalLong.empty();
+        private volatile OptionalLong logStartOffsetOption = OptionalLong.empty();
 
         public void convertToLeader(int leaderEpochVal) {
             if (leaderEpochVal < 0) {
@@ -594,15 +596,25 @@ public class RemoteLogManager implements Closeable {
             if (this.leaderEpoch != leaderEpochVal) {
                 leaderEpoch = leaderEpochVal;
             }
-            // Reset readOffset, so that it is set in next run of RLMTask
+            // Reset copied and log-start offset, so that it is set in next run of RLMTask
             copiedOffsetOption = OptionalLong.empty();
+            logStartOffsetOption = OptionalLong.empty();
         }
 
         public void convertToFollower() {
             leaderEpoch = -1;
         }
 
-        private void maybeUpdateReadOffset(UnifiedLog log) throws RemoteStorageException {
+        private void maybeUpdateLogStartOffset(UnifiedLog log) throws RemoteStorageException {
+            if (!logStartOffsetOption.isPresent()) {
+                logStartOffsetOption = OptionalLong.of(findLogStartOffset(topicIdPartition, log));
+                logStartOffsetOption.ifPresent(offset -> updateRemoteLogStartOffset.accept(topicIdPartition.topicPartition(), offset));
+                logger.info("Found the log start offset: {} for partition: {} after becoming leader, leaderEpoch: {}",
+                        logStartOffsetOption, topicIdPartition, leaderEpoch);
+            }
+        }
+
+        private void maybeUpdateCopiedOffset(UnifiedLog log) throws RemoteStorageException {
             if (!copiedOffsetOption.isPresent()) {
                 // This is found by traversing from the latest leader epoch from leader epoch history and find the highest offset
                 // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
@@ -645,7 +657,8 @@ public class RemoteLogManager implements Closeable {
                 return;
 
             try {
-                maybeUpdateReadOffset(log);
+                maybeUpdateLogStartOffset(log);
+                maybeUpdateCopiedOffset(log);
                 long copiedOffset = copiedOffsetOption.getAsLong();
 
                 // LSO indicates the offset below are ready to be consumed (high-watermark or committed)
@@ -1367,6 +1380,26 @@ public class RemoteLogManager implements Closeable {
         }
 
         return offset.orElse(-1L);
+    }
+
+    long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) throws RemoteStorageException {
+        Optional<Long> logStartOffset = Optional.empty();
+        Option<LeaderEpochFileCache> maybeLeaderEpochFileCache = log.leaderEpochCache();
+        if (maybeLeaderEpochFileCache.isDefined()) {
+            LeaderEpochFileCache cache = maybeLeaderEpochFileCache.get();
+            OptionalInt earliestEpochOpt = cache.earliestEntry()
+                    .map(epochEntry -> OptionalInt.of(epochEntry.epoch))
+                    .orElseGet(OptionalInt::empty);
+            while (!logStartOffset.isPresent() && earliestEpochOpt.isPresent()) {
+                Iterator<RemoteLogSegmentMetadata> iterator =
+                        remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, earliestEpochOpt.getAsInt());
+                if (iterator.hasNext()) {
+                    logStartOffset = Optional.of(iterator.next().startOffset());
+                }
+                earliestEpochOpt = cache.nextEpoch(earliestEpochOpt.getAsInt());
+            }
+        }
+        return logStartOffset.orElseGet(log::localLogStartOffset);
     }
 
     /**
