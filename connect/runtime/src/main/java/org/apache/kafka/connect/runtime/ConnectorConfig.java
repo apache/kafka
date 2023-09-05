@@ -85,7 +85,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String KEY_CONVERTER_CLASS_DOC = WorkerConfig.KEY_CONVERTER_CLASS_DOC;
     public static final String KEY_CONVERTER_CLASS_DISPLAY = "Key converter class";
     private static final ConfigDef.Validator KEY_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
-            ConcreteSubClassValidator.forSuperClass(Converter.class, "Key converter"),
+            ConcreteSubClassValidator.forSuperClass(Converter.class),
             new InstantiableClassValidator()
     );
 
@@ -93,7 +93,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DOC = WorkerConfig.VALUE_CONVERTER_CLASS_DOC;
     public static final String VALUE_CONVERTER_CLASS_DISPLAY = "Value converter class";
     private static final ConfigDef.Validator VALUE_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
-            ConcreteSubClassValidator.forSuperClass(Converter.class, "Value converter"),
+            ConcreteSubClassValidator.forSuperClass(Converter.class),
             new InstantiableClassValidator()
     );
 
@@ -104,7 +104,7 @@ public class ConnectorConfig extends AbstractConfig {
     // the worker config settings should be used. Thus, we set the default to null here.
     public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
     private static final ConfigDef.Validator HEADER_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
-            ConcreteSubClassValidator.forSuperClass(HeaderConverter.class, "Header converter"),
+            ConcreteSubClassValidator.forSuperClass(HeaderConverter.class),
             new InstantiableClassValidator()
     );
 
@@ -508,7 +508,7 @@ public class ConnectorConfig extends AbstractConfig {
             if (cls == null || !baseClass.isAssignableFrom(cls)) {
                 throw new ConfigException(key, String.valueOf(cls), "Not a " + baseClass.getSimpleName());
             }
-            Utils.ensureConcrete(cls, aliasKind);
+            Utils.ensureConcrete(cls);
 
             T transformation;
             try {

@@ -22,15 +22,13 @@ import org.apache.kafka.common.utils.Utils;
 
 public class ConcreteSubClassValidator implements ConfigDef.Validator {
     private final Class<?> expectedSuperClass;
-    private final String superClassName;
 
-    private ConcreteSubClassValidator(Class<?> expectedSuperClass, String superClassName) {
+    private ConcreteSubClassValidator(Class<?> expectedSuperClass) {
         this.expectedSuperClass = expectedSuperClass;
-        this.superClassName = superClassName;
     }
 
-    public static ConcreteSubClassValidator forSuperClass(Class<?> expectedSuperClass, String superClassName) {
-        return new ConcreteSubClassValidator(expectedSuperClass, superClassName);
+    public static ConcreteSubClassValidator forSuperClass(Class<?> expectedSuperClass) {
+        return new ConcreteSubClassValidator(expectedSuperClass);
     }
 
     @Override
@@ -45,7 +43,7 @@ public class ConcreteSubClassValidator implements ConfigDef.Validator {
             throw new ConfigException(name, String.valueOf(cls), "Not a " + expectedSuperClass.getSimpleName());
         }
 
-        Utils.ensureConcrete(cls, superClassName);
+        Utils.ensureConcrete(cls);
     }
 
     @Override

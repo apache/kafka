@@ -33,9 +33,9 @@ public class InstantiableClassValidator implements ConfigDef.Validator {
         try {
             Object o = cls.getDeclaredConstructor().newInstance();
             Utils.maybeCloseQuietly(o, o + " (instantiated for preflight validation");
-        } catch (NoSuchMethodException e) {
+        } catch (NoSuchMethodException | IllegalAccessException e) {
             throw new ConfigException(name, cls.getName(), "Could not find a public no-argument constructor for class" + (e.getMessage() != null ? ": " + e.getMessage() : ""));
-        } catch (ReflectiveOperationException | RuntimeException e) {
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
             throw new ConfigException(name, cls.getName(), "Could not instantiate class" + (e.getMessage() != null ? ": " + e.getMessage() : ""));
         }
     }

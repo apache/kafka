@@ -1578,26 +1578,22 @@ public final class Utils {
     /**
      * Ensure that the class is concrete (i.e., not abstract). If it is, throw a {@link ConfigException}
      * with a friendly error message suggesting a list of concrete child subclasses (if any are known).
-     * @param cls the class to check; may not be null
-     * @param name the name of the type of class to use in the error message; e.g., "Transform",
-     *             "Interceptor", or even just "Class"; may be null
+     * @param klass the class to check; may not be null
      * @throws ConfigException if the class is not concrete
      */
-    public static void ensureConcrete(Class<?> cls, String name) {
-        Objects.requireNonNull(cls);
-        if (isBlank(name))
-            name = "Class";
-        if (Modifier.isAbstract(cls.getModifiers())) {
-            String childClassNames = Stream.of(cls.getClasses())
-                    .filter(cls::isAssignableFrom)
+    public static void ensureConcrete(Class<?> klass) {
+        Objects.requireNonNull(klass);
+        if (Modifier.isAbstract(klass.getModifiers())) {
+            String childClassNames = Stream.of(klass.getClasses())
+                    .filter(klass::isAssignableFrom)
                     .filter(c -> !Modifier.isAbstract(c.getModifiers()))
                     .filter(c -> Modifier.isPublic(c.getModifiers()))
                     .map(Class::getName)
                     .collect(Collectors.joining(", "));
-            String message = Utils.isBlank(childClassNames) ?
-                    name + " is abstract and cannot be created." :
-                    name + " is abstract and cannot be created. Did you mean " + childClassNames + "?";
-            throw new ConfigException(name, cls.getName(), message);
+            String message = "This class is abstract and cannot be created.";
+            if (!Utils.isBlank(childClassNames))
+                message += " Did you mean " + childClassNames + "?";
+            throw new ConfigException(message);
         }
     }
 
