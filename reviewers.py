@@ -20,7 +20,6 @@
 
 
 from collections import defaultdict
-import operator
 import os
 import re
 
