@@ -418,8 +418,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()));
         }
 
-
-        return runtime.scheduleWriteOperation("generic-group-leave",
+        return runtime.scheduleWriteOperation(
+            "generic-group-leave",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupLeave(context, request)
         ).exceptionally(exception -> {

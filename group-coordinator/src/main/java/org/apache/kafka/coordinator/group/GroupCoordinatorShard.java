@@ -309,12 +309,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Handles a OffsetCommit request.
+     * Handles a LeaveGroup request.
      *
      * @param context The request context.
-     * @param request The actual OffsetCommit request.
+     * @param request The actual LeaveGroup request.
      *
-     * @return A Result containing the OffsetCommitResponse response and
+     * @return A Result containing the LeaveGroup response and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(

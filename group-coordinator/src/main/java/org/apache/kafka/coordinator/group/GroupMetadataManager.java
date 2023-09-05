@@ -2909,13 +2909,13 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a generic group LeaveGroup request.
+     * Handle a generic LeaveGroupRequest.
      *
      * @param context        The request context.
      * @param request        The actual LeaveGroup request.
      *
      * @return The LeaveGroup response and the GroupMetadata record to append if the group
-     *         no longer has any member.
+     *         no longer has any members.
      */
     public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(
         RequestContext context,
@@ -2923,7 +2923,8 @@ public class GroupMetadataManager {
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
         GenericGroup group = getOrMaybeCreateGenericGroup(request.groupId(), false);
         if (group.isInState(DEAD)) {
-            return new CoordinatorResult<>(Collections.emptyList(),
+            return new CoordinatorResult<>(
+                Collections.emptyList(),
                 new LeaveGroupResponseData()
                     .setErrorCode(COORDINATOR_NOT_AVAILABLE.code())
             );
@@ -2932,11 +2933,11 @@ public class GroupMetadataManager {
         CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
         List<MemberResponse> memberResponses = new ArrayList<>();
 
-            for (MemberIdentity member : request.members()) {
+            for (MemberIdentity member: request.members()) {
                 // The LeaveGroup API allows administrative removal of members by GroupInstanceId
                 // in which case we expect the MemberId to be undefined.
-                if (member.memberId().equals(UNKNOWN_MEMBER_ID)) {
-                    if (member.groupInstanceId() != null && group.staticMemberId(member.groupInstanceId()) != null) {
+                if (UNKNOWN_MEMBER_ID.equals(member.memberId())) {
+                    if (member.groupInstanceId() != null && group.hasStaticMember(member.groupInstanceId())) {
                         coordinatorResult = removeCurrentMemberFromGenericGroup(
                             group,
                             group.staticMemberId(member.groupInstanceId()),
@@ -2958,8 +2959,8 @@ public class GroupMetadataManager {
                 } else if (group.isPendingMember(member.memberId())) {
                     coordinatorResult = removePendingMemberAndUpdateGenericGroup(group, member.memberId());
                     timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
-                    log.info("Pending member {} has left group {} through explicit `LeaveGroup` request.",
-                        member.memberId(), group.groupId());
+                    log.info("Pending member {} has left group {} through explicit `LeaveGroup` request. Reason: {}",
+                        member.memberId(), group.groupId(), member.reason());
 
                     memberResponses.add(
                         new MemberResponse()
@@ -3019,7 +3020,11 @@ public class GroupMetadataManager {
         log.info("[Group {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
             group.groupId(), memberId, reason);
 
-        group.completeJoinFuture(member,
+        // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
+        // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
+        // will retry the JoinGroup request if is still active.
+        group.completeJoinFuture(
+            member,
             new JoinGroupResponseData()
                 .setMemberId(UNKNOWN_MEMBER_ID)
                 .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
@@ -3031,7 +3036,7 @@ public class GroupMetadataManager {
             case COMPLETING_REBALANCE:
                 return maybePrepareRebalanceOrCompleteJoin(group, reason);
             case PREPARING_REBALANCE:
-                timer.cancel(genericGroupJoinKey(group.groupId()));
+                return maybeCompleteJoinPhase(group);
         }
 
         return EMPTY_RESULT;
