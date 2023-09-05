@@ -953,7 +953,7 @@ if (inputsChanged())
 
     <p><code>SinkConnectors</code> usually only have to handle the addition of streams, which may translate to new entries in their outputs (e.g., a new database table). The framework manages any changes to the Kafka input, such as when the set of input topics changes because of a regex subscription. <code>SinkTasks</code> should expect new input streams, which may require creating new resources in the downstream system, such as a new table in a database. The trickiest situation to handle in these cases may be conflicts between multiple <code>SinkTasks</code> seeing a new input stream for the first time and simultaneously trying to create the new resource. <code>SinkConnectors</code>, on the other hand, will generally require no special code for handling a dynamic set of streams.</p>
 
-    <h4><a id="connect_configs" href="#connect_configs">Connect Configuration Validation</a></h4>
+    <h4><a id="connect_configs" href="#connect_configs">Configuration Validation</a></h4>
 
     <p>Kafka Connect allows you to validate connector configurations before submitting a connector to be executed and can provide feedback about errors and recommended values. To take advantage of this, connector developers need to provide an implementation of <code>config()</code> to expose the configuration definition to the framework.</p>
 
