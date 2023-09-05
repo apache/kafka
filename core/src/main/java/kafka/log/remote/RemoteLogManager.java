@@ -962,11 +962,11 @@ public class RemoteLogManager implements Closeable {
 
             RemoteLogRetentionHandler remoteLogRetentionHandler = new RemoteLogRetentionHandler(retentionSizeData, retentionTimeData);
             Iterator<Integer> epochIterator = epochWithOffsets.navigableKeySet().iterator();
-            boolean isSegmentDeleted = true;
-            while (isSegmentDeleted && epochIterator.hasNext()) {
+            boolean canProcess = true;
+            while (canProcess && epochIterator.hasNext()) {
                 Integer epoch = epochIterator.next();
                 Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
-                while (isSegmentDeleted && segmentsIterator.hasNext()) {
+                while (canProcess && segmentsIterator.hasNext()) {
                     if (isCancelled() || !isLeader()) {
                         logger.info("Returning from remote log segments cleanup for the remaining segments as the task state is changed.");
                         return;
@@ -974,13 +974,17 @@ public class RemoteLogManager implements Closeable {
                     RemoteLogSegmentMetadata metadata = segmentsIterator.next();
 
                     // check whether the segment contains the required epoch range with in the current leader epoch lineage.
-                    if (isRemoteSegmentWithinLeaderEpochs(metadata, logEndOffset, epochWithOffsets)) {
+                    boolean isValidSegment = isRemoteSegmentWithinLeaderEpochs(metadata, logEndOffset, epochWithOffsets);
+                    boolean isSegmentDeleted = false;
+                    if (isValidSegment) {
                         isSegmentDeleted =
                                 remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
                                         remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata);
-                    } else {
+                    }
+                    if (!isSegmentDeleted) {
                         isSegmentDeleted = remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(metadata, logStartOffset);
                     }
+                    canProcess = isSegmentDeleted || !isValidSegment;
                 }
             }
 

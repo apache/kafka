@@ -75,6 +75,7 @@ public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredSto
                 .expectDeletionInRemoteStorage(broker0, topicA, p0, DELETE_SEGMENT, 1)
                 .deleteRecords(topicA, p0, beforeOffset)
                 // expect that the leader epoch checkpoint is updated
+                // Comment out this line if it's FLAKY since the leader-epoch is not deterministic in ZK mode.
                 .expectLeaderEpochCheckpoint(broker0, topicA, p0, beginEpoch, startOffset)
                 // consume from the offset-3 of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 1)
