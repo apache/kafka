@@ -1745,15 +1745,17 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *  Delete all data in the log and start at the new offset
    *
    *  @param newOffset The new offset to start the log with
+   *  @param logStartOffsetOpt The log start offset to set for the log. If None, the new offset will be used.
    */
-  def truncateFullyAndStartAt(newOffset: Long): Unit = {
+  def truncateFullyAndStartAt(newOffset: Long,
+                              logStartOffsetOpt: Option[Long] = None): Unit = {
     maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
-      debug(s"Truncate and start at offset $newOffset")
+      debug(s"Truncate and start at offset $newOffset, logStartOffset: ${logStartOffsetOpt.getOrElse(newOffset)}")
       lock synchronized {
         localLog.truncateFullyAndStartAt(newOffset)
         leaderEpochCache.foreach(_.clearAndFlush())
         producerStateManager.truncateFullyAndStartAt(newOffset)
-        logStartOffset = newOffset
+        logStartOffset = logStartOffsetOpt.getOrElse(newOffset)
         rebuildProducerState(newOffset, producerStateManager)
         updateHighWatermark(localLog.logEndOffsetMetadata)
       }
