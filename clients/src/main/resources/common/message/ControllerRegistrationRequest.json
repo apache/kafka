@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 70,
+  "apiKey": 69,
   "type": "request",
   "listeners": ["controller"],
   "name": "ControllerRegistrationRequest",

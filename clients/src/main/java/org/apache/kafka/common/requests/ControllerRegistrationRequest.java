@@ -29,7 +29,7 @@ public class ControllerRegistrationRequest extends AbstractRequest {
         private final ControllerRegistrationRequestData data;
 
         public Builder(ControllerRegistrationRequestData data) {
-            super(ApiKeys.BROKER_HEARTBEAT);
+            super(ApiKeys.CONTROLLER_REGISTRATION);
             this.data = data;
         }
 

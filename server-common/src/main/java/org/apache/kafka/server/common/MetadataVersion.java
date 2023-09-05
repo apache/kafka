@@ -324,7 +324,7 @@ public enum MetadataVersion {
     }
 
     public short registerControllerRecordVersion() {
-        if (isAtLeast(MetadataVersion.IBP_3_6_IV2)) {
+        if (isAtLeast(MetadataVersion.IBP_3_7_IV0)) {
             return (short) 0;
         } else {
             throw new RuntimeException("Controller registration is not supported in " +
