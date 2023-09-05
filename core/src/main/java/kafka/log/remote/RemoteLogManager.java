@@ -360,19 +360,21 @@ public class RemoteLogManager implements Closeable {
         LOGGER.debug("Stop partitions: {}", stopPartitions);
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
-            TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
             try {
-                RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
-                if (task != null) {
-                    LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
-                    task.cancel();
-                }
-                if (stopPartition.deleteRemoteLog()) {
-                    LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
-                    deleteRemoteLogPartition(tpId);
+                if (topicIdByPartitionMap.containsKey(tp)) {
+                    TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
+                    RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
+                    if (task != null) {
+                        LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
+                        task.cancel();
+                    }
+                    if (stopPartition.deleteRemoteLog()) {
+                        LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
+                        deleteRemoteLogPartition(tpId);
+                    }
                 }
             } catch (Exception ex) {
-                errorHandler.accept(tpId.topicPartition(), ex);
+                errorHandler.accept(tp, ex);
                 LOGGER.error("Error while stopping the partition: {}", stopPartition, ex);
             }
         }
