@@ -93,14 +93,14 @@ public class QuorumFeaturesTest {
     public void testZkMigrationNotReadyIfNotAllControllersRegistered() {
         assertEquals(Optional.of("No registration found for controller 0"),
             QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-                MetadataVersion.IBP_3_6_IV2, Collections.emptyMap()));
+                MetadataVersion.IBP_3_7_IV0, Collections.emptyMap()));
     }
 
     @Test
     public void testZkMigrationNotReadyIfControllerNotReady() {
         assertEquals(Optional.of("Controller 0 has not enabled zookeeper.metadata.migration.enable"),
             QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-                MetadataVersion.IBP_3_6_IV2, Collections.singletonMap(0,
+                MetadataVersion.IBP_3_7_IV0, Collections.singletonMap(0,
                     new ControllerRegistration.Builder().
                         setId(0).
                         setZkMigrationReady(false).
@@ -124,6 +124,6 @@ public class QuorumFeaturesTest {
                     build());
         });
         assertEquals(Optional.empty(), QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-            MetadataVersion.IBP_3_6_IV2, controllers));
+            MetadataVersion.IBP_3_7_IV0, controllers));
     }
 }
