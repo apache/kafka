@@ -999,7 +999,7 @@ Struct struct = new Struct(schema)
 
     <p>Sink connectors are usually simpler because they are consuming data and therefore do not need to create schemas. However, they should take just as much care to validate that the schemas they receive have the expected format. When the schema does not match -- usually indicating the upstream producer is generating invalid data that cannot be correctly translated to the destination system -- sink connectors should throw an exception to indicate this error to the system.</p>
 
-    <h4><a id="connect_administration" href="#connect_administration">Kafka Connect Administration</a></h4>
+    <h3><a id="connect_administration" href="#connect_administration">8.4 Administration</a></h3>
 
     <p>
     Kafka Connect's <a href="#connect_rest">REST layer</a> provides a set of APIs to enable administration of the cluster. This includes APIs to view the configuration of connectors and the status of their tasks, as well as to alter their current behavior (e.g. changing configuration and restarting tasks).
