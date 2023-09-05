@@ -201,6 +201,10 @@ public class RocksDBMetricsRecorderGaugesTest {
     }
 
     private void runAndVerifySumOfProperties(final String propertyName) throws Exception {
+        runAndVerifySumOfProperties(propertyName, true);
+    }
+
+    private void runAndVerifySumOfProperties(final String propertyName, final boolean aggregated) throws Exception {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
         final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
@@ -211,14 +215,19 @@ public class RocksDBMetricsRecorderGaugesTest {
 
         final long recordedValue1 = 5L;
         final long recordedValue2 = 3L;
-        when(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue1);
-        when(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue2);
+        if (aggregated) {
+            when(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue1);
+            when(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue2);
+        } else {
+            when(dbToAdd1.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue1);
+            when(dbToAdd2.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue2);
+        }
 
         verifyMetrics(streamsMetrics, propertyName, recordedValue1 + recordedValue2);
     }
 
     private void runAndVerifyBlockCacheMetricsWithMultipleCaches(final String propertyName) throws Exception {
-        runAndVerifySumOfProperties(propertyName);
+        runAndVerifySumOfProperties(propertyName, false);
     }
 
     private void runAndVerifyBlockCacheMetricsWithSingleCache(final String propertyName) throws Exception {
@@ -231,8 +240,8 @@ public class RocksDBMetricsRecorderGaugesTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd2);
 
         final long recordedValue = 5L;
-        when(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue);
-        when(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue);
+        when(dbToAdd1.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue);
+        when(dbToAdd2.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)).thenReturn(recordedValue);
 
         verifyMetrics(streamsMetrics, propertyName, recordedValue);
     }
