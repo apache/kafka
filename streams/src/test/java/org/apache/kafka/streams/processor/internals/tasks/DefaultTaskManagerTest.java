@@ -167,8 +167,8 @@ public class DefaultTaskManagerTest {
         taskManager.add(Collections.singleton(task));
         when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
 
-        final StreamTask t = taskManager.assignNextTask(taskExecutor);
-        assertNotNull(t);
+        final StreamTask task = taskManager.assignNextTask(taskExecutor);
+        assertNotNull(task);
         final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
         final Thread awaitingThread = new Thread(awaitingRunnable);
         awaitingThread.start();
