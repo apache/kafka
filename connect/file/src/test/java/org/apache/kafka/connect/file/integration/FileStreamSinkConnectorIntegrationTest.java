@@ -49,7 +49,7 @@ public class FileStreamSinkConnectorIntegrationTest {
 
     private static final String CONNECTOR_NAME = "test-connector";
     private static final String TOPIC = "test-topic";
-    private static final String MESSAGE_FORMAT = "Message %d";
+    private static final String MESSAGE_PREFIX = "Message ";
     private static final int NUM_MESSAGES = 5;
     private static final String FILE_NAME = "test-file";
     private final EmbeddedConnectCluster connect = new EmbeddedConnectCluster.Builder().build();
@@ -155,7 +155,7 @@ public class FileStreamSinkConnectorIntegrationTest {
 
     private void produceMessagesToTopic(String topic, int numMessages) {
         for (int i = 0; i < numMessages; i++) {
-            connect.kafka().produce(topic, String.format(MESSAGE_FORMAT, i));
+            connect.kafka().produce(topic, MESSAGE_PREFIX + i);
         }
     }
 
@@ -168,9 +168,11 @@ public class FileStreamSinkConnectorIntegrationTest {
     }
 
     /**
-     * Verify that the number of lines in the file at {@code filePath} is equal to {@code numLines}.
-     * If {@code verifyLinearity} is true, this method will also verify that the lines match {@link #MESSAGE_FORMAT}
-     * with a linearly increasing message number (beginning with 0).
+     * Verify that the number of lines in the file at {@code filePath} is equal to {@code numLines} and that they all begin with the
+     * prefix {@link #MESSAGE_PREFIX}.
+     * <p>
+     * If {@code verifyLinearity} is true, this method will also verify that the lines also have a linearly increasing message number
+     * (beginning with 0) after the prefix.
      *
      * @param filePath the file path
      * @param numLines the expected number of lines in the file
@@ -185,9 +187,9 @@ public class FileStreamSinkConnectorIntegrationTest {
                         return false;
                     }
                     if (verifyLinearity) {
-                        assertEquals(String.format(MESSAGE_FORMAT, i), line);
+                        assertEquals(MESSAGE_PREFIX + i, line);
                     } else {
-                        assertTrue(line.startsWith(MESSAGE_FORMAT));
+                        assertTrue(line.startsWith(MESSAGE_PREFIX));
                     }
                 }
                 return true;
