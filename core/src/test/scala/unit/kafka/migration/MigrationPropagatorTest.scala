@@ -20,7 +20,7 @@ package kafka.migration
 import kafka.cluster.Broker
 import org.apache.kafka.common.metadata.RegisterBrokerRecord
 import org.apache.kafka.image.ClusterImage
-import org.apache.kafka.metadata.BrokerRegistration
+import org.apache.kafka.metadata.{BrokerRegistration, ControllerRegistration}
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -40,7 +40,7 @@ class MigrationPropagatorTest {
 
   def brokersToClusterImage(brokers: Seq[BrokerRegistration]): ClusterImage = {
     val brokerMap = brokers.map(broker => Integer.valueOf(broker.id()) -> broker).toMap.asJava
-    new ClusterImage(brokerMap, Collections.emptyMap)
+    new ClusterImage(brokerMap, Collections.emptyMap[Integer, ControllerRegistration])
   }
 
   @Test
