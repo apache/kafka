@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.connect.file.FileStreamSinkConnector.FILE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -169,22 +170,21 @@ public class FileStreamSinkConnectorIntegrationTest {
      * @param verifyLinearity true if the line contents are to be verified
      */
     private void verifyLinesInFile(Path filePath, int numLines, boolean verifyLinearity) throws Exception {
-        TestUtils.waitForCondition(() -> {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(Files.newInputStream(filePath)))) {
-                for (int i = 0; i < numLines; i++) {
-                    String line = reader.readLine();
-                    if (line == null) {
-                        return false;
-                    }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(Files.newInputStream(filePath)))) {
+            AtomicInteger i = new AtomicInteger(0);
+            TestUtils.waitForCondition(() -> {
+                reader.lines().forEach(line -> {
                     if (verifyLinearity) {
                         assertEquals(MESSAGE_PREFIX + i, line);
                     } else {
                         assertTrue(line.startsWith(MESSAGE_PREFIX));
                     }
-                }
-                return true;
-            }
-        }, "Expected to read " + numLines + " lines from the file");
+                    i.getAndIncrement();
+                });
+
+                return i.get() >= numLines;
+            }, "Expected to read " + numLines + " lines from the file");
+        }
 
         // Ensure that there are exactly the expected number of lines present
         assertEquals(numLines, Files.readAllLines(filePath).size());
