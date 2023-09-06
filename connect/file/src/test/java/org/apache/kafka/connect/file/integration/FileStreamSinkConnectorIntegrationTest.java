@@ -162,7 +162,7 @@ public class FileStreamSinkConnectorIntegrationTest {
      * Verify that the number of lines in the file at {@code filePath} is equal to {@code numLines} and that they all begin with the
      * prefix {@link #MESSAGE_PREFIX}.
      * <p>
-     * If {@code verifyLinearity} is true, this method will also verify that the lines also have a linearly increasing message number
+     * If {@code verifyLinearity} is true, this method will also verify that the lines have a linearly increasing message number
      * (beginning with 0) after the prefix.
      *
      * @param filePath the file path
