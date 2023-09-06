@@ -185,5 +185,8 @@ public class FileStreamSinkConnectorIntegrationTest {
                 return true;
             }
         }, "Expected to read " + numLines + " lines from the file");
+
+        // Ensure that there are exactly the expected number of lines present
+        assertEquals(numLines, Files.readAllLines(filePath).size());
     }
 }
