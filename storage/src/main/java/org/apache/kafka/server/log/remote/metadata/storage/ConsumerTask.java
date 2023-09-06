@@ -157,9 +157,10 @@ class ConsumerTask implements Runnable, Closeable {
             remotePartitionMetadataEventHandler.handleRemoteLogMetadata(remoteLogMetadata);
             readOffsetsByUserTopicPartition.put(remoteLogMetadata.topicIdPartition(), record.offset());
         } else {
-            log.debug("The event {} is skipped because it is either already processed or not assigned to this consumer", remoteLogMetadata);
+            log.trace("The event {} is skipped because it is either already processed or not assigned to this consumer",
+                    remoteLogMetadata);
         }
-        log.debug("Updating consumed offset: [{}] for partition [{}]", record.offset(), record.partition());
+        log.trace("Updating consumed offset: {} for partition {}", record.offset(), record.partition());
         readOffsetsByMetadataPartition.put(record.partition(), record.offset());
     }
 

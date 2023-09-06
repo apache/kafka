@@ -1065,6 +1065,7 @@ Struct struct = new Struct(schema)
     <li><b>UNASSIGNED:</b> The connector/task has not yet been assigned to a worker.</li>
     <li><b>RUNNING:</b> The connector/task is running.</li>
     <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
+    <li><b>STOPPED:</b> The connector has been stopped. Note that this state is not applicable to tasks because the tasks for a stopped connector are shut down and won't be visible in the status API.</li>
     <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
     <li><b>RESTARTING:</b> The connector/task is either actively restarting or is expected to restart soon</li>
     </ul>
@@ -1079,6 +1080,10 @@ Struct struct = new Struct(schema)
 
     <p>
     It's sometimes useful to temporarily stop the message processing of a connector. For example, if the remote system is undergoing maintenance, it would be preferable for source connectors to stop polling it for new data instead of filling logs with exception spam. For this use case, Connect offers a pause/resume API. While a source connector is paused, Connect will stop polling it for additional records. While a sink connector is paused, Connect will stop pushing new messages to it. The pause state is persistent, so even if you restart the cluster, the connector will not begin message processing again until the task has been resumed. Note that there may be a delay before all of a connector's tasks have transitioned to the PAUSED state since it may take time for them to finish whatever processing they were in the middle of when being paused. Additionally, failed tasks will not transition to the PAUSED state until they have been restarted.
+    </p>
+
+    <p>
+    In 3.5.0, Connect introduced a stop API that completely shuts down the tasks for a connector and deallocates any resources claimed by them. This is different from pausing a connector where tasks are left idling and any resources claimed by them are left allocated (which allows the connector to begin processing data quickly once it is resumed). Stopping a connector is more efficient from a resource usage standpoint than pausing it, but can cause it to take longer to begin processing data once resumed. Note that the offsets for a connector can be only modified via the offsets management endpoints if it is in the stopped state.
     </p>
 </script>
 
