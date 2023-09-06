@@ -42,6 +42,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.sink.SinkConnector.TOPICS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 public class FileStreamSinkConnectorIntegrationTest {
@@ -71,7 +72,7 @@ public class FileStreamSinkConnectorIntegrationTest {
         Path tempFilePath = tempDir.toPath().resolve(FILE_NAME);
         Map<String, String> connectorConfigs = baseConnectorConfigs(TOPIC, tempFilePath.toString());
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not start in time");
 
         verifyLinesInFile(tempFilePath, NUM_MESSAGES, true);
@@ -83,7 +84,7 @@ public class FileStreamSinkConnectorIntegrationTest {
         Path tempFilePath = tempDir.toPath().resolve(FILE_NAME);
         Map<String, String> connectorConfigs = baseConnectorConfigs(TOPIC, tempFilePath.toString());
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not start in time");
 
         verifyLinesInFile(tempFilePath, NUM_MESSAGES, true);
@@ -95,7 +96,7 @@ public class FileStreamSinkConnectorIntegrationTest {
         Map<String, Object> partition = new HashMap<>();
         partition.put(SinkUtils.KAFKA_TOPIC_KEY, TOPIC);
         partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
-        Map<String, Object> offset = Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 4);
+        Map<String, Object> offset = Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, NUM_MESSAGES - 1);
         List<ConnectorOffset> offsetsToAlter = Collections.singletonList(new ConnectorOffset(partition, offset));
 
         connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter));
@@ -114,7 +115,7 @@ public class FileStreamSinkConnectorIntegrationTest {
         Path tempFilePath = tempDir.toPath().resolve(FILE_NAME);
         Map<String, String> connectorConfigs = baseConnectorConfigs(TOPIC, tempFilePath.toString());
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not start in time");
 
         verifyLinesInFile(tempFilePath, NUM_MESSAGES, true);
@@ -145,7 +146,7 @@ public class FileStreamSinkConnectorIntegrationTest {
         connectorConfigs.put(TASKS_MAX_CONFIG, "2");
 
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 2,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 2,
             "Connector and task did not start in time");
 
         // Only verify the number of lines since the messages can be consumed in any order across the two topics
@@ -185,6 +186,8 @@ public class FileStreamSinkConnectorIntegrationTest {
                     }
                     if (verifyLinearity) {
                         assertEquals(String.format(MESSAGE_FORMAT, i), line);
+                    } else {
+                        assertTrue(line.startsWith(MESSAGE_FORMAT));
                     }
                 }
                 return true;

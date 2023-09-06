@@ -73,7 +73,7 @@ public class FileStreamSourceConnectorIntegrationTest {
     public void testSimpleSource() throws Exception {
         Map<String, String> connectorConfigs = baseConnectorConfigs(sourceFile.getAbsolutePath());
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not start in time");
 
         int i = 0;
@@ -86,7 +86,7 @@ public class FileStreamSourceConnectorIntegrationTest {
     public void testStopResumeSavedOffset() throws Exception {
         Map<String, String> connectorConfigs = baseConnectorConfigs(sourceFile.getAbsolutePath());
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not start in time");
 
         // Wait for the initially written records to be sourced by the connector and produced to the configured Kafka topic
@@ -119,7 +119,7 @@ public class FileStreamSourceConnectorIntegrationTest {
     public void testAlterOffsets() throws Exception {
         Map<String, String> connectorConfigs = baseConnectorConfigs(sourceFile.getAbsolutePath());
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not start in time");
 
         // Wait for the initially written records to be sourced by the connector and produced to the configured Kafka topic
@@ -134,14 +134,13 @@ public class FileStreamSourceConnectorIntegrationTest {
         connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(Collections.singletonList(new ConnectorOffset(partition, offset))));
 
         connect.resumeConnector(CONNECTOR_NAME);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not resume in time");
 
         Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = connect.kafka().consume(NUM_LINES + 1, TIMEOUT_MS, TOPIC).iterator();
 
-        int i = 0;
-        while (i < NUM_LINES) {
-            assertEquals(String.format(LINE_FORMAT, i++), new String(recordIterator.next().value()));
+        for (int i = 0; i < NUM_LINES; i++) {
+            assertEquals(String.format(LINE_FORMAT, i), new String(recordIterator.next().value()));
         }
 
         // Verify that the last line has been sourced again after the alter offsets request
@@ -152,7 +151,7 @@ public class FileStreamSourceConnectorIntegrationTest {
     public void testResetOffsets() throws Exception {
         Map<String, String> connectorConfigs = baseConnectorConfigs(sourceFile.getAbsolutePath());
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not start in time");
 
         // Wait for the initially written records to be sourced by the connector and produced to the configured Kafka topic
@@ -165,7 +164,7 @@ public class FileStreamSourceConnectorIntegrationTest {
         connect.resetConnectorOffsets(CONNECTOR_NAME);
 
         connect.resumeConnector(CONNECTOR_NAME);
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not resume in time");
 
         // We expect 2 * NUM_LINES messages to be produced
