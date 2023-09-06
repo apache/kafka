@@ -304,7 +304,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return responseFuture;
         }
 
-        runtime.scheduleWriteOperation("generic-group-join",
+        runtime.scheduleWriteOperation(
+            "generic-group-join",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
@@ -343,7 +344,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
 
-        runtime.scheduleWriteOperation("generic-group-sync",
+        runtime.scheduleWriteOperation(
+            "generic-group-sync",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {

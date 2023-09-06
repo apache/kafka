@@ -2930,72 +2930,86 @@ public class GroupMetadataManager {
             );
         }
 
-        CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
         List<MemberResponse> memberResponses = new ArrayList<>();
+        List<CoordinatorResult<Void, Record>> coordinatorResults = new ArrayList<>();
 
-            for (MemberIdentity member: request.members()) {
-                // The LeaveGroup API allows administrative removal of members by GroupInstanceId
-                // in which case we expect the MemberId to be undefined.
-                if (UNKNOWN_MEMBER_ID.equals(member.memberId())) {
-                    if (member.groupInstanceId() != null && group.hasStaticMember(member.groupInstanceId())) {
-                        coordinatorResult = removeCurrentMemberFromGenericGroup(
-                            group,
-                            group.staticMemberId(member.groupInstanceId()),
-                            member.reason()
-                        );
-                        memberResponses.add(
-                            new MemberResponse()
-                                .setMemberId(member.memberId())
-                                .setGroupInstanceId(member.groupInstanceId())
-                        );
-                    } else {
-                        memberResponses.add(
-                            new MemberResponse()
-                                .setMemberId(member.memberId())
-                                .setGroupInstanceId(member.groupInstanceId())
-                                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                        );
-                    }
-                } else if (group.isPendingMember(member.memberId())) {
-                    coordinatorResult = removePendingMemberAndUpdateGenericGroup(group, member.memberId());
-                    timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
-                    log.info("Pending member {} has left group {} through explicit `LeaveGroup` request. Reason: {}",
-                        member.memberId(), group.groupId(), member.reason());
-
+        for (MemberIdentity member: request.members()) {
+            String reason = member.reason() != null ? member.reason() : "not provided";
+            // The LeaveGroup API allows administrative removal of members by GroupInstanceId
+            // in which case we expect the MemberId to be undefined.
+            if (UNKNOWN_MEMBER_ID.equals(member.memberId())) {
+                if (member.groupInstanceId() != null && group.hasStaticMember(member.groupInstanceId())) {
+                    coordinatorResults.add(removeCurrentMemberFromGenericGroup(
+                        group,
+                        group.staticMemberId(member.groupInstanceId()),
+                        reason
+                    ));
                     memberResponses.add(
                         new MemberResponse()
                             .setMemberId(member.memberId())
                             .setGroupInstanceId(member.groupInstanceId())
                     );
                 } else {
-                    try {
-                        group.validateMember(member.memberId(), member.groupInstanceId(), "leave-group");
-                        coordinatorResult = removeCurrentMemberFromGenericGroup(
-                            group,
-                            member.memberId(),
-                            member.reason()
-                        );
-                        memberResponses.add(
-                            new MemberResponse()
-                                .setMemberId(member.memberId())
-                                .setGroupInstanceId(member.groupInstanceId())
-                        );
-                    } catch (KafkaException e) {
-                        memberResponses.add(
-                            new MemberResponse()
-                                .setMemberId(member.memberId())
-                                .setGroupInstanceId(member.groupInstanceId())
-                                .setErrorCode(Errors.forException(e).code())
-                        );
-                    }
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                    );
+                }
+            } else if (group.isPendingMember(member.memberId())) {
+                coordinatorResults.add(removePendingMemberAndUpdateGenericGroup(group, member.memberId()));
+                timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
+                log.info("Pending member {} has left group {} through explicit `LeaveGroup` request. Reason: {}",
+                    member.memberId(), group.groupId(), reason);
+
+                memberResponses.add(
+                    new MemberResponse()
+                        .setMemberId(member.memberId())
+                        .setGroupInstanceId(member.groupInstanceId())
+                );
+            } else {
+                try {
+                    group.validateMember(member.memberId(), member.groupInstanceId(), "leave-group");
+                    coordinatorResults.add(removeCurrentMemberFromGenericGroup(
+                        group,
+                        member.memberId(),
+                        reason
+                    ));
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                    );
+                } catch (KafkaException e) {
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                            .setErrorCode(Errors.forException(e).code())
+                    );
                 }
             }
-            return new CoordinatorResult<>(
-                coordinatorResult.records(),
-                new LeaveGroupResponseData()
-                    .setMembers(memberResponses),
-                coordinatorResult.appendFuture()
-            );
+        }
+
+        List<CoordinatorResult<Void, Record>> results = coordinatorResults.stream()
+            .filter(result -> result != EMPTY_RESULT)
+            .collect(Collectors.toList());
+
+        CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
+
+        if (results.size() > 1) {
+            throw new IllegalStateException("Expected max 1 non-empty result but found: " + results.size());
+        } else if (results.size() == 1) {
+            coordinatorResult = coordinatorResults.get(0);
+        }
+
+        return new CoordinatorResult<>(
+            coordinatorResult.records(),
+            new LeaveGroupResponseData()
+                .setMembers(memberResponses),
+            coordinatorResult.appendFuture()
+        );
     }
 
     /**
@@ -3015,7 +3029,6 @@ public class GroupMetadataManager {
         String reason
     ) {
         GenericGroupMember member = group.member(memberId);
-        reason = reason != null ? reason : "not provided";
         timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
         log.info("[Group {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
             group.groupId(), memberId, reason);
