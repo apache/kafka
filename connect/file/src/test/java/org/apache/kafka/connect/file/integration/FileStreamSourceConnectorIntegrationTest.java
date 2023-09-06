@@ -21,7 +21,6 @@ import org.apache.kafka.connect.file.FileStreamSourceConnector;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +43,6 @@ import static org.apache.kafka.connect.file.FileStreamSourceTask.FILENAME_FIELD;
 import static org.apache.kafka.connect.file.FileStreamSourceTask.POSITION_FIELD;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Tag("integration")
 public class FileStreamSourceConnectorIntegrationTest {
@@ -106,13 +104,15 @@ public class FileStreamSourceConnectorIntegrationTest {
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not resume in time");
 
-        // We expect only 2 * NUM_LINES messages to be produced since the connector should continue from where it left off on being resumed
-        assertThrows(EmbeddedKafkaCluster.NotEnoughRecordsException.class, () -> connect.kafka().consume(2 * NUM_LINES + 1, TIMEOUT_MS, TOPIC));
-
         int i = 0;
         for (ConsumerRecord<byte[], byte[]> record : connect.kafka().consume(2 * NUM_LINES, TIMEOUT_MS, TOPIC)) {
             assertEquals(String.format(LINE_FORMAT, i++), new String(record.value()));
         }
+
+        // We expect exactly (2 * NUM_LINES) messages to be produced since the connector should continue from where it left off on being resumed.
+        // We verify this by consuming all the messages from the topic after we've already ensured that at least (2 * NUM_LINES) messages can be
+        // consumed above.
+        assertEquals(2 * NUM_LINES, connect.kafka().consumeAll(TIMEOUT_MS, TOPIC).count());
     }
 
     @Test
@@ -167,9 +167,6 @@ public class FileStreamSourceConnectorIntegrationTest {
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
             "Connector and task did not resume in time");
 
-        // We expect 2 * NUM_LINES messages to be produced
-        assertThrows(EmbeddedKafkaCluster.NotEnoughRecordsException.class, () -> connect.kafka().consume(2 * NUM_LINES + 1, TIMEOUT_MS, TOPIC));
-
         Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = connect.kafka().consume(2 * NUM_LINES, TIMEOUT_MS, TOPIC).iterator();
 
         int i = 0;
@@ -182,6 +179,11 @@ public class FileStreamSourceConnectorIntegrationTest {
             assertEquals(String.format(LINE_FORMAT, i - NUM_LINES), new String(recordIterator.next().value()));
             i++;
         }
+
+        // We expect exactly (2 * NUM_LINES) messages to be produced since the connector should reprocess exactly the same NUM_LINES messages after
+        // the offsets have been reset. We verify this by consuming all the messages from the topic after we've already ensured that at least
+        // (2 * NUM_LINES) messages can be consumed above.
+        assertEquals(2 * NUM_LINES, connect.kafka().consumeAll(TIMEOUT_MS, TOPIC).count());
     }
 
     /**

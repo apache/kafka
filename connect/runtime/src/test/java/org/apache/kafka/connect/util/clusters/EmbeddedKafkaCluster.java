@@ -522,7 +522,20 @@ public class EmbeddedKafkaCluster {
             }
         }
 
-        throw new NotEnoughRecordsException(n, consumedRecords);
+        throw new RuntimeException("Could not find enough records. found " + consumedRecords + ", expected " + n);
+    }
+
+    /**
+     * Consume all currently-available records for the specified topics in a given duration, or throw an exception.
+     * @param maxDurationMs the max duration to wait for these records (in milliseconds).
+     * @param topics the topics to consume from
+     * @return a {@link ConsumerRecords} collection containing the records for all partitions of the given topics
+     */
+    public ConsumerRecords<byte[], byte[]> consumeAll(
+        long maxDurationMs,
+        String... topics
+    ) throws TimeoutException, InterruptedException, ExecutionException {
+        return consumeAll(maxDurationMs, null, null, topics);
     }
 
     /**
@@ -684,12 +697,6 @@ public class EmbeddedKafkaCluster {
     private static void putIfAbsent(final Map<String, Object> props, final String propertyKey, final Object propertyValue) {
         if (!props.containsKey(propertyKey)) {
             props.put(propertyKey, propertyValue);
-        }
-    }
-
-    public static class NotEnoughRecordsException extends ConnectException {
-        public NotEnoughRecordsException(int expected, int actual) {
-            super("Could not find enough records. Found: " + actual + ", Expected: " + expected);
         }
     }
 }
