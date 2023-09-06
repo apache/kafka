@@ -24,7 +24,7 @@ from kafkatest.services.kafka import KafkaService, config_property, quorum
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_3_6, LATEST_3_5, LATEST_3_4, LATEST_3_3, LATEST_3_2, LATEST_3_1, \
+from kafkatest.version import DEV_BRANCH, LATEST_3_5, LATEST_3_4, LATEST_3_3, LATEST_3_2, LATEST_3_1, \
     LATEST_3_0, LATEST_2_8, LATEST_2_7, LATEST_2_6, LATEST_2_5, LATEST_2_4, LATEST_2_3, LATEST_2_2, LATEST_2_1, \
     LATEST_2_0, LATEST_1_1, LATEST_1_0, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, \
     LATEST_0_8_2, KafkaVersion
@@ -703,7 +703,6 @@ class ConnectDistributedTest(Test):
 
     @cluster(num_nodes=5)
     @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(LATEST_3_6), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
     @parametrize(broker_version=str(LATEST_3_5), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
     @parametrize(broker_version=str(LATEST_3_4), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
     @parametrize(broker_version=str(LATEST_3_3), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
@@ -728,7 +727,6 @@ class ConnectDistributedTest(Test):
     @parametrize(broker_version=str(LATEST_0_10_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='sessioned')
     @parametrize(broker_version=str(LATEST_0_10_0), auto_create_topics=True, exactly_once_source=False, connect_protocol='sessioned')
     @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(LATEST_3_6), auto_create_topics=False, exactly_once_source=True, connect_protocol='compatible')
     @parametrize(broker_version=str(LATEST_3_5), auto_create_topics=False, exactly_once_source=True, connect_protocol='compatible')
     @parametrize(broker_version=str(LATEST_3_4), auto_create_topics=False, exactly_once_source=True, connect_protocol='compatible')
     @parametrize(broker_version=str(LATEST_3_3), auto_create_topics=False, exactly_once_source=True, connect_protocol='compatible')
@@ -751,7 +749,6 @@ class ConnectDistributedTest(Test):
     @parametrize(broker_version=str(LATEST_0_10_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
     @parametrize(broker_version=str(LATEST_0_10_0), auto_create_topics=True, exactly_once_source=False, connect_protocol='compatible')
     @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    @parametrize(broker_version=str(LATEST_3_6), auto_create_topics=False, exactly_once_source=True, connect_protocol='eager')
     @parametrize(broker_version=str(LATEST_3_5), auto_create_topics=False, exactly_once_source=True, connect_protocol='eager')
     @parametrize(broker_version=str(LATEST_3_4), auto_create_topics=False, exactly_once_source=True, connect_protocol='eager')
     @parametrize(broker_version=str(LATEST_3_3), auto_create_topics=False, exactly_once_source=True, connect_protocol='eager')
