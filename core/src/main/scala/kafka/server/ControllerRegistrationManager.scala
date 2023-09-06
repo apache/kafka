@@ -51,6 +51,7 @@ class ControllerRegistrationManager(
   val threadNamePrefix: String,
   val supportedFeatures: util.Map[String, VersionRange],
   val incarnationId: Uuid,
+  val listenerPortOverrides: Map[String, Int] = Map(),
   val resendExponentialBackoff: ExponentialBackoff = new ExponentialBackoff(100, 2, 120000L, 0.02)
 ) extends Logging with MetadataPublisher {
   override def name(): String = "ControllerRegistrationManager"
@@ -75,7 +76,7 @@ class ControllerRegistrationManager(
       collection.add(new ControllerRegistrationRequestData.Listener().
         setHost(endPoint.host).
         setName(endPoint.listenerName.value()).
-        setPort(endPoint.port).
+        setPort(listenerPortOverrides.getOrElse(endPoint.listenerName.value(), endPoint.port)).
         setSecurityProtocol(endPoint.securityProtocol.id))
     })
     collection

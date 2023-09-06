@@ -72,7 +72,7 @@ class ControllerApis(
   val raftManager: RaftManager[ApiMessageAndVersion],
   val config: KafkaConfig,
   val metaProperties: MetaProperties,
-  val controllerRegistrations: ControllerRegistrationsPublisher,
+  val registrationsPublisher: ControllerRegistrationsPublisher,
   val apiVersionManager: ApiVersionManager
 ) extends ApiRequestHandler with Logging {
 
@@ -121,6 +121,7 @@ class ControllerApis(
         case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
         case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
+        case ApiKeys.CONTROLLER_REGISTRATION => handleControllerRegistration(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
 
@@ -1032,7 +1033,7 @@ class ControllerApis(
       request,
       EndpointType.CONTROLLER,
       metaProperties.clusterId,
-      () => controllerRegistrations.describeClusterControllers(request.context.listenerName()),
+      () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
       () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>

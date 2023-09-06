@@ -61,8 +61,13 @@ public class ControllerRegistration {
             this.zkMigrationReady = record.zkMigrationReady();
             Map<String, Endpoint> newListeners = new HashMap<>();
             record.endPoints().forEach(endPoint -> {
-                listeners.put(endPoint.name(), new Endpoint(endPoint.name(),
-                    SecurityProtocol.forId(endPoint.securityProtocol()),
+                SecurityProtocol protocol = SecurityProtocol.forId(endPoint.securityProtocol());
+                if (protocol == null) {
+                    throw new RuntimeException("Unknown security protocol " +
+                            (int) endPoint.securityProtocol());
+                }
+                newListeners.put(endPoint.name(), new Endpoint(endPoint.name(),
+                    protocol,
                     endPoint.host(),
                     endPoint.port()));
             });
@@ -115,31 +120,6 @@ public class ControllerRegistration {
                 listeners,
                 supportedFeatures);
         }
-    }
-
-    public static ControllerRegistration fromRecord(RegisterControllerRecord record) {
-        Map<String, Endpoint> listeners = new HashMap<>();
-        record.endPoints().forEach(endpoint -> {
-            SecurityProtocol protocol = SecurityProtocol.forId(endpoint.securityProtocol());
-            if (protocol == null) {
-                throw new RuntimeException("Unknown security protocol " +
-                        (int) endpoint.securityProtocol());
-            }
-            listeners.put(endpoint.name(), new Endpoint(endpoint.name(),
-                    protocol,
-                    endpoint.host(),
-                    endpoint.port()));
-        });
-        Map<String, VersionRange> supportedFeatures = new HashMap<>();
-        record.features().forEach(feature -> {
-            supportedFeatures.put(feature.name(),
-                    VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()));
-        });
-        return new ControllerRegistration(record.controllerId(),
-                record.incarnationId(),
-                record.zkMigrationReady(),
-                listeners,
-                supportedFeatures);
     }
 
     private final int id;

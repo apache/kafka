@@ -90,7 +90,7 @@ public final class ClusterDelta {
     }
 
     public void replay(RegisterControllerRecord record) {
-        ControllerRegistration controller = ControllerRegistration.fromRecord(record);
+        ControllerRegistration controller = new ControllerRegistration.Builder(record).build();
         changedControllers.put(controller.id(), Optional.of(controller));
     }
 

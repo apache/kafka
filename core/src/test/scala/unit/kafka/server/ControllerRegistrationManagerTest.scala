@@ -73,6 +73,7 @@ class ControllerRegistrationManagerTest {
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_6_IV2),
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
+      Map(),
       new ExponentialBackoff(1, 2, 100, 0.02))
   }
 

@@ -40,7 +40,31 @@ import org.mockito.Mockito.{mock, verify, when}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+object AuthHelperTest {
+  def newMockDescribeClusterRequest(
+    data: DescribeClusterRequestData,
+    requestVersion: Int
+  ): Request = {
+    val requestContext = new RequestContext(
+      new RequestHeader(ApiKeys.DESCRIBE_CLUSTER, requestVersion.toShort, "", 0),
+      "",
+      InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS,
+      new ListenerName("PLAINTEXT"),
+      SecurityProtocol.PLAINTEXT,
+      ClientInformation.EMPTY,
+      false)
+    val request: Request = mock(classOf[Request])
+    when(request.body[DescribeClusterRequest]).thenReturn(
+      new DescribeClusterRequest(data, requestVersion.toShort))
+    when(request.context).thenReturn(requestContext)
+    when(request.header).thenReturn(requestContext.header)
+    request
+  }
+}
+
 class AuthHelperTest {
+  import AuthHelperTest.newMockDescribeClusterRequest
 
   private val clientId = ""
 
@@ -121,27 +145,6 @@ class AuthHelperTest {
     )
 
     assertEquals(Set(resourceName1, resourceName3), result)
-  }
-
-  private def newMockDescribeClusterRequest(
-    data: DescribeClusterRequestData,
-    requestVersion: Int
-  ): Request = {
-    val requestContext = new RequestContext(
-      new RequestHeader(ApiKeys.DESCRIBE_CLUSTER, requestVersion.toShort, "", 0),
-      "",
-      InetAddress.getLocalHost,
-      KafkaPrincipal.ANONYMOUS,
-      new ListenerName("PLAINTEXT"),
-      SecurityProtocol.PLAINTEXT,
-      ClientInformation.EMPTY,
-      false)
-    val request: Request = mock(classOf[Request])
-    when(request.body[DescribeClusterRequest]).thenReturn(
-      new DescribeClusterRequest(data, requestVersion.toShort))
-    when(request.context).thenReturn(requestContext)
-    when(request.header).thenReturn(requestContext.header)
-    request
   }
 
   @Test
