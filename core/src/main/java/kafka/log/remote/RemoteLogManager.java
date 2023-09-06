@@ -987,17 +987,17 @@ public class RemoteLogManager implements Closeable {
                     }
                     RemoteLogSegmentMetadata metadata = segmentsIterator.next();
 
-                    // check whether the segment contains the required epoch range with in the current leader epoch lineage.
-                    boolean isValidSegment = isRemoteSegmentWithinLeaderEpochs(metadata, logEndOffset, epochWithOffsets);
-                    boolean isSegmentDeleted = false;
-                    if (isValidSegment) {
-                        isSegmentDeleted =
-                                remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
-                                        remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata);
-                    }
+                    boolean isSegmentDeleted = remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(
+                            metadata, logStartOffset, epochWithOffsets);
+                    boolean isValidSegment = false;
                     if (!isSegmentDeleted) {
-                        isSegmentDeleted = remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(
-                                metadata, logStartOffset, epochWithOffsets);
+                        // check whether the segment contains the required epoch range with in the current leader epoch lineage.
+                        isValidSegment = isRemoteSegmentWithinLeaderEpochs(metadata, logEndOffset, epochWithOffsets);
+                        if (isValidSegment) {
+                            isSegmentDeleted =
+                                    remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
+                                            remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata);
+                        }
                     }
                     canProcess = isSegmentDeleted || !isValidSegment;
                 }
