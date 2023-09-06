@@ -592,6 +592,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final long retryBackoffMs;
+    private final long retryBackoffMaxMs;
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
@@ -698,6 +699,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.time = Time.SYSTEM;
             this.metrics = createMetrics(config, time);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
@@ -768,7 +770,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     requestTimeoutMs,
                     isolationLevel,
                     apiVersions);
-            this.topicMetadataFetcher = new TopicMetadataFetcher(logContext, client, retryBackoffMs);
+            this.topicMetadataFetcher = new TopicMetadataFetcher(logContext,
+                    client,
+                    retryBackoffMs,
+                    retryBackoffMaxMs);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
 
@@ -802,6 +807,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   SubscriptionState subscriptions,
                   ConsumerMetadata metadata,
                   long retryBackoffMs,
+                  long retryBackoffMaxMs,
                   long requestTimeoutMs,
                   int defaultApiTimeoutMs,
                   List<ConsumerPartitionAssignor> assignors,
@@ -821,6 +827,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.subscriptions = subscriptions;
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;

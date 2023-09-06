@@ -126,7 +126,7 @@ public class OffsetsRequestManagerTest {
                 requestManager.fetchOffsets(timestampsToSearch, false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
-        verify(metadata).requestUpdate();
+        verify(metadata).requestUpdate(false);
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         // Metadata update not happening within the time boundaries of the request future, so
@@ -216,7 +216,7 @@ public class OffsetsRequestManagerTest {
                         false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
-        verify(metadata).requestUpdate();
+        verify(metadata).requestUpdate(false);
 
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -476,7 +476,7 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         requestManager.resetPositionsIfNeeded();
-        verify(metadata).requestUpdate();
+        verify(metadata).requestUpdate(false);
         assertEquals(0, requestManager.requestsToSend());
     }
 
@@ -537,7 +537,7 @@ public class OffsetsRequestManagerTest {
         assertFalse(unsentRequest.future().isCompletedExceptionally());
 
         verify(subscriptionState).requestFailed(any(), anyLong());
-        verify(metadata).requestUpdate();
+        verify(metadata).requestUpdate(false);
 
         // Following resetPositions should raise the previous exception without performing any
         // request

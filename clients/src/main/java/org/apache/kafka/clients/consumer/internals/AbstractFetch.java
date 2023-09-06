@@ -144,7 +144,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
             if (!handler.handleResponse(response, requestVersion)) {
                 if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
-                    metadata.requestUpdate();
+                    metadata.requestUpdate(false);
                 }
 
                 return;
@@ -405,7 +405,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
      * @param partition {@link TopicPartition} for which we want to fetch data
      * @param leaderReplica {@link Node} for the leader of the given partition
      * @param currentTimeMs Current time in milliseconds; used to determine if we're within the optional lease window
-     * @return Replic {@link Node node} from which to request the data
+     * @return Replica {@link Node node} from which to request the data
      * @see SubscriptionState#preferredReadReplica
      * @see SubscriptionState#updatePreferredReadReplica
      */
@@ -451,7 +451,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
             if (!leaderOpt.isPresent()) {
                 log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
-                metadata.requestUpdate();
+                metadata.requestUpdate(false);
                 continue;
             }
 
@@ -785,7 +785,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     }
 
     private void requestMetadataUpdate(final TopicPartition topicPartition) {
-        metadata.requestUpdate();
+        metadata.requestUpdate(false);
         subscriptions.clearPreferredReadReplica(topicPartition);
     }
 }

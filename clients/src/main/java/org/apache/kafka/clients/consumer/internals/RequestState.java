@@ -27,13 +27,13 @@ class RequestState {
     private int numAttempts = 0;
     private long backoffMs = 0;
 
-    public RequestState(long retryBackoffMs) {
+    public RequestState(final long retryBackoffMs,
+                        final long retryBackoffMaxMs) {
         this.exponentialBackoff = new ExponentialBackoff(
-            retryBackoffMs,
-            RETRY_BACKOFF_EXP_BASE,
-            retryBackoffMs,
-            RETRY_BACKOFF_JITTER
-        );
+                retryBackoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                retryBackoffMaxMs,
+                RETRY_BACKOFF_JITTER);
     }
 
     // Visible for testing
@@ -42,11 +42,10 @@ class RequestState {
                  final long retryBackoffMaxMs,
                  final double jitter) {
         this.exponentialBackoff = new ExponentialBackoff(
-            retryBackoffMs,
-            retryBackoffExpBase,
-            retryBackoffMaxMs,
-            jitter
-        );
+                retryBackoffMs,
+                retryBackoffExpBase,
+                retryBackoffMaxMs,
+                jitter);
     }
 
     /**

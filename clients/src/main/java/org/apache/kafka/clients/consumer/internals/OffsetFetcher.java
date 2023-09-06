@@ -245,7 +245,7 @@ public class OffsetFetcher {
         long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
         regrouped.forEach((node, fetchPositions) -> {
             if (node.isEmpty()) {
-                metadata.requestUpdate();
+                metadata.requestUpdate(true);
                 return;
             }
 
@@ -353,7 +353,7 @@ public class OffsetFetcher {
 
             if (!leaderAndEpoch.leader.isPresent()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
-                metadata.requestUpdate();
+                metadata.requestUpdate(true);
                 partitionsToRetry.add(tp);
             } else {
                 Node leader = leaderAndEpoch.leader.get();

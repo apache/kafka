@@ -81,7 +81,6 @@ class SocketServerTest {
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true, false,
     () => new Features(MetadataVersion.latest(), Collections.emptyMap[String, java.lang.Short], 0, true))
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
-  server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
   val sockets = new ArrayBuffer[Socket]
 
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
@@ -94,6 +93,7 @@ class SocketServerTest {
 
   @BeforeEach
   def setUp(): Unit = {
+    server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
     kafkaLogger.setLevel(Level.TRACE)

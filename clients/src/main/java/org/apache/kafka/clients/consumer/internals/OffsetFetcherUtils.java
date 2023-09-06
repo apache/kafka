@@ -294,7 +294,7 @@ class OffsetFetcherUtils {
             final ListOffsetResult result) {
         if (!result.partitionsToRetry.isEmpty()) {
             subscriptionState.requestFailed(result.partitionsToRetry, time.milliseconds() + retryBackoffMs);
-            metadata.requestUpdate();
+            metadata.requestUpdate(false);
         }
 
         for (Map.Entry<TopicPartition, ListOffsetData> fetchedOffset : result.fetchedOffsets.entrySet()) {
@@ -312,7 +312,7 @@ class OffsetFetcherUtils {
             final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> resetTimestamps,
             final RuntimeException error) {
         subscriptionState.requestFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
-        metadata.requestUpdate();
+        metadata.requestUpdate(false);
 
         if (!(error instanceof RetriableException) && !cachedListOffsetsException.compareAndSet(null,
                 error))
@@ -327,7 +327,7 @@ class OffsetFetcherUtils {
         if (!offsetsResult.partitionsToRetry().isEmpty()) {
             subscriptionState.setNextAllowedRetry(offsetsResult.partitionsToRetry(),
                     time.milliseconds() + retryBackoffMs);
-            metadata.requestUpdate();
+            metadata.requestUpdate(false);
         }
 
         // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
@@ -351,7 +351,7 @@ class OffsetFetcherUtils {
     void onFailedRequestForValidatingPositions(final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
                                                final RuntimeException error) {
         subscriptionState.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
-        metadata.requestUpdate();
+        metadata.requestUpdate(false);
 
         if (!(error instanceof RetriableException)) {
             maybeSetOffsetForLeaderException(error);

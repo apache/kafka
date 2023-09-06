@@ -798,7 +798,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     consumer.commitSync()
   }
 
-  @Disabled
   @Test
   def testThreadPoolResize(): Unit = {
     val requestHandlerPrefix = "data-plane-kafka-request-handler-"
@@ -1254,6 +1253,38 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       else
         assertEquals(value, entry.value)
     }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTransactionVerificationEnable(quorum: String): Unit = {
+    def verifyConfiguration(enabled: Boolean): Unit = {
+      servers.foreach { server =>
+        TestUtils.waitUntilTrue(() => server.logManager.producerStateManagerConfig.transactionVerificationEnabled == enabled, "Configuration was not updated.")
+      }
+      verifyThreads("AddPartitionsToTxnSenderThread-", 1)
+    }
+    // Verification enabled by default
+    verifyConfiguration(true)
+
+    // Dynamically turn verification off.
+    val configPrefix = listenerPrefix(SecureExternal)
+    val updatedProps = securityProps(sslProperties1, KEYSTORE_PROPS, configPrefix)
+    updatedProps.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
+    alterConfigsUsingConfigCommand(updatedProps)
+    verifyConfiguration(false)
+
+    // Ensure it remains off after shutdown.
+    val shutdownServer = servers.head
+    shutdownServer.shutdown()
+    shutdownServer.awaitShutdown()
+    shutdownServer.startup()
+    verifyConfiguration(false)
+
+    // Turn verification back on.
+    updatedProps.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "true")
+    alterConfigsUsingConfigCommand(updatedProps)
+    verifyConfiguration(true)
   }
 
   private def verifyAddListener(listenerName: String, securityProtocol: SecurityProtocol,

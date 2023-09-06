@@ -152,7 +152,8 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.groupState = new GroupState(rebalanceConfig);
-            final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
             final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
             OffsetsRequestManager offsetsRequestManager =
@@ -173,6 +174,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                         this.time,
                         logContext,
                         retryBackoffMs,
+                        retryBackoffMaxMs,
                         this.errorEventHandler,
                         groupState.groupId);
                 commitRequestManager = new CommitRequestManager(
