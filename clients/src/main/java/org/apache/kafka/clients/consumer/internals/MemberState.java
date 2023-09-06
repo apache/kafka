@@ -37,12 +37,12 @@ public enum MemberState {
     PROCESSING_ASSIGNMENT,
 
     /**
-     * Member is active in a group (heartbeating) and has processed any assignment received.
+     * Member is active in a group (heartbeating) and has processed all assignments received.
      */
     STABLE,
 
     /**
-     * The member failed at processing an assignment.
+     * The member failed with an unrecoverable error
      */
     FAILED;
 
