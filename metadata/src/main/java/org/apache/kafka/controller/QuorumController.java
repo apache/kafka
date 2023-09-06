@@ -2115,7 +2115,7 @@ public final class QuorumController implements Controller {
                     }
                 }
             },
-            EnumSet.of(RUNS_IN_PREMIGRATION)).whenComplete((__, t) -> {
+            EnumSet.of(RUNS_IN_PREMIGRATION, COMPLETES_IN_TRANSACTION)).whenComplete((__, t) -> {
                 if (ControllerExceptions.isTimeoutException(t)) {
                     replicationControl.processExpiredBrokerHeartbeat(request);
                     controllerMetrics.incrementTimedOutHeartbeats();

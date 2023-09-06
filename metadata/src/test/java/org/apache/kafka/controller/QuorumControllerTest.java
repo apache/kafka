@@ -1491,6 +1491,7 @@ public class QuorumControllerTest {
                 setAddingReplicas(Collections.emptyList()).setLeader(1).setLeaderEpoch(0).
                 setPartitionEpoch(0), (short) 0)
             ));
+
     @Test
     public void testFailoverDuringMigrationTransaction() throws Exception {
         try (
@@ -1531,6 +1532,43 @@ public class QuorumControllerTest {
 
             assertEquals(ZkMigrationState.MIGRATION, newActive.appendReadEvent("read migration state", OptionalLong.empty(),
                 () -> newActive.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
+
+        }
+    }
+
+    @Test
+    public void testBrokerHeartbeatDuringMigration() throws Exception {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+        ) {
+            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"));
+            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+            QuorumController active = controlEnv.activeController(true);
+
+            // Register a ZK broker
+            BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
+                new BrokerRegistrationRequestData().
+                    setBrokerId(0).
+                    setRack(null).
+                    setClusterId(active.clusterId()).
+                    setIsMigratingZkBroker(true).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_6_IV1, MetadataVersion.IBP_3_6_IV1)).
+                    setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
+                    setListeners(new ListenerCollection(Arrays.asList(new Listener().
+                        setName("PLAINTEXT").setHost("localhost").
+                        setPort(9092)).iterator()))).get();
+
+            // Start migration
+            ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
+            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
+
+            // Send broker heartbeat, should complete even though we leave migration transaction hanging
+            assertEquals(new BrokerHeartbeatReply(true, false, false, false),
+                active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
+                    setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
+                    setCurrentMetadataOffset(100000L)).get());
 
         }
     }
