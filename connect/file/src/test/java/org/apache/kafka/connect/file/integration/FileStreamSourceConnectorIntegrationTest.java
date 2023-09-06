@@ -195,7 +195,7 @@ public class FileStreamSourceConnectorIntegrationTest {
     private File createTempFile(int numLines) throws Exception {
         File sourceFile = TestUtils.tempFile();
 
-        try (PrintStream printStream = new PrintStream(Files.newOutputStream(sourceFile.toPath(), StandardOpenOption.APPEND))) {
+        try (PrintStream printStream = new PrintStream(Files.newOutputStream(sourceFile.toPath()))) {
             for (int i = 0; i < numLines; i++) {
                 printStream.println(String.format(LINE_FORMAT, i));
             }
