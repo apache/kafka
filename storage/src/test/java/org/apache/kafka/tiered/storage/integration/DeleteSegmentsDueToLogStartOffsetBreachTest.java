@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import kafka.server.KafkaConfig;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
@@ -24,7 +23,6 @@ import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -35,14 +33,6 @@ public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredSto
     @Override
     public int brokerCount() {
         return 2;
-    }
-
-    @Override
-    public Properties overridingProps() {
-        Properties props = super.overridingProps();
-        // configure infinite bytes retention
-        props.put(KafkaConfig.LogRetentionBytesProp(), "-1");
-        return props;
     }
 
     @Override
