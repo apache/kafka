@@ -18,8 +18,6 @@ package org.apache.kafka.connect.file.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.file.FileStreamSourceConnector;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -129,9 +127,11 @@ public class FileStreamSourceConnectorIntegrationTest {
         connect.assertions().assertConnectorIsStopped(CONNECTOR_NAME, "Connector did not stop in time");
 
         // Alter the offsets to make the connector re-process the last line in the file
-        Map<String, Object> partition = Collections.singletonMap(FILENAME_FIELD, sourceFile.getAbsolutePath());
-        Map<String, Object> offset = Collections.singletonMap(POSITION_FIELD, 28L);
-        connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(Collections.singletonList(new ConnectorOffset(partition, offset))));
+        connect.alterSourceConnectorOffset(
+            CONNECTOR_NAME,
+            Collections.singletonMap(FILENAME_FIELD, sourceFile.getAbsolutePath()),
+            Collections.singletonMap(POSITION_FIELD, 28L)
+        );
 
         connect.resumeConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,

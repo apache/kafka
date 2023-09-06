@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.connect.file.integration;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.file.FileStreamSinkConnector;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
-import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -32,9 +30,7 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.connect.file.FileStreamSinkConnector.FILE_CONFIG;
@@ -93,13 +89,7 @@ public class FileStreamSinkConnectorIntegrationTest {
         connect.assertions().assertConnectorIsStopped(CONNECTOR_NAME, "Connector did not stop in time");
 
         // Alter the offsets to cause the last message in the topic to be re-processed
-        Map<String, Object> partition = new HashMap<>();
-        partition.put(SinkUtils.KAFKA_TOPIC_KEY, TOPIC);
-        partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
-        Map<String, Object> offset = Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, NUM_MESSAGES - 1);
-        List<ConnectorOffset> offsetsToAlter = Collections.singletonList(new ConnectorOffset(partition, offset));
-
-        connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter));
+        connect.alterSinkConnectorOffset(CONNECTOR_NAME, new TopicPartition(TOPIC, 0), (long) (NUM_MESSAGES - 1));
 
         connect.resumeConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 1,
