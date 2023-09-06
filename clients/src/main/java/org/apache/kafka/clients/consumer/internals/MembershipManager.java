@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
-import java.util.List;
-
 /**
- * Manages group membership for a single consumer.
- * Responsible for keeping member lifecycle as part of a consumer group.
+ * Manages group membership for a single member.
+ * Responsible for:
+ * <li>Keeping member state</li>
+ * <li>Keeping assignment for the member</li>
+ * <li>Computing assignment for the group if the member is required to do so<li/>
  */
 public interface MembershipManager {
 
@@ -35,20 +35,37 @@ public interface MembershipManager {
 
     int memberEpoch();
 
-    void updateStateOnHeartbeatResponse(ConsumerGroupHeartbeatResponseData response);
-
     MemberState state();
 
-    AssignorSelector.Type assignorType();
+    /**
+     * Update the current state of the member based on a heartbeat response
+     */
+    void updateState(ConsumerGroupHeartbeatResponseData response);
 
     /**
+     * Returns the {@link AssignorSelection} for the member
+     */
+    AssignorSelection assignorSelection();
+
+    /**
+     * Returns the current assignment for the member
+     */
+    ConsumerGroupHeartbeatResponseData.Assignment assignment();
+
+    /**
+     * Sets the current assignment for the member
+     */
+    void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment);
+
+
+    /**
+     * Compute assignment for the group members using the provided group state and client side
+     * assignors defined.
      *
-     * Returns the name of the server side assignor if any
+     * @param groupState Group state to be used to compute the assignment
+     * @return Group assignment computed using the selected client side assignor
      */
-    String serverAssignor();
-
-    /**
-     * Returns the client side assignors if any
-     */
-    List<ConsumerGroupHeartbeatRequestData.Assignor> clientAssignors();
+    //TODO: fix parameters and return types to represent the group state object as defined in the
+    // ConsumerGroupPrepareAssignmentResponse
+    Object computeAssignment(Object groupState);
 }

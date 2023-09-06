@@ -17,43 +17,64 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Membership manager that maintains group membership following the new consumer group protocol.
- * It sends periodic heartbeat requests according to the defined interval.
- * <p>
- * Heartbeat responses are processed to update the member state, and process assignments received.
+ * Membership manager that maintains group membership for a single member following the new
+ * consumer group protocol.
+ * <p/>
+ * This keeps membership state and assignment updated in-memory, based on the heartbeat responses
+ * the member receives. It is also responsible for computing assignment for the group based on
+ * the metadata, if the member has been selected by the broker to do so.
  */
 public class MembershipManagerImpl implements MembershipManager {
 
-    private String groupId;
+    private final String groupId;
     private Optional<String> groupInstanceId;
     private String memberId;
     private int memberEpoch;
     private MemberState state;
-    private AssignorSelector assignorSelector;
-    private ConsumerGroupHeartbeatResponseData.Assignment assignment;
+    private AssignorSelection assignorSelection;
+
+    /**
+     * Assignment that the member received from the server and successfully processed
+     */
+    private ConsumerGroupHeartbeatResponseData.Assignment currentAssignment;
+
+    /**
+     * List of assignments that the member received from the server but hasn't processed yet
+     */
+    private final List<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignments;
 
     public MembershipManagerImpl(String groupId) {
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
+        this.assignorSelection = AssignorSelection.defaultAssignor();
+        this.targetAssignments = new ArrayList<>();
     }
 
-    public MembershipManagerImpl(String groupId, String groupInstanceId) {
+    public MembershipManagerImpl(String groupId, String groupInstanceId, AssignorSelection assignorSelection) {
         this(groupId);
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
+        setAssignorSelection(assignorSelection);
     }
 
-    public void setupClientAssignors(List<ConsumerGroupHeartbeatRequestData.Assignor> clientAssignors) {
-        // TODO: double check that no validation is required here, given that a member could
-        //  start using client side assignors at any given time.
-        assignorSelector = AssignorSelector.newClientAssignors(clientAssignors);
+    /**
+     * Update assignor selection for the member.
+     *
+     * @param assignorSelection New assignor selection
+     * @throws IllegalArgumentException If the provided assignor selection is null
+     */
+    public void setAssignorSelection(AssignorSelection assignorSelection) {
+        if (assignorSelection == null) {
+            throw new IllegalArgumentException("Assignor selection cannot be null");
+        }
+        this.assignorSelection = assignorSelection;
     }
 
     private void transitionTo(MemberState nextState) {
@@ -87,25 +108,30 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public void updateStateOnHeartbeatResponse(ConsumerGroupHeartbeatResponseData response) {
+    public void updateState(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() == Errors.NONE.code()) {
-            // Successful heartbeat response. Extract metadata and assignment
             this.memberId = response.memberId();
             this.memberEpoch = response.memberEpoch();
-            assignment = response.assignment();
-            // TODO: validate response & process assignment
-            transitionTo(MemberState.STABLE);
+            targetAssignments.add(response.assignment());
+            transitionTo(MemberState.PROCESSING_ASSIGNMENT);
         } else {
-            // TODO: error handling
-            handleHeartbeatError(response);
-            transitionTo(MemberState.UNJOINED);
+            if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
+                resetMemberIdAndEpoch();
+                transitionTo(MemberState.UNJOINED);
+            } else if (response.errorCode() == Errors.UNRELEASED_INSTANCE_ID.code()) {
+                transitionTo(MemberState.FAILED);
+            }
         }
     }
 
-    private void handleHeartbeatError(ConsumerGroupHeartbeatResponseData responseData) {
-        if (responseData.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || responseData.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
-            resetMemberIdAndEpoch();
-        }
+    public void onAssignmentProcessSuccess(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        currentAssignment = assignment;
+        targetAssignments.remove(assignment);
+        transitionTo(MemberState.STABLE);
+    }
+
+    public void onAssignmentProcessFailure(Throwable error) {
+        // TODO: handle failure scenario when the member was not able to process the assignment
     }
 
     private void resetMemberIdAndEpoch() {
@@ -119,19 +145,24 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public AssignorSelector.Type assignorType() {
-        return assignorSelector.type;
+    public AssignorSelection assignorSelection() {
+        return this.assignorSelection;
     }
 
     @Override
-    public String serverAssignor() {
-        return null;
+    public ConsumerGroupHeartbeatResponseData.Assignment assignment() {
+        return this.currentAssignment;
     }
 
     @Override
-    public List<ConsumerGroupHeartbeatRequestData.Assignor> clientAssignors() {
-        return null;
+    public void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        this.currentAssignment = assignment;
     }
 
+    @Override
+    public Object computeAssignment(Object groupState) {
+        throw new UnsupportedOperationException("Client side assignment computation not supported" +
+                " yet.");
+    }
 
 }
