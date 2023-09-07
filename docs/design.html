@@ -137,8 +137,7 @@
     the same type (e.g. field names in JSON or user agents in web logs or common string values). Efficient compression requires compressing multiple messages together rather than compressing each message individually.
     <p>
     Kafka supports this with an efficient batching format. A batch of messages can be grouped together, compressed, and sent to the server in this form. The broker decompresses the batch in order to validate it. For
-    example, it validates that the number of records in the batch is same as what batch header states. The broker may also potentially modify the batch (e.g., if the topic is compacted, the broker will filter out 
-    records eligible for compaction prior to writing to disk). This batch of messages is then written to disk in compressed form. The batch will remain compressed in the log and it will also be transmitted to the 
+    example, it validates that the number of records in the batch is same as what batch header states. This batch of messages is then written to disk in compressed form. The batch will remain compressed in the log and it will also be transmitted to the 
     consumer in compressed form. The consumer decompresses any compressed data that it receives.
     <p>
     Kafka supports GZIP, Snappy, LZ4 and ZStandard compression protocols. More details on compression can be found <a href="https://cwiki.apache.org/confluence/display/KAFKA/Compression">here</a>.
