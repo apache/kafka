@@ -870,9 +870,10 @@ public class ReassignPartitionsUnitTest {
         return res;
     }
 
+    @SuppressWarnings("unchecked")
     private Map<Integer, PartitionMove> asJava(scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove> map) {
         Map<Integer, PartitionMove> res = new HashMap<>();
-        map.foreach(t -> res.put((Integer) t._1, new PartitionMove(asJava(t._2.sources()), asJava(t._2.destinations()))));
+        map.foreach(t -> res.put((Integer) t._1, new PartitionMove(CollectionConverters.asJava(t._2.sources().toSet()), asJava(t._2.destinations()))));
         return res;
     }
 
