@@ -1494,6 +1494,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestContext,
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId(offsetFetchRequest.groupId)
+        .setMemberId(offsetFetchRequest.memberId)
+        .setMemberEpoch(offsetFetchRequest.memberEpoch)
         .setTopics(authorizedTopics.asJava),
       requireStable
     ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (offsetFetchResponse, exception) =>

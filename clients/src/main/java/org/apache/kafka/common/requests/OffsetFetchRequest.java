@@ -55,28 +55,48 @@ public class OffsetFetchRequest extends AbstractRequest {
                        boolean requireStable,
                        List<TopicPartition> partitions,
                        boolean throwOnFetchStableOffsetsUnsupported) {
+            this(
+              groupId,
+              null,
+              -1,
+              requireStable,
+              partitions,
+              throwOnFetchStableOffsetsUnsupported
+            );
+        }
+
+        public Builder(String groupId,
+                       String memberId,
+                       int memberEpoch,
+                       boolean requireStable,
+                       List<TopicPartition> partitions,
+                       boolean throwOnFetchStableOffsetsUnsupported) {
             super(ApiKeys.OFFSET_FETCH);
 
-            final List<OffsetFetchRequestTopic> topics;
+            OffsetFetchRequestData.OffsetFetchRequestGroup group =
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(memberEpoch);
+
             if (partitions != null) {
-                Map<String, OffsetFetchRequestTopic> offsetFetchRequestTopicMap = new HashMap<>();
+                Map<String, OffsetFetchRequestTopics> offsetFetchRequestTopicMap = new HashMap<>();
                 for (TopicPartition topicPartition : partitions) {
                     String topicName = topicPartition.topic();
-                    OffsetFetchRequestTopic topic = offsetFetchRequestTopicMap.getOrDefault(
-                        topicName, new OffsetFetchRequestTopic().setName(topicName));
+                    OffsetFetchRequestTopics topic = offsetFetchRequestTopicMap.getOrDefault(
+                        topicName, new OffsetFetchRequestTopics().setName(topicName));
                     topic.partitionIndexes().add(topicPartition.partition());
                     offsetFetchRequestTopicMap.put(topicName, topic);
                 }
-                topics = new ArrayList<>(offsetFetchRequestTopicMap.values());
+                group.setTopics(new ArrayList<>(offsetFetchRequestTopicMap.values()));
             } else {
                 // If passed in partition list is null, it is requesting offsets for all topic partitions.
-                topics = ALL_TOPIC_PARTITIONS;
+                group.setTopics(ALL_TOPIC_PARTITIONS_BATCH);
             }
 
             this.data = new OffsetFetchRequestData()
-                            .setGroupId(groupId)
-                            .setRequireStable(requireStable)
-                            .setTopics(topics);
+                .setRequireStable(requireStable)
+                .setGroups(Collections.singletonList(group));
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 

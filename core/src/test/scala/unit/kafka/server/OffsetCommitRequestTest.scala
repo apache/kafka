@@ -21,23 +21,20 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
-import kafka.utils.{NotNothing, TestUtils}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, JoinGroupRequest, JoinGroupResponse, OffsetCommitRequest, OffsetCommitResponse, SyncGroupRequest, SyncGroupResponse}
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
 @Tag("integration")
-class OffsetCommitRequestTest(cluster: ClusterInstance) {
+class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
@@ -162,134 +159,5 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) {
         version = version.toShort
       )
     }
-  }
-
-  private def isUnstableApiEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("unstable.api.versions.enable") == "true"
-  }
-
-  private def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("group.coordinator.new.enable") == "true"
-  }
-
-  private def commitOffset(
-    groupId: String,
-    memberId: String,
-    memberEpoch: Int,
-    topic: String,
-    partition: Int,
-    offset: Long,
-    expectedError: Errors,
-    version: Short
-  ): Unit = {
-    val request = new OffsetCommitRequest.Builder(
-      new OffsetCommitRequestData()
-        .setGroupId(groupId)
-        .setMemberId(memberId)
-        .setGenerationIdOrMemberEpoch(memberEpoch)
-        .setTopics(List(
-          new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName(topic)
-            .setPartitions(List(
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(partition)
-                .setCommittedOffset(offset)
-            ).asJava)
-        ).asJava),
-      isUnstableApiEnabled
-    ).build(version)
-
-    val expectedResponse = new OffsetCommitResponseData()
-      .setTopics(List(
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName(topic)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(partition)
-              .setErrorCode(expectedError.code)
-          ).asJava)
-      ).asJava)
-
-    val response = connectAndReceive[OffsetCommitResponse](request)
-    assertEquals(expectedResponse, response.data)
-  }
-
-  private def joinConsumerGroupWithOldProtocol(groupId: String): (String, Int) = {
-    val joinGroupRequestData = new JoinGroupRequestData()
-      .setGroupId(groupId)
-      .setRebalanceTimeoutMs(5 * 50 * 1000)
-      .setSessionTimeoutMs(600000)
-      .setProtocolType("consumer")
-      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-        List(
-          new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("consumer-range")
-            .setMetadata(Array.empty)
-        ).asJava.iterator
-      ))
-
-    // Join the group as a dynamic member.
-    // Send the request until receiving a successful response. There is a delay
-    // here because the group coordinator is loaded in the background.
-    var joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
-    var joinGroupResponse: JoinGroupResponse = null
-    TestUtils.waitUntilTrue(() => {
-      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
-      joinGroupResponse.data.errorCode == Errors.MEMBER_ID_REQUIRED.code
-    }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
-
-    // Rejoin the group with the member id.
-    joinGroupRequestData.setMemberId(joinGroupResponse.data.memberId)
-    joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
-    joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
-    assertEquals(Errors.NONE.code, joinGroupResponse.data.errorCode)
-
-    val syncGroupRequestData = new SyncGroupRequestData()
-      .setGroupId(groupId)
-      .setMemberId(joinGroupResponse.data.memberId)
-      .setGenerationId(joinGroupResponse.data.generationId)
-      .setProtocolType("consumer")
-      .setProtocolName("consumer-range")
-      .setAssignments(List.empty.asJava)
-
-    // Send the sync group request to complete the rebalance.
-    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
-    val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
-    assertEquals(Errors.NONE.code, syncGroupResponse.data.errorCode)
-
-    (joinGroupResponse.data.memberId, joinGroupResponse.data.generationId)
-  }
-
-  private def joinConsumerGroupWithNewProtocol(groupId: String): (String, Int) = {
-    // Heartbeat request to join the group.
-    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-      new ConsumerGroupHeartbeatRequestData()
-        .setGroupId(groupId)
-        .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(5 * 60 * 1000)
-        .setSubscribedTopicNames(List("foo").asJava)
-        .setTopicPartitions(List.empty.asJava),
-      true
-    ).build()
-
-    // Send the request until receiving a successful response. There is a delay
-    // here because the group coordinator is loaded in the background.
-    var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
-    TestUtils.waitUntilTrue(() => {
-      consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
-    }, msg = s"Could not join the group successfully. Last response $consumerGroupHeartbeatResponse.")
-
-    (consumerGroupHeartbeatResponse.data.memberId, consumerGroupHeartbeatResponse.data.memberEpoch)
-  }
-
-  private def connectAndReceive[T <: AbstractResponse](
-    request: AbstractRequest
-  )(implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
-    IntegrationTestUtils.connectAndReceive[T](
-      request,
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
-    )
   }
 }

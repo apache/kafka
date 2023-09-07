@@ -56,7 +56,7 @@
       "about": "Each group we would like to fetch offsets for", "fields": [
       { "name": "GroupId", "type": "string", "versions": "8+", "entityType": "groupId",
         "about": "The group ID."},
-      { "name": "MemberId", "type": "string", "versions": "9+", "nullableVersions": "9+", "default": null, "ignorable": true,
+      { "name": "MemberId", "type": "string", "versions": "9+", "nullableVersions": "9+", "default": "null", "ignorable": true,
         "about": "The member ID assigned by the group coordinator if using the new consumer protocol (KIP-848)." },
       { "name": "MemberEpoch", "type": "int32", "versions": "9+", "default": "-1", "ignorable": true,
         "about": "The member epoch if using the new consumer protocol (KIP-848)." },
