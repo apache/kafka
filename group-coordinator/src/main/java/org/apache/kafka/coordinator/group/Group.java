@@ -50,6 +50,11 @@ public interface Group {
     String stateAsString();
 
     /**
+     * @return The {{@link GroupType}}'s String representation with committedOffset.
+     */
+    String stateAsString(long committedOffset);
+
+    /**
      * @return the group formatted as a list group response.
      */
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);

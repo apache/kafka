@@ -243,6 +243,16 @@ public class GenericGroup implements Group {
     }
 
     /**
+     * The state of this group with committedOffset.
+     *
+     * @return The current state as a String.
+     */
+    @Override
+    public String stateAsString(long committedOffset) {
+        return this.state.toString();
+    }
+
+    /**
      * @return the group id.
      */
     public String groupId() {

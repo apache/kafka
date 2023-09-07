@@ -428,13 +428,7 @@ public class GroupMetadataManager {
     public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
         if (!statesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> {
-                if (group instanceof ConsumerGroup) {
-                    return statesFilter.contains(((ConsumerGroup) group).stateAsString(committedOffset));
-                } else {
-                    return statesFilter.contains(group.stateAsString());
-                }
-            });
+            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
         }
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }
