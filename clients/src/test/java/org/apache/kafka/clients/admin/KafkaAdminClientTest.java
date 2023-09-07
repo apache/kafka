@@ -212,6 +212,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -5619,8 +5621,13 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Test
-    public void testListOffsetsMetadataNonRetriableErrors() throws Exception {
+    @ParameterizedTest
+    @MethodSource("listOffsetsMetadataNonRetriableErrors")
+    public void testListOffsetsMetadataNonRetriableErrors(
+            Errors topicMetadataError,
+            Errors partitionMetadataError,
+            Class<? extends Throwable> expectedFailure
+    ) throws Exception {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
         List<Node> nodes = Arrays.asList(node0, node1);
@@ -5636,33 +5643,37 @@ public class KafkaAdminClientTest {
                 node0);
 
         final TopicPartition tp1 = new TopicPartition("foo", 0);
-
-        Map<MetadataResponse, Class<? extends Throwable>> responsesAndFailures = new HashMap<>();
-        responsesAndFailures.put(
-                prepareMetadataResponse(cluster, Errors.TOPIC_AUTHORIZATION_FAILED),
-                TopicAuthorizationException.class
-        );
-        responsesAndFailures.put(
-                // We fail fast when the entire topic is unknown
-                prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE),
-                UnknownTopicOrPartitionException.class
+        final MetadataResponse preparedResponse = prepareMetadataResponse(
+                cluster, topicMetadataError, partitionMetadataError
         );
 
-        for (Map.Entry<MetadataResponse, Class<? extends Throwable>> responseAndFailure : responsesAndFailures.entrySet()) {
-            MetadataResponse preparedResponse = responseAndFailure.getKey();
-            Class<? extends Throwable> expectedFailure = responseAndFailure.getValue();
-            try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
-                env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-                env.kafkaClient().prepareResponse(preparedResponse);
+            env.kafkaClient().prepareResponse(preparedResponse);
 
-                Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
-                partitions.put(tp1, OffsetSpec.latest());
-                ListOffsetsResult result = env.adminClient().listOffsets(partitions);
+            Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
+            partitions.put(tp1, OffsetSpec.latest());
+            ListOffsetsResult result = env.adminClient().listOffsets(partitions);
 
-                TestUtils.assertFutureError(result.all(), expectedFailure);
-            }
+            TestUtils.assertFutureError(result.all(), expectedFailure);
         }
+    }
+
+    private static Stream<Arguments> listOffsetsMetadataNonRetriableErrors() {
+        return Stream.of(
+                Arguments.of(
+                        Errors.TOPIC_AUTHORIZATION_FAILED,
+                        Errors.TOPIC_AUTHORIZATION_FAILED,
+                        TopicAuthorizationException.class
+                ),
+                Arguments.of(
+                        // We fail fast when the entire topic is unknown
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        Errors.NONE,
+                        UnknownTopicOrPartitionException.class
+                )
+        );
     }
 
     @Test
