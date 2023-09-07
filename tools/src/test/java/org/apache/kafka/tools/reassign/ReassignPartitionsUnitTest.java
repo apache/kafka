@@ -315,21 +315,21 @@ public class ReassignPartitionsUnitTest {
                 new Node(2, "localhost", 9094, null))).
             build()) {
 
-            assertEquals(Arrays.asList(
+            assertEquals(CollectionConverters.asScala(Arrays.asList(
                 new BrokerMetadata(0, Optional.of("rack0")),
                 new BrokerMetadata(1, Optional.of("rack1"))
-            ), CollectionConverters.asJava(getBrokerMetadata(adminClient, CollectionConverters.asScala(Arrays.asList(0, 1)), true)));
-            assertEquals(Arrays.asList(
+            )), getBrokerMetadata(adminClient, CollectionConverters.asScala(Arrays.asList(0, 1)), true));
+            assertEquals(CollectionConverters.asScala(Arrays.asList(
                 new BrokerMetadata(0, Optional.empty()),
                 new BrokerMetadata(1, Optional.empty())
-            ), CollectionConverters.asJava(getBrokerMetadata(adminClient, CollectionConverters.asScala(Arrays.asList(0, 1)), false)));
+            )), getBrokerMetadata(adminClient, CollectionConverters.asScala(Arrays.asList(0, 1)), false));
             assertStartsWith("Not all brokers have rack information",
                 assertThrows(AdminOperationException.class,
                     () -> getBrokerMetadata(adminClient, CollectionConverters.asScala(Arrays.asList(1, 2)), true)).getMessage());
-            assertEquals(Arrays.asList(
+            assertEquals(CollectionConverters.asScala(Arrays.asList(
                 new BrokerMetadata(1, Optional.empty()),
                 new BrokerMetadata(2, Optional.empty())
-            ), CollectionConverters.asJava(getBrokerMetadata(adminClient, CollectionConverters.asScala(Arrays.asList(1, 2)), false)));
+            )), getBrokerMetadata(adminClient, CollectionConverters.asScala(Arrays.asList(1, 2)), false));
         }
     }
 
