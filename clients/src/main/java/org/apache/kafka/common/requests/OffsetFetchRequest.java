@@ -56,12 +56,12 @@ public class OffsetFetchRequest extends AbstractRequest {
                        List<TopicPartition> partitions,
                        boolean throwOnFetchStableOffsetsUnsupported) {
             this(
-              groupId,
-              null,
-              -1,
-              requireStable,
-              partitions,
-              throwOnFetchStableOffsetsUnsupported
+                groupId,
+                null,
+                -1,
+                requireStable,
+                partitions,
+                throwOnFetchStableOffsetsUnsupported
             );
         }
 
