@@ -18,6 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
+import java.util.Optional;
+
 /**
  * Manages group membership for a single member.
  * Responsible for:
@@ -29,7 +31,7 @@ public interface MembershipManager {
 
     String groupId();
 
-    String groupInstanceId();
+    Optional<String> groupInstanceId();
 
     String memberId();
 

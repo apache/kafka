@@ -92,9 +92,8 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public String groupInstanceId() {
-        // TODO: review empty vs null instance id
-        return groupInstanceId.orElse(null);
+    public Optional<String> groupInstanceId() {
+        return groupInstanceId;
     }
 
     @Override
