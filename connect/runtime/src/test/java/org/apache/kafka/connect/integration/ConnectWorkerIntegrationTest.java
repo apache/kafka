@@ -382,7 +382,7 @@ public class ConnectWorkerIntegrationTest {
         );
         // If the connector is truly stopped, we should also see an empty set of tasks and task configs
         assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Transition to RUNNING
         connect.resumeConnector(CONNECTOR_NAME);
@@ -411,7 +411,7 @@ public class ConnectWorkerIntegrationTest {
                 "Connector did not stop in time"
         );
         assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Transition to PAUSED
         connect.pauseConnector(CONNECTOR_NAME);
@@ -471,7 +471,7 @@ public class ConnectWorkerIntegrationTest {
         );
         // If the connector is truly stopped, we should also see an empty set of tasks and task configs
         assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Can resume a connector after its Connector has failed before shutdown after receiving a stop request
         props.remove("connector.start.inject.error");
@@ -493,7 +493,7 @@ public class ConnectWorkerIntegrationTest {
                 "Connector did not stop in time"
         );
         assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyMap(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Can resume a connector after its Connector has failed during shutdown after receiving a stop request
         connect.resumeConnector(CONNECTOR_NAME);
