@@ -37,6 +37,8 @@ import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochE
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
@@ -1752,5 +1754,51 @@ class LogLoaderTest {
     log.activeSegment.sanityCheck(true) // this should not throw
 
     log.close()
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("false, 5", "true, 0"))
+  def testLogStartOffsetWhenRemoteStorageIsEnabled(isRemoteLogEnabled: Boolean,
+                                                   expectedLogStartOffset: Long): Unit = {
+    val logDirFailureChannel = null
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
+    val logConfig = LogTestUtils.createLogConfig()
+    val stateManager: ProducerStateManager = mock(classOf[ProducerStateManager])
+    when(stateManager.isEmpty).thenReturn(true)
+
+    val log = createLog(logDir, logConfig)
+    // Create segments: [0-0], [1-1], [2-2], [3-3], [4-4], [5-5], [6-6], [7-7], [8-8], [9-]
+    //                   |---> logStartOffset                                           |---> active segment (empty)
+    //                                                                                  |---> logEndOffset
+    for (i <- 0 until 9) {
+      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
+      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
+      log.roll()
+    }
+    log.maybeIncrementHighWatermark(new LogOffsetMetadata(9L))
+    log.maybeIncrementLogStartOffset(5L, LogStartOffsetIncrementReason.SegmentDeletion)
+    log.deleteOldSegments()
+
+    val segments = new LogSegments(topicPartition)
+    log.logSegments.foreach(segment => segments.add(segment))
+    assertEquals(5, segments.firstSegment.get.baseOffset)
+
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
+    val offsets = new LogLoader(
+      logDir,
+      topicPartition,
+      logConfig,
+      mockTime.scheduler,
+      mockTime,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      leaderEpochCache,
+      stateManager,
+      isRemoteLogEnabled = isRemoteLogEnabled
+    ).load()
+    assertEquals(expectedLogStartOffset, offsets.logStartOffset)
   }
 }

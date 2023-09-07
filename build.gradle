@@ -829,6 +829,7 @@ def connectPkgs = [
     'connect:file',
     'connect:json',
     'connect:runtime',
+    'connect:test-plugins',
     'connect:transforms',
     'connect:mirror',
     'connect:mirror-client'
@@ -1073,7 +1074,8 @@ project(':core') {
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
                                ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
                                ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
-                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs'], type: Tar) {
+                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
+                               ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc'], type: Tar) {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -1694,6 +1696,10 @@ project(':storage:api') {
   javadoc {
     include "**/org/apache/kafka/server/log/remote/storage/*"
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
+  }
 }
 
 project(':storage') {
@@ -1718,6 +1724,7 @@ project(':storage') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -1760,6 +1767,20 @@ project(':storage') {
     outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
   }
 
+  task genRemoteLogManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_manager_config.html").newOutputStream()
+  }
+
+  task genRemoteLogMetadataManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_metadata_manager_config.html").newOutputStream()
+  }
+
   sourceSets {
     main {
       java {
@@ -1795,6 +1816,10 @@ project(':storage') {
 
   javadoc {
     enabled = false
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
   }
 }
 
@@ -2768,7 +2793,6 @@ project(':connect:runtime') {
     implementation libs.reflections
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
-    implementation project(':server-common')
 
     // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
@@ -2778,6 +2802,8 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':connect:test-plugins')
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi
@@ -2889,6 +2915,10 @@ project(':connect:file') {
 
     testRuntimeOnly libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':connect:runtime')
+    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
   }
 
   javadoc {
@@ -3072,6 +3102,18 @@ project(':connect:mirror-client') {
 
   jar {
     dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:test-plugins') {
+  archivesBaseName = "connect-test-plugins"
+
+  dependencies {
+    api project(':connect:api')
+
+    implementation project(':server-common')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
   }
 }
 

@@ -125,6 +125,10 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     }
 
     QuorumController activeController() throws InterruptedException {
+        return activeController(false);
+    }
+
+    QuorumController activeController(boolean waitForActivation) throws InterruptedException {
         AtomicReference<QuorumController> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             LeaderAndEpoch leader = logEnv.leaderAndEpoch();
@@ -140,6 +144,18 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 throw new RuntimeException(String.format("Expected to see %s as leader", leader));
             }
         });
+
+        if (waitForActivation) {
+            try {
+                // ControllerActivation happens after curClaimEpoch is set, so we need to put something on
+                // the end of the queue and wait for it to complete before returning the active controller.
+                value.get()
+                    .appendReadEvent("wait for activation", OptionalLong.empty(), () -> null)
+                    .get(20000, TimeUnit.MILLISECONDS);
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed while waiting for controller activation", t);
+            }
+        }
 
         return value.get();
     }

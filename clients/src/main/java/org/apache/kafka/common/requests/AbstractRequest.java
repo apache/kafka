@@ -312,6 +312,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return AllocateProducerIdsRequest.parse(buffer, apiVersion);
             case CONSUMER_GROUP_HEARTBEAT:
                 return ConsumerGroupHeartbeatRequest.parse(buffer, apiVersion);
+            case CONSUMER_GROUP_DESCRIBE:
+                return ConsumerGroupDescribeRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

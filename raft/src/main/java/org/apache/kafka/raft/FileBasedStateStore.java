@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ShortNode;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.raft.generated.QuorumStateData.Voter;
@@ -88,6 +89,10 @@ public class FileBasedStateStore implements QuorumStateStore {
             if (dataVersionNode == null) {
                 throw new IOException("Deserialized node " + readNode +
                     " does not have " + DATA_VERSION + " field");
+            }
+
+            if (dataVersionNode.asInt() != 0) {
+                throw new UnsupportedVersionException("Unknown data version of " + dataVersionNode.toString());
             }
 
             final short dataVersion = dataVersionNode.shortValue();

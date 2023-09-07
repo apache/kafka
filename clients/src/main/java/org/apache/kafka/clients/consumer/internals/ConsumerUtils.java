@@ -32,7 +32,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -40,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -87,22 +87,19 @@ public final class ConsumerUtils {
     }
 
     public static LogContext createLogContext(ConsumerConfig config, GroupRebalanceConfig groupRebalanceConfig) {
-        String groupId = String.valueOf(groupRebalanceConfig.groupId);
-        String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-        String logPrefix;
-        String groupInstanceId = groupRebalanceConfig.groupInstanceId.orElse(null);
+        Optional<String> groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
+        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
 
-        if (groupInstanceId != null) {
-            // If group.instance.id is set, we will append it to the log context.
-            logPrefix = String.format("[Consumer instanceId=%s, clientId=%s, groupId=%s] ", groupInstanceId, clientId, groupId);
+        // If group.instance.id is set, we will append it to the log context.
+        if (groupRebalanceConfig.groupInstanceId.isPresent()) {
+            return new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
+                    ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         } else {
-            logPrefix = String.format("[Consumer clientId=%s, groupId=%s] ", clientId, groupId);
+            return new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         }
-
-        return new LogContext(logPrefix);
     }
 
-    public static IsolationLevel createIsolationLevel(ConsumerConfig config) {
+    public static IsolationLevel configuredIsolationLevel(ConsumerConfig config) {
         String s = config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT);
         return IsolationLevel.valueOf(s);
     }
@@ -134,44 +131,14 @@ public final class ConsumerUtils {
     }
 
     public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config,
-                                                             Deserializer<K> keyDeserializer,
-                                                             Deserializer<V> valueDeserializer) {
-        IsolationLevel isolationLevel = createIsolationLevel(config);
-        return new FetchConfig<>(config, keyDeserializer, valueDeserializer, isolationLevel);
+                                                             Deserializers<K, V> deserializers) {
+        IsolationLevel isolationLevel = configuredIsolationLevel(config);
+        return new FetchConfig<>(config, deserializers, isolationLevel);
     }
 
     @SuppressWarnings("unchecked")
-    public static <K, V> List<ConsumerInterceptor<K, V>> createConsumerInterceptors(ConsumerConfig config) {
-        return ClientUtils.createConfiguredInterceptors(config,
-                ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                ConsumerInterceptor.class);
+    public static <K, V> List<ConsumerInterceptor<K, V>> configuredConsumerInterceptors(ConsumerConfig config) {
+        return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
     }
 
-    @SuppressWarnings("unchecked")
-    public static <K> Deserializer<K> createKeyDeserializer(ConsumerConfig config, Deserializer<K> keyDeserializer) {
-        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-
-        if (keyDeserializer == null) {
-            keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
-        } else {
-            config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
-        }
-
-        return keyDeserializer;
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <V> Deserializer<V> createValueDeserializer(ConsumerConfig config, Deserializer<V> valueDeserializer) {
-        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-
-        if (valueDeserializer == null) {
-            valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
-        } else {
-            config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-        }
-
-        return valueDeserializer;
-    }
 }
