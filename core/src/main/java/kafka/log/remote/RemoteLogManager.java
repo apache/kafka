@@ -987,6 +987,11 @@ public class RemoteLogManager implements Closeable {
                     }
                     RemoteLogSegmentMetadata metadata = segmentsIterator.next();
 
+                    // When the log-start-offset is moved by the user, the leader-epoch-checkpoint file gets truncated
+                    // as per the log-start-offset. Until the rlm-cleaner-thread runs in the next iteration, those
+                    // remote log segments won't be removed. The `isRemoteSegmentWithinLeaderEpoch` validates whether
+                    // the epochs present in the segment lies in the checkpoint file. It will always return false
+                    // since the checkpoint file was already truncated.
                     boolean isSegmentDeleted = remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(
                             metadata, logStartOffset, epochWithOffsets);
                     boolean isValidSegment = false;

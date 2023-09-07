@@ -49,6 +49,7 @@ public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredSto
         final int beginEpoch = 0;
         final long startOffset = 3;
         final long beforeOffset = 3L;
+        final long beforeOffset1 = 7L;
 
         // Create topicA with 1 partition and 2 RF
         builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
@@ -83,7 +84,7 @@ public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredSto
                         new KeyValueSpec("k7", "v7"), new KeyValueSpec("k8", "v8"), new KeyValueSpec("k9", "v9"))
                 // Use DELETE_RECORDS API to delete the records upto offset 7 and expect 2 remote segments to be deleted
                 .expectDeletionInRemoteStorage(broker1, topicA, p0, DELETE_SEGMENT, 2)
-                .deleteRecords(topicA, p0, 7L)
+                .deleteRecords(topicA, p0, beforeOffset1)
                 // consume from the topic with fetch-offset 7 to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker1, topicA, p0, 1)
                 .consume(topicA, p0, 7L, 3, 1);
