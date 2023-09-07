@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -131,8 +130,6 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
-import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.COMPLETES_IN_TRANSACTION;
-import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.brokerFeatures;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
@@ -1541,7 +1538,7 @@ public class QuorumControllerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value=MetadataVersion.class, names={"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
     public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
@@ -1576,7 +1573,7 @@ public class QuorumControllerTest {
             // Interleave migration batches with heartbeats. Ensure the heartbeat events use the correct
             // offset when adding to the purgatory. Otherwise, we get errors like:
             //   There is already a deferred event with offset 292. We should not add one with an offset of 241 which is lower than that.
-            for (int i=0; i<100; i++) {
+            for (int i = 0; i < 100; i++) {
                 Uuid topicId = Uuid.randomUuid();
                 String topicName = "testBrokerHeartbeatDuringMigration" + i;
                 Future<?> migrationFuture = migrationConsumer.acceptBatch(
