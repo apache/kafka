@@ -69,6 +69,7 @@ import org.mockito.internal.util.collections.Sets;
 import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -606,7 +607,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testListGroups() throws ExecutionException, InterruptedException {
+    public void testListGroups() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -617,37 +618,34 @@ public class GroupCoordinatorServiceTest {
 
         ListGroupsRequestData request = new ListGroupsRequestData();
 
-        ListGroupsResponseData expectResponseData = new ListGroupsResponseData()
-            .setGroups(Arrays.asList(
-                new ListGroupsResponseData.ListedGroup()
-                    .setGroupId("group1")
-                    .setGroupState("Stable")
-                    .setProtocolType("protocol1"),
-                new ListGroupsResponseData.ListedGroup()
-                    .setGroupId("group2")
-                    .setGroupState("Empty")
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+        List<ListGroupsResponseData.ListedGroup> expectedResults = Arrays.asList(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId("group1")
+                .setGroupState("Stable")
+                .setProtocolType("protocol1"),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId("group2")
+                .setGroupState("Empty")
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
 
-            ));
+        );
         when(runtime.partitions()).thenReturn(Sets.newSet(new TopicPartition("__consumer_offsets", 0)));
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("list-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(
-            expectResponseData));
+        )).thenReturn(CompletableFuture.completedFuture(expectedResults));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
             requestContext(ApiKeys.LIST_GROUPS),
             request
         );
 
-        assertTrue(responseFuture.isDone());
-        assertEquals(expectResponseData, responseFuture.get().duplicate());
+        assertEquals(new ListGroupsResponseData().setGroups(expectedResults), responseFuture.get(5, TimeUnit.SECONDS));
     }
 
     private void testListGroupsFailedWithException(Throwable t, ListGroupsResponseData expectResponseData)
-        throws InterruptedException {
+        throws InterruptedException, ExecutionException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -668,27 +666,15 @@ public class GroupCoordinatorServiceTest {
             requestContext(ApiKeys.LIST_GROUPS),
             request
         );
-        ListGroupsResponseData actualResponseData = new ListGroupsResponseData();
-        try {
-            actualResponseData = responseFuture.get();
-        } catch (ExecutionException e) {
-            actualResponseData.setErrorCode(Errors.forException(e.getCause()).code());
-        }
-        assertTrue(responseFuture.isDone());
-        assertEquals(expectResponseData, actualResponseData);
+        assertEquals(expectResponseData, responseFuture.get(5, TimeUnit.SECONDS));
 
     }
 
     @Test
-    public void testListGroupsFutureFailed() throws InterruptedException {
-        testListGroupsFailedWithException(new RuntimeException(""), new ListGroupsResponseData()
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
+    public void testListGroupsFutureFailed() throws InterruptedException, ExecutionException, TimeoutException {
         for (Errors errors : Errors.values()) {
             if (errors.code() != Errors.NONE.code()) {
-                if (errors.code() == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {
-                    testListGroupsFailedWithException(errors.exception(),
-                        new ListGroupsResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
-                } else if (errors.code() == Errors.NOT_COORDINATOR.code()) {
+                if (errors.code() == Errors.NOT_COORDINATOR.code()) {
                     testListGroupsFailedWithException(new NotCoordinatorException(""),
                         new ListGroupsResponseData());
                 } else {

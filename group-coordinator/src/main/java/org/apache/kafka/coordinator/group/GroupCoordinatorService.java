@@ -432,51 +432,32 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        List<CompletableFuture<ListGroupsResponseData>> futures = new ArrayList<>();
+        CompletableFuture<ListGroupsResponseData> future = new CompletableFuture<>();
+        List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
+        final AtomicInteger cnt = new AtomicInteger(runtime.partitions().size());
+
         for (TopicPartition tp : runtime.partitions()) {
-            futures.add(runtime.scheduleReadOperation(
+            runtime.scheduleReadOperation(
                 "list-groups",
                 tp,
                 (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), lastCommittedOffset)
-            ).exceptionally(exception -> {
-                if (!(exception instanceof KafkaException)) {
-                    log.error("ListGroups request {} hit an unexpected exception: {}",
-                        request, exception.getMessage());
-                    throw new RuntimeException(exception);
-                }
-                if (exception instanceof CoordinatorLoadInProgressException) {
-                    throw new RuntimeException(exception);
-                } else if (exception instanceof NotCoordinatorException) {
-                    log.warn("ListGroups request {} hit a NotCoordinatorException exception: {}",
-                        request, exception.getMessage());
-                    return new ListGroupsResponseData().setGroups(Collections.emptyList());
+            ).handle((groups, exception) -> {
+                if (exception == null) {
+                    synchronized (results) {
+                        results.addAll(groups);
+                    }
                 } else {
-                    return new ListGroupsResponseData().setErrorCode(Errors.forException(exception).code());
-                }
-            }));
-        }
-        CompletableFuture<ListGroupsResponseData> responseFuture = new CompletableFuture<>();
-        List<ListGroupsResponseData.ListedGroup> listedGroups = new ArrayList<>();
-        AtomicInteger succeedFutureCount = new AtomicInteger();
-        FutureUtils.drainFutures(futures, (data, t) -> {
-            synchronized (runtime) {
-                if (t != null) {
-                    responseFuture.completeExceptionally(new UnknownServerException(t.getMessage()));
-                } else {
-                    if (data.errorCode() != Errors.NONE.code()) {
-                        if (!responseFuture.isDone()) {
-                            responseFuture.complete(data);
-                        }
-                    } else {
-                        listedGroups.addAll(data.groups());
-                        if (succeedFutureCount.addAndGet(1) == runtime.partitions().size()) {
-                            responseFuture.complete(new ListGroupsResponseData().setGroups(listedGroups));
-                        }
+                    if (!(exception instanceof NotCoordinatorException)) {
+                        future.complete(new ListGroupsResponseData().setErrorCode(Errors.forException(exception).code()));
                     }
                 }
-            }
-        });
-        return responseFuture;
+                if (cnt.decrementAndGet() == 0) {
+                    future.complete(new ListGroupsResponseData().setGroups(results));
+                }
+                return null;
+            });
+        }
+        return future;
     }
 
     /**
