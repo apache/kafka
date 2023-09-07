@@ -24,7 +24,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.ApiKeys.{BROKER_HEARTBEAT, BROKER_REGISTRATION}
+import org.apache.kafka.common.protocol.ApiKeys.{BROKER_HEARTBEAT, BROKER_REGISTRATION, CONTROLLER_REGISTRATION}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.server.util.MockTime
@@ -55,7 +55,7 @@ class RegistrationTestContext(
   val metadata = new Metadata(1000, 1000, 1000, new LogContext(), new ClusterResourceListeners())
   val mockClient = new MockClient(time, metadata)
   val controllerNodeProvider = new SimpleControllerNodeProvider()
-  val nodeApiVersions = NodeApiVersions.create(Seq(BROKER_REGISTRATION, BROKER_HEARTBEAT).map {
+  val nodeApiVersions = NodeApiVersions.create(Seq(BROKER_REGISTRATION, BROKER_HEARTBEAT, CONTROLLER_REGISTRATION).map {
     apiKey => new ApiVersion().setApiKey(apiKey.id).
       setMinVersion(apiKey.oldestVersion()).setMaxVersion(apiKey.latestVersion())
   }.toList.asJava)

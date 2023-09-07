@@ -71,7 +71,7 @@ class ControllerRegistrationManagerTest {
       context.clusterId,
       Time.SYSTEM,
       "controller-registration-manager-test-",
-      createSupportedFeatures(MetadataVersion.IBP_3_6_IV2),
+      createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
       Map(),
       new ExponentialBackoff(1, 2, 100, 0.02))
@@ -158,7 +158,7 @@ class ControllerRegistrationManagerTest {
   def testRegistration(metadataVersionSupportsRegistration: Boolean): Unit = {
     val context = new RegistrationTestContext(configProperties)
     val metadataVersion = if (metadataVersionSupportsRegistration) {
-      MetadataVersion.IBP_3_6_IV2
+      MetadataVersion.IBP_3_7_IV0
     } else {
       MetadataVersion.IBP_3_6_IV0
     }
@@ -206,35 +206,34 @@ class ControllerRegistrationManagerTest {
     val context = new RegistrationTestContext(configProperties)
     val manager = newControllerRegistrationManager(context)
     try {
+      // We try to send an RPC, because the incarnation ID is wrong.
       context.controllerNodeProvider.node.set(controller1)
+      doMetadataUpdate(MetadataImage.EMPTY,
+        manager,
+        MetadataVersion.IBP_3_7_IV0,
+        r => Some(r.setIncarnationId(new Uuid(456, r.controllerId()))))
       manager.start(context.mockChannelManager)
+      TestUtils.retryOnExceptionWithTimeout(30000, () => {
+        context.mockChannelManager.poll()
+        assertEquals((true, 0, 0), rpcStats(manager))
+      })
+
+      // Complete the RPC.
       context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
         new ControllerRegistrationResponseData()), controller1)
-      var image = doMetadataUpdate(MetadataImage.EMPTY,
-        manager,
-        MetadataVersion.IBP_3_6_IV2,
-        r => if (r.controllerId() == 1) None else Some(r))
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         context.mockChannelManager.poll()
         assertEquals((false, 1, 0), rpcStats(manager))
       })
-      image = doMetadataUpdate(image,
+
+      // If the incarnation ID is still wrong, we'll resend again.
+      doMetadataUpdate(MetadataImage.EMPTY,
         manager,
-        MetadataVersion.IBP_3_6_IV2,
-        r => Some(r.setIncarnationId(new Uuid(456, r.controllerId()))))
-      TestUtils.retryOnExceptionWithTimeout(30000, () => {
-        assertEquals((true, 1, 0), rpcStats(manager))
-      })
-      context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
-        new ControllerRegistrationResponseData()), controller1)
-      doMetadataUpdate(image,
-        manager,
-        MetadataVersion.IBP_3_6_IV2,
-        r => Some(r))
+        MetadataVersion.IBP_3_7_IV0,
+        r => Some(r.setIncarnationId(new Uuid(457, r.controllerId()))))
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         context.mockChannelManager.poll()
-        assertEquals((false, 2, 0), rpcStats(manager))
-        assertTrue(registeredInLog(manager))
+        assertEquals((true, 1, 0), rpcStats(manager))
       })
     } finally {
       manager.close()
@@ -256,7 +255,7 @@ class ControllerRegistrationManagerTest {
         new ControllerRegistrationResponseData()), controller1)
       doMetadataUpdate(MetadataImage.EMPTY,
         manager,
-        MetadataVersion.IBP_3_6_IV2,
+        MetadataVersion.IBP_3_7_IV0,
         r => if (r.controllerId() == 1) None else Some(r))
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         context.mockChannelManager.poll()
