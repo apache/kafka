@@ -1126,7 +1126,7 @@ public class StreamThread extends Thread {
                     .collect(Collectors.toSet())
             );
 
-            if (committed > 0 && (now - lastPurgeMs) > purgeTimeMs) {
+            if ((now - lastPurgeMs) > purgeTimeMs) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
                 lastPurgeMs = now;
@@ -1196,8 +1196,12 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
-        if (leaveGroupRequested.get()) {
-            mainConsumer.unsubscribe();
+        try {
+            if (leaveGroupRequested.get()) {
+                mainConsumer.unsubscribe();
+            }
+        } catch (final Throwable e) {
+            log.error("Failed to unsubscribe due to the following error: ", e);
         }
         try {
             mainConsumer.close();

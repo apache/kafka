@@ -30,7 +30,10 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -78,12 +81,13 @@ class ProduceRequestTest extends BaseRequestTest {
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
-  @Test
-  def testProduceWithInvalidTimestamp(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("timestampConfigProvider"))
+  def testProduceWithInvalidTimestamp(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topic = "topic"
     val partition = 0
     val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
+    topicConfig.setProperty(messageTimeStampConfig, "1000")
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
 
@@ -96,7 +100,7 @@ class ProduceRequestTest extends BaseRequestTest {
       builder.build()
     }
 
-    val records = createRecords(RecordBatch.MAGIC_VALUE_V2, System.currentTimeMillis() - 1001L, CompressionType.GZIP)
+    val records = createRecords(RecordBatch.MAGIC_VALUE_V2, recordTimestamp, CompressionType.GZIP)
     val topicPartition = new TopicPartition("topic", partition)
     val produceResponse = sendProduceRequest(leader, ProduceRequest.forCurrentMagic(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
@@ -249,4 +253,17 @@ class ProduceRequestTest extends BaseRequestTest {
     connectAndReceive[ProduceResponse](request, destination = brokerSocketServer(leaderId))
   }
 
+}
+
+object ProduceRequestTest {
+
+  @nowarn("cat=deprecation") // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
+  def timestampConfigProvider: java.util.stream.Stream[Arguments] = {
+    val fiveMinutesInMs: Long = 5 * 60 * 60 * 1000L
+    java.util.stream.Stream.of[Arguments](
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.box(System.currentTimeMillis() - fiveMinutesInMs)),
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(System.currentTimeMillis() - fiveMinutesInMs)),
+      Arguments.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(System.currentTimeMillis() + fiveMinutesInMs))
+    )
+  }
 }

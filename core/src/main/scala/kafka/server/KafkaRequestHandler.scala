@@ -35,6 +35,7 @@ import scala.jdk.CollectionConverters._
 
 trait ApiRequestHandler {
   def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
+  def tryCompleteActions(): Unit = {}
 }
 
 object KafkaRequestHandler {
@@ -111,9 +112,9 @@ class KafkaRequestHandler(id: Int,
           return
 
         case callback: RequestChannel.CallbackRequest =>
+          val originalRequest = callback.originalRequest
           try {
-            val originalRequest = callback.originalRequest
-            
+
             // If we've already executed a callback for this request, reset the times and subtract the callback time from the 
             // new dequeue time. This will allow calculation of multiple callback times.
             // Otherwise, set dequeue time to now.
@@ -127,14 +128,16 @@ class KafkaRequestHandler(id: Int,
             
             threadCurrentRequest.set(originalRequest)
             callback.fun()
-            if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
-              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
           } catch {
             case e: FatalExitError =>
               completeShutdown()
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
+            // When handling requests, we try to complete actions after, so we should try to do so here as well.
+            apis.tryCompleteActions()
+            if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
+              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
             threadCurrentRequest.remove()
           }
 

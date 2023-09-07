@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.reassign;
 
+import kafka.admin.ReassignPartitionsCommand;
 import org.apache.kafka.common.utils.Exit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

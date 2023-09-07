@@ -89,7 +89,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
-import static org.junit.Assert.assertFalse;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -529,6 +528,19 @@ public class EmbeddedKafkaCluster {
     /**
      * Consume all currently-available records for the specified topics in a given duration, or throw an exception.
      * @param maxDurationMs the max duration to wait for these records (in milliseconds).
+     * @param topics the topics to consume from
+     * @return a {@link ConsumerRecords} collection containing the records for all partitions of the given topics
+     */
+    public ConsumerRecords<byte[], byte[]> consumeAll(
+        long maxDurationMs,
+        String... topics
+    ) throws TimeoutException, InterruptedException, ExecutionException {
+        return consumeAll(maxDurationMs, null, null, topics);
+    }
+
+    /**
+     * Consume all currently-available records for the specified topics in a given duration, or throw an exception.
+     * @param maxDurationMs the max duration to wait for these records (in milliseconds).
      * @param consumerProps overrides to the default properties the consumer is constructed with; may be null
      * @param adminProps overrides to the default properties the admin used to query Kafka cluster metadata is constructed with; may be null
      * @param topics the topics to consume from
@@ -597,7 +609,9 @@ public class EmbeddedKafkaCluster {
             Admin admin,
             Collection<String> topics
     ) throws TimeoutException, InterruptedException, ExecutionException {
-        assertFalse("collection of topics may not be empty", topics.isEmpty());
+        if (topics.isEmpty()) {
+            throw new AssertionError("collection of topics may not be empty");
+        }
         return admin.describeTopics(topics)
                 .allTopicNames().get(maxDurationMs, TimeUnit.MILLISECONDS)
                 .entrySet().stream()
@@ -617,7 +631,9 @@ public class EmbeddedKafkaCluster {
             Admin admin,
             Collection<TopicPartition> topicPartitions
     ) throws TimeoutException, InterruptedException, ExecutionException {
-        assertFalse("collection of topic partitions may not be empty", topicPartitions.isEmpty());
+        if (topicPartitions.isEmpty()) {
+            throw new AssertionError("collection of topic partitions may not be empty");
+        }
         Map<TopicPartition, OffsetSpec> offsetSpecMap = topicPartitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
         return admin.listOffsets(offsetSpecMap, new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED))
                 .all().get(maxDurationMs, TimeUnit.MILLISECONDS)

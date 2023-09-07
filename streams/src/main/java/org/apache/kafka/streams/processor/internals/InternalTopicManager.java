@@ -584,7 +584,7 @@ public class InternalTopicManager {
      */
     // visible for testing
     protected Map<String, List<TopicPartitionInfo>> getTopicPartitionInfo(final Set<String> topics,
-                                                                final Set<String> tempUnknownTopics) {
+                                                                          final Set<String> tempUnknownTopics) {
         final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
         final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.topicNameValues();
 

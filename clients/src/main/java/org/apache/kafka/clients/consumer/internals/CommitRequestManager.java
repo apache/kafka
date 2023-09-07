@@ -59,6 +59,7 @@ public class CommitRequestManager implements RequestManager {
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final GroupState groupState;
     private final long retryBackoffMs;
+    private final long retryBackoffMaxMs;
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
 
@@ -83,6 +84,7 @@ public class CommitRequestManager implements RequestManager {
         this.groupState = groupState;
         this.subscriptionState = subscriptionState;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
     }
 
@@ -92,6 +94,11 @@ public class CommitRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+        // poll only when the coordinator node is known.
+        if (!coordinatorRequestManager.coordinator().isPresent()) {
+            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
+        }
+
         maybeAutoCommit(this.subscriptionState.allConsumed());
         if (!pendingRequests.hasUnsentRequests()) {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
@@ -232,8 +239,9 @@ public class CommitRequestManager implements RequestManager {
 
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
                                        final GroupState.Generation generation,
-                                       final long retryBackoffMs) {
-            super(retryBackoffMs);
+                                       final long retryBackoffMs,
+                                       final long retryBackoffMaxMs) {
+            super(retryBackoffMs, retryBackoffMaxMs);
             this.requestedPartitions = partitions;
             this.requestedGeneration = generation;
             this.future = new CompletableFuture<>();
@@ -423,7 +431,8 @@ public class CommitRequestManager implements RequestManager {
             OffsetFetchRequestState request = new OffsetFetchRequestState(
                     partitions,
                     groupState.generation,
-                    retryBackoffMs);
+                    retryBackoffMs,
+                    retryBackoffMaxMs);
             return addOffsetFetchRequest(request);
         }
 

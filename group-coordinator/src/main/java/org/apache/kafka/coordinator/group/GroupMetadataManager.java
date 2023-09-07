@@ -401,7 +401,19 @@ public class GroupMetadataManager {
      * @return The group corresponding to the group id or throw GroupIdNotFoundException.
      */
     public Group group(String groupId) throws GroupIdNotFoundException {
-        Group group = groups.get(groupId);
+        Group group = groups.get(groupId, Long.MAX_VALUE);
+        if (group == null) {
+            throw new GroupIdNotFoundException(String.format("Group %s not found.", groupId));
+        }
+        return group;
+    }
+
+    /**
+     * @return The group corresponding to the group id at the given committed offset
+     *         or throw GroupIdNotFoundException.
+     */
+    public Group group(String groupId, long committedOffset) throws GroupIdNotFoundException {
+        Group group = groups.get(groupId, committedOffset);
         if (group == null) {
             throw new GroupIdNotFoundException(String.format("Group %s not found.", groupId));
         }

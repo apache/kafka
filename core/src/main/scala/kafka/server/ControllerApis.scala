@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.{lang, util}
+import java.nio.ByteBuffer
 import java.util.{Collections, OptionalLong}
 import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
@@ -28,7 +29,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
-import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
+import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
@@ -44,12 +45,14 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
@@ -101,6 +104,9 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
+        case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateDelegationTokenRequest(request)
+        case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewDelegationTokenRequest(request)
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireDelegationTokenRequest(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -840,6 +846,118 @@ class ControllerApis(val requestChannel: RequestChannel,
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
+  }
+
+  // The principal is carried through in the forwarded case.
+  // The security protocol in the context is for the current connection (hop)
+  // We need to always disallow a tokenAuthenticated principal
+  // We need to allow special protocols but only in the forwarded case for testing.
+  def allowTokenRequests(request: RequestChannel.Request): Boolean = {
+    val protocol = request.context.securityProtocol
+    if (request.context.principal.tokenAuthenticated ||
+      // We allow forwarded requests to use PLAINTEXT for testing purposes
+      (request.isForwarded == false && protocol == SecurityProtocol.PLAINTEXT) ||
+      // disallow requests from 1-way SSL
+      (request.isForwarded == false && protocol == SecurityProtocol.SSL && request.context.principal == KafkaPrincipal.ANONYMOUS))
+      false
+    else
+      true
+  }
+
+  def handleCreateDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val createTokenRequest = request.body[CreateDelegationTokenRequest]
+
+    val requester = request.context.principal
+    val ownerPrincipalName = createTokenRequest.data.ownerPrincipalName
+    val ownerPrincipalType = createTokenRequest.data.ownerPrincipalType
+    val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
+      request.context.principal
+    } else {
+      new KafkaPrincipal(ownerPrincipalType, ownerPrincipalName)
+    }
+
+    if (!allowTokenRequests(request)) {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+          Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!owner.equals(requester) && 
+      !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
+      // Requester is always allowed to create token for self
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+          Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
+        CompletableFuture.completedFuture[Unit](())
+    } else {
+
+      val context = new ControllerRequestContext(request.context.header.data,
+        request.context.principal, OptionalLong.empty())
+
+      // Copy the response data to a new response so we can apply the request version
+      controller.createDelegationToken(context, createTokenRequest.data)
+        .thenApply[Unit] { response =>
+           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+             CreateDelegationTokenResponse.prepareResponse(
+               request.context.requestVersion,
+               requestThrottleMs,
+               Errors.forCode(response.errorCode()),
+               new KafkaPrincipal(response.principalType(), response.principalName()),
+               new KafkaPrincipal(response.tokenRequesterPrincipalType(), response.tokenRequesterPrincipalName()),
+               response.issueTimestampMs(),
+               response.expiryTimestampMs(),
+               response.maxTimestampMs(),
+               response.tokenId(),
+               ByteBuffer.wrap(response.hmac())))
+      }
+    }
+  }
+
+  def handleRenewDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val renewTokenRequest = request.body[RenewDelegationTokenRequest]
+
+    if (!allowTokenRequests(request)) {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new RenewDelegationTokenResponse(
+          new RenewDelegationTokenResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
+              .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
+        CompletableFuture.completedFuture[Unit](())
+    } else {
+      val context = new ControllerRequestContext(
+        request.context.header.data,
+        request.context.principal,
+        OptionalLong.empty())
+      controller.renewDelegationToken(context, renewTokenRequest.data)
+        .thenApply[Unit] { response =>
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new RenewDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+    }
+  }
+
+  def handleExpireDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val expireTokenRequest = request.body[ExpireDelegationTokenRequest]
+
+    if (!allowTokenRequests(request)) {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new ExpireDelegationTokenResponse(
+          new ExpireDelegationTokenResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
+              .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      val context = new ControllerRequestContext(
+        request.context.header.data,
+        request.context.principal,
+        OptionalLong.empty())
+      controller.expireDelegationToken(context, expireTokenRequest.data)
+        .thenApply[Unit] { response =>
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new ExpireDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+    }
   }
 
   def handleListPartitionReassignments(request: RequestChannel.Request): CompletableFuture[Unit] = {
