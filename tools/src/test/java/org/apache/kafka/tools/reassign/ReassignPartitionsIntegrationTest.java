@@ -198,7 +198,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Set the high water mark of foo-0 to 123 on its leader.
         TopicPartition part = new TopicPartition("foo", 0);
-        cluster.servers.get(0).replicaManager().logManager().truncateFullyAndStartAt(part, 123L, false);
+        cluster.servers.get(0).replicaManager().logManager().truncateFullyAndStartAt(part, 123L, false, None$.empty());
 
         // Execute the assignment
         runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L);
