@@ -50,6 +50,11 @@ public interface Group {
     String stateAsString();
 
     /**
+     * @return the group formatted as a list group response.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
+
+    /**
      * @return The group id.
      */
     String groupId();
@@ -67,11 +72,6 @@ public interface Group {
         String groupInstanceId,
         int generationIdOrMemberEpoch
     ) throws KafkaException;
-
-    /**
-     * @return the group formatted as a list group response.
-     */
-    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
 
     /**
      * Validates the OffsetFetch request.
