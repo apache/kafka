@@ -5668,9 +5668,21 @@ public class KafkaAdminClientTest {
                         TopicAuthorizationException.class
                 ),
                 Arguments.of(
-                        // We fail fast when the entire topic is unknown
+                        // We fail fast when the entire topic is unknown...
                         Errors.UNKNOWN_TOPIC_OR_PARTITION,
                         Errors.NONE,
+                        UnknownTopicOrPartitionException.class
+                ),
+                Arguments.of(
+                        // ... even if a partition in the topic is also somehow reported as unknown...
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        UnknownTopicOrPartitionException.class
+                ),
+                Arguments.of(
+                        // ... or a partition in the topic has a different, otherwise-retriable error
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        Errors.LEADER_NOT_AVAILABLE,
                         UnknownTopicOrPartitionException.class
                 )
         );
