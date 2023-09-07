@@ -23,11 +23,13 @@ import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
+import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -301,7 +303,7 @@ public class RemoteLogManager implements Closeable {
 
     private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
         Uuid previousTopicId = topicIdByPartitionMap.put(topicIdPartition.topicPartition(), topicIdPartition.topicId());
-        if (previousTopicId != null && previousTopicId != topicIdPartition.topicId()) {
+        if (previousTopicId != null && !previousTopicId.equals(topicIdPartition.topicId())) {
             LOGGER.info("Previous cached topic id {} for {} does not match updated topic id {}",
                     previousTopicId, topicIdPartition.topicPartition(), topicIdPartition.topicId());
         }
@@ -348,41 +350,49 @@ public class RemoteLogManager implements Closeable {
     }
 
     /**
-     * Deletes the internal topic partition info if delete flag is set as true.
+     * Stop the remote-log-manager task for the given partitions. And, calls the
+     * {@link RemoteLogMetadataManager#onStopPartitions(Set)} when {@link StopPartition#deleteLocalLog()} is true.
+     * Deletes the partitions from the remote storage when {@link StopPartition#deleteRemoteLog()} is true.
      *
-     * @param topicPartitions topic partitions that needs to be stopped.
-     * @param delete         flag to indicate whether the given topic partitions to be deleted or not.
+     * @param stopPartitions topic partitions that needs to be stopped.
      * @param errorHandler   callback to handle any errors while stopping the partitions.
      */
-    public void stopPartitions(Set<TopicPartition> topicPartitions,
-                               boolean delete,
+    public void stopPartitions(Set<StopPartition> stopPartitions,
                                BiConsumer<TopicPartition, Throwable> errorHandler) {
-        LOGGER.debug("Stopping {} partitions, delete: {}", topicPartitions.size(), delete);
-        Set<TopicIdPartition> topicIdPartitions = topicPartitions.stream()
-                .filter(topicIdByPartitionMap::containsKey)
-                .map(tp -> new TopicIdPartition(topicIdByPartitionMap.get(tp), tp))
-                .collect(Collectors.toSet());
-
-        topicIdPartitions.forEach(tpId -> {
+        LOGGER.debug("Stop partitions: {}", stopPartitions);
+        for (StopPartition stopPartition: stopPartitions) {
+            TopicPartition tp = stopPartition.topicPartition();
             try {
-                RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
-                if (task != null) {
-                    LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
-                    task.cancel();
-                }
-                if (delete) {
-                    LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
-                    deleteRemoteLogPartition(tpId);
+                // We are assuming that if the topic exists in topicIdByPartitionMap then it has active archival
+                // otherwise not. Ideally, `stopPartitions` should not be called for internal and non-tiered-storage
+                // topics. See KAFKA-15432 for more details.
+                if (topicIdByPartitionMap.containsKey(tp)) {
+                    TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
+                    RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
+                    if (task != null) {
+                        LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
+                        task.cancel();
+                    }
+                    if (stopPartition.deleteRemoteLog()) {
+                        LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
+                        deleteRemoteLogPartition(tpId);
+                    }
                 }
             } catch (Exception ex) {
-                errorHandler.accept(tpId.topicPartition(), ex);
-                LOGGER.error("Error while stopping the partition: {}, delete: {}", tpId.topicPartition(), delete, ex);
+                errorHandler.accept(tp, ex);
+                LOGGER.error("Error while stopping the partition: {}", stopPartition, ex);
             }
-        });
-        remoteLogMetadataManager.onStopPartitions(topicIdPartitions);
-        if (delete) {
-            // NOTE: this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
-            topicPartitions.forEach(topicIdByPartitionMap::remove);
+        }
+        // Note `deleteLocalLog` will always be true when `deleteRemoteLog` is true but not the other way around.
+        Set<TopicIdPartition> deleteLocalPartitions = stopPartitions.stream()
+                .filter(sp -> sp.deleteLocalLog() && topicIdByPartitionMap.containsKey(sp.topicPartition()))
+                .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
+                .collect(Collectors.toSet());
+        if (!deleteLocalPartitions.isEmpty()) {
+            // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
+            // ReplicaDeletionStarted
+            remoteLogMetadataManager.onStopPartitions(deleteLocalPartitions);
+            deleteLocalPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
         }
     }
 
@@ -574,8 +584,10 @@ public class RemoteLogManager implements Closeable {
             return leaderEpoch >= 0;
         }
 
-        // The copiedOffsetOption is OptionalLong.empty() initially for a new leader RLMTask, and needs to be fetched inside the task's run() method.
+        // The copied and log-start offset is empty initially for a new leader RLMTask, and needs to be fetched inside
+        // the task's run() method.
         private volatile OptionalLong copiedOffsetOption = OptionalLong.empty();
+        private volatile boolean isLogStartOffsetUpdatedOnBecomingLeader = false;
 
         public void convertToLeader(int leaderEpochVal) {
             if (leaderEpochVal < 0) {
@@ -584,22 +596,33 @@ public class RemoteLogManager implements Closeable {
             if (this.leaderEpoch != leaderEpochVal) {
                 leaderEpoch = leaderEpochVal;
             }
-            // Reset readOffset, so that it is set in next run of RLMTask
+            // Reset copied and log-start offset, so that it is set in next run of RLMTask
             copiedOffsetOption = OptionalLong.empty();
+            isLogStartOffsetUpdatedOnBecomingLeader = false;
         }
 
         public void convertToFollower() {
             leaderEpoch = -1;
         }
 
-        private void maybeUpdateReadOffset(UnifiedLog log) throws RemoteStorageException {
+        private void maybeUpdateLogStartOffsetOnBecomingLeader(UnifiedLog log) throws RemoteStorageException {
+            if (!isLogStartOffsetUpdatedOnBecomingLeader) {
+                long logStartOffset = findLogStartOffset(topicIdPartition, log);
+                updateRemoteLogStartOffset.accept(topicIdPartition.topicPartition(), logStartOffset);
+                isLogStartOffsetUpdatedOnBecomingLeader = true;
+                logger.info("Found the logStartOffset: {} for partition: {} after becoming leader, leaderEpoch: {}",
+                        logStartOffset, topicIdPartition, leaderEpoch);
+            }
+        }
+
+        private void maybeUpdateCopiedOffset(UnifiedLog log) throws RemoteStorageException {
             if (!copiedOffsetOption.isPresent()) {
                 // This is found by traversing from the latest leader epoch from leader epoch history and find the highest offset
                 // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
                 // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
                 // epoch cache then it starts copying the segments from the earliest epoch entry's offset.
                 copiedOffsetOption = OptionalLong.of(findHighestRemoteOffset(topicIdPartition, log));
-                logger.info("Found the highest copied remote offset: {} for partition: {} after becoming leader, " +
+                logger.info("Found the highest copiedRemoteOffset: {} for partition: {} after becoming leader, " +
                                 "leaderEpoch: {}", copiedOffsetOption, topicIdPartition, leaderEpoch);
             }
         }
@@ -635,7 +658,8 @@ public class RemoteLogManager implements Closeable {
                 return;
 
             try {
-                maybeUpdateReadOffset(log);
+                maybeUpdateLogStartOffsetOnBecomingLeader(log);
+                maybeUpdateCopiedOffset(log);
                 long copiedOffset = copiedOffsetOption.getAsLong();
 
                 // LSO indicates the offset below are ready to be consumed (high-watermark or committed)
@@ -671,7 +695,7 @@ public class RemoteLogManager implements Closeable {
                 brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
                 brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                 this.cancel();
-            } catch (InterruptedException ex) {
+            } catch (InterruptedException | RetriableException ex) {
                 throw ex;
             } catch (Exception ex) {
                 if (!isCancelled()) {
@@ -776,6 +800,8 @@ public class RemoteLogManager implements Closeable {
                 if (!isCancelled()) {
                     logger.warn("Current thread for topic-partition-id {} is interrupted. Reason: {}", topicIdPartition, ex.getMessage());
                 }
+            } catch (RetriableException ex) {
+                logger.debug("Encountered a retryable error while executing current task for topic-partition {}", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     logger.warn("Current task for topic-partition {} received error but it will be scheduled. " +
@@ -1357,6 +1383,26 @@ public class RemoteLogManager implements Closeable {
         return offset.orElse(-1L);
     }
 
+    long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) throws RemoteStorageException {
+        Optional<Long> logStartOffset = Optional.empty();
+        Option<LeaderEpochFileCache> maybeLeaderEpochFileCache = log.leaderEpochCache();
+        if (maybeLeaderEpochFileCache.isDefined()) {
+            LeaderEpochFileCache cache = maybeLeaderEpochFileCache.get();
+            OptionalInt earliestEpochOpt = cache.earliestEntry()
+                    .map(epochEntry -> OptionalInt.of(epochEntry.epoch))
+                    .orElseGet(OptionalInt::empty);
+            while (!logStartOffset.isPresent() && earliestEpochOpt.isPresent()) {
+                Iterator<RemoteLogSegmentMetadata> iterator =
+                        remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, earliestEpochOpt.getAsInt());
+                if (iterator.hasNext()) {
+                    logStartOffset = Optional.of(iterator.next().startOffset());
+                }
+                earliestEpochOpt = cache.nextEpoch(earliestEpochOpt.getAsInt());
+            }
+        }
+        return logStartOffset.orElseGet(log::localLogStartOffset);
+    }
+
     /**
      * Submit a remote log read task.
      * This method returns immediately. The read operation is executed in a thread pool.
@@ -1450,6 +1496,11 @@ public class RemoteLogManager implements Closeable {
         }
 
         LOGGER.info("Shutting down of thread pool {} is completed", poolName);
+    }
+
+    //Visible for testing
+    RLMTaskWithFuture task(TopicIdPartition partition) {
+        return leaderOrFollowerTasks.get(partition);
     }
 
     static class RLMScheduledThreadPool {
