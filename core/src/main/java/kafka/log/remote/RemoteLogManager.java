@@ -876,8 +876,6 @@ public class RemoteLogManager implements Closeable {
                     return false;
                 });
                 if (isSegmentDeleted) {
-                    remainingBreachedSize = retentionSizeData.isPresent() ?
-                            Math.max(0, remainingBreachedSize - metadata.segmentSizeInBytes()) : 0;
                     logger.info("Deleted remote log segment {} due to log-start-offset {} breach. " +
                             "Current earliest-epoch-entry: {}, segment-end-offset: {} and segment-epochs: {}",
                             metadata.remoteLogSegmentId(), logStartOffset, leaderEpochEntries.firstEntry(),
