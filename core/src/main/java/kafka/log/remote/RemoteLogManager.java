@@ -605,7 +605,7 @@ public class RemoteLogManager implements Closeable {
             leaderEpoch = -1;
         }
 
-        private void maybeUpdateLogStartOffset(UnifiedLog log) throws RemoteStorageException {
+        private void maybeUpdateLogStartOffsetOnBecomingLeader(UnifiedLog log) throws RemoteStorageException {
             if (!isLogStartOffsetUpdatedOnBecomingLeader) {
                 long logStartOffset = findLogStartOffset(topicIdPartition, log);
                 updateRemoteLogStartOffset.accept(topicIdPartition.topicPartition(), logStartOffset);
@@ -658,7 +658,7 @@ public class RemoteLogManager implements Closeable {
                 return;
 
             try {
-                maybeUpdateLogStartOffset(log);
+                maybeUpdateLogStartOffsetOnBecomingLeader(log);
                 maybeUpdateCopiedOffset(log);
                 long copiedOffset = copiedOffsetOption.getAsLong();
 
