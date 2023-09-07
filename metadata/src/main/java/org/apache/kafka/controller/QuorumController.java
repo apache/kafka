@@ -763,7 +763,14 @@ public final class QuorumController implements Controller {
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
-                OptionalLong maybeOffset = deferredEventQueue.highestPendingOffset();
+                // If the operation can complete within a transaction, let it use the
+                // unstable purgatory so that it can complete sooner.
+                OptionalLong maybeOffset;
+                if (flags.contains(COMPLETES_IN_TRANSACTION)) {
+                    maybeOffset = deferredUnstableEventQueue.highestPendingOffset();
+                } else {
+                    maybeOffset = deferredEventQueue.highestPendingOffset();
+                }
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can complete immediately.

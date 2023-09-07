@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -117,6 +118,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,6 +131,8 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.COMPLETES_IN_TRANSACTION;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.brokerFeatures;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
@@ -1536,14 +1540,19 @@ public class QuorumControllerTest {
         }
     }
 
-    @Test
-    public void testBrokerHeartbeatDuringMigration() throws Exception {
+    @ParameterizedTest
+    @EnumSource(value=MetadataVersion.class, names={"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
+    public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
         ) {
             QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"));
+                setControllerBuilderInitializer(controllerBuilder ->
+                    controllerBuilder
+                        .setZkMigrationEnabled(true)
+                        .setMaxIdleIntervalNs(OptionalLong.of(TimeUnit.MILLISECONDS.toNanos(100)))
+                ).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test"));
             QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
             QuorumController active = controlEnv.activeController(true);
 
@@ -1554,7 +1563,7 @@ public class QuorumControllerTest {
                     setRack(null).
                     setClusterId(active.clusterId()).
                     setIsMigratingZkBroker(true).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_6_IV1, MetadataVersion.IBP_3_6_IV1)).
+                    setFeatures(brokerFeatures(metadataVersion, metadataVersion)).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
                     setListeners(new ListenerCollection(Arrays.asList(new Listener().
                         setName("PLAINTEXT").setHost("localhost").
@@ -1564,11 +1573,27 @@ public class QuorumControllerTest {
             ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
             migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
 
-            // Send broker heartbeat, should complete even though we leave migration transaction hanging
+            // Interleave migration batches with heartbeats. Ensure the heartbeat events use the correct
+            // offset when adding to the purgatory. Otherwise, we get errors like:
+            //   There is already a deferred event with offset 292. We should not add one with an offset of 241 which is lower than that.
+            for (int i=0; i<100; i++) {
+                Uuid topicId = Uuid.randomUuid();
+                String topicName = "testBrokerHeartbeatDuringMigration" + i;
+                Future<?> migrationFuture = migrationConsumer.acceptBatch(
+                    Arrays.asList(
+                        new ApiMessageAndVersion(new TopicRecord().setTopicId(topicId).setName(topicName), (short) 0),
+                        new ApiMessageAndVersion(new PartitionRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(0, 1, 2)), (short) 0)));
+                active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
+                        setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
+                        setCurrentMetadataOffset(100000L + i));
+                migrationFuture.get();
+            }
+
+            // Ensure that we can complete a heartbeat even though we leave migration transaction hanging
             assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                 active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                     setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
-                    setCurrentMetadataOffset(100000L)).get());
+                    setCurrentMetadataOffset(100100L)).get());
 
         }
     }
