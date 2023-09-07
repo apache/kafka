@@ -273,13 +273,13 @@ public class OffsetFetcher {
             future.addListener(new RequestFutureListener<OffsetForEpochResult>() {
                 @Override
                 public void onSuccess(OffsetForEpochResult offsetsResult) {
-                    offsetFetcherUtils.onSuccessfulRequestForValidatingPositions(fetchPositions,
+                    offsetFetcherUtils.onSuccessfulResponseForValidatingPositions(fetchPositions,
                             offsetsResult);
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    offsetFetcherUtils.onFailedRequestForValidatingPositions(fetchPositions, e);
+                    offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
             });
         });

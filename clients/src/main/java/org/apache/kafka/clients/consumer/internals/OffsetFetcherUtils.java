@@ -320,7 +320,7 @@ class OffsetFetcherUtils {
     }
 
 
-    void onSuccessfulRequestForValidatingPositions(
+    void onSuccessfulResponseForValidatingPositions(
             final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
             final OffsetsForLeaderEpochUtils.OffsetForEpochResult offsetsResult) {
         List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
@@ -348,8 +348,8 @@ class OffsetFetcherUtils {
         }
     }
 
-    void onFailedRequestForValidatingPositions(final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
-                                               final RuntimeException error) {
+    void onFailedResponseForValidatingPositions(final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+                                                final RuntimeException error) {
         subscriptionState.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
         metadata.requestUpdate(false);
 

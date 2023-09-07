@@ -445,7 +445,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             partialResult.whenComplete((offsetsResult, error) -> {
                 if (error == null) {
-                    offsetFetcherUtils.onSuccessfulRequestForValidatingPositions(fetchPositions,
+                    offsetFetcherUtils.onSuccessfulResponseForValidatingPositions(fetchPositions,
                             offsetsResult);
                 } else {
                     RuntimeException e;
@@ -455,7 +455,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                         e = new RuntimeException("Unexpected failure in OffsetsForLeaderEpoch " +
                                 "request for validating positions", error);
                     }
-                    offsetFetcherUtils.onFailedRequestForValidatingPositions(fetchPositions, e);
+                    offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
             });
 
