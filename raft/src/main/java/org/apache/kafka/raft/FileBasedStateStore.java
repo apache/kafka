@@ -64,6 +64,7 @@ public class FileBasedStateStore implements QuorumStateStore {
     private final File stateFile;
 
     static final String DATA_VERSION = "data_version";
+    static final short HIGHEST_SUPPORTED_VERSION = 0;
 
     public FileBasedStateStore(final File stateFile) {
         this.stateFile = stateFile;
@@ -150,10 +151,8 @@ public class FileBasedStateStore implements QuorumStateStore {
                      new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8)
                  )
             ) {
-                short version = state.highestSupportedVersion();
-
-                ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version);
-                jsonState.set(DATA_VERSION, new ShortNode(version));
+                ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, HIGHEST_SUPPORTED_VERSION);
+                jsonState.set(DATA_VERSION, new ShortNode(HIGHEST_SUPPORTED_VERSION));
                 writer.write(jsonState.toString());
                 writer.flush();
                 fileOutputStream.getFD().sync();
