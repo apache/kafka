@@ -21,7 +21,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -181,6 +180,7 @@ public class ConsumerGroup implements Group {
     public String stateAsString() {
         return state.get().toString();
     }
+
     /**
      * @return The current state as a String with given committedOffset.
      */
@@ -188,6 +188,15 @@ public class ConsumerGroup implements Group {
         return state.get(committedOffset).toString();
     }
 
+    /**
+     * @return the group formatted as a list group response.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
+        return new ListGroupsResponseData.ListedGroup()
+            .setGroupId(groupId)
+            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setGroupState(state.get(committedOffset).toString());
+    }
 
     /**
      * @return The group id.
@@ -785,16 +794,6 @@ public class ConsumerGroup implements Group {
      */
     private static Integer incValue(String key, Integer value) {
         return value == null ? 1 : value + 1;
-    }
-
-    /**
-     * @return the group formatted as a list group response.
-     */
-    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
-        return new ListGroupsResponseData.ListedGroup()
-            .setGroupId(groupId)
-            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .setGroupState(state.get(committedOffset).toString());
     }
 
 }

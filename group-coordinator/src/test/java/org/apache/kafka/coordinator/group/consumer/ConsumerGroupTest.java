@@ -644,7 +644,9 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         snapshotRegistry.getOrCreateSnapshot(1);
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE.toString(), group.stateAsString(1));
+    }
 
+    @Test
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
