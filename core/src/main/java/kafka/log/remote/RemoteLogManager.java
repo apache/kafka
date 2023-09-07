@@ -587,7 +587,7 @@ public class RemoteLogManager implements Closeable {
         // The copied and log-start offset is empty initially for a new leader RLMTask, and needs to be fetched inside
         // the task's run() method.
         private volatile OptionalLong copiedOffsetOption = OptionalLong.empty();
-        private volatile OptionalLong logStartOffsetOption = OptionalLong.empty();
+        private volatile boolean isLogStartOffsetUpdatedOnBecomingLeader = false;
 
         public void convertToLeader(int leaderEpochVal) {
             if (leaderEpochVal < 0) {
@@ -598,7 +598,7 @@ public class RemoteLogManager implements Closeable {
             }
             // Reset copied and log-start offset, so that it is set in next run of RLMTask
             copiedOffsetOption = OptionalLong.empty();
-            logStartOffsetOption = OptionalLong.empty();
+            isLogStartOffsetUpdatedOnBecomingLeader = false;
         }
 
         public void convertToFollower() {
@@ -606,11 +606,12 @@ public class RemoteLogManager implements Closeable {
         }
 
         private void maybeUpdateLogStartOffset(UnifiedLog log) throws RemoteStorageException {
-            if (!logStartOffsetOption.isPresent()) {
-                logStartOffsetOption = OptionalLong.of(findLogStartOffset(topicIdPartition, log));
-                logStartOffsetOption.ifPresent(offset -> updateRemoteLogStartOffset.accept(topicIdPartition.topicPartition(), offset));
-                logger.info("Found the log start offset: {} for partition: {} after becoming leader, leaderEpoch: {}",
-                        logStartOffsetOption, topicIdPartition, leaderEpoch);
+            if (!isLogStartOffsetUpdatedOnBecomingLeader) {
+                long logStartOffset = findLogStartOffset(topicIdPartition, log);
+                updateRemoteLogStartOffset.accept(topicIdPartition.topicPartition(), logStartOffset);
+                isLogStartOffsetUpdatedOnBecomingLeader = true;
+                logger.info("Found the logStartOffset: {} for partition: {} after becoming leader, leaderEpoch: {}",
+                        logStartOffset, topicIdPartition, leaderEpoch);
             }
         }
 
@@ -621,7 +622,7 @@ public class RemoteLogManager implements Closeable {
                 // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
                 // epoch cache then it starts copying the segments from the earliest epoch entry's offset.
                 copiedOffsetOption = OptionalLong.of(findHighestRemoteOffset(topicIdPartition, log));
-                logger.info("Found the highest copied remote offset: {} for partition: {} after becoming leader, " +
+                logger.info("Found the highest copiedRemoteOffset: {} for partition: {} after becoming leader, " +
                                 "leaderEpoch: {}", copiedOffsetOption, topicIdPartition, leaderEpoch);
             }
         }
