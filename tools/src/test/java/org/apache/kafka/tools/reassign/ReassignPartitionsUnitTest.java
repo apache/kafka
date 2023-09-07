@@ -123,21 +123,21 @@ public class ReassignPartitionsUnitTest {
 
     @Test
     public void testPartitionReassignStatesToString() {
-        Map<TopicPartition, PartitionReassignmentState> states = new HashMap<>();
+        Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> states = new HashMap<>();
 
         states.put(new TopicPartition("foo", 0),
-            new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3), true));
+            asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3), true)));
         states.put(new TopicPartition("foo", 1),
-            new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false));
+            asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false)));
         states.put(new TopicPartition("bar", 0),
-            new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false));
+            asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false)));
 
         assertEquals(String.join(System.lineSeparator(), Arrays.asList(
             "Status of partition reassignment:",
             "Reassignment of partition bar-0 is still in progress.",
             "Reassignment of partition foo-0 is completed.",
             "Reassignment of partition foo-1 is still in progress.")),
-            partitionReassignmentStatesToString(asScala(states, this::asScala)));
+            partitionReassignmentStatesToString(CollectionConverters.asScala(states)));
     }
 
     private void addTopics(MockAdminClient adminClient) {
@@ -260,17 +260,17 @@ public class ReassignPartitionsUnitTest {
 
     @Test
     public void testReplicaMoveStatesToString() {
-        Map<TopicPartitionReplica, LogDirMoveState> states = new HashMap<>();
+        Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> states = new HashMap<>();
 
-        states.put(new TopicPartitionReplica("bar", 0, 0), new CompletedMoveState("/tmp/kafka-logs0"));
-        states.put(new TopicPartitionReplica("foo", 0, 0), new ActiveMoveState("/tmp/kafka-logs0",
-            "/tmp/kafka-logs1", "/tmp/kafka-logs1"));
-        states.put(new TopicPartitionReplica("foo", 1, 0), new CancelledMoveState("/tmp/kafka-logs0",
-            "/tmp/kafka-logs1"));
-        states.put(new TopicPartitionReplica("quux", 0, 0), new MissingReplicaMoveState("/tmp/kafka-logs1"));
-        states.put(new TopicPartitionReplica("quux", 1, 1), new ActiveMoveState("/tmp/kafka-logs0",
-            "/tmp/kafka-logs1", "/tmp/kafka-logs2"));
-        states.put(new TopicPartitionReplica("quux", 2, 1), new MissingLogDirMoveState("/tmp/kafka-logs1"));
+        states.put(new TopicPartitionReplica("bar", 0, 0), asScala(new CompletedMoveState("/tmp/kafka-logs0")));
+        states.put(new TopicPartitionReplica("foo", 0, 0), asScala(new ActiveMoveState("/tmp/kafka-logs0",
+            "/tmp/kafka-logs1", "/tmp/kafka-logs1")));
+        states.put(new TopicPartitionReplica("foo", 1, 0), asScala(new CancelledMoveState("/tmp/kafka-logs0",
+            "/tmp/kafka-logs1")));
+        states.put(new TopicPartitionReplica("quux", 0, 0), asScala(new MissingReplicaMoveState("/tmp/kafka-logs1")));
+        states.put(new TopicPartitionReplica("quux", 1, 1), asScala(new ActiveMoveState("/tmp/kafka-logs0",
+            "/tmp/kafka-logs1", "/tmp/kafka-logs2")));
+        states.put(new TopicPartitionReplica("quux", 2, 1), asScala(new MissingLogDirMoveState("/tmp/kafka-logs1")));
 
         assertEquals(String.join(System.lineSeparator(), Arrays.asList(
             "Reassignment of replica bar-0-0 completed successfully.",
@@ -280,7 +280,7 @@ public class ReassignPartitionsUnitTest {
             "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1.",
             "Partition quux-2 is not found in any live log dir on broker 1. " +
                 "There is likely an offline log directory on the broker.")),
-            replicaMoveStatesToString(asScala(states, this::asScala)));
+            replicaMoveStatesToString(CollectionConverters.asScala(states)));
     }
 
     @Test
@@ -855,8 +855,8 @@ public class ReassignPartitionsUnitTest {
 
     private PartitionReassignmentState asJava(ReassignPartitionsCommand.PartitionReassignmentState state) {
         return new PartitionReassignmentState(
-            asJava(state.currentReplicas(), o -> (Integer) o),
-            asJava(state.targetReplicas(), o -> (Integer) o),
+            CollectionConverters.asJava(state.currentReplicas()).stream().map(i -> (Integer) i).collect(Collectors.toList()),
+            CollectionConverters.asJava(state.targetReplicas()).stream().map(i -> (Integer) i).collect(Collectors.toList()),
             state.done());
     }
 
@@ -888,12 +888,6 @@ public class ReassignPartitionsUnitTest {
     private <T> Set<T> asJava(scala.collection.mutable.Set<?> set) {
         Set<T> res = new HashSet<>();
         set.foreach(e -> res.add((T) e));
-        return res;
-    }
-
-    private <T, T1> List<T1> asJava(Seq<T> seq, Function<T, T1> mapper) {
-        List<T1> res = new ArrayList<>();
-        seq.foreach(e -> res.add(mapper.apply(e)));
         return res;
     }
 
