@@ -14,17 +14,20 @@
 // limitations under the License.
 
 {
-  "apiKey": 70,
-  "type": "response",
-  "name": "ControllerRegistrationResponse",
+  "apiKey": 69,
+  "type": "request",
+  "listeners": ["zkBroker", "broker"],
+  "name": "ConsumerGroupDescribeRequest",
   "validVersions": "0",
+  // The ConsumerGroupDescribe API is added as part of KIP-848 and is still
+  // under development. Hence, the API is not exposed by default by brokers
+  // unless explicitly enabled.
+  "latestVersionUnstable": true,
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
-      "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The response error code." },
-    { "name": "ErrorMessage", "type": "string", "nullableVersions": "0+", "versions": "0+",
-      "about": "The response error message, or null if there was no error." }
+    { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",
+      "about": "The ids of the groups to describe" },
+    { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "0+",
+      "about": "Whether to include authorized operations." }
   ]
 }

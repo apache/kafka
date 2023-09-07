@@ -249,6 +249,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return AllocateProducerIdsResponse.parse(responseBuffer, version);
             case CONSUMER_GROUP_HEARTBEAT:
                 return ConsumerGroupHeartbeatResponse.parse(responseBuffer, version);
+            case CONSUMER_GROUP_DESCRIBE:
+                return ConsumerGroupDescribeResponse.parse(responseBuffer, version);
             case CONTROLLER_REGISTRATION:
                 return ControllerRegistrationResponse.parse(responseBuffer, version);
             default:
