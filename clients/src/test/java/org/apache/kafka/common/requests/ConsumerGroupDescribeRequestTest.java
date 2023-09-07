@@ -21,26 +21,29 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupDescribeRequestTest {
 
     @Test
     void testGetErrorResponse() {
-        // Arrange
-        String groupId = "group0";
+        List<String> groupIds = Arrays.asList("group0", "group1");
         ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData();
-        data.groupIds().add(groupId);
+        data.groupIds().addAll(groupIds);
         ConsumerGroupDescribeRequest request = new ConsumerGroupDescribeRequest.Builder(data, true)
             .build();
         Throwable e = Errors.GROUP_AUTHORIZATION_FAILED.exception();
+        int throttleTimeMs = 1000;
 
-        // Act
-        ConsumerGroupDescribeResponse response = request.getErrorResponse(1000, e);
+        ConsumerGroupDescribeResponse response = request.getErrorResponse(throttleTimeMs, e);
 
-        // Assert
-        for (ConsumerGroupDescribeResponseData.DescribedGroup group: response.data().groups()) {
-            assertEquals(groupId, group.groupId());
+        assertEquals(throttleTimeMs, response.throttleTimeMs());
+        for (int i = 0; i < groupIds.size(); i++) {
+            ConsumerGroupDescribeResponseData.DescribedGroup group = response.data().groups().get(i);
+            assertEquals(groupIds.get(i), group.groupId());
             assertEquals(Errors.forException(e).code(), group.errorCode());
         }
     }

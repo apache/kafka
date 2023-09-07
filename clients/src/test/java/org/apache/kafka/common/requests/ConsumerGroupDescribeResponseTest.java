@@ -23,12 +23,12 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ConsumerGroupDescribeResponseTest {
 
     @Test
     void testErrorCounts() {
-        // Arrange
         Errors e = Errors.INVALID_GROUP_ID;
         int errorCount = 2;
         ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData();
@@ -40,11 +40,9 @@ public class ConsumerGroupDescribeResponseTest {
         }
         ConsumerGroupDescribeResponse response = new ConsumerGroupDescribeResponse(data);
 
-        // Act
         Map<Errors, Integer> counts = response.errorCounts();
 
-        // Assert
         assertEquals(errorCount, counts.get(e));
-        assertEquals(null, counts.get(Errors.COORDINATOR_NOT_AVAILABLE));
+        assertNull(counts.get(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 }

@@ -1142,14 +1142,14 @@ public class RequestResponseTest {
 
     private ConsumerGroupDescribeRequest createConsumerGroupDescribeRequest(short version) {
         ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData()
-            .setGroupIds(Arrays.asList("group"))
+            .setGroupIds(Collections.singletonList("group"))
             .setIncludeAuthorizedOperations(false);
         return new ConsumerGroupDescribeRequest.Builder(data).build(version);
     }
 
     private ConsumerGroupDescribeResponse createConsumerGroupDescribeResponse() {
         ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData()
-            .setGroups(Arrays.asList(
+            .setGroups(Collections.singletonList(
                 new ConsumerGroupDescribeResponseData.DescribedGroup()
                     .setGroupId("group")
                     .setErrorCode((short) 0)
