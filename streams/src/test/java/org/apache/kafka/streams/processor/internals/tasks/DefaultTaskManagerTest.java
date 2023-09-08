@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
+import org.apache.kafka.test.StreamsTestUtils.TaskBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +58,8 @@ public class DefaultTaskManagerTest {
     private final static long VERIFICATION_TIMEOUT = 15000;
 
     private final Time time = new MockTime(1L);
-    private final StreamTask task = mock(StreamTask.class);
+    private final TaskId taskId = new TaskId(0, 0, "A");
+    private final StreamTask task = TaskBuilder.statelessTask(taskId).build();
     private final TasksRegistry tasks = mock(TasksRegistry.class);
     private final TaskExecutor taskExecutor = mock(TaskExecutor.class);
     private final StreamsException exception = mock(StreamsException.class);
@@ -77,11 +79,9 @@ public class DefaultTaskManagerTest {
 
     @BeforeEach
     public void setUp() {
-        when(task.id()).thenReturn(new TaskId(0, 0, "A"));
         when(task.isProcessable(anyLong())).thenReturn(true);
-        when(task.isActive()).thenReturn(true);
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
-        when(tasks.task(new TaskId(0, 0, "A"))).thenReturn(task);
+        when(tasks.task(taskId)).thenReturn(task);
     }
 
     @Test
@@ -129,7 +129,7 @@ public class DefaultTaskManagerTest {
         final Thread awaitingThread = new Thread(awaitingRunnable);
         awaitingThread.start();
 
-        assertFalse(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+        assertFalse(awaitingRunnable.awaitDone.await(100, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
     }
@@ -174,7 +174,7 @@ public class DefaultTaskManagerTest {
         awaitingThread.start();
         verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
 
-        taskManager.unassignTask(t, taskExecutor);
+        taskManager.unassignTask(task, taskExecutor);
 
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 

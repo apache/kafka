@@ -88,7 +88,7 @@ public class DefaultTaskExecutorTest {
     @Test
     public void shouldAwaitProcessableTasksIfNoneAssignable() throws InterruptedException {
         assertNull(taskExecutor.currentTask(), "Have task assigned before startup");
-        when(task.isProcessable(anyLong())).thenReturn(false);
+        when(taskManager.assignNextTask(taskExecutor)).thenReturn(null);
 
         taskExecutor.start();
 
