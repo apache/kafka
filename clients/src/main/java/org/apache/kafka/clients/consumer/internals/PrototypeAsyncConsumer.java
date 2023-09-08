@@ -197,7 +197,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     backgroundEvent.ifPresent(event -> processEvent(event, timeout));
                 }
 
-                updateFetchPositions();
+                updateFetchPositionsIfNeeded();
 
                 // The idea here is to have the background thread sending fetches autonomously, and the fetcher
                 // uses the poll loop to retrieve successful fetchResponse and process them on the polling thread.
@@ -217,14 +217,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Set the fetch position to the committed position (if there is one) or reset it using the
-     * offset reset policy the user has configured.
+     * offset reset policy the user has configured (if partitions require reset)
      *
      * @return true if the operation completed without timing out
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws NoOffsetForPartitionException                          If no offset is stored for a given partition and no offset reset policy is
      *                                                                defined
      */
-    private boolean updateFetchPositions() {
+    private boolean updateFetchPositionsIfNeeded() {
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
         ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
         eventHandler.add(validatePositionsEvent);
