@@ -130,6 +130,9 @@ public class MembershipManagerImpl implements MembershipManager {
             } else if (response.errorCode() == Errors.UNRELEASED_INSTANCE_ID.code()) {
                 transitionTo(MemberState.FAILED);
             }
+            // TODO: handle other errors here to update state accordingly, mainly making the
+            //  distinction between the recoverable errors and the fatal ones, that should FAILED
+            //  the member
         }
     }
 
