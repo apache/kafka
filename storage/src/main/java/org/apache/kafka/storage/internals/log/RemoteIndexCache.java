@@ -77,7 +77,7 @@ public class RemoteIndexCache implements Closeable {
     private static final String TMP_FILE_SUFFIX = ".tmp";
     public static final String REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD = "remote-log-index-cleaner";
     public static final String DIR_NAME = "remote-log-index-cache";
-    public static final long DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES = 1024 * 1024L;
+    private static final long DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES = 1024 * 1024L;
 
     /**
      * Directory where the index files will be stored on disk.
@@ -99,6 +99,8 @@ public class RemoteIndexCache implements Closeable {
      * concurrent reads in-progress.
      */
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final RemoteStorageManager remoteStorageManager;
+    private final ShutdownableThread cleanerThread;
 
     /**
      * Actual cache implementation that this file wraps around.
@@ -112,8 +114,6 @@ public class RemoteIndexCache implements Closeable {
      * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
      */
     private Cache<Uuid, Entry> internalCache;
-    private final RemoteStorageManager remoteStorageManager;
-    private final ShutdownableThread cleanerThread;
 
     public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
         this(DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES, remoteStorageManager, logDir);
@@ -524,7 +524,7 @@ public class RemoteIndexCache implements Closeable {
 
         public long estimatedEntrySize() {
             try {
-                return Files.size(offsetIndex.file().toPath()) + Files.size(timeIndex.file().toPath()) + Files.size(txnIndex.file().toPath());
+                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
             } catch (IOException e) {
                 log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
                 return 0L;
