@@ -81,7 +81,7 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     private void transitionTo(MemberState nextState) {
-        if (!nextState.getPreviousValidStates().contains(state)) {
+        if (!this.state.equals(nextState) && !nextState.getPreviousValidStates().contains(state)) {
             // TODO: handle invalid state transition
             throw new RuntimeException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
@@ -117,16 +117,33 @@ public class MembershipManagerImpl implements MembershipManager {
             ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
             if (assignment != null) {
                 targetAssignments.add(assignment);
-                transitionTo(MemberState.RECONCILING);
             }
+            maybeTransitionToStable();
         } else {
-            if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
-                resetMemberIdAndEpoch();
+            if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code()) {
+                resetEpoch();
+                transitionTo(MemberState.FENCED);
+            } else if (response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
+                resetMemberId();
+                resetEpoch();
                 transitionTo(MemberState.UNJOINED);
             } else if (response.errorCode() == Errors.UNRELEASED_INSTANCE_ID.code()) {
                 transitionTo(MemberState.FAILED);
             }
         }
+    }
+
+    /**
+     * Transition to {@link MemberState#STABLE} only if there are no target assignments left to
+     * reconcile. Transition to {@link MemberState#RECONCILING} otherwise.
+     */
+    private boolean maybeTransitionToStable() {
+        if (targetAssignments.isEmpty()) {
+            transitionTo(MemberState.STABLE);
+        } else {
+            transitionTo(MemberState.RECONCILING);
+        }
+        return state.equals(MemberState.STABLE);
     }
 
     /**
@@ -155,9 +172,12 @@ public class MembershipManagerImpl implements MembershipManager {
         //  this unrecoverable state
     }
 
-    private void resetMemberIdAndEpoch() {
-        this.memberId = "";
+    private void resetEpoch() {
         this.memberEpoch = 0;
+    }
+
+    private void resetMemberId() {
+        this.memberId = "";
     }
 
     @Override
