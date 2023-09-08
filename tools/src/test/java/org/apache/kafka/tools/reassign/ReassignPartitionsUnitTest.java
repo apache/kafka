@@ -188,7 +188,7 @@ public class ReassignPartitionsUnitTest {
             assertEquals(expected._2, actual._2);
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
-            Map<TopicPartition, Class<? extends Throwable>> cancelResult = CollectionConverters.asJava(cancelPartitionReassignments(adminClient, toSet(new HashSet<>(Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("quux", 2))))))
+            Map<TopicPartition, Class<? extends Throwable>> cancelResult = CollectionConverters.asJava(cancelPartitionReassignments(adminClient, toSet(new TopicPartition("foo", 0), new TopicPartition("quux", 2))))
                 .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getClass()));
 
             assertEquals(Collections.singletonMap(new TopicPartition("quux", 2), UnknownTopicOrPartitionException.class), cancelResult);
@@ -302,8 +302,7 @@ public class ReassignPartitionsUnitTest {
             assignments.put(new TopicPartition("bar", 0), Arrays.asList(2, 3, 0));
 
             assertEquals(assignments,
-                javaMap(getReplicaAssignmentForPartitions(adminClient, toSet(new HashSet<>(Arrays.asList(
-                    new TopicPartition("foo", 0), new TopicPartition("bar", 0))))), CollectionConverters::asJava));
+                javaMap(getReplicaAssignmentForPartitions(adminClient, toSet(new TopicPartition("foo", 0), new TopicPartition("bar", 0))), CollectionConverters::asJava));
         }
     }
 
@@ -539,9 +538,9 @@ public class ReassignPartitionsUnitTest {
 
         assertEquals(new HashSet<>(Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8)), CollectionConverters.asJava(calculateReassigningBrokers(mutableMap(asScala(moveMap, this::toMoveMap)))));
 
-        assertEquals(new HashSet<>(Arrays.asList(0, 2)), CollectionConverters.asJava(calculateMovingBrokers(toSet(new HashSet<>(Arrays.asList(
+        assertEquals(new HashSet<>(Arrays.asList(0, 2)), CollectionConverters.asJava(calculateMovingBrokers(toSet(
             new TopicPartitionReplica("quux", 0, 0),
-            new TopicPartitionReplica("quux", 1, 2)))))));
+            new TopicPartitionReplica("quux", 1, 2)))));
     }
 
     @Test
@@ -627,8 +626,8 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testModifyBrokerInterBrokerThrottle() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
-            modifyInterBrokerThrottle(adminClient, toSet(Arrays.asList(0, 1, 2)), 1000);
-            modifyInterBrokerThrottle(adminClient, toSet(Arrays.asList(0, 3)), 100);
+            modifyInterBrokerThrottle(adminClient, toSet(0, 1, 2), 1000);
+            modifyInterBrokerThrottle(adminClient, toSet(0, 3), 100);
             List<ConfigResource> brokers = new ArrayList<>();
             for (int i = 0; i < 4; i++)
                 brokers.add(new ConfigResource(ConfigResource.Type.BROKER, Integer.toString(i)));
@@ -643,8 +642,8 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testModifyLogDirThrottle() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
-            modifyLogDirThrottle(adminClient, toSet(Arrays.asList(0, 1, 2)), 2000);
-            modifyLogDirThrottle(adminClient, toSet(Arrays.asList(0, 3)), -1);
+            modifyLogDirThrottle(adminClient, toSet(0, 1, 2), 2000);
+            modifyLogDirThrottle(adminClient, toSet(0, 3), -1);
 
             List<ConfigResource> brokers = new ArrayList<>();
             for (int i = 0; i < 4; i++)
@@ -766,8 +765,9 @@ public class ReassignPartitionsUnitTest {
         }
     }
 
-    private <T> scala.collection.immutable.Set<T> toSet(Collection<T> set) {
-        return toMutableSet(new HashSet<>(set)).toSet();
+    @SuppressWarnings("unchecked")
+    private <T> scala.collection.immutable.Set<T> toSet(final T... set) {
+        return (scala.collection.immutable.Set<T>) toMutableSet(new HashSet<>(Arrays.asList(set))).toSet();
     }
 
     private <T> scala.collection.mutable.Set<Object> toMutableSet(Set<T> set) {
