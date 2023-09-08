@@ -61,6 +61,7 @@ public class TopicMetadataRequestManager implements RequestManager {
     private final boolean allowAutoTopicCreation;
     private final Map<String, CompletableTopicMetadataRequest> inflightRequests;
     private final long retryBackoffMs;
+    private final long retryBackoffMaxMs;
     private final Logger log;
     private final LogContext logContext;
 
@@ -69,6 +70,7 @@ public class TopicMetadataRequestManager implements RequestManager {
         this.log = logContext.logger(this.getClass());
         this.inflightRequests = new HashMap<>();
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
     }
 
@@ -98,9 +100,10 @@ public class TopicMetadataRequestManager implements RequestManager {
         }
 
         CompletableTopicMetadataRequest newRequest = new CompletableTopicMetadataRequest(
-            logContext,
-            topic,
-            retryBackoffMs);
+                logContext,
+                topic,
+                retryBackoffMs,
+                retryBackoffMaxMs);
         inflightRequests.put(topicName, newRequest);
         return newRequest.future();
     }
@@ -116,9 +119,10 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         public CompletableTopicMetadataRequest(final LogContext logContext,
                                                final Optional<String> topic,
-                                               final long retryBackoffMs) {
+                                               final long retryBackoffMs,
+                                               final long retryBackoffMaxMs) {
             this.topic = topic;
-            this.state = new RequestState(logContext, retryBackoffMs);
+            this.state = new RequestState(logContext, this.getClass().getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
         }
 
         /**

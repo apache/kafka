@@ -77,6 +77,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final RequestManagers requestManagers;
 
     // Visible for testing
+    @SuppressWarnings("ParameterNumber")
     DefaultBackgroundThread(final Time time,
                             final ConsumerConfig config,
                             final LogContext logContext,
@@ -89,7 +90,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final GroupState groupState,
                             final CoordinatorRequestManager coordinatorManager,
                             final CommitRequestManager commitRequestManager,
-                            final OffsetsRequestManager offsetsRequestManager) {
+                            final OffsetsRequestManager offsetsRequestManager,
                             final TopicMetadataRequestManager topicMetadataRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;

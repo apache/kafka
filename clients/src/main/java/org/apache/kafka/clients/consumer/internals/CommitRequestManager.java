@@ -145,7 +145,6 @@ public class CommitRequestManager implements RequestManager {
         this.autoCommitState.ifPresent(t -> t.ack(currentTimeMs));
     }
 
-
     // Visible for testing
     List<CompletableOffsetFetchRequest> unsentOffsetFetchRequests() {
         return pendingRequests.unsentOffsetFetches;

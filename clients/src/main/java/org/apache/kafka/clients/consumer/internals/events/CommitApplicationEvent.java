@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-public class CommitApplicationEvent extends ApplicationEvent {
+public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     final private CompletableFuture<Void> future;
     final private Map<TopicPartition, OffsetAndMetadata> offsets;
 
