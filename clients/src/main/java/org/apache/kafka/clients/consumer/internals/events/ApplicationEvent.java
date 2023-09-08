@@ -16,23 +16,32 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.Objects;
+
 /**
  * This is the abstract definition of the events created by the KafkaConsumer API
  */
-abstract public class ApplicationEvent {
-    public final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-
-    @Override
-    public String toString() {
-        return type + " ApplicationEvent";
-    }
+public abstract class ApplicationEvent {
 
     public enum Type {
         NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, ASSIGNMENT_CHANGE,
         LIST_OFFSETS,
+    }
+
+    protected final Type type;
+
+    protected ApplicationEvent(Type type) {
+        this.type = Objects.requireNonNull(type);
+    }
+
+    public Type type() {
+        return type;
+    }
+
+    @Override
+    public String toString() {
+        return "ApplicationEvent{" +
+                "type=" + type +
+                '}';
     }
 }
