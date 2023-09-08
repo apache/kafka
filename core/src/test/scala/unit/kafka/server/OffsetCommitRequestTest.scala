@@ -19,16 +19,11 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
-import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
-
-import java.util.stream.Collectors
-import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -73,36 +68,20 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
-    val admin = cluster.createAdminClient()
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    TestUtils.createOffsetsTopicWithAdmin(
-      admin = admin,
-      brokers = if (cluster.isKRaftTest) {
-        cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala
-      } else {
-        cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala
-      }
-    )
+    createOffsetsTopic()
 
     // Create the topic.
     TestUtils.createTopicWithAdminRaw(
-      admin = admin,
+      admin = cluster.createAdminClient(),
       topic = "foo",
       numPartitions = 3
     )
 
-    // Join the consumer group.
-    val (memberId, memberEpoch) = if (useNewProtocol) {
-      // Note that we heartbeat only once to join the group and assume
-      // that the test will complete within the session timeout.
-      joinConsumerGroupWithNewProtocol("grp")
-    } else {
-      // Note that we don't heartbeat and assume  that the test will
-      // complete within the session timeout.
-      joinConsumerGroupWithOldProtocol("grp")
-    }
+    // Join the consumer group. Note that we don't heartbeat here so we must use
+    // a session long enough for the duration of the test.
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
 
     // Start from version 1 because version 0 goes to ZK.
     for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {

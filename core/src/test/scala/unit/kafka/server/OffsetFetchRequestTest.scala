@@ -19,19 +19,14 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
-import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetFetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{OffsetFetchRequest, OffsetFetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
-import java.util.Comparator
-import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -153,36 +148,20 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
-    val admin = cluster.createAdminClient()
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    TestUtils.createOffsetsTopicWithAdmin(
-      admin = admin,
-      brokers = if (cluster.isKRaftTest) {
-        cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala
-      } else {
-        cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala
-      }
-    )
+    createOffsetsTopic()
 
     // Create the topic.
     TestUtils.createTopicWithAdminRaw(
-      admin = admin,
+      admin = cluster.createAdminClient(),
       topic = "foo",
       numPartitions = 3
     )
 
-    // Join the consumer group.
-    val (memberId, memberEpoch) = if (useNewProtocol) {
-      // Note that we heartbeat only once to join the group and assume
-      // that the test will complete within the session timeout.
-      joinConsumerGroupWithNewProtocol("grp")
-    } else {
-      // Note that we don't heartbeat and assume  that the test will
-      // complete within the session timeout.
-      joinConsumerGroupWithOldProtocol("grp")
-    }
+    // Join the consumer group. Note that we don't heartbeat here so we must use
+    // a session long enough for the duration of the test.
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
 
     // Commit offsets.
     for (partitionId <- 0 to 2) {
@@ -305,36 +284,20 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
-    val admin = cluster.createAdminClient()
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    TestUtils.createOffsetsTopicWithAdmin(
-      admin = admin,
-      brokers = if (cluster.isKRaftTest) {
-        cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala
-      } else {
-        cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala
-      }
-    )
+    createOffsetsTopic()
 
     // Create the topic.
     TestUtils.createTopicWithAdminRaw(
-      admin = admin,
+      admin = cluster.createAdminClient(),
       topic = "foo",
       numPartitions = 3
     )
 
-    // Join the consumer group.
-    val (memberId, memberEpoch) = if (useNewProtocol) {
-      // Note that we heartbeat only once to join the group and assume
-      // that the test will complete within the session timeout.
-      joinConsumerGroupWithNewProtocol("grp")
-    } else {
-      // Note that we don't heartbeat and assume  that the test will
-      // complete within the session timeout.
-      joinConsumerGroupWithOldProtocol("grp")
-    }
+    // Join the consumer group. Note that we don't heartbeat here so we must use
+    // a session long enough for the duration of the test.
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
 
     // Commit offsets.
     for (partitionId <- 0 to 2) {
@@ -435,33 +398,22 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
-    val admin = cluster.createAdminClient()
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    TestUtils.createOffsetsTopicWithAdmin(
-      admin = admin,
-      brokers = if (cluster.isKRaftTest) {
-        cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala
-      } else {
-        cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala
-      }
-    )
+    createOffsetsTopic()
 
     // Create the topic.
     TestUtils.createTopicWithAdminRaw(
-      admin = admin,
+      admin = cluster.createAdminClient(),
       topic = "foo",
       numPartitions = 3
     )
 
-    // Create groups and commits offsets.
+    // Create groups and commit offsets.
     List("grp-0", "grp-1", "grp-2").foreach { groupId =>
-      val (memberId, memberEpoch) = if (useNewProtocol) {
-        joinConsumerGroupWithNewProtocol(groupId)
-      } else {
-        joinConsumerGroupWithOldProtocol(groupId)
-      }
+      // Join the consumer group. Note that we don't heartbeat here so we must use
+      // a session long enough for the duration of the test.
+      val (memberId, memberEpoch) = joinConsumerGroup(groupId, useNewProtocol)
 
       for (partitionId <- 0 to 2) {
         commitOffset(
@@ -552,87 +504,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           version = version.toShort
         )
       )
-    }
-  }
-
-  private def fetchOffsets(
-    groupId: String,
-    memberId: String,
-    memberEpoch: Int,
-    partitions: List[TopicPartition],
-    requireStable: Boolean,
-    version: Short
-  ): OffsetFetchResponseData.OffsetFetchResponseGroup = {
-    val request = new OffsetFetchRequest.Builder(
-      groupId,
-      memberId,
-      memberEpoch,
-      requireStable,
-      if (partitions == null) null else partitions.asJava,
-      false
-    ).build(version)
-
-    val response = connectAndReceive[OffsetFetchResponse](request)
-
-    // Normalize the response based on the version to present the
-    // same format to the caller.
-    val groupResponse = if (version >= 8) {
-      assertEquals(1, response.data.groups.size)
-      assertEquals(groupId, response.data.groups.get(0).groupId)
-      response.data.groups.asScala.head
-    } else {
-      new OffsetFetchResponseData.OffsetFetchResponseGroup()
-        .setGroupId(groupId)
-        .setErrorCode(response.data.errorCode)
-        .setTopics(response.data.topics.asScala.map { topic =>
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName(topic.name)
-            .setPartitions(topic.partitions.asScala.map { partition =>
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(partition.partitionIndex)
-                .setErrorCode(partition.errorCode)
-                .setCommittedOffset(partition.committedOffset)
-                .setCommittedLeaderEpoch(partition.committedLeaderEpoch)
-                .setMetadata(partition.metadata)
-            }.asJava)
-        }.asJava)
-    }
-
-    // Sort topics and partitions within the response as their order is not guaranteed.
-    sortTopicPartitions(groupResponse)
-
-    groupResponse
-  }
-
-  private def fetchOffsets(
-    groups: Map[String, List[TopicPartition]],
-    requireStable: Boolean,
-    version: Short
-  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
-    if (version < 8) {
-      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
-    }
-
-    val request = new OffsetFetchRequest.Builder(
-      groups.map { case (k, v) => (k, v.asJava) }.asJava,
-      requireStable,
-      false
-    ).build(version)
-
-    val response = connectAndReceive[OffsetFetchResponse](request)
-
-    // Sort topics and partitions within the response as their order is not guaranteed.
-    response.data.groups.asScala.foreach(sortTopicPartitions)
-
-    response.data.groups.asScala.toList
-  }
-
-  private def sortTopicPartitions(
-    group: OffsetFetchResponseData.OffsetFetchResponseGroup
-  ): Unit = {
-    group.topics.sort((t1, t2) => t1.name.compareTo(t2.name))
-    group.topics.asScala.foreach { topic =>
-      topic.partitions.sort(Comparator.comparingInt[OffsetFetchResponseData.OffsetFetchResponsePartitions](_.partitionIndex))
     }
   }
 }

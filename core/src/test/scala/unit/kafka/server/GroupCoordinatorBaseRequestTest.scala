@@ -17,16 +17,32 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
+import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
+import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.{NotNothing, TestUtils}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, JoinGroupRequest, JoinGroupResponse, OffsetCommitRequest, OffsetCommitResponse, SyncGroupRequest, SyncGroupResponse}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, JoinGroupRequest, JoinGroupResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
+import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
+import java.util.Comparator
+import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
+  protected def createOffsetsTopic(): Unit = {
+    TestUtils.createOffsetsTopicWithAdmin(
+      admin = cluster.createAdminClient(),
+      brokers = if (cluster.isKRaftTest) {
+        cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala
+      } else {
+        cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala
+      }
+    )
+  }
+
   protected def isUnstableApiEnabled: Boolean = {
     cluster.config.serverProperties.getProperty("unstable.api.versions.enable") == "true"
   }
@@ -75,6 +91,87 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val response = connectAndReceive[OffsetCommitResponse](request)
     assertEquals(expectedResponse, response.data)
+  }
+
+  protected def fetchOffsets(
+    groupId: String,
+    memberId: String,
+    memberEpoch: Int,
+    partitions: List[TopicPartition],
+    requireStable: Boolean,
+    version: Short
+  ): OffsetFetchResponseData.OffsetFetchResponseGroup = {
+    val request = new OffsetFetchRequest.Builder(
+      groupId,
+      memberId,
+      memberEpoch,
+      requireStable,
+      if (partitions == null) null else partitions.asJava,
+      false
+    ).build(version)
+
+    val response = connectAndReceive[OffsetFetchResponse](request)
+
+    // Normalize the response based on the version to present the
+    // same format to the caller.
+    val groupResponse = if (version >= 8) {
+      assertEquals(1, response.data.groups.size)
+      assertEquals(groupId, response.data.groups.get(0).groupId)
+      response.data.groups.asScala.head
+    } else {
+      new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId(groupId)
+        .setErrorCode(response.data.errorCode)
+        .setTopics(response.data.topics.asScala.map { topic =>
+          new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName(topic.name)
+            .setPartitions(topic.partitions.asScala.map { partition =>
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(partition.partitionIndex)
+                .setErrorCode(partition.errorCode)
+                .setCommittedOffset(partition.committedOffset)
+                .setCommittedLeaderEpoch(partition.committedLeaderEpoch)
+                .setMetadata(partition.metadata)
+            }.asJava)
+        }.asJava)
+    }
+
+    // Sort topics and partitions within the response as their order is not guaranteed.
+    sortTopicPartitions(groupResponse)
+
+    groupResponse
+  }
+
+  protected def fetchOffsets(
+    groups: Map[String, List[TopicPartition]],
+    requireStable: Boolean,
+    version: Short
+  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    if (version < 8) {
+      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
+    }
+
+    val request = new OffsetFetchRequest.Builder(
+      groups.map { case (k, v) => (k, v.asJava) }.asJava,
+      requireStable,
+      false
+    ).build(version)
+
+    val response = connectAndReceive[OffsetFetchResponse](request)
+
+    // Sort topics and partitions within the response as their order is not guaranteed.
+    response.data.groups.asScala.foreach(sortTopicPartitions)
+
+    response.data.groups.asScala.toList
+  }
+
+  private def sortTopicPartitions(
+    group: OffsetFetchResponseData.OffsetFetchResponseGroup
+  ): Unit = {
+    group.topics.sort((t1, t2) => t1.name.compareTo(t2.name))
+    group.topics.asScala.foreach { topic =>
+      topic.partitions.sort(Comparator.comparingInt[OffsetFetchResponseData.OffsetFetchResponsePartitions](_.partitionIndex))
+    }
   }
 
   protected def joinConsumerGroupWithOldProtocol(groupId: String): (String, Int) = {
@@ -144,6 +241,18 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }, msg = s"Could not join the group successfully. Last response $consumerGroupHeartbeatResponse.")
 
     (consumerGroupHeartbeatResponse.data.memberId, consumerGroupHeartbeatResponse.data.memberEpoch)
+  }
+
+  protected def joinConsumerGroup(groupId: String, useNewProtocol: Boolean): (String, Int) = {
+    if (useNewProtocol) {
+      // Note that we heartbeat only once to join the group and assume
+      // that the test will complete within the session timeout.
+      joinConsumerGroupWithNewProtocol(groupId)
+    } else {
+      // Note that we don't heartbeat and assume  that the test will
+      // complete within the session timeout.
+      joinConsumerGroupWithOldProtocol(groupId)
+    }
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
