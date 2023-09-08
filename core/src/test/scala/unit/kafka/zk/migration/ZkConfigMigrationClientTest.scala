@@ -22,15 +22,16 @@ import kafka.zk.{AdminZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.metadata.ConfigRecord
+import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
+import org.apache.kafka.common.metadata.{ClientQuotaRecord, ConfigRecord, UserScramCredentialRecord}
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.security.scram.ScramCredential
-import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramMechanism}
 import org.apache.kafka.common.utils.SecurityUtils
-import org.apache.kafka.image.{ClientQuotasDelta, ClientQuotasImage}
+import org.apache.kafka.image.{ClientQuotasDelta, ClientQuotasImage, MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.RecordTestUtils
-import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
