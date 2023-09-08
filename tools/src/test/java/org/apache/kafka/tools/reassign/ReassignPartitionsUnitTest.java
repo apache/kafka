@@ -38,7 +38,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import scala.Tuple2;
 import scala.collection.Seq;
-import scala.collection.mutable.Map$;
 import scala.jdk.javaapi.CollectionConverters;
 
 import java.util.ArrayList;
@@ -50,7 +49,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -171,20 +169,19 @@ public class ReassignPartitionsUnitTest {
 
             assertEquals(Collections.singletonMap(new TopicPartition("quux", 0), UnknownTopicOrPartitionException.class), reassignmentResult);
 
-            Map<TopicPartition, PartitionReassignmentState> partitionReassignmentStates = new HashMap<>();
+            Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> partitionReassignmentStates = new HashMap<>();
 
-            partitionReassignmentStates.put(new TopicPartition("foo", 0), new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 3), false));
-            partitionReassignmentStates.put(new TopicPartition("foo", 1), new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true));
+            partitionReassignmentStates.put(new TopicPartition("foo", 0), asScala(new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 3), false)));
+            partitionReassignmentStates.put(new TopicPartition("foo", 1), asScala(new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true)));
 
-            Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> expected = new Tuple2<>(partitionReassignmentStates, true);
             Tuple2<scala.collection.Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState>, Object> actual =
                 findPartitionReassignmentStates(adminClient, CollectionConverters.asScala(asList(
                     new Tuple2<>(new TopicPartition("foo", 0), seq(0, 1, 3)),
                     new Tuple2<>(new TopicPartition("foo", 1), seq(1, 2, 3))
                 )));
 
-            assertEquals(asScala(expected._1, this::asScala), actual._1);
-            assertEquals(expected._2, actual._2);
+            assertEquals(CollectionConverters.asScala(partitionReassignmentStates), actual._1);
+            assertEquals(true, actual._2);
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
             Map<TopicPartition, Class<? extends Throwable>> cancelResult = CollectionConverters.asJava(cancelPartitionReassignments(adminClient, set(new TopicPartition("foo", 0), new TopicPartition("quux", 2))))
@@ -194,17 +191,16 @@ public class ReassignPartitionsUnitTest {
 
             partitionReassignmentStates.clear();
 
-            partitionReassignmentStates.put(new TopicPartition("foo", 0), new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 3), true));
-            partitionReassignmentStates.put(new TopicPartition("foo", 1), new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true));
+            partitionReassignmentStates.put(new TopicPartition("foo", 0), asScala(new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 3), true)));
+            partitionReassignmentStates.put(new TopicPartition("foo", 1), asScala(new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true)));
 
-            expected = new Tuple2<>(partitionReassignmentStates, false);
             actual = findPartitionReassignmentStates(adminClient, CollectionConverters.asScala(asList(
                 new Tuple2<>(new TopicPartition("foo", 0), seq(0, 1, 3)),
                 new Tuple2<>(new TopicPartition("foo", 1), seq(1, 2, 3))
             )));
 
-            assertEquals(asScala(expected._1, this::asScala), actual._1);
-            assertEquals(expected._2, actual._2);
+            assertEquals(CollectionConverters.asScala(partitionReassignmentStates), actual._1);
+            assertEquals(false, actual._2);
         }
     }
 
@@ -507,43 +503,44 @@ public class ReassignPartitionsUnitTest {
         currentParts.put(new TopicPartition("bar", 0), seq(2, 3, 4));
         currentParts.put(new TopicPartition("baz", 0), seq(1, 2, 3));
 
-        Map<String, Map<Integer, PartitionMove>> moveMap = javaMap(calculateProposedMoveMap(
-            CollectionConverters.asScala(currentReassignments),
-            CollectionConverters.asScala(proposedParts),
-            CollectionConverters.asScala(currentParts)
-        ), this::asJava);
+        scala.collection.mutable.Map<String, scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove>>
+            moveMap = calculateProposedMoveMap(
+                CollectionConverters.asScala(currentReassignments),
+                CollectionConverters.asScala(proposedParts),
+                CollectionConverters.asScala(currentParts)
+            );
 
-        Map<String, Map<Integer, PartitionMove>> expMoveMap = new HashMap<>();
+        Map<Integer, ReassignPartitionsCommand.PartitionMove> fooMoves = new HashMap<>();
 
-        Map<Integer, PartitionMove> fooMoves = new HashMap<>();
+        fooMoves.put(0, asScala(new PartitionMove(jset(1, 2, 3), jset(5))));
+        fooMoves.put(1, asScala(new PartitionMove(jset(4, 5, 6), jset(7, 8))));
+        fooMoves.put(2, asScala(new PartitionMove(jset(1, 2), jset(3, 4))));
+        fooMoves.put(3, asScala(new PartitionMove(jset(1, 2), jset(5, 6))));
+        fooMoves.put(4, asScala(new PartitionMove(jset(1, 2), jset(3))));
+        fooMoves.put(5, asScala(new PartitionMove(jset(1, 2), jset(3, 4, 5, 6))));
 
-        fooMoves.put(0, new PartitionMove(new HashSet<>(asList(1, 2, 3)), Collections.singleton(5)));
-        fooMoves.put(1, new PartitionMove(new HashSet<>(asList(4, 5, 6)), new HashSet<>(asList(7, 8))));
-        fooMoves.put(2, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4))));
-        fooMoves.put(3, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(5, 6))));
-        fooMoves.put(4, new PartitionMove(new HashSet<>(asList(1, 2)), Collections.singleton(3)));
-        fooMoves.put(5, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4, 5, 6))));
+        Map<Integer, ReassignPartitionsCommand.PartitionMove> barMoves = new HashMap<>();
 
-        expMoveMap.put("foo", fooMoves);
-        expMoveMap.put("bar", Collections.singletonMap(0, new PartitionMove(new HashSet<>(asList(2, 3, 4)), Collections.singleton(1))));
+        barMoves.put(0, asScala(new PartitionMove(jset(2, 3, 4), jset(1))));
 
-        assertEquals(expMoveMap, moveMap);
+        assertEquals(CollectionConverters.asScala(fooMoves), moveMap.get("foo").get());
+        assertEquals(CollectionConverters.asScala(barMoves), moveMap.get("bar").get());
 
         Map<String, String> expLeaderThrottle = new HashMap<>();
 
         expLeaderThrottle.put("foo", "0:1,0:2,0:3,1:4,1:5,1:6,2:1,2:2,3:1,3:2,4:1,4:2,5:1,5:2");
         expLeaderThrottle.put("bar", "0:2,0:3,0:4");
 
-        assertEquals(expLeaderThrottle, CollectionConverters.asJava(calculateLeaderThrottles(mutableMap(asScala(moveMap, this::toMoveMap)))));
+        assertEquals(CollectionConverters.asScala(expLeaderThrottle), calculateLeaderThrottles(moveMap));
 
         Map<String, String> expFollowerThrottle = new HashMap<>();
 
         expFollowerThrottle.put("foo", "0:5,1:7,1:8,2:3,2:4,3:5,3:6,4:3,5:3,5:4,5:5,5:6");
         expFollowerThrottle.put("bar", "0:1");
 
-        assertEquals(expFollowerThrottle, CollectionConverters.asJava(calculateFollowerThrottles(mutableMap(asScala(moveMap, this::toMoveMap)))));
+        assertEquals(CollectionConverters.asScala(expFollowerThrottle), calculateFollowerThrottles(moveMap));
 
-        assertEquals(set(1, 2, 3, 4, 5, 6, 7, 8), calculateReassigningBrokers(mutableMap(asScala(moveMap, this::toMoveMap))));
+        assertEquals(set(1, 2, 3, 4, 5, 6, 7, 8), calculateReassigningBrokers(moveMap));
         assertEquals(set(0, 2), calculateMovingBrokers(set(
             new TopicPartitionReplica("quux", 0, 0),
             new TopicPartitionReplica("quux", 1, 2))));
@@ -599,8 +596,8 @@ public class ReassignPartitionsUnitTest {
                 "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[1,2,3],\"log_dirs\":[\"/tmp/a\",\"/tmp/b\",\"/tmp/c\"]}" +
                 "]}");
 
-        assertEquals(Collections.singletonMap(new TopicPartition("foo", 0), asList(1, 2, 3)), javaMap(actual._1, CollectionConverters::asJava));
-        assertEquals(replicaAssignment, CollectionConverters.asJava(actual._2));
+        assertEquals(CollectionConverters.asScala(Collections.singletonMap(new TopicPartition("foo", 0), seq(1, 2, 3))), actual._1);
+        assertEquals(CollectionConverters.asScala(replicaAssignment), actual._2);
     }
 
     @Test
@@ -774,37 +771,17 @@ public class ReassignPartitionsUnitTest {
 
     @SuppressWarnings("unchecked")
     private <T> scala.collection.immutable.Set<T> set(final T... set) {
-        return toMutableSet(new HashSet<>(asList(set))).toSet();
+        return CollectionConverters.asScala(jset(set)).toSet();
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> Set<T> jset(final T...set) {
+        return new HashSet<>(asList(set));
     }
 
     @SuppressWarnings("unchecked")
     private <T> Seq<Object> seq(T... col) {
         return (Seq<Object>) CollectionConverters.asScala(asList(col)).toSeq();
-    }
-
-    private <T> scala.collection.mutable.Set<Object> toMutableSet(Set<T> set) {
-        return CollectionConverters.asScala(new HashSet<>(set));
-    }
-
-    @SuppressWarnings("unchecked")
-    private scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove> toMoveMap(Map<Integer, PartitionMove> moveMap) {
-        scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove> res =
-            (scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove>) Map$.MODULE$.mapFactory().newBuilder().result();
-
-        moveMap.forEach((k, v) -> res.addOne(new Tuple2<>(k,
-            new ReassignPartitionsCommand.PartitionMove(toMutableSet(v.sources), toMutableSet(v.destinations)))));
-
-        return res;
-    }
-
-    private <K, V, V1> scala.collection.Map<K, V1> asScala(Map<K, V> map, Function<V, V1> mapper) {
-        return CollectionConverters.asScala(map.entrySet().stream().
-            collect(Collectors.toMap(Map.Entry::getKey, e -> mapper.apply(e.getValue()))));
-    }
-
-    @SuppressWarnings("unchecked")
-    private <K, V> scala.collection.mutable.Map<K, V> mutableMap(scala.collection.Map<K, V> map) {
-        return (scala.collection.mutable.Map<K, V>) map.to(Map$.MODULE$.mapFactory());
     }
 
     private ReassignPartitionsCommand.LogDirMoveState asScala(LogDirMoveState state) {
@@ -829,25 +806,18 @@ public class ReassignPartitionsUnitTest {
     }
 
     @SuppressWarnings("unchecked")
+    private ReassignPartitionsCommand.PartitionMove asScala(PartitionMove pm) {
+        return new ReassignPartitionsCommand.PartitionMove(
+            CollectionConverters.asScala((Set) pm.sources),
+            CollectionConverters.asScala((Set) pm.destinations)
+        );
+    }
+
+    @SuppressWarnings("unchecked")
     private ReassignPartitionsCommand.PartitionReassignmentState asScala(PartitionReassignmentState state) {
-        List currentReplicas = state.currentReplicas;
-        List targetReplicas = state.targetReplicas;
-
         return new ReassignPartitionsCommand.PartitionReassignmentState(
-            CollectionConverters.asScala(currentReplicas).toSeq(),
-            CollectionConverters.asScala(targetReplicas).toSeq(),
+            CollectionConverters.asScala((List) state.currentReplicas).toSeq(),
+            CollectionConverters.asScala((List) state.targetReplicas).toSeq(),
             state.done);
-    }
-
-    private <K, V, V1> Map<K, V1> javaMap(scala.collection.Map<K, V> map, Function<V, V1> mapper) {
-        Map<K, V1> res = new HashMap<>();
-        map.foreach(t -> res.put(t._1, mapper.apply(t._2)));
-        return res;
-    }
-
-    private Map<Integer, PartitionMove> asJava(scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove> map) {
-        Map<Integer, PartitionMove> res = new HashMap<>();
-        map.foreach(t -> res.put((Integer) t._1, new PartitionMove(CollectionConverters.asJava(t._2.sources().toSet()), CollectionConverters.asJava(t._2.destinations().toSet()))));
-        return res;
     }
 }
