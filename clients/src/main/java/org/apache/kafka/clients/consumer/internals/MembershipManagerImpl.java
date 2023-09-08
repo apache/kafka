@@ -120,13 +120,13 @@ public class MembershipManagerImpl implements MembershipManager {
             }
             maybeTransitionToStable();
         } else {
-            if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code()) {
+            if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
                 resetEpoch();
                 transitionTo(MemberState.FENCED);
-            } else if (response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
-                resetMemberId();
-                resetEpoch();
-                transitionTo(MemberState.UNJOINED);
+
+                if (response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
+                    resetMemberId();
+                }
             } else if (response.errorCode() == Errors.UNRELEASED_INSTANCE_ID.code()) {
                 transitionTo(MemberState.FAILED);
             }

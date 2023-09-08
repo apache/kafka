@@ -24,7 +24,7 @@ import java.util.List;
 public enum MemberState {
 
     /**
-     * Member has not joined a consumer group yet
+     * Member has not joined a consumer group yet, or has been fenced and needs to re-join.
      */
     UNJOINED,
 
@@ -43,8 +43,10 @@ public enum MemberState {
     STABLE,
 
     /**
-     * Member transitions to this state when it receives a FENCED_MEMBER_EPOCH error from the
-     * broker, indicating an invalid member epoch. This is a recoverable state, where the member
+     * Member transitions to this state when it receives a
+     * {@link org.apache.kafka.common.protocol.Errors#UNKNOWN_MEMBER_ID} or
+     * {@link org.apache.kafka.common.protocol.Errors#FENCED_MEMBER_EPOCH} error from the
+     * broker. This is a recoverable state, where the member
      * gives up its partitions by invoking the user callbacks for onPartitionsLost, and then
      * transitions to {@link #UNJOINED} to rejoin the group as a new member.
      */
