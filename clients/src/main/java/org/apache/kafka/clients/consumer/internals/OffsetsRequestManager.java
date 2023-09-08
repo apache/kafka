@@ -84,13 +84,13 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final ApiVersions apiVersions;
 
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
-                                     final ConsumerMetadata metadata,
-                                     final IsolationLevel isolationLevel,
-                                     final Time time,
-                                     final long retryBackoffMs,
-                                     final long requestTimeoutMs,
-                                     final ApiVersions apiVersions,
-                                     final LogContext logContext) {
+                                 final ConsumerMetadata metadata,
+                                 final IsolationLevel isolationLevel,
+                                 final Time time,
+                                 final long retryBackoffMs,
+                                 final long requestTimeoutMs,
+                                 final ApiVersions apiVersions,
+                                 final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
         requireNonNull(isolationLevel);
@@ -195,8 +195,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     /**
      * Validate positions for all assigned partitions for which a leader change has been detected.
-     * This will generate OffsetsForLeaderEpoch requests for the partitions and timestamps, and
-     * enqueue them to be sent on the next call to {@link #poll(long)}.
+     * This will generate OffsetsForLeaderEpoch requests for the partitions, with the known offset
+     * epoch and current leader epoch. It will enqueue the generated requests, to be sent on the
+     * next call to {@link #poll(long)}.
      *
      * <p/>
      *
