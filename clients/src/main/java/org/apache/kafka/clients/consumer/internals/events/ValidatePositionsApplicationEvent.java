@@ -27,12 +27,4 @@ public class ValidatePositionsApplicationEvent extends CompletableApplicationEve
     public ValidatePositionsApplicationEvent() {
         super(Type.VALIDATE_POSITIONS);
     }
-
-    @Override
-    public String toString() {
-        return "ValidatePositions{" +
-                "future=" + future +
-                ", type=" + type +
-                '}';
-    }
 }

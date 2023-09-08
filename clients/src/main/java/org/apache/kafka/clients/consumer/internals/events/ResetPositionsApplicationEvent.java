@@ -27,12 +27,4 @@ public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<
     public ResetPositionsApplicationEvent() {
         super(Type.RESET_POSITIONS);
     }
-
-    @Override
-    public String toString() {
-        return "ResetPositions{" +
-                "future=" + future +
-                ", type=" + type +
-                '}';
-    }
 }
