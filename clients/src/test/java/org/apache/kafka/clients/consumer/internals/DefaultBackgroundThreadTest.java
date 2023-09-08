@@ -257,9 +257,7 @@ public class DefaultBackgroundThreadTest {
                 metadata));
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
 
-        LogTruncationException logTruncationException = new LogTruncationException(
-                "Detected truncated partitions",
-                Collections.emptyMap(), Collections.emptyMap());
+        LogTruncationException logTruncationException = new LogTruncationException(Collections.emptyMap(), Collections.emptyMap());
         doThrow(logTruncationException).when(offsetsRequestManager).validatePositionsIfNeeded();
 
         ValidatePositionsApplicationEvent event = new ValidatePositionsApplicationEvent();

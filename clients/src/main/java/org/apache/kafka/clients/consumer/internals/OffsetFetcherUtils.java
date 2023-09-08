@@ -378,8 +378,7 @@ class OffsetFetcherUtils {
                     divergentOffsets.put(truncation.topicPartition, divergentOffset));
             truncatedFetchOffsets.put(truncation.topicPartition, truncation.fetchPosition.offset);
         }
-        return new LogTruncationException("Detected truncated partitions: " + truncations,
-                truncatedFetchOffsets, divergentOffsets);
+        return new LogTruncationException(truncatedFetchOffsets, divergentOffsets);
     }
 
     // Visible for testing
