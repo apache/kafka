@@ -244,6 +244,8 @@ public class ClusterControlManager {
      */
     private final boolean zkMigrationEnabled;
 
+    private ReplicationControlManager replicationControlManager;
+
     /**
      * Maps controller IDs to controller registrations.
      */
@@ -295,6 +297,10 @@ public class ClusterControlManager {
         heartbeatManager = null;
     }
 
+    public void setReplicationControlManager(ReplicationControlManager replicationControlManager) {
+        this.replicationControlManager = replicationControlManager;
+    }
+
     Map<Integer, BrokerRegistration> brokerRegistrations() {
         return brokerRegistrations;
     }
@@ -327,10 +333,12 @@ public class ClusterControlManager {
                 ", but got cluster ID " + request.clusterId());
         }
         int brokerId = request.brokerId();
+        List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
-        if (version < 2 || existing == null || request.previousBrokerEpoch() != existing.epoch()) {
-            // TODO(KIP-966): Update the ELR if the broker has an unclean shutdown.
-            log.debug("Received an unclean shutdown request");
+        if (version >= 2
+            && (existing == null || request.previousBrokerEpoch() != existing.epoch())
+            && replicationControlManager != null) {
+            replicationControlManager.handleBrokerUncleanShutdown(request.brokerId(), records);
         }
         if (existing != null) {
             if (heartbeatManager.hasValidSession(brokerId)) {
@@ -377,7 +385,6 @@ public class ClusterControlManager {
 
         heartbeatManager.register(brokerId, record.fenced());
 
-        List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
             registerBrokerRecordVersion()));
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));

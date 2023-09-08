@@ -97,6 +97,39 @@ public class BrokersToIsrs {
         }
     }
 
+    static class PartitionsOnReplicaIteratorChain implements Iterator<TopicIdPartition> {
+        private final Iterator<PartitionsOnReplicaIterator> iterator;
+
+        private PartitionsOnReplicaIterator current;
+
+        PartitionsOnReplicaIteratorChain(Iterator<PartitionsOnReplicaIterator> iterator) {
+            this.iterator = iterator;
+            if (iterator.hasNext()) {
+                current = iterator.next();
+            } else {
+                current = new PartitionsOnReplicaIterator(Collections.emptyMap(), false);
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (current.hasNext()) return true;
+            while (iterator.hasNext()) {
+                current = iterator.next();
+                if (current.hasNext()) break;
+            }
+            return current.hasNext();
+        }
+
+        @Override
+        public TopicIdPartition next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return current.next();
+        }
+    }
+
     private final SnapshotRegistry snapshotRegistry;
 
     /**

@@ -466,6 +466,9 @@ public class PartitionChangeBuilder {
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
             record.setLastKnownELR(Arrays.asList(partition.leader));
+        } else if (record.leader() != NO_LEADER && record.leader() != NO_LEADER_CHANGE && partition.leader == NO_LEADER) {
+            // Clear the LastKnownElr field if a leaderless partition elects a leader.
+            record.setLastKnownELR(Collections.emptyList());
         }
     }
 
@@ -489,6 +492,10 @@ public class PartitionChangeBuilder {
             // the partition does not have a leader.
             targetLastKnownElr = Replicas.toList(partition.lastKnownElr);
         }
+
+        // If the last known ELR is expected to store the last known leader, the lastKnownElr field should be updated
+        // later in maybeUpdateLastKnownLeader.
+        if (useLastKnownLeaderInBalancedRecovery) return;
 
         if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
             record.setLastKnownELR(targetLastKnownElr);

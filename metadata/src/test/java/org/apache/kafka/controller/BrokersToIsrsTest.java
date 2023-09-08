@@ -21,14 +21,19 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.controller.BrokersToIsrs.PartitionsOnReplicaIterator;
+import org.apache.kafka.controller.BrokersToIsrs.PartitionsOnReplicaIteratorChain;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 
 @Timeout(40)
@@ -50,6 +55,14 @@ public class BrokersToIsrsTest {
         HashSet<TopicIdPartition> set = new HashSet<>();
         while (iterator.hasNext()) {
             set.add(iterator.next());
+        }
+        return set;
+    }
+
+    private static Set<TopicIdPartition> toSet(PartitionsOnReplicaIteratorChain chain) {
+        HashSet<TopicIdPartition> set = new HashSet<>();
+        while (chain.hasNext()) {
+            set.add(chain.next());
         }
         return set;
     }
@@ -105,5 +118,46 @@ public class BrokersToIsrsTest {
         brokersToIsrs.update(UUIDS[0], 2, new int[]{1, 2, 3}, new int[]{1, 2, 3}, 3, -1);
         assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2)),
             toSet(brokersToIsrs.partitionsWithNoLeader()));
+    }
+
+    @Test
+    public void testIteratorChain() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        BrokersToIsrs brokersToIsrs1 = new BrokersToIsrs(snapshotRegistry);
+
+        // Empty chain.
+        PartitionsOnReplicaIteratorChain chain =
+            new PartitionsOnReplicaIteratorChain(new ArrayList<PartitionsOnReplicaIterator>().iterator());
+        assertFalse(chain.hasNext());
+
+        // One empty iterator.
+        chain = new PartitionsOnReplicaIteratorChain(Arrays.asList(brokersToIsrs1.partitionsWithBrokerInIsr(0)).iterator());
+        assertFalse(chain.hasNext());
+
+        // One iterator.
+        brokersToIsrs1.update(UUIDS[0], 2, null, new int[]{1, 2, 3}, -1, 3);
+        chain = new PartitionsOnReplicaIteratorChain(Arrays.asList(brokersToIsrs1.iterator(3, true)).iterator());
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2)), toSet(chain));
+        assertEquals(toSet(), toSet(new PartitionsOnReplicaIteratorChain(Arrays.asList(brokersToIsrs1.iterator(2, true)).iterator())));
+        assertEquals(toSet(), toSet(new PartitionsOnReplicaIteratorChain(Arrays.asList(brokersToIsrs1.iterator(NO_LEADER, true)).iterator())));
+
+        // Three iterators.
+        BrokersToIsrs brokersToIsrs2 = new BrokersToIsrs(snapshotRegistry);
+        BrokersToIsrs brokersToIsrs3 = new BrokersToIsrs(snapshotRegistry);
+        brokersToIsrs3.update(UUIDS[0], 3, null, new int[]{1, 2, 3}, -1, 3);
+        chain = new PartitionsOnReplicaIteratorChain(Arrays.asList(
+            brokersToIsrs1.iterator(3, true),
+            brokersToIsrs2.iterator(3, true),
+            brokersToIsrs3.iterator(3, true)
+        ).iterator());
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2), new TopicIdPartition(UUIDS[0], 3)), toSet(chain));
+
+        // Three iterators with changed sequence.
+        chain = new PartitionsOnReplicaIteratorChain(Arrays.asList(
+                brokersToIsrs1.iterator(3, true),
+                brokersToIsrs3.iterator(3, true),
+                brokersToIsrs2.iterator(3, true)
+        ).iterator());
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2), new TopicIdPartition(UUIDS[0], 3)), toSet(chain));
     }
 }
