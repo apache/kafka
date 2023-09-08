@@ -214,6 +214,13 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * @return The current state based on committed offset.
+     */
+    public ConsumerGroupState state(long committedOffset) {
+        return state.get(committedOffset);
+    }
+
+    /**
      * @return The group epoch.
      */
     public int groupEpoch() {

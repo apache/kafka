@@ -78,6 +78,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -431,11 +432,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        CompletableFuture<ListGroupsResponseData> future = new CompletableFuture<>();
-        List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
-        final AtomicInteger cnt = new AtomicInteger(runtime.partitions().size());
+        final CompletableFuture<ListGroupsResponseData> future = new CompletableFuture<>();
+        final List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
+        final Set<TopicPartition> existingPartitionSet = runtime.partitions();
+        final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
 
-        for (TopicPartition tp : runtime.partitions()) {
+        for (TopicPartition tp : existingPartitionSet) {
             runtime.scheduleReadOperation(
                 "list-groups",
                 tp,
