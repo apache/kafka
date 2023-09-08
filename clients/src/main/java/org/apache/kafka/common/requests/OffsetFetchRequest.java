@@ -100,10 +100,6 @@ public class OffsetFetchRequest extends AbstractRequest {
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 
-        boolean isAllTopicPartitions() {
-            return this.data.topics() == ALL_TOPIC_PARTITIONS;
-        }
-
         public Builder(Map<String, List<TopicPartition>> groupIdToTopicPartitionMap,
                        boolean requireStable,
                        boolean throwOnFetchStableOffsetsUnsupported) {
@@ -140,10 +136,6 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         @Override
         public OffsetFetchRequest build(short version) {
-            if (isAllTopicPartitions() && version < 2) {
-                throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
-                    "v" + version + ", but we need v2 or newer to request all topic partitions.");
-            }
             if (data.groups().size() > 1 && version < 8) {
                 throw new NoBatchedOffsetFetchRequestException("Broker does not support"
                     + " batching groups for fetch offset request on version " + version);
@@ -161,7 +153,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
             // convert data to use the appropriate version since version 8 uses different format
             if (version < 8) {
-                OffsetFetchRequestData oldDataFormat = null;
+                OffsetFetchRequestData normalizedData;
                 if (!data.groups().isEmpty()) {
                     OffsetFetchRequestGroup group = data.groups().get(0);
                     String groupName = group.groupId();
@@ -176,34 +168,18 @@ public class OffsetFetchRequest extends AbstractRequest {
                                     .setPartitionIndexes(t.partitionIndexes()))
                             .collect(Collectors.toList());
                     }
-                    oldDataFormat = new OffsetFetchRequestData()
+                    normalizedData = new OffsetFetchRequestData()
                         .setGroupId(groupName)
                         .setTopics(oldFormatTopics)
                         .setRequireStable(data.requireStable());
+                } else {
+                    normalizedData = data;
                 }
-                return new OffsetFetchRequest(oldDataFormat == null ? data : oldDataFormat, version);
-            } else {
-                if (data.groups().isEmpty()) {
-                    String groupName = data.groupId();
-                    List<OffsetFetchRequestTopic> oldFormatTopics = data.topics();
-                    List<OffsetFetchRequestTopics> topics = null;
-                    if (oldFormatTopics != null) {
-                        topics = oldFormatTopics
-                            .stream()
-                            .map(t -> new OffsetFetchRequestTopics()
-                                .setName(t.name())
-                                .setPartitionIndexes(t.partitionIndexes()))
-                            .collect(Collectors.toList());
-                    }
-                    OffsetFetchRequestData convertedDataFormat =
-                        new OffsetFetchRequestData()
-                            .setGroups(Collections.singletonList(
-                                new OffsetFetchRequestGroup()
-                                    .setGroupId(groupName)
-                                    .setTopics(topics)))
-                            .setRequireStable(data.requireStable());
-                    return new OffsetFetchRequest(convertedDataFormat, version);
+                if (normalizedData.topics() == null && version < 2) {
+                    throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
+                        "v" + version + ", but we need v2 or newer to request all topic partitions.");
                 }
+                return new OffsetFetchRequest(normalizedData, version);
             }
             return new OffsetFetchRequest(data, version);
         }
