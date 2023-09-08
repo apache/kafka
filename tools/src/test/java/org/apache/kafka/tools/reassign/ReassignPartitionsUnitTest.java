@@ -235,13 +235,13 @@ public class ReassignPartitionsUnitTest {
 
             adminClient.alterReplicaLogDirs(replicaAssignment).all().get();
 
-            Map<TopicPartitionReplica, LogDirMoveState> expLogDirMoveStates = new HashMap<>();
+            Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> expLogDirMoveStates = new HashMap<>();
 
-            expLogDirMoveStates.put(new TopicPartitionReplica("bar", 0, 0), new CompletedMoveState("/tmp/kafka-logs0"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("foo", 0, 0), new ActiveMoveState("/tmp/kafka-logs0", "/tmp/kafka-logs1", "/tmp/kafka-logs1"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("foo", 1, 0), new CancelledMoveState("/tmp/kafka-logs0", "/tmp/kafka-logs1"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("quux", 1, 0), new MissingLogDirMoveState("/tmp/kafka-logs1"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("quuz", 0, 0), new MissingReplicaMoveState("/tmp/kafka-logs0"));
+            expLogDirMoveStates.put(new TopicPartitionReplica("bar", 0, 0), asScala(new CompletedMoveState("/tmp/kafka-logs0")));
+            expLogDirMoveStates.put(new TopicPartitionReplica("foo", 0, 0), asScala(new ActiveMoveState("/tmp/kafka-logs0", "/tmp/kafka-logs1", "/tmp/kafka-logs1")));
+            expLogDirMoveStates.put(new TopicPartitionReplica("foo", 1, 0), asScala(new CancelledMoveState("/tmp/kafka-logs0", "/tmp/kafka-logs1")));
+            expLogDirMoveStates.put(new TopicPartitionReplica("quux", 1, 0), asScala(new MissingLogDirMoveState("/tmp/kafka-logs1")));
+            expLogDirMoveStates.put(new TopicPartitionReplica("quuz", 0, 0), asScala(new MissingReplicaMoveState("/tmp/kafka-logs0")));
 
             Map<TopicPartitionReplica, String> targetMoves = new HashMap<>();
 
@@ -252,8 +252,8 @@ public class ReassignPartitionsUnitTest {
             targetMoves.put(new TopicPartitionReplica("quuz", 0, 0), "/tmp/kafka-logs0");
 
             assertEquals(
-                expLogDirMoveStates,
-                javaMap(findLogDirMoveStates(adminClient, CollectionConverters.asScala(targetMoves)), this::asJava)
+                CollectionConverters.asScala(expLogDirMoveStates),
+                findLogDirMoveStates(adminClient, CollectionConverters.asScala(targetMoves))
             );
         }
     }
@@ -767,10 +767,10 @@ public class ReassignPartitionsUnitTest {
     }
 
     private <T> scala.collection.immutable.Set<T> toSet(Collection<T> set) {
-        return toMutableSet(set).toSet();
+        return toMutableSet(new HashSet<>(set)).toSet();
     }
 
-    private <T> scala.collection.mutable.Set<Object> toMutableSet(Collection<T> set) {
+    private <T> scala.collection.mutable.Set<Object> toMutableSet(Set<T> set) {
         return CollectionConverters.asScala(new HashSet<>(set));
     }
 
@@ -788,8 +788,8 @@ public class ReassignPartitionsUnitTest {
         scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove> res =
             (scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove>) Map$.MODULE$.mapFactory().newBuilder().result();
 
-        moveMap.forEach((k, v) ->
-            res.addOne(new Tuple2<>(k, new ReassignPartitionsCommand.PartitionMove(toMutableSet(v.sources), toMutableSet(v.destinations)))));
+        moveMap.forEach((k, v) -> res.addOne(new Tuple2<>(k,
+            new ReassignPartitionsCommand.PartitionMove(toMutableSet(v.sources), toMutableSet(v.destinations)))));
 
         return res;
     }
@@ -832,27 +832,6 @@ public class ReassignPartitionsUnitTest {
             state.done);
     }
 
-    private LogDirMoveState asJava(ReassignPartitionsCommand.LogDirMoveState state) {
-        if (state instanceof ReassignPartitionsCommand.ActiveMoveState) {
-            ReassignPartitionsCommand.ActiveMoveState s = (ReassignPartitionsCommand.ActiveMoveState) state;
-            return new ActiveMoveState(s.currentLogDir(), s.targetLogDir(), s.futureLogDir());
-        } else if (state instanceof ReassignPartitionsCommand.CancelledMoveState) {
-            ReassignPartitionsCommand.CancelledMoveState s = (ReassignPartitionsCommand.CancelledMoveState) state;
-            return new CancelledMoveState(s.currentLogDir(), s.targetLogDir());
-        } else if (state instanceof ReassignPartitionsCommand.CompletedMoveState) {
-            ReassignPartitionsCommand.CompletedMoveState s = (ReassignPartitionsCommand.CompletedMoveState) state;
-            return new CompletedMoveState(s.targetLogDir());
-        } else if (state instanceof ReassignPartitionsCommand.MissingLogDirMoveState) {
-            ReassignPartitionsCommand.MissingLogDirMoveState s = (ReassignPartitionsCommand.MissingLogDirMoveState) state;
-            return new MissingLogDirMoveState(s.targetLogDir());
-        } else if (state instanceof ReassignPartitionsCommand.MissingReplicaMoveState) {
-            ReassignPartitionsCommand.MissingReplicaMoveState s = (ReassignPartitionsCommand.MissingReplicaMoveState) state;
-            return new MissingReplicaMoveState(s.targetLogDir());
-        }
-
-        throw new IllegalArgumentException("Unknown state " + state);
-    }
-
     private PartitionReassignmentState asJava(ReassignPartitionsCommand.PartitionReassignmentState state) {
         return new PartitionReassignmentState(
             CollectionConverters.asJava(state.currentReplicas()).stream().map(i -> (Integer) i).collect(Collectors.toList()),
@@ -870,7 +849,6 @@ public class ReassignPartitionsUnitTest {
         return res;
     }
 
-    @SuppressWarnings("unchecked")
     private Map<Integer, PartitionMove> asJava(scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove> map) {
         Map<Integer, PartitionMove> res = new HashMap<>();
         map.foreach(t -> res.put((Integer) t._1, new PartitionMove(CollectionConverters.asJava(t._2.sources().toSet()), asJava(t._2.destinations()))));
