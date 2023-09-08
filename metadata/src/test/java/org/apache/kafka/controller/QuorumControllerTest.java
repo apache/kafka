@@ -117,6 +117,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1491,6 +1492,7 @@ public class QuorumControllerTest {
                 setAddingReplicas(Collections.emptyList()).setLeader(1).setLeaderEpoch(0).
                 setPartitionEpoch(0), (short) 0)
             ));
+
     @Test
     public void testFailoverDuringMigrationTransaction() throws Exception {
         try (
@@ -1531,6 +1533,64 @@ public class QuorumControllerTest {
 
             assertEquals(ZkMigrationState.MIGRATION, newActive.appendReadEvent("read migration state", OptionalLong.empty(),
                 () -> newActive.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
+
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
+    public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+        ) {
+            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder ->
+                    controllerBuilder
+                        .setZkMigrationEnabled(true)
+                        .setMaxIdleIntervalNs(OptionalLong.of(TimeUnit.MILLISECONDS.toNanos(100)))
+                ).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test"));
+            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+            QuorumController active = controlEnv.activeController(true);
+
+            // Register a ZK broker
+            BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
+                new BrokerRegistrationRequestData().
+                    setBrokerId(0).
+                    setRack(null).
+                    setClusterId(active.clusterId()).
+                    setIsMigratingZkBroker(true).
+                    setFeatures(brokerFeatures(metadataVersion, metadataVersion)).
+                    setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
+                    setListeners(new ListenerCollection(Arrays.asList(new Listener().
+                        setName("PLAINTEXT").setHost("localhost").
+                        setPort(9092)).iterator()))).get();
+
+            // Start migration
+            ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
+            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
+
+            // Interleave migration batches with heartbeats. Ensure the heartbeat events use the correct
+            // offset when adding to the purgatory. Otherwise, we get errors like:
+            //   There is already a deferred event with offset 292. We should not add one with an offset of 241 which is lower than that.
+            for (int i = 0; i < 100; i++) {
+                Uuid topicId = Uuid.randomUuid();
+                String topicName = "testBrokerHeartbeatDuringMigration" + i;
+                Future<?> migrationFuture = migrationConsumer.acceptBatch(
+                    Arrays.asList(
+                        new ApiMessageAndVersion(new TopicRecord().setTopicId(topicId).setName(topicName), (short) 0),
+                        new ApiMessageAndVersion(new PartitionRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(0, 1, 2)), (short) 0)));
+                active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
+                        setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
+                        setCurrentMetadataOffset(100000L + i));
+                migrationFuture.get();
+            }
+
+            // Ensure that we can complete a heartbeat even though we leave migration transaction hanging
+            assertEquals(new BrokerHeartbeatReply(true, false, false, false),
+                active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
+                    setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
+                    setCurrentMetadataOffset(100100L)).get());
 
         }
     }
