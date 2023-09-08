@@ -208,6 +208,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     public void validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
                 offsetFetcherUtils.getPartitionsToValidate();
+        if (partitionsToValidate.isEmpty()) {
+            return;
+        }
         List<NetworkClientDelegate.UnsentRequest> unsentRequests =
                 buildListOffsetsRequestsAndValidatePositions(partitionsToValidate);
         requestsToSend.addAll(unsentRequests);
