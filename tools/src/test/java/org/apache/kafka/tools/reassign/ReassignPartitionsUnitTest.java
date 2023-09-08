@@ -48,7 +48,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -123,11 +122,11 @@ public class ReassignPartitionsUnitTest {
         Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> states = new HashMap<>();
 
         states.put(new TopicPartition("foo", 0),
-            asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3), true)));
+            new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
         states.put(new TopicPartition("foo", 1),
-            asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false)));
+            new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 4), false));
         states.put(new TopicPartition("bar", 0),
-            asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false)));
+            new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 4), false));
 
         assertEquals(String.join(System.lineSeparator(), Arrays.asList(
             "Status of partition reassignment:",
@@ -171,8 +170,10 @@ public class ReassignPartitionsUnitTest {
 
             Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> partitionReassignmentStates = new HashMap<>();
 
-            partitionReassignmentStates.put(new TopicPartition("foo", 0), asScala(new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 3), false)));
-            partitionReassignmentStates.put(new TopicPartition("foo", 1), asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3), true)));
+            partitionReassignmentStates.put(new TopicPartition("foo", 0),
+                new ReassignPartitionsCommand.PartitionReassignmentState(seq(0, 1, 2), seq(0, 1, 3), false));
+            partitionReassignmentStates.put(new TopicPartition("foo", 1),
+                new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
 
             Tuple2<scala.collection.Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState>, Object> actual =
                 findPartitionReassignmentStates(adminClient, CollectionConverters.asScala(Arrays.asList(
@@ -191,8 +192,10 @@ public class ReassignPartitionsUnitTest {
 
             partitionReassignmentStates.clear();
 
-            partitionReassignmentStates.put(new TopicPartition("foo", 0), asScala(new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 3), true)));
-            partitionReassignmentStates.put(new TopicPartition("foo", 1), asScala(new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3), true)));
+            partitionReassignmentStates.put(new TopicPartition("foo", 0),
+                new ReassignPartitionsCommand.PartitionReassignmentState(seq(0, 1, 2), seq(0, 1, 3), true));
+            partitionReassignmentStates.put(new TopicPartition("foo", 1),
+                new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
 
             actual = findPartitionReassignmentStates(adminClient, CollectionConverters.asScala(Arrays.asList(
                 new Tuple2<>(new TopicPartition("foo", 0), seq(0, 1, 3)),
@@ -514,16 +517,16 @@ public class ReassignPartitionsUnitTest {
 
         Map<Integer, ReassignPartitionsCommand.PartitionMove> fooMoves = new HashMap<>();
 
-        fooMoves.put(0, asScala(new PartitionMove(jset(1, 2, 3), jset(5))));
-        fooMoves.put(1, asScala(new PartitionMove(jset(4, 5, 6), jset(7, 8))));
-        fooMoves.put(2, asScala(new PartitionMove(jset(1, 2), jset(3, 4))));
-        fooMoves.put(3, asScala(new PartitionMove(jset(1, 2), jset(5, 6))));
-        fooMoves.put(4, asScala(new PartitionMove(jset(1, 2), jset(3))));
-        fooMoves.put(5, asScala(new PartitionMove(jset(1, 2), jset(3, 4, 5, 6))));
+        fooMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mset(1, 2, 3), mset(5)));
+        fooMoves.put(1, new ReassignPartitionsCommand.PartitionMove(mset(4, 5, 6), mset(7, 8)));
+        fooMoves.put(2, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(3, 4)));
+        fooMoves.put(3, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(5, 6)));
+        fooMoves.put(4, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(3)));
+        fooMoves.put(5, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(3, 4, 5, 6)));
 
         Map<Integer, ReassignPartitionsCommand.PartitionMove> barMoves = new HashMap<>();
 
-        barMoves.put(0, asScala(new PartitionMove(jset(2, 3, 4), jset(1))));
+        barMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mset(2, 3, 4), mset(1)));
 
         assertEquals(CollectionConverters.asScala(fooMoves), moveMap.get("foo").get());
         assertEquals(CollectionConverters.asScala(barMoves), moveMap.get("bar").get());
@@ -773,32 +776,16 @@ public class ReassignPartitionsUnitTest {
 
     @SuppressWarnings("unchecked")
     private <T> scala.collection.immutable.Set<T> set(final T... set) {
-        return CollectionConverters.asScala(jset(set)).toSet();
+        return mset(set).toSet();
     }
 
     @SuppressWarnings("unchecked")
-    private <T> Set<T> jset(final T...set) {
-        return new HashSet<>(Arrays.asList(set));
+    private <T> scala.collection.mutable.Set<T> mset(final T...set) {
+        return CollectionConverters.asScala(new HashSet<>(Arrays.asList(set)));
     }
 
     @SuppressWarnings("unchecked")
     private <T> Seq<Object> seq(T... col) {
         return (Seq<Object>) CollectionConverters.asScala(Arrays.asList(col)).toSeq();
-    }
-
-    @SuppressWarnings("unchecked")
-    private ReassignPartitionsCommand.PartitionMove asScala(PartitionMove pm) {
-        return new ReassignPartitionsCommand.PartitionMove(
-            CollectionConverters.asScala((Set) pm.sources),
-            CollectionConverters.asScala((Set) pm.destinations)
-        );
-    }
-
-    @SuppressWarnings("unchecked")
-    private ReassignPartitionsCommand.PartitionReassignmentState asScala(PartitionReassignmentState state) {
-        return new ReassignPartitionsCommand.PartitionReassignmentState(
-            CollectionConverters.asScala((List) state.currentReplicas).toSeq(),
-            CollectionConverters.asScala((List) state.targetReplicas).toSeq(),
-            state.done);
     }
 }
