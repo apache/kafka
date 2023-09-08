@@ -122,7 +122,7 @@ public class RemoteIndexCache implements Closeable {
     /**
      * Creates RemoteIndexCache with the given configs.
      *
-     * @param maxSize              maximum number of segment index entries to be cached.
+     * @param maxSize              maximum bytes size of segment index entries to be cached.
      * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
      * @param logDir               log directory
      */
@@ -523,11 +523,14 @@ public class RemoteIndexCache implements Closeable {
         }
 
         public long estimatedEntrySize() {
+            lock.readLock().lock();
             try {
                 return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
             } catch (IOException e) {
                 log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
                 return 0L;
+            } finally {
+                lock.readLock().unlock();
             }
         }
 
