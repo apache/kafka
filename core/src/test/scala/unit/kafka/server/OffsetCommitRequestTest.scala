@@ -132,6 +132,20 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         version = version.toShort
       )
 
+      // Commit offset with empty group id should fail.
+      commitOffset(
+        groupId = "",
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        topic = "foo",
+        partition = 0,
+        offset = 100L,
+        expectedError =
+          if (isNewGroupCoordinatorEnabled && version >= 9) Errors.GROUP_ID_NOT_FOUND
+          else Errors.ILLEGAL_GENERATION,
+        version = version.toShort
+      )
+
       // Commit offset with unknown member id should fail.
       commitOffset(
         groupId = "grp",
@@ -156,6 +170,19 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           if (useNewProtocol && version >= 9) Errors.STALE_MEMBER_EPOCH
           else if (useNewProtocol) Errors.UNSUPPORTED_VERSION
           else Errors.ILLEGAL_GENERATION,
+        version = version.toShort
+      )
+
+      // Commit offset to a group without member id/epoch should succeed.
+      // This simulate a call from the admin client.
+      commitOffset(
+        groupId = "other-grp",
+        memberId = "",
+        memberEpoch = -1,
+        topic = "foo",
+        partition = 0,
+        offset = 100L,
+        expectedError = Errors.NONE,
         version = version.toShort
       )
     }
