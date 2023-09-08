@@ -212,7 +212,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             return;
         }
         List<NetworkClientDelegate.UnsentRequest> unsentRequests =
-                buildListOffsetsRequestsAndValidatePositions(partitionsToValidate);
+                buildOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate);
         requestsToSend.addAll(unsentRequests);
     }
 
@@ -412,7 +412,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * <p/>
      * Requests are grouped by Node for efficiency.
      */
-    private List<NetworkClientDelegate.UnsentRequest> buildListOffsetsRequestsAndValidatePositions(
+    private List<NetworkClientDelegate.UnsentRequest> buildOffsetsForLeaderEpochRequestsAndValidatePositions(
             Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
 
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
@@ -494,11 +494,11 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                         error);
                 result.completeExceptionally(error);
             } else {
-                OffsetsForLeaderEpochResponse lor = (OffsetsForLeaderEpochResponse) response.responseBody();
-                log.trace("Received OffsetsForLeaderEpoch response {} from broker {}", lor, node);
+                OffsetsForLeaderEpochResponse offsetsForLeaderEpochResponse = (OffsetsForLeaderEpochResponse) response.responseBody();
+                log.trace("Received OffsetsForLeaderEpoch response {} from broker {}", offsetsForLeaderEpochResponse, node);
                 try {
                     OffsetsForLeaderEpochUtils.OffsetForEpochResult listOffsetResult =
-                            OffsetsForLeaderEpochUtils.handleResponse(fetchPositions, lor);
+                            OffsetsForLeaderEpochUtils.handleResponse(fetchPositions, offsetsForLeaderEpochResponse);
                     result.complete(listOffsetResult);
                 } catch (RuntimeException e) {
                     result.completeExceptionally(e);
