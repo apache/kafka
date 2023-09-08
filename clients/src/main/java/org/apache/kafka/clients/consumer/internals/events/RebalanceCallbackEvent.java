@@ -16,49 +16,50 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
+import org.apache.kafka.common.TopicPartition;
 
-/**
- * This is the abstract definition of the events created by the background thread.
- */
-public abstract class BackgroundEvent {
+import java.util.Collections;
+import java.util.SortedSet;
 
-    public enum Type {
-        NOOP, ERROR, REVOKE_PARTITIONS, ASSIGN_PARTITIONS, LOSE_PARTITIONS
+public abstract class RebalanceCallbackEvent extends CompletableBackgroundEvent<Void> {
+
+    private final SortedSet<TopicPartition> partitions;
+
+    public RebalanceCallbackEvent(Type type, SortedSet<TopicPartition> partitions) {
+        super(type);
+        this.partitions = Collections.unmodifiableSortedSet(partitions);
     }
 
-    private final Type type;
-
-    public BackgroundEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
-    }
-
-    public Type type() {
-        return type;
+    public SortedSet<TopicPartition> partitions() {
+        return partitions;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
 
-        BackgroundEvent that = (BackgroundEvent) o;
+        RebalanceCallbackEvent that = (RebalanceCallbackEvent) o;
 
-        return type == that.type;
+        return partitions.equals(that.partitions);
     }
 
     @Override
     public int hashCode() {
-        return type.hashCode();
+        int result = super.hashCode();
+        result = 31 * result + partitions.hashCode();
+        return result;
     }
 
+    @Override
     protected String toStringBase() {
-        return "type=" + type;
+        return super.toStringBase() + ", partitions=" + partitions;
     }
 
     @Override
     public String toString() {
-        return "BackgroundEvent{" +
+        return getClass().getSimpleName() + "{" +
                 toStringBase() +
                 '}';
     }

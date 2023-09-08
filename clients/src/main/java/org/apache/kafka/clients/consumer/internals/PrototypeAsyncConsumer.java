@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
@@ -70,6 +71,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -111,7 +113,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    private WakeupTrigger wakeupTrigger = new WakeupTrigger();
+    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
+    private final ConsumerRebalanceListenerInvoker consumerRebalanceListenerInvoker;
+
     public PrototypeAsyncConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
@@ -155,6 +159,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 clusterResourceListeners,
                 null // this is coming from the fetcher, but we don't have one
         );
+        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(logContext,
+                subscriptions,
+                time,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
     }
 
     // Visible for testing
@@ -177,6 +187,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = new Deserializers<>(config);
         this.eventHandler = eventHandler;
+        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(logContext,
+                subscriptions,
+                time,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
     }
 
     /**
@@ -269,7 +285,45 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void processEvent(final BackgroundEvent backgroundEvent, final Duration timeout) {
-        // stubbed class
+        if (backgroundEvent instanceof RebalanceCallbackEvent) {
+            processRebalanceCallback((RebalanceCallbackEvent) backgroundEvent);
+        }
+    }
+
+    private void processRebalanceCallback(final RebalanceCallbackEvent event) {
+        SortedSet<TopicPartition> partitions = event.partitions();
+        CompletableFuture<Void> future = event.future();
+        Throwable invocationException = null;
+
+        try {
+
+            switch (event.type()) {
+                case REVOKE_PARTITIONS:
+                    invocationException = consumerRebalanceListenerInvoker.invokePartitionsRevoked(partitions);
+                    break;
+
+                case ASSIGN_PARTITIONS:
+                    invocationException = consumerRebalanceListenerInvoker.invokePartitionsAssigned(partitions);
+                    break;
+
+                case LOSE_PARTITIONS:
+                    invocationException = consumerRebalanceListenerInvoker.invokePartitionsLost(partitions);
+                    break;
+            }
+        } catch (Throwable t) {
+            invocationException = t;
+        }
+
+        if (invocationException != null) {
+            future.completeExceptionally(invocationException);
+
+            if (invocationException instanceof KafkaException)
+                throw (KafkaException) invocationException;
+            else
+                throw new KafkaException(invocationException);
+        } else {
+            future.complete(null);
+        }
     }
 
     private ConsumerRecords<K, V> processFetchResults(final Fetch<K, V> fetch) {
