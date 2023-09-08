@@ -62,7 +62,7 @@ public class AppInfoParser {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             MBeanServer server = ManagementFactory.getPlatformMBeanServer();
             if (server.isRegistered(name)) {
-                log.info("App info {} for {} already exists, so skipping  a new mbean creation", prefix, id);
+                log.info("The mbean of App info: [{}], id: [{}] already exists, so skipping a new mbean creation.", prefix, id);
                 return;
             }
             AppInfo mBean = new AppInfo(nowMs);
