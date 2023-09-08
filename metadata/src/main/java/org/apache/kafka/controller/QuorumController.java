@@ -39,6 +39,7 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -71,6 +72,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -95,6 +97,7 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
@@ -130,6 +133,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -465,6 +469,18 @@ public final class QuorumController implements Controller {
                 default:
                     break;
             }
+        }
+    }
+
+    class QuorumClusterFeatureSupportDescriber implements ClusterFeatureSupportDescriber {
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
+            return clusterControl.brokerSupportedFeatures();
+        }
+
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
+            return clusterControl.controllerSupportedFeatures();
         }
     }
 
@@ -1403,7 +1419,7 @@ public final class QuorumController implements Controller {
             delegationTokenControlManager.isEnabled()) {
 
             log.debug(
-                "Scheduling write event for {} because DelegationTokens are enabled.", 
+                "Scheduling write event for {} because DelegationTokens are enabled.",
                 SWEEP_EXPIRED_DELEGATION_TOKENS
             );
 
@@ -1418,7 +1434,7 @@ public final class QuorumController implements Controller {
                 EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME)
             );
 
-            long delayNs = time.nanoseconds() + 
+            long delayNs = time.nanoseconds() +
                 NANOSECONDS.convert(delegationTokenExpiryCheckIntervalMs, TimeUnit.MILLISECONDS);
             queue.scheduleDeferred(SWEEP_EXPIRED_DELEGATION_TOKENS,
                 new EarliestDeadlineFunction(delayNs), event);
@@ -1531,6 +1547,9 @@ public final class QuorumController implements Controller {
             case ABORT_TRANSACTION_RECORD:
                 offsetControl.replay((AbortTransactionRecord) message, offset);
                 break;
+            case REGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((RegisterControllerRecord) message);
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1616,6 +1635,11 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final ClientQuotaControlManager clientQuotaControlManager;
+
+    /**
+     * Describes the feature versions in the cluster.
+     */
+    private final QuorumClusterFeatureSupportDescriber clusterSupportDescriber;
 
     /**
      * An object which stores the controller's view of the cluster.
@@ -1795,6 +1819,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
+        this.clusterSupportDescriber = new QuorumClusterFeatureSupportDescriber();
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1805,6 +1830,7 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
+            setClusterFeatureSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -2183,8 +2209,7 @@ public final class QuorumController implements Controller {
                 upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
-                request.validateOnly());
+            return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
@@ -2218,6 +2243,16 @@ public final class QuorumController implements Controller {
                 return result;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> registerController(
+        ControllerRequestContext context,
+        ControllerRegistrationRequestData request
+    ) {
+        return appendWriteEvent("registerController", context.deadlineNs(),
+            () -> clusterControl.registerController(request),
+            EnumSet.of(RUNS_IN_PREMIGRATION));
     }
 
     @Override

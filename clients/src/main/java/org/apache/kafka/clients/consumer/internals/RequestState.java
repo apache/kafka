@@ -17,18 +17,27 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 class RequestState {
+
+    private final Logger log;
+    protected final String owner;
     final static int RETRY_BACKOFF_EXP_BASE = 2;
     final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final ExponentialBackoff exponentialBackoff;
-    private long lastSentMs = -1;
-    private long lastReceivedMs = -1;
-    private int numAttempts = 0;
-    private long backoffMs = 0;
+    protected final ExponentialBackoff exponentialBackoff;
+    protected long lastSentMs = -1;
+    protected long lastReceivedMs = -1;
+    protected int numAttempts = 0;
+    protected long backoffMs = 0;
 
-    public RequestState(final long retryBackoffMs,
+    public RequestState(final LogContext logContext,
+                        final String owner,
+                        final long retryBackoffMs,
                         final long retryBackoffMaxMs) {
+        this.log = logContext.logger(RequestState.class);
+        this.owner = owner;
         this.exponentialBackoff = new ExponentialBackoff(
                 retryBackoffMs,
                 RETRY_BACKOFF_EXP_BASE,
@@ -37,10 +46,14 @@ class RequestState {
     }
 
     // Visible for testing
-    RequestState(final long retryBackoffMs,
+    RequestState(final LogContext logContext,
+                 final String owner,
+                 final long retryBackoffMs,
                  final int retryBackoffExpBase,
                  final long retryBackoffMaxMs,
                  final double jitter) {
+        this.log = logContext.logger(RequestState.class);
+        this.owner = owner;
         this.exponentialBackoff = new ExponentialBackoff(
                 retryBackoffMs,
                 retryBackoffExpBase,
@@ -65,13 +78,19 @@ class RequestState {
             return true;
         }
 
-        if (this.lastReceivedMs == -1 ||
-                this.lastReceivedMs < this.lastSentMs) {
-            // there is an inflight request
+        if (this.lastReceivedMs == -1 || this.lastReceivedMs < this.lastSentMs) {
+            log.trace("An inflight request already exists for {}", this);
             return false;
         }
 
-        return requestBackoffExpired(currentTimeMs);
+        long remainingBackoffMs = remainingBackoffMs(currentTimeMs);
+
+        if (remainingBackoffMs <= 0) {
+            return true;
+        } else {
+            log.trace("{} ms remain before another request should be sent for {}", remainingBackoffMs, this);
+            return false;
+        }
     }
 
     public void onSendAttempt(final long currentTimeMs) {
@@ -105,12 +124,29 @@ class RequestState {
         this.numAttempts++;
     }
 
-    private boolean requestBackoffExpired(final long currentTimeMs) {
-        return remainingBackoffMs(currentTimeMs) <= 0;
-    }
-
     long remainingBackoffMs(final long currentTimeMs) {
         long timeSinceLastReceiveMs = currentTimeMs - this.lastReceivedMs;
         return Math.max(0, backoffMs - timeSinceLastReceiveMs);
+    }
+
+    /**
+     * This method appends the instance variables together in a simple String of comma-separated key value pairs.
+     * This allows subclasses to include these values and not have to duplicate each variable, helping to prevent
+     * any variables from being omitted when new ones are added.
+     *
+     * @return String version of instance variables.
+     */
+    protected String toStringBase() {
+        return "owner='" + owner + '\'' +
+                ", exponentialBackoff=" + exponentialBackoff +
+                ", lastSentMs=" + lastSentMs +
+                ", lastReceivedMs=" + lastReceivedMs +
+                ", numAttempts=" + numAttempts +
+                ", backoffMs=" + backoffMs;
+    }
+
+    @Override
+    public String toString() {
+        return "RequestState{" + toStringBase() + '}';
     }
 }
