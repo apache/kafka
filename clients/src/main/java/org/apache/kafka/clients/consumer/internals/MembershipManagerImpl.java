@@ -35,7 +35,7 @@ import java.util.Optional;
 public class MembershipManagerImpl implements MembershipManager {
 
     private final String groupId;
-    private Optional<String> groupInstanceId;
+    private final Optional<String> groupInstanceId;
     private String memberId;
     private int memberEpoch;
     private MemberState state;
@@ -52,16 +52,19 @@ public class MembershipManagerImpl implements MembershipManager {
     private final List<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignments;
 
     public MembershipManagerImpl(String groupId) {
-        this.groupId = groupId;
-        this.state = MemberState.UNJOINED;
-        this.assignorSelection = AssignorSelection.defaultAssignor();
-        this.targetAssignments = new ArrayList<>();
+        this(groupId, null, null);
     }
 
     public MembershipManagerImpl(String groupId, String groupInstanceId, AssignorSelection assignorSelection) {
-        this(groupId);
+        this.groupId = groupId;
+        this.state = MemberState.UNJOINED;
+        if (assignorSelection == null) {
+            setAssignorSelection(AssignorSelection.defaultAssignor());
+        } else {
+            setAssignorSelection(assignorSelection);
+        }
+        this.targetAssignments = new ArrayList<>();
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
-        setAssignorSelection(assignorSelection);
     }
 
     /**
@@ -111,8 +114,11 @@ public class MembershipManagerImpl implements MembershipManager {
         if (response.errorCode() == Errors.NONE.code()) {
             this.memberId = response.memberId();
             this.memberEpoch = response.memberEpoch();
-            targetAssignments.add(response.assignment());
-            transitionTo(MemberState.PROCESSING_ASSIGNMENT);
+            ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
+            if (assignment != null) {
+                targetAssignments.add(assignment);
+                transitionTo(MemberState.RECONCILING);
+            }
         } else {
             if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
                 resetMemberIdAndEpoch();
@@ -123,14 +129,30 @@ public class MembershipManagerImpl implements MembershipManager {
         }
     }
 
+    /**
+     * Update state and assignment as the member has successfully processed a new target
+     * assignment.
+     * This indicates the end of the reconciliation phase for the member, and makes the target
+     * assignment the new current assignment.
+     *
+     * @param assignment Target assignment the member was able to successfully process
+     */
     public void onAssignmentProcessSuccess(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
         currentAssignment = assignment;
         targetAssignments.remove(assignment);
         transitionTo(MemberState.STABLE);
     }
 
+    /**
+     * Update state and member info as the member was not able to process the assignment, due
+     * to errors in the execution of the user-provided callbacks.
+     *
+     * @params error Exception found during the execution of the user-provided callbacks
+     */
     public void onAssignmentProcessFailure(Throwable error) {
-        // TODO: handle failure scenario when the member was not able to process the assignment
+        transitionTo(MemberState.FAILED);
+        // TODO: update member info appropriately, to clear up whatever shouldn't be kept in
+        //  this unrecoverable state
     }
 
     private void resetMemberIdAndEpoch() {
