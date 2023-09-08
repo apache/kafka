@@ -128,11 +128,11 @@ public class ReassignPartitionsUnitTest {
         states.put(new TopicPartition("bar", 0),
             new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 4), false));
 
-        assertEquals(String.join(System.lineSeparator(), Arrays.asList(
-            "Status of partition reassignment:",
-            "Reassignment of partition bar-0 is still in progress.",
-            "Reassignment of partition foo-0 is completed.",
-            "Reassignment of partition foo-1 is still in progress.")),
+        assertEquals(
+            "Status of partition reassignment:\n" +
+            "Reassignment of partition bar-0 is still in progress.\n" +
+            "Reassignment of partition foo-0 is completed.\n" +
+            "Reassignment of partition foo-1 is still in progress.",
             partitionReassignmentStatesToString(CollectionConverters.asScala(states)));
     }
 
@@ -163,16 +163,17 @@ public class ReassignPartitionsUnitTest {
             reassignments.put(new TopicPartition("foo", 0), seq(0, 1, 3));
             reassignments.put(new TopicPartition("quux", 0), seq(1, 2, 3));
 
-            scala.collection.Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, CollectionConverters.asScala(reassignments));
+            scala.collection.Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient,
+                CollectionConverters.asScala(reassignments));
 
             assertEquals(1, reassignmentResult.size());
             assertEquals(UnknownTopicOrPartitionException.class, reassignmentResult.get(new TopicPartition("quux", 0)).get().getClass());
 
-            Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> partitionReassignmentStates = new HashMap<>();
+            Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> expStates = new HashMap<>();
 
-            partitionReassignmentStates.put(new TopicPartition("foo", 0),
+            expStates.put(new TopicPartition("foo", 0),
                 new ReassignPartitionsCommand.PartitionReassignmentState(seq(0, 1, 2), seq(0, 1, 3), false));
-            partitionReassignmentStates.put(new TopicPartition("foo", 1),
+            expStates.put(new TopicPartition("foo", 1),
                 new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
 
             Tuple2<scala.collection.Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState>, Object> actual =
@@ -181,20 +182,21 @@ public class ReassignPartitionsUnitTest {
                     new Tuple2<>(new TopicPartition("foo", 1), seq(1, 2, 3))
                 )));
 
-            assertEquals(CollectionConverters.asScala(partitionReassignmentStates), actual._1);
+            assertEquals(CollectionConverters.asScala(expStates), actual._1);
             assertEquals(true, actual._2);
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
-            scala.collection.Map<TopicPartition, Throwable> cancelResult = cancelPartitionReassignments(adminClient, set(new TopicPartition("foo", 0), new TopicPartition("quux", 2)));
+            scala.collection.Map<TopicPartition, Throwable> cancelResult = cancelPartitionReassignments(adminClient,
+                set(new TopicPartition("foo", 0), new TopicPartition("quux", 2)));
 
             assertEquals(1, cancelResult.size());
             assertEquals(UnknownTopicOrPartitionException.class, cancelResult.get(new TopicPartition("quux", 2)).get().getClass());
 
-            partitionReassignmentStates.clear();
+            expStates.clear();
 
-            partitionReassignmentStates.put(new TopicPartition("foo", 0),
+            expStates.put(new TopicPartition("foo", 0),
                 new ReassignPartitionsCommand.PartitionReassignmentState(seq(0, 1, 2), seq(0, 1, 3), true));
-            partitionReassignmentStates.put(new TopicPartition("foo", 1),
+            expStates.put(new TopicPartition("foo", 1),
                 new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
 
             actual = findPartitionReassignmentStates(adminClient, CollectionConverters.asScala(Arrays.asList(
@@ -202,7 +204,7 @@ public class ReassignPartitionsUnitTest {
                 new Tuple2<>(new TopicPartition("foo", 1), seq(1, 2, 3))
             )));
 
-            assertEquals(CollectionConverters.asScala(partitionReassignmentStates), actual._1);
+            assertEquals(CollectionConverters.asScala(expStates), actual._1);
             assertEquals(false, actual._2);
         }
     }
@@ -233,15 +235,15 @@ public class ReassignPartitionsUnitTest {
 
             adminClient.alterReplicaLogDirs(replicaAssignment).all().get();
 
-            Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> expLogDirMoveStates = new HashMap<>();
+            Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> states = new HashMap<>();
 
-            expLogDirMoveStates.put(new TopicPartitionReplica("bar", 0, 0), new ReassignPartitionsCommand.CompletedMoveState("/tmp/kafka-logs0"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("foo", 0, 0), new ReassignPartitionsCommand.ActiveMoveState("/tmp/kafka-logs0",
+            states.put(new TopicPartitionReplica("bar", 0, 0), new ReassignPartitionsCommand.CompletedMoveState("/tmp/kafka-logs0"));
+            states.put(new TopicPartitionReplica("foo", 0, 0), new ReassignPartitionsCommand.ActiveMoveState("/tmp/kafka-logs0",
                 "/tmp/kafka-logs1", "/tmp/kafka-logs1"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("foo", 1, 0), new ReassignPartitionsCommand.CancelledMoveState("/tmp/kafka-logs0",
+            states.put(new TopicPartitionReplica("foo", 1, 0), new ReassignPartitionsCommand.CancelledMoveState("/tmp/kafka-logs0",
                 "/tmp/kafka-logs1"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("quux", 1, 0), new ReassignPartitionsCommand.MissingLogDirMoveState("/tmp/kafka-logs1"));
-            expLogDirMoveStates.put(new TopicPartitionReplica("quuz", 0, 0), new ReassignPartitionsCommand.MissingReplicaMoveState("/tmp/kafka-logs0"));
+            states.put(new TopicPartitionReplica("quux", 1, 0), new ReassignPartitionsCommand.MissingLogDirMoveState("/tmp/kafka-logs1"));
+            states.put(new TopicPartitionReplica("quuz", 0, 0), new ReassignPartitionsCommand.MissingReplicaMoveState("/tmp/kafka-logs0"));
 
             Map<TopicPartitionReplica, String> targetMoves = new HashMap<>();
 
@@ -252,7 +254,7 @@ public class ReassignPartitionsUnitTest {
             targetMoves.put(new TopicPartitionReplica("quuz", 0, 0), "/tmp/kafka-logs0");
 
             assertEquals(
-                CollectionConverters.asScala(expLogDirMoveStates),
+                CollectionConverters.asScala(states),
                 findLogDirMoveStates(adminClient, CollectionConverters.asScala(targetMoves))
             );
         }
@@ -272,14 +274,14 @@ public class ReassignPartitionsUnitTest {
             "/tmp/kafka-logs1", "/tmp/kafka-logs2"));
         states.put(new TopicPartitionReplica("quux", 2, 1), new ReassignPartitionsCommand.MissingLogDirMoveState("/tmp/kafka-logs1"));
 
-        assertEquals(String.join(System.lineSeparator(), Arrays.asList(
-            "Reassignment of replica bar-0-0 completed successfully.",
-            "Reassignment of replica foo-0-0 is still in progress.",
-            "Partition foo-1 on broker 0 is not being moved from log dir /tmp/kafka-logs0 to /tmp/kafka-logs1.",
-            "Partition quux-0 cannot be found in any live log directory on broker 0.",
-            "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1.",
+        assertEquals(
+            "Reassignment of replica bar-0-0 completed successfully.\n" +
+            "Reassignment of replica foo-0-0 is still in progress.\n" +
+            "Partition foo-1 on broker 0 is not being moved from log dir /tmp/kafka-logs0 to /tmp/kafka-logs1.\n" +
+            "Partition quux-0 cannot be found in any live log directory on broker 0.\n" +
+            "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1.\n" +
             "Partition quux-2 is not found in any live log dir on broker 1. " +
-                "There is likely an offline log directory on the broker.")),
+                "There is likely an offline log directory on the broker.",
             replicaMoveStatesToString(CollectionConverters.asScala(states)));
     }
 
@@ -447,16 +449,15 @@ public class ReassignPartitionsUnitTest {
         currentParts.put(new TopicPartition("bar", 0), seq(7, 8));
         currentParts.put(new TopicPartition("baz", 0), seq(10, 11, 12));
 
-        assertEquals(String.join(System.lineSeparator(), Arrays.asList(
-                "Current partition replica assignment",
-                "",
-                "{\"version\":1,\"partitions\":" +
-                    "[{\"topic\":\"bar\",\"partition\":0,\"replicas\":[7,8],\"log_dirs\":[\"any\",\"any\"]}," +
-                    "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[4,5,6],\"log_dirs\":[\"any\",\"any\",\"any\"]}]" +
-                    "}",
-                "",
-                "Save this to use as the --reassignment-json-file option during rollback"
-            )),
+        assertEquals(
+            "Current partition replica assignment\n" +
+            "\n" +
+            "{\"version\":1,\"partitions\":" +
+                "[{\"topic\":\"bar\",\"partition\":0,\"replicas\":[7,8],\"log_dirs\":[\"any\",\"any\"]}," +
+                "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[4,5,6],\"log_dirs\":[\"any\",\"any\",\"any\"]}]" +
+                "}\n" +
+            "\n" +
+            "Save this to use as the --reassignment-json-file option during rollback",
             currentPartitionReplicaAssignmentToString(
                 CollectionConverters.asScala(proposedParts),
                 CollectionConverters.asScala(currentParts)
@@ -682,10 +683,10 @@ public class ReassignPartitionsUnitTest {
                 alterPartitionReassignments(adminClient, CollectionConverters.asScala(reassignments));
 
             assertTrue(reassignmentResult.isEmpty());
-            assertEquals(String.join(System.lineSeparator(), Arrays.asList("Current partition reassignments:",
-                    "bar-0: replicas: 2,3,0. removing: 0.",
-                    "foo-0: replicas: 0,1,2. adding: 4.",
-                    "foo-1: replicas: 1,2,3. adding: 4,5. removing: 1,2.")),
+            assertEquals("Current partition reassignments:\n" +
+                    "bar-0: replicas: 2,3,0. removing: 0.\n" +
+                    "foo-0: replicas: 0,1,2. adding: 4.\n" +
+                    "foo-1: replicas: 1,2,3. adding: 4,5. removing: 1,2.",
                 curReassignmentsToString(adminClient));
         }
     }
