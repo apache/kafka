@@ -220,12 +220,12 @@ public class OffsetFetcher {
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
-                    offsetFetcherUtils.onSuccessfulRequestForResettingPositions(resetTimestamps, result);
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(resetTimestamps, result);
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    offsetFetcherUtils.onFailedRequestForResettingPositions(resetTimestamps, e);
+                    offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
                 }
             });
         }

@@ -289,7 +289,7 @@ class OffsetFetcherUtils {
             return null;
     }
 
-    void onSuccessfulRequestForResettingPositions(
+    void onSuccessfulResponseForResettingPositions(
             final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> resetTimestamps,
             final ListOffsetResult result) {
         if (!result.partitionsToRetry.isEmpty()) {
@@ -308,7 +308,7 @@ class OffsetFetcherUtils {
         }
     }
 
-    void onFailedRequestForResettingPositions(
+    void onFailedResponseForResettingPositions(
             final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> resetTimestamps,
             final RuntimeException error) {
         subscriptionState.requestFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);

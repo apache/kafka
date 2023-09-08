@@ -385,7 +385,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             partialResult.whenComplete((result, error) -> {
                 if (error == null) {
-                    offsetFetcherUtils.onSuccessfulRequestForResettingPositions(resetTimestamps,
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(resetTimestamps,
                             result);
                 } else {
                     RuntimeException e;
@@ -395,7 +395,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                         e = new RuntimeException("Unexpected failure in ListOffsets request for " +
                                 "resetting positions", error);
                     }
-                    offsetFetcherUtils.onFailedRequestForResettingPositions(resetTimestamps, e);
+                    offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
                 }
             });
         });
