@@ -29,17 +29,26 @@ public enum MemberState {
     UNJOINED,
 
     /**
-     * Member has received a new assignment (partitions assigned or revoked), and it is applying
-     * it. While in this state, the member will invoke the user callbacks for
-     * onPartitionsAssigned or onPartitionsRevoked, and then make the new assignment effective.
+     * Member has received a new target assignment (partitions could have been assigned or
+     * revoked), and it is processing it. While in this state, the member will
+     * invoke the user callbacks for onPartitionsAssigned or onPartitionsRevoked, and then make
+     * the new assignment effective.
      */
     // TODO: determine if separate state will be needed for assign/revoke (not for now)
-    PROCESSING_ASSIGNMENT,
+    RECONCILING,
 
     /**
      * Member is active in a group (heartbeating) and has processed all assignments received.
      */
     STABLE,
+
+    /**
+     * Member transitions to this state when it receives a FENCED_MEMBER_EPOCH error from the
+     * broker, indicating an invalid member epoch. This is a recoverable state, where the member
+     * gives up its partitions by invoking the user callbacks for onPartitionsLost, and then
+     * transitions to {@link #UNJOINED} to rejoin the group as a new member.
+     */
+    FENCED,
 
     /**
      * The member failed with an unrecoverable error
@@ -48,13 +57,15 @@ public enum MemberState {
 
     static {
         // Valid state transitions
-        STABLE.previousValidStates = Arrays.asList(UNJOINED, PROCESSING_ASSIGNMENT);
+        STABLE.previousValidStates = Arrays.asList(UNJOINED, RECONCILING);
 
-        PROCESSING_ASSIGNMENT.previousValidStates = Arrays.asList(STABLE, UNJOINED);
+        RECONCILING.previousValidStates = Arrays.asList(STABLE, UNJOINED);
 
-        FAILED.previousValidStates = Arrays.asList(STABLE, PROCESSING_ASSIGNMENT);
+        FAILED.previousValidStates = Arrays.asList(STABLE, RECONCILING);
 
-        // TODO: consider FAILED->STABLE?
+        FENCED.previousValidStates = Arrays.asList(STABLE, RECONCILING);
+
+        UNJOINED.previousValidStates = Arrays.asList(FENCED);
     }
 
     private List<MemberState> previousValidStates;
