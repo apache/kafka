@@ -171,15 +171,55 @@ class UnifiedLogTest {
 
   @Test
   def testTruncateBelowFirstUnstableOffset(): Unit = {
-    testTruncateBelowFirstUnstableOffset(_.truncateTo)
+    testTruncateBelowFirstUnstableOffset((log, targetOffset) => log.truncateTo(targetOffset))
   }
 
   @Test
   def testTruncateFullyAndStartBelowFirstUnstableOffset(): Unit = {
-    testTruncateBelowFirstUnstableOffset(_.truncateFullyAndStartAt)
+    testTruncateBelowFirstUnstableOffset((log, targetOffset) => log.truncateFullyAndStartAt(targetOffset))
   }
 
-  private def testTruncateBelowFirstUnstableOffset(truncateFunc: UnifiedLog => (Long => Unit)): Unit = {
+  @Test
+  def testTruncateFullyAndStart(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    val producerId = 17L
+    val producerEpoch: Short = 10
+    val sequence = 0
+
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("0".getBytes),
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )), leaderEpoch = 0)
+
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("3".getBytes),
+      new SimpleRecord("4".getBytes)
+    ), leaderEpoch = 0)
+
+    assertEquals(Some(3L), log.firstUnstableOffset)
+
+    // We close and reopen the log to ensure that the first unstable offset segment
+    // position will be undefined when we truncate the log.
+    log.close()
+
+    val reopened = createLog(logDir, logConfig)
+    assertEquals(Optional.of(new LogOffsetMetadata(3L)), reopened.producerStateManager.firstUnstableOffset)
+
+    reopened.truncateFullyAndStartAt(2L, Some(1L))
+    assertEquals(None, reopened.firstUnstableOffset)
+    assertEquals(java.util.Collections.emptyMap(), reopened.producerStateManager.activeProducers)
+    assertEquals(1L, reopened.logStartOffset)
+    assertEquals(2L, reopened.logEndOffset)
+  }
+
+  private def testTruncateBelowFirstUnstableOffset(truncateFunc: (UnifiedLog, Long) => Unit): Unit = {
     // Verify that truncation below the first unstable offset correctly
     // resets the producer state. Specifically we are testing the case when
     // the segment position of the first unstable offset is unknown.
@@ -215,7 +255,7 @@ class UnifiedLogTest {
     val reopened = createLog(logDir, logConfig)
     assertEquals(Optional.of(new LogOffsetMetadata(3L)), reopened.producerStateManager.firstUnstableOffset)
 
-    truncateFunc(reopened)(0L)
+    truncateFunc(reopened, 0L)
     assertEquals(None, reopened.firstUnstableOffset)
     assertEquals(java.util.Collections.emptyMap(), reopened.producerStateManager.activeProducers)
   }

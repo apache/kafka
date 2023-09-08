@@ -34,13 +34,13 @@ import java.util.Optional;
 
 /**
  * This is responsible for timing to send the next {@link FindCoordinatorRequest} based on the following criteria:
- *
+ * <p/>
  * Whether there is an existing coordinator.
  * Whether there is an inflight request.
  * Whether the backoff timer has expired.
  * The {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} contains either a wait timer
  * or a singleton list of {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}.
- *
+ * <p/>
  * The {@link FindCoordinatorRequest} will be handled by the {@link #onResponse(long, FindCoordinatorResponse)}  callback, which
  * subsequently invokes {@code onResponse} to handle the exception and response. Note that the coordinator node will be
  * marked {@code null} upon receiving a failure.
@@ -57,17 +57,25 @@ public class CoordinatorRequestManager implements RequestManager {
     private long totalDisconnectedMin = 0;
     private Node coordinator;
 
-    public CoordinatorRequestManager(final Time time,
-                                     final LogContext logContext,
-                                     final long retryBackoffMs,
-                                     final ErrorEventHandler errorHandler,
-                                     final String groupId) {
+    public CoordinatorRequestManager(
+        final Time time,
+        final LogContext logContext,
+        final long retryBackoffMs,
+        final long retryBackoffMaxMs,
+        final ErrorEventHandler errorHandler,
+        final String groupId
+    ) {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());
         this.nonRetriableErrorHandler = errorHandler;
         this.groupId = groupId;
-        this.coordinatorRequestState = new RequestState(retryBackoffMs);
+        this.coordinatorRequestState = new RequestState(
+                logContext,
+                CoordinatorRequestManager.class.getSimpleName(),
+                retryBackoffMs,
+                retryBackoffMaxMs
+        );
     }
 
     /**
@@ -215,5 +223,4 @@ public class CoordinatorRequestManager implements RequestManager {
     public Optional<Node> coordinator() {
         return Optional.ofNullable(this.coordinator);
     }
-
 }

@@ -69,6 +69,14 @@ public interface Group {
 
     /**
      * Validates the OffsetFetch request.
+     *
+     * @param memberId              The member id for consumer groups.
+     * @param memberEpoch           The member epoch for consumer groups.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
      */
-    void validateOffsetFetch() throws KafkaException;
+    void validateOffsetFetch(
+        String memberId,
+        int memberEpoch,
+        long lastCommittedOffset
+    ) throws KafkaException;
 }
