@@ -35,7 +35,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
-import org.apache.kafka.controller.QuorumController
+import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer._
@@ -1153,12 +1153,36 @@ class KRaftClusterTest {
       val controller = cluster.controllers().values().iterator().next()
       controller.controller.waitForReadyBrokers(3).get()
       TestUtils.retry(60000) {
-        val latch = controller.controller.asInstanceOf[QuorumController].pause()
+        val latch = QuorumControllerIntegrationTestUtils.pause(controller.controller.asInstanceOf[QuorumController])
         Thread.sleep(1001)
         latch.countDown()
         assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
         assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
           "Expected timedOutHeartbeats to be greater than 0.");
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testRegisteredControllerEndpoints(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(3).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.retry(60000) {
+        val controller = cluster.controllers().values().iterator().next()
+        val registeredControllers = controller.registrationsPublisher.controllers()
+        assertEquals(3, registeredControllers.size(), "Expected 3 controller registrations")
+        registeredControllers.values().forEach(registration => {
+          assertNotNull(registration.listeners.get("CONTROLLER"));
+          assertNotEquals(0, registration.listeners.get("CONTROLLER").port());
+        })
       }
     } finally {
       cluster.close()

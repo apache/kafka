@@ -32,6 +32,8 @@ import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata, VerificationStateEntry}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.{mock, when}
 
 import java.util
@@ -200,7 +202,8 @@ class ProducerStateManagerTest {
     val producerEpoch = 0.toShort
     val offset = 992342L
     val seq = 0
-    val producerAppendInfo = new ProducerAppendInfo(partition, producerId, ProducerStateEntry.empty(producerId), AppendOrigin.CLIENT)
+    val producerAppendInfo = new ProducerAppendInfo(partition, producerId, ProducerStateEntry.empty(producerId), AppendOrigin.CLIENT,
+      stateManager.maybeCreateVerificationStateEntry(producerId, seq, producerEpoch))
 
     val firstOffsetMetadata = new LogOffsetMetadata(offset, 990000L, 234224)
     producerAppendInfo.appendDataBatch(producerEpoch, seq, seq, time.milliseconds(),
@@ -388,7 +391,8 @@ class ProducerStateManagerTest {
         partition,
         producerId,
         ProducerStateEntry.empty(producerId),
-        AppendOrigin.CLIENT
+        AppendOrigin.CLIENT,
+        stateManager.maybeCreateVerificationStateEntry(producerId, 0, producerEpoch)
       )
       val firstOffsetMetadata = new LogOffsetMetadata(startOffset, segmentBaseOffset, 50 * relativeOffset)
       producerAppendInfo.appendDataBatch(producerEpoch, 0, 0, time.milliseconds(),
@@ -1089,37 +1093,79 @@ class ProducerStateManagerTest {
 
   @Test
   def testEntryForVerification(): Unit = {
-    val originalEntry = stateManager.verificationStateEntry(producerId, true)
+    val originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, 0)
     val originalEntryVerificationGuard = originalEntry.verificationGuard()
 
     def verifyEntry(producerId: Long, newEntry: VerificationStateEntry): Unit = {
-      val entry = stateManager.verificationStateEntry(producerId, false)
+      val entry = stateManager.verificationStateEntry(producerId)
       assertEquals(originalEntryVerificationGuard, entry.verificationGuard)
       assertEquals(entry.verificationGuard, newEntry.verificationGuard)
     }
 
     // If we already have an entry, reuse it.
-    val updatedEntry = stateManager.verificationStateEntry(producerId, true)
+    val updatedEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, 0)
     verifyEntry(producerId, updatedEntry)
 
     // Add the transactional data and clear the entry.
     append(stateManager, producerId, 0, 0, offset = 0, isTransactional = true)
     stateManager.clearVerificationStateEntry(producerId)
-    assertNull(stateManager.verificationStateEntry(producerId, false))
+    assertNull(stateManager.verificationStateEntry(producerId))
+  }
+
+  @Test
+  def testSequenceAndEpochInVerificationEntry(): Unit = {
+    val originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 1, 0)
+    val originalEntryVerificationGuard = originalEntry.verificationGuard()
+
+    def verifyEntry(producerId: Long, newEntry: VerificationStateEntry, expectedSequence: Int, expectedEpoch: Short): Unit = {
+      val entry = stateManager.verificationStateEntry(producerId)
+      assertEquals(originalEntryVerificationGuard, entry.verificationGuard)
+      assertEquals(entry.verificationGuard, newEntry.verificationGuard)
+      assertEquals(expectedSequence, entry.lowestSequence)
+      assertEquals(expectedEpoch, entry.epoch)
+    }
+    verifyEntry(producerId, originalEntry, 1, 0)
+
+    // If we see a lower sequence, update to the lower one.
+    val updatedEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, 0)
+    verifyEntry(producerId, updatedEntry, 0, 0)
+
+    // If we see a new epoch that is higher, update the sequence.
+    val updatedEntryNewEpoch = stateManager.maybeCreateVerificationStateEntry(producerId, 2, 1)
+    verifyEntry(producerId, updatedEntryNewEpoch, 2, 1)
+
+    // Ignore a lower epoch.
+    val updatedEntryOldEpoch = stateManager.maybeCreateVerificationStateEntry(producerId, 0, 0)
+    verifyEntry(producerId, updatedEntryOldEpoch, 2, 1)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testThrowOutOfOrderSequenceWithVerificationSequenceCheck(dynamicallyDisable: Boolean): Unit = {
+    val originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, 0)
+
+    // Even if we dynamically disable, we should still execute the sequence check if we have an entry
+    if (dynamicallyDisable)
+      producerStateManagerConfig.setTransactionVerificationEnabled(false)
+
+    // Trying to append with a higher sequence should fail
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, 0, 4, offset = 0, isTransactional = true))
+
+    assertEquals(originalEntry, stateManager.verificationStateEntry(producerId))
   }
 
   @Test
   def testVerificationStateEntryExpiration(): Unit = {
-    val originalEntry = stateManager.verificationStateEntry(producerId, true)
+    val originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, 0)
 
     // Before timeout we do not remove. Note: Accessing the verification entry does not update the time.
     time.sleep(producerStateManagerConfig.producerIdExpirationMs / 2)
     stateManager.removeExpiredProducers(time.milliseconds())
-    assertEquals(originalEntry, stateManager.verificationStateEntry(producerId, false))
+    assertEquals(originalEntry, stateManager.verificationStateEntry(producerId))
 
     time.sleep((producerStateManagerConfig.producerIdExpirationMs / 2) + 1)
     stateManager.removeExpiredProducers(time.milliseconds())
-    assertNull(stateManager.verificationStateEntry(producerId, false))
+    assertNull(stateManager.verificationStateEntry(producerId))
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {

@@ -20,7 +20,6 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -32,24 +31,24 @@ class KStreamKTableJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, 
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner;
     private final boolean leftJoin;
     private final Optional<Duration> gracePeriod;
-    private final Optional<TimeOrderedKeyValueBuffer<K, V1, V1>> buffer;
+    private final Optional<String> storeName;
 
 
     KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier,
                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner,
                       final boolean leftJoin,
                       final Optional<Duration> gracePeriod,
-                      final Optional<TimeOrderedKeyValueBuffer<K, V1, V1>> buffer) {
+                      final Optional<String> storeName) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
         this.gracePeriod = gracePeriod;
-        this.buffer = buffer;
+        this.storeName = storeName;
     }
 
     @Override
     public Processor<K, V1, K, VOut> get() {
-        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin, gracePeriod, buffer);
+        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin, gracePeriod, storeName);
     }
 
 }

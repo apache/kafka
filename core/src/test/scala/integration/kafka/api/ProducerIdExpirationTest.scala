@@ -183,7 +183,11 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     )
 
     // Update the expiration time to a low value again.
-    admin.incrementalAlterConfigs(producerIdExpirationConfig("100"))
+    admin.incrementalAlterConfigs(producerIdExpirationConfig("100")).all().get()
+
+    // restart a broker to ensure that dynamic config changes are picked up on restart
+    killBroker(0)
+    restartDeadBrokers()
 
     brokers.foreach(broker => TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100, "Configuration was not updated."))
 

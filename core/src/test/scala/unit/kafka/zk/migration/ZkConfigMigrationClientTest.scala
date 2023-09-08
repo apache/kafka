@@ -16,6 +16,7 @@
  */
 package kafka.zk.migration
 
+import kafka.utils.CoreUtils
 import kafka.server.{ConfigType, KafkaConfig, ZkAdminManager}
 import kafka.zk.{AdminZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -23,8 +24,10 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.metadata.ConfigRecord
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{ClientQuotasDelta, ClientQuotasImage}
 import org.apache.kafka.metadata.RecordTestUtils
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
@@ -56,10 +59,15 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     props.put(KafkaConfig.SslKeystorePasswordProp, encoder.encode(new Password(SECRET))) // sensitive config
     zkClient.setOrCreateEntityConfigs(ConfigType.Broker, "1", props)
 
+    val defaultProps = new Properties()
+    defaultProps.put(KafkaConfig.DefaultReplicationFactorProp, "3") // normal config
+    zkClient.setOrCreateEntityConfigs(ConfigType.Broker, "<default>", defaultProps)
+
     migrationClient.migrateBrokerConfigs(batch => batches.add(batch), brokerId => brokers.add(brokerId))
     assertEquals(1, brokers.size())
-    assertEquals(1, batches.size())
+    assertEquals(2, batches.size())
     assertEquals(2, batches.get(0).size)
+    assertEquals(1, batches.get(1).size)
 
     batches.get(0).forEach(record => {
       val message = record.message().asInstanceOf[ConfigRecord]
@@ -74,6 +82,12 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
         assertEquals(props.getProperty(name), value)
       }
     })
+
+    val record = batches.get(1).get(0).message().asInstanceOf[ConfigRecord]
+    assertEquals(ConfigResource.Type.BROKER.id(), record.resourceType())
+    assertEquals("", record.resourceName())
+    assertEquals(KafkaConfig.DefaultReplicationFactorProp, record.name())
+    assertEquals("3", record.value())
 
     // Update the sensitive config value from the config client and check that the value
     // persisted in Zookeeper is encrypted.
@@ -250,6 +264,89 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val props = new Properties()
     props.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(scramCredential))
     adminZkClient.changeConfigs(ConfigType.User, "alice", props)
+
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+
+    migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(0, brokers.size())
+    assertEquals(1, batches.size())
+    assertEquals(1, batches.get(0).size)
+  }
+
+  @Test
+  def testScramAndQuotaChangesInSnapshot(): Unit = {
+    val random = new MockRandom()
+
+    val props = new Properties()
+    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
+    adminZkClient.changeConfigs(ConfigType.User, "user1", props)
+
+    // Create SCRAM records in Zookeeper.
+    val aliceScramCredential = new ScramCredential(
+      randomBuffer(random, 1024),
+      randomBuffer(random, 1024),
+      randomBuffer(random, 1024),
+      4096)
+
+    val alicePropsInit = new Properties()
+    alicePropsInit.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(aliceScramCredential))
+    adminZkClient.changeConfigs(ConfigType.User, "alice", alicePropsInit)
+
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
+
+    // Create a new Quota for user2
+    val entityData = new EntityData().setEntityType("user").setEntityName("user2")
+    val clientQuotaRecord = new ClientQuotaRecord()
+      .setEntity(List(entityData).asJava)
+      .setKey("request_percentage")
+      .setValue(58.58)
+      .setRemove(false)
+    delta.replay(clientQuotaRecord)
+
+    // Create a new SCRAM credential for george
+    val scramCredentialRecord = new UserScramCredentialRecord()
+      .setName("george")
+      .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
+      .setSalt(randomBuffer(random, 1024))
+      .setStoredKey(randomBuffer(random, 1024))
+      .setServerKey(randomBuffer(random, 1024))
+      .setIterations(8192)
+    delta.replay(scramCredentialRecord)
+
+    // Add Quota record for user2 but not user1 to delete user1
+    // Add SCRAM record for george but not for alice to delete alice
+    val image = delta.apply(MetadataProvenance.EMPTY)
+
+    // load snapshot to Zookeeper.
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient)
+    kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+
+    val user1Props = zkClient.getEntityConfigs(ConfigType.User, "user1")
+    assertEquals(0, user1Props.size())
+    val user2Props = zkClient.getEntityConfigs(ConfigType.User, "user2")
+    assertEquals(1, user2Props.size())
+
+    val georgeProps = zkClient.getEntityConfigs(ConfigType.User, "george")
+    assertEquals(1, georgeProps.size())
+    val aliceProps = zkClient.getEntityConfigs(ConfigType.User, "alice")
+    assertEquals(0, aliceProps.size())
+  }
+
+  @Test
+  def testDelegationTokens(): Unit = {
+    val uuid = CoreUtils.generateUuidAsBase64()
+    val owner = SecurityUtils.parseKafkaPrincipal("User:alice")
+
+    val tokenInfo = new TokenInformation(uuid, owner, owner, List(owner).asJava, 0, 100, 1000)
+
+    val hmac: Array[Byte] = Array(1.toByte, 2.toByte, 3.toByte, 4.toByte)
+    val token = new DelegationToken(tokenInfo, hmac)
+
+    zkClient.createDelegationTokenPaths()
+    zkClient.setOrCreateDelegationToken(token)
 
     val brokers = new java.util.ArrayList[Integer]()
     val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()

@@ -54,16 +54,27 @@ public class TokenInformation {
         this.expiryTimestamp =  expiryTimestamp;
     }
 
+    // Convert record elements into a TokenInformation
+    public static TokenInformation fromRecord(String tokenId, KafkaPrincipal owner, KafkaPrincipal tokenRequester,
+                            Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
+        return new TokenInformation(
+            tokenId, owner, tokenRequester, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
+    }
+
     public KafkaPrincipal owner() {
         return owner;
+    }
+
+    public String ownerAsString() {
+        return owner.toString();
     }
 
     public KafkaPrincipal tokenRequester() {
         return tokenRequester;
     }
 
-    public String ownerAsString() {
-        return owner.toString();
+    public String tokenRequesterAsString() {
+        return tokenRequester.toString();
     }
 
     public Collection<KafkaPrincipal> renewers() {

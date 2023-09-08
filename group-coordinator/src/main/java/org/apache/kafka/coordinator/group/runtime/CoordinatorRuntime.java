@@ -44,6 +44,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
@@ -70,7 +72,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @param <S> The type of the state machine.
  * @param <U> The type of the record.
  */
-public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoCloseable {
+public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements AutoCloseable {
 
     /**
      * Builder to create a CoordinatorRuntime.
@@ -78,14 +80,14 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      * @param <S> The type of the state machine.
      * @param <U> The type of the record.
      */
-    public static class Builder<S extends Coordinator<U>, U> {
+    public static class Builder<S extends CoordinatorShard<U>, U> {
         private String logPrefix;
         private LogContext logContext;
         private CoordinatorEventProcessor eventProcessor;
         private PartitionWriter<U> partitionWriter;
         private CoordinatorLoader<U> loader;
-        private CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
-        private Time time;
+        private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
+        private Time time = Time.SYSTEM;
         private Timer timer;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
@@ -113,8 +115,8 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             return this;
         }
 
-        public Builder<S, U> withCoordinatorBuilderSupplier(CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier) {
-            this.coordinatorBuilderSupplier = coordinatorBuilderSupplier;
+        public Builder<S, U> withCoordinatorShardBuilderSupplier(CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier) {
+            this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
             return this;
         }
 
@@ -139,7 +141,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                 throw new IllegalArgumentException("Partition write must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
-            if (coordinatorBuilderSupplier == null)
+            if (coordinatorShardBuilderSupplier == null)
                 throw new IllegalArgumentException("State machine supplier must be set.");
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
@@ -152,7 +154,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                 eventProcessor,
                 partitionWriter,
                 loader,
-                coordinatorBuilderSupplier,
+                coordinatorShardBuilderSupplier,
                 time,
                 timer
             );
@@ -179,7 +181,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         LOADING {
             @Override
             boolean canTransitionFrom(CoordinatorState state) {
-                return state == INITIAL;
+                return state == INITIAL || state == FAILED;
             }
         },
 
@@ -231,7 +233,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      *
      * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
      */
-    class EventBasedCoordinatorTimer implements CoordinatorTimer<U> {
+    class EventBasedCoordinatorTimer implements CoordinatorTimer<Void, U> {
         /**
          * The logger.
          */
@@ -258,7 +260,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             long delay,
             TimeUnit unit,
             boolean retry,
-            TimeoutOperation<U> operation
+            TimeoutOperation<Void, U> operation
         ) {
             // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
             // expires, the event is pushed to the queue of the coordinator runtime to be executed. This
@@ -277,7 +279,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                         }
 
                         // Execute the timeout operation.
-                        return new CoordinatorResult<>(operation.generateRecords(), null);
+                        return operation.generateRecords();
                     });
 
                     // If the write event fails, it is rescheduled with a small backoff except if retry
@@ -348,6 +350,12 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      */
     class CoordinatorContext {
         /**
+         * The lock which protects all data in the context. Note that the context
+         * is never accessed concurrently, but it is accessed by multiple threads.
+         */
+        final ReentrantLock lock;
+
+        /**
          * The topic partition backing the coordinator.
          */
         final TopicPartition tp;
@@ -356,11 +364,6 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
          * The log context.
          */
         final LogContext logContext;
-
-        /**
-         * The snapshot registry backing the coordinator.
-         */
-        final SnapshotRegistry snapshotRegistry;
 
         /**
          * The deferred event queue used to park events waiting
@@ -376,29 +379,34 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         /**
          * The current state.
          */
-        volatile CoordinatorState state;
-
-        /**
-         * The actual state machine.
-         */
-        volatile S coordinator;
+        CoordinatorState state;
 
         /**
          * The current epoch of the coordinator. This represents
          * the epoch of the partition leader.
          */
-        volatile int epoch;
+        int epoch;
+
+        /**
+         * The snapshot registry backing the coordinator.
+         */
+        SnapshotRegistry snapshotRegistry;
+
+        /**
+         * The actual state machine.
+         */
+        S coordinator;
 
         /**
          * The last offset written to the partition.
          */
-        volatile long lastWrittenOffset;
+        long lastWrittenOffset;
 
         /**
          * The last offset committed. This represents the high
          * watermark of the partition.
          */
-        volatile long lastCommittedOffset;
+        long lastCommittedOffset;
 
         /**
          * Constructor.
@@ -408,19 +416,17 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         private CoordinatorContext(
             TopicPartition tp
         ) {
+            this.lock = new ReentrantLock();
             this.tp = tp;
             this.logContext = new LogContext(String.format("[%s topic=%s partition=%d] ",
                 logPrefix,
                 tp.topic(),
                 tp.partition()
             ));
-            this.snapshotRegistry = new SnapshotRegistry(logContext);
-            this.deferredEventQueue = new DeferredEventQueue(logContext);
-            this.timer = new EventBasedCoordinatorTimer(tp, logContext);
             this.state = CoordinatorState.INITIAL;
             this.epoch = -1;
-            this.lastWrittenOffset = 0L;
-            this.lastCommittedOffset = 0L;
+            this.deferredEventQueue = new DeferredEventQueue(logContext);
+            this.timer = new EventBasedCoordinatorTimer(tp, logContext);
         }
 
         /**
@@ -499,7 +505,10 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             switch (newState) {
                 case LOADING:
                     state = CoordinatorState.LOADING;
-                    coordinator = coordinatorBuilderSupplier
+                    snapshotRegistry = new SnapshotRegistry(logContext);
+                    lastWrittenOffset = 0L;
+                    lastCommittedOffset = 0L;
+                    coordinator = coordinatorShardBuilderSupplier
                         .get()
                         .withLogContext(logContext)
                         .withSnapshotRegistry(snapshotRegistry)
@@ -539,8 +548,9 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
                 coordinator.onUnloaded();
-                coordinator = null;
             }
+            coordinator = null;
+            snapshotRegistry = null;
         }
     }
 
@@ -632,46 +642,49 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         public void run() {
             try {
                 // Get the context of the coordinator or fail if the coordinator is not in active state.
-                CoordinatorContext context = activeContextOrThrow(tp);
-                long prevLastWrittenOffset = context.lastWrittenOffset;
+                withActiveContextOrThrow(tp, context -> {
+                    long prevLastWrittenOffset = context.lastWrittenOffset;
 
-                // Execute the operation.
-                result = op.generateRecordsAndResult(context.coordinator);
+                    // Execute the operation.
+                    result = op.generateRecordsAndResult(context.coordinator);
 
-                if (result.records().isEmpty()) {
-                    // If the records are empty, it was a read operation after all. In this case,
-                    // the response can be returned directly iff there are no pending write operations;
-                    // otherwise, the read needs to wait on the last write operation to be completed.
-                    OptionalLong pendingOffset = context.deferredEventQueue.highestPendingOffset();
-                    if (pendingOffset.isPresent()) {
-                        context.deferredEventQueue.add(pendingOffset.getAsLong(), this);
-                    } else {
-                        complete(null);
-                    }
-                } else {
-                    // If the records are not empty, first, they are applied to the state machine,
-                    // second, then are written to the partition/log, and finally, the response
-                    // is put into the deferred event queue.
-                    try {
-                        // Apply the records to the state machine.
-                        result.records().forEach(context.coordinator::replay);
-
-                        // Write the records to the log and update the last written
-                        // offset.
-                        long offset = partitionWriter.append(tp, result.records());
-                        context.updateLastWrittenOffset(offset);
-
-                        // Add the response to the deferred queue.
-                        if (!future.isDone()) {
-                            context.deferredEventQueue.add(offset, this);
+                    if (result.records().isEmpty()) {
+                        // If the records are empty, it was a read operation after all. In this case,
+                        // the response can be returned directly iff there are no pending write operations;
+                        // otherwise, the read needs to wait on the last write operation to be completed.
+                        OptionalLong pendingOffset = context.deferredEventQueue.highestPendingOffset();
+                        if (pendingOffset.isPresent()) {
+                            context.deferredEventQueue.add(pendingOffset.getAsLong(), this);
                         } else {
                             complete(null);
                         }
-                    } catch (Throwable t) {
-                        context.revertLastWrittenOffset(prevLastWrittenOffset);
-                        complete(t);
+                    } else {
+                        // If the records are not empty, first, they are applied to the state machine,
+                        // second, then are written to the partition/log, and finally, the response
+                        // is put into the deferred event queue.
+                        try {
+                            // Apply the records to the state machine.
+                            if (result.replayRecords()) {
+                                result.records().forEach(context.coordinator::replay);
+                            }
+
+                            // Write the records to the log and update the last written
+                            // offset.
+                            long offset = partitionWriter.append(tp, result.records());
+                            context.updateLastWrittenOffset(offset);
+
+                            // Add the response to the deferred queue.
+                            if (!future.isDone()) {
+                                context.deferredEventQueue.add(offset, this);
+                            } else {
+                                complete(null);
+                            }
+                        } catch (Throwable t) {
+                            context.revertLastWrittenOffset(prevLastWrittenOffset);
+                            complete(t);
+                        }
                     }
-                }
+                });
             } catch (Throwable t) {
                 complete(t);
             }
@@ -685,9 +698,13 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
          */
         @Override
         public void complete(Throwable exception) {
+            CompletableFuture<T> appendFuture = result != null ? result.appendFuture() : null;
+
             if (exception == null) {
+                if (appendFuture != null) result.appendFuture().complete(result.response());
                 future.complete(result.response());
             } else {
+                if (appendFuture != null) result.appendFuture().completeExceptionally(exception);
                 future.completeExceptionally(exception);
             }
         }
@@ -785,16 +802,16 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         public void run() {
             try {
                 // Get the context of the coordinator or fail if the coordinator is not in active state.
-                CoordinatorContext context = activeContextOrThrow(tp);
+                withActiveContextOrThrow(tp, context -> {
+                    // Execute the read operation.
+                    response = op.generateResponse(
+                        context.coordinator,
+                        context.lastCommittedOffset
+                    );
 
-                // Execute the read operation.
-                response = op.generateResponse(
-                    context.coordinator,
-                    context.lastCommittedOffset
-                );
-
-                // The response can be completed immediately.
-                complete(null);
+                    // The response can be completed immediately.
+                    complete(null);
+                });
             } catch (Throwable t) {
                 complete(t);
             }
@@ -886,7 +903,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         @Override
         public void complete(Throwable exception) {
             if (exception != null) {
-                log.error("Execution of {} failed due to {}.", name, exception.getMessage());
+                log.error("Execution of {} failed due to {}.", name, exception.getMessage(), exception);
             }
         }
 
@@ -914,7 +931,9 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         ) {
             log.debug("High watermark of {} incremented to {}.", tp, offset);
             scheduleInternalOperation("HighWatermarkUpdated(tp=" + tp + ", offset=" + offset + ")", tp, () -> {
-                contextOrThrow(tp).updateLastCommittedOffset(offset);
+                withActiveContextOrThrow(tp, context -> {
+                    context.updateLastCommittedOffset(offset);
+                });
             });
         }
     }
@@ -974,7 +993,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      * The coordinator state machine builder used by the runtime
      * to instantiate a coordinator.
      */
-    private final CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
+    private final CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
 
     /**
      * Atomic boolean indicating whether the runtime is running.
@@ -989,14 +1008,14 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
     /**
      * Constructor.
      *
-     * @param logPrefix                     The log prefix.
-     * @param logContext                    The log context.
-     * @param processor                     The event processor.
-     * @param partitionWriter               The partition writer.
-     * @param loader                        The coordinator loader.
-     * @param coordinatorBuilderSupplier    The coordinator builder.
-     * @param time                          The system time.
-     * @param timer                         The system timer.
+     * @param logPrefix                         The log prefix.
+     * @param logContext                        The log context.
+     * @param processor                         The event processor.
+     * @param partitionWriter                   The partition writer.
+     * @param loader                            The coordinator loader.
+     * @param coordinatorShardBuilderSupplier   The coordinator builder.
+     * @param time                              The system time.
+     * @param timer                             The system timer.
      */
     private CoordinatorRuntime(
         String logPrefix,
@@ -1004,7 +1023,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         CoordinatorEventProcessor processor,
         PartitionWriter<U> partitionWriter,
         CoordinatorLoader<U> loader,
-        CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier,
+        CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
         Timer timer
     ) {
@@ -1018,7 +1037,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         this.partitionWriter = partitionWriter;
         this.highWatermarklistener = new HighWatermarkListener();
         this.loader = loader;
-        this.coordinatorBuilderSupplier = coordinatorBuilderSupplier;
+        this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
     }
 
     /**
@@ -1046,35 +1065,12 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
     }
 
     /**
-     * @return The coordinator context if the coordinator is active or an exception otherwise.
-     * @throws NotCoordinatorException
-     * @throws CoordinatorLoadInProgressException
+     * Creates the context if it does not exist.
+     *
+     * @param tp    The topic partition.
      */
-    private CoordinatorContext activeContextOrThrow(TopicPartition tp) {
-        CoordinatorContext context = coordinators.get(tp);
-
-        if (context == null) {
-            throw Errors.NOT_COORDINATOR.exception();
-        } else {
-            switch (context.state) {
-                case INITIAL:
-                case FAILED:
-                case CLOSED:
-                    throw Errors.NOT_COORDINATOR.exception();
-
-                case LOADING:
-                    throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception();
-            }
-        }
-
-        return context;
-    }
-
-    /**
-     * @return The coordinator context. It is created if it does not exist.
-     */
-    private CoordinatorContext getOrCreateContext(TopicPartition tp) {
-        return coordinators.computeIfAbsent(tp, CoordinatorContext::new);
+    private void maybeCreateContext(TopicPartition tp) {
+        coordinators.computeIfAbsent(tp, CoordinatorContext::new);
     }
 
     /**
@@ -1083,13 +1079,66 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
      * @throws NotCoordinatorException
      * Package private for testing.
      */
-    CoordinatorContext contextOrThrow(TopicPartition tp) {
+    CoordinatorContext contextOrThrow(TopicPartition tp) throws NotCoordinatorException {
         CoordinatorContext context = coordinators.get(tp);
 
         if (context == null) {
             throw Errors.NOT_COORDINATOR.exception();
         } else {
             return context;
+        }
+    }
+
+    /**
+     * Calls the provided function with the context; throws an exception otherwise.
+     * This method ensures that the context lock is acquired before calling the
+     * function and releases afterwards.
+     *
+     * @param tp    The topic partition.
+     * @param func  The function that will receive the context.
+     * @throws NotCoordinatorException
+     */
+    private void withContextOrThrow(
+        TopicPartition tp,
+        Consumer<CoordinatorContext> func
+    ) throws NotCoordinatorException {
+        CoordinatorContext context = contextOrThrow(tp);
+
+        try {
+            context.lock.lock();
+            func.accept(context);
+        } finally {
+            context.lock.unlock();
+        }
+    }
+
+    /**
+     * Calls the provided function with the context iff the context is active; throws
+     * an exception otherwise. This method ensures that the context lock is acquired
+     * before calling the function and releases afterwards.
+     *
+     * @param tp    The topic partition.
+     * @param func  The function that will receive the context.
+     * @throws NotCoordinatorException
+     * @throws CoordinatorLoadInProgressException
+     */
+    private void withActiveContextOrThrow(
+        TopicPartition tp,
+        Consumer<CoordinatorContext> func
+    ) throws NotCoordinatorException, CoordinatorLoadInProgressException {
+        CoordinatorContext context = contextOrThrow(tp);
+
+        try {
+            context.lock.lock();
+            if (context.state == CoordinatorState.ACTIVE) {
+                func.accept(context);
+            } else if (context.state == CoordinatorState.LOADING) {
+                throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception();
+            } else {
+                throw Errors.NOT_COORDINATOR.exception();
+            }
+        } finally {
+            context.lock.unlock();
         }
     }
 
@@ -1180,63 +1229,62 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
     ) {
         throwIfNotRunning();
         log.info("Scheduling loading of metadata from {} with epoch {}", tp, partitionEpoch);
+
         // Touch the state to make the runtime immediately aware of the new coordinator.
-        getOrCreateContext(tp);
+        maybeCreateContext(tp);
 
         scheduleInternalOperation("Load(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
-            CoordinatorContext context = getOrCreateContext(tp);
+            withContextOrThrow(tp, context -> {
+                if (context.epoch < partitionEpoch) {
+                    context.epoch = partitionEpoch;
 
-            if (context.state == CoordinatorState.FAILED) {
-                // When the coordinator has failed, we create a new context instead of
-                // recycling the previous one because it is better to start from an
-                // empty state for timeline data structures.
-                coordinators.remove(tp);
-                context = getOrCreateContext(tp);
-            }
-
-            if (context.epoch < partitionEpoch) {
-                context.epoch = partitionEpoch;
-
-                switch (context.state) {
-                    case INITIAL:
-                        context.transitionTo(CoordinatorState.LOADING);
-                        loader.load(tp, context.coordinator).whenComplete((state, exception) -> {
-                            scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
-                                CoordinatorContext ctx = contextOrThrow(tp);
-                                if (ctx.state != CoordinatorState.LOADING) {
-                                    log.info("Ignoring load completion from {} because context is in {} state.",
-                                        ctx.tp, ctx.state);
-                                    return;
-                                }
-                                try {
-                                    if (exception != null) throw exception;
-                                    ctx.transitionTo(CoordinatorState.ACTIVE);
-                                    log.info("Finished loading of metadata from {} with epoch {}.",
-                                        tp, partitionEpoch);
-                                } catch (Throwable ex) {
-                                    log.error("Failed to load metadata from {} with epoch {} due to {}.",
-                                        tp, partitionEpoch, ex.toString());
-                                    ctx.transitionTo(CoordinatorState.FAILED);
-                                }
+                    switch (context.state) {
+                        case FAILED:
+                        case INITIAL:
+                            context.transitionTo(CoordinatorState.LOADING);
+                            loader.load(tp, context.coordinator).whenComplete((state, exception) -> {
+                                scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
+                                    withContextOrThrow(tp, ctx -> {
+                                        if (ctx.state != CoordinatorState.LOADING) {
+                                            log.info("Ignoring load completion from {} because context is in {} state.",
+                                                ctx.tp, ctx.state
+                                            );
+                                            return;
+                                        }
+                                        try {
+                                            if (exception != null) throw exception;
+                                            ctx.transitionTo(CoordinatorState.ACTIVE);
+                                            log.info("Finished loading of metadata from {} with epoch {}.",
+                                                tp, partitionEpoch
+                                            );
+                                        } catch (Throwable ex) {
+                                            log.error("Failed to load metadata from {} with epoch {} due to {}.",
+                                                tp, partitionEpoch, ex.toString()
+                                            );
+                                            ctx.transitionTo(CoordinatorState.FAILED);
+                                        }
+                                    });
+                                });
                             });
-                        });
-                        break;
+                            break;
 
-                    case LOADING:
-                        log.info("The coordinator {} is already loading metadata.", tp);
-                        break;
+                        case LOADING:
+                            log.info("The coordinator {} is already loading metadata.", tp);
+                            break;
 
-                    case ACTIVE:
-                        log.info("The coordinator {} is already active.", tp);
-                        break;
+                        case ACTIVE:
+                            log.info("The coordinator {} is already active.", tp);
+                            break;
 
-                    default:
-                        log.error("Cannot load coordinator {} in state {}.", tp, context.state);
+                        default:
+                            log.error("Cannot load coordinator {} in state {}.", tp, context.state);
+                    }
+                } else {
+                    log.info("Ignoring loading metadata from {} since current epoch {} is larger than or equals to {}.",
+                        context.tp, context.epoch, partitionEpoch
+                    );
                 }
-            } else {
-                log.info("Ignoring loading metadata from {} since current epoch {} is larger than or equals to {}.",
-                    context.tp, context.epoch, partitionEpoch);
-            }
+            });
         });
     }
 
@@ -1255,16 +1303,18 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         log.info("Scheduling unloading of metadata for {} with epoch {}", tp, partitionEpoch);
 
         scheduleInternalOperation("UnloadCoordinator(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
-            CoordinatorContext context = contextOrThrow(tp);
-            if (context.epoch < partitionEpoch) {
-                log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-                context.transitionTo(CoordinatorState.CLOSED);
-                coordinators.remove(tp);
-                log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-            } else {
-                log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
-                    tp, partitionEpoch, context.epoch);
-            }
+            withContextOrThrow(tp, context -> {
+                if (context.epoch < partitionEpoch) {
+                    log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                    context.transitionTo(CoordinatorState.CLOSED);
+                    coordinators.remove(tp, context);
+                    log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                } else {
+                    log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
+                        tp, partitionEpoch, context.epoch
+                    );
+                }
+            });
         });
     }
 
@@ -1287,14 +1337,15 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         // Push an event for each coordinator.
         coordinators.keySet().forEach(tp -> {
             scheduleInternalOperation("UpdateImage(tp=" + tp + ", offset=" + newImage.offset() + ")", tp, () -> {
-                CoordinatorContext context = contextOrThrow(tp);
-                if (context.state == CoordinatorState.ACTIVE) {
-                    log.debug("Applying new metadata image with offset {} to {}.", newImage.offset(), tp);
-                    context.coordinator.onNewMetadataImage(newImage, delta);
-                } else {
-                    log.debug("Ignoring new metadata image with offset {} for {} because the coordinator is not active.",
-                        newImage.offset(), tp);
-                }
+                withContextOrThrow(tp, context -> {
+                    if (context.state == CoordinatorState.ACTIVE) {
+                        log.debug("Applying new metadata image with offset {} to {}.", newImage.offset(), tp);
+                        context.coordinator.onNewMetadataImage(newImage, delta);
+                    } else {
+                        log.debug("Ignoring new metadata image with offset {} for {} because the coordinator is not active.",
+                            newImage.offset(), tp);
+                    }
+                });
             });
         });
     }
