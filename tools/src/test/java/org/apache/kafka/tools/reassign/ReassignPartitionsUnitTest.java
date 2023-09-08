@@ -184,7 +184,7 @@ public class ReassignPartitionsUnitTest {
                     new Tuple2<>(new TopicPartition("foo", 1), Arrays.asList(1, 2, 3))
                 ), this::asScala));
 
-            assertEquals(expected._1, javaMap(actual._1, this::asJava));
+            assertEquals(asScala(expected._1, this::asScala), actual._1);
             assertEquals(expected._2, actual._2);
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
@@ -204,7 +204,7 @@ public class ReassignPartitionsUnitTest {
                 new Tuple2<>(new TopicPartition("foo", 1), Arrays.asList(1, 2, 3))
             ), this::asScala));
 
-            assertEquals(expected._1, javaMap(actual._1, this::asJava));
+            assertEquals(asScala(expected._1, this::asScala), actual._1);
             assertEquals(expected._2, actual._2);
         }
     }
@@ -767,7 +767,7 @@ public class ReassignPartitionsUnitTest {
 
     @SuppressWarnings("unchecked")
     private <T> scala.collection.immutable.Set<T> toSet(final T... set) {
-        return (scala.collection.immutable.Set<T>) toMutableSet(new HashSet<>(Arrays.asList(set))).toSet();
+        return toMutableSet(new HashSet<>(Arrays.asList(set))).toSet();
     }
 
     private <T> scala.collection.mutable.Set<Object> toMutableSet(Set<T> set) {
@@ -832,13 +832,6 @@ public class ReassignPartitionsUnitTest {
             state.done);
     }
 
-    private PartitionReassignmentState asJava(ReassignPartitionsCommand.PartitionReassignmentState state) {
-        return new PartitionReassignmentState(
-            CollectionConverters.asJava(state.currentReplicas()).stream().map(i -> (Integer) i).collect(Collectors.toList()),
-            CollectionConverters.asJava(state.targetReplicas()).stream().map(i -> (Integer) i).collect(Collectors.toList()),
-            state.done());
-    }
-
     private Tuple2<TopicPartition, Seq<Object>> asScala(Tuple2<TopicPartition, List<Integer>> t) {
         return map(t, Function.identity(), this::toRawSeq);
     }
@@ -851,7 +844,7 @@ public class ReassignPartitionsUnitTest {
 
     private Map<Integer, PartitionMove> asJava(scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove> map) {
         Map<Integer, PartitionMove> res = new HashMap<>();
-        map.foreach(t -> res.put((Integer) t._1, new PartitionMove(CollectionConverters.asJava(t._2.sources().toSet()), asJava(t._2.destinations()))));
+        map.foreach(t -> res.put((Integer) t._1, new PartitionMove(CollectionConverters.asJava(t._2.sources().toSet()), CollectionConverters.asJava(t._2.destinations().toSet()))));
         return res;
     }
 
@@ -859,13 +852,6 @@ public class ReassignPartitionsUnitTest {
     private Map<TopicPartition, List<Integer>> asJava(scala.collection.Map<TopicPartition, Seq<Object>> map) {
         Map<TopicPartition, List<Integer>> res = new HashMap<>();
         map.foreach(e -> res.put(e._1, (List) CollectionConverters.asJava(e._2)));
-        return res;
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> Set<T> asJava(scala.collection.mutable.Set<?> set) {
-        Set<T> res = new HashSet<>();
-        set.foreach(e -> res.add((T) e));
         return res;
     }
 
