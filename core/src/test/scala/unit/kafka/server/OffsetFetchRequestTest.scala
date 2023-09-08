@@ -19,7 +19,6 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetFetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -153,8 +152,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     createOffsetsTopic()
 
     // Create the topic.
-    TestUtils.createTopicWithAdminRaw(
-      admin = cluster.createAdminClient(),
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -289,8 +287,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     createOffsetsTopic()
 
     // Create the topic.
-    TestUtils.createTopicWithAdminRaw(
-      admin = cluster.createAdminClient(),
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -403,8 +400,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     createOffsetsTopic()
 
     // Create the topic.
-    TestUtils.createTopicWithAdminRaw(
-      admin = cluster.createAdminClient(),
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )

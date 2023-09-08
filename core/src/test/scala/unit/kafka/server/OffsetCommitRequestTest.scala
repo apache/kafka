@@ -19,7 +19,6 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.{Tag, Timeout}
@@ -73,8 +72,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     createOffsetsTopic()
 
     // Create the topic.
-    TestUtils.createTopicWithAdminRaw(
-      admin = cluster.createAdminClient(),
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )

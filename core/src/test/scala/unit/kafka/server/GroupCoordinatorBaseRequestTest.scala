@@ -32,14 +32,30 @@ import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
+  private def brokers(): Seq[KafkaBroker] = {
+    if (cluster.isKRaftTest) {
+      cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala.toSeq
+    } else {
+      cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala.toSeq
+    }
+  }
+
   protected def createOffsetsTopic(): Unit = {
     TestUtils.createOffsetsTopicWithAdmin(
       admin = cluster.createAdminClient(),
-      brokers = if (cluster.isKRaftTest) {
-        cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala
-      } else {
-        cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala
-      }
+      brokers = brokers()
+    )
+  }
+
+  protected def createTopic(
+    topic: String,
+    numPartitions: Int
+  ): Unit = {
+    TestUtils.createTopicWithAdmin(
+      admin = cluster.createAdminClient(),
+      brokers = brokers(),
+      topic = topic,
+      numPartitions = numPartitions
     )
   }
 
