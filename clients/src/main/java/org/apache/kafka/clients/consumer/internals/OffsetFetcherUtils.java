@@ -63,8 +63,19 @@ class OffsetFetcherUtils {
     private final ApiVersions apiVersions;
     private final Logger log;
 
-    private final AtomicReference<RuntimeException> cachedOffsetForLeaderException = new AtomicReference<>();
-    private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
+    /**
+     * Exception that occurred while validating positions, that will be propagated on the next
+     * call to validate positions. This could be an error received in the
+     * OffsetsForLeaderEpoch response, or a LogTruncationException detected when using a
+     * successful response to validate the positions. It will be cleared when thrown.
+     */
+    private final AtomicReference<RuntimeException> cachedValidatePositionsException = new AtomicReference<>();
+    /**
+     * Exception that occurred while resetting positions, that will be propagated on the next
+     * call to reset positions. This will have the error received in the response to the
+     * ListOffsets request. It will be cleared when thrown on the next call to reset.
+     */
+    private final AtomicReference<RuntimeException> cachedResetPositionsException = new AtomicReference<>();
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
     OffsetFetcherUtils(LogContext logContext,
@@ -175,7 +186,7 @@ class OffsetFetcherUtils {
     }
 
     Map<TopicPartition, SubscriptionState.FetchPosition> getPartitionsToValidate() {
-        RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
+        RuntimeException exception = cachedValidatePositionsException.getAndSet(null);
         if (exception != null)
             throw exception;
 
@@ -191,9 +202,9 @@ class OffsetFetcherUtils {
                 .collect(Collectors.toMap(Function.identity(), subscriptionState::position));
     }
 
-    void maybeSetOffsetForLeaderException(RuntimeException e) {
-        if (!cachedOffsetForLeaderException.compareAndSet(null, e)) {
-            log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
+    void maybeSetValidatePositionsException(RuntimeException e) {
+        if (!cachedValidatePositionsException.compareAndSet(null, e)) {
+            log.error("Discarding error validating positions because another error is pending", e);
         }
     }
 
@@ -213,7 +224,7 @@ class OffsetFetcherUtils {
 
     Map<TopicPartition, Long> getOffsetResetTimestamp() {
         // Raise exception from previous offset fetch if there is one
-        RuntimeException exception = cachedListOffsetsException.getAndSet(null);
+        RuntimeException exception = cachedResetPositionsException.getAndSet(null);
         if (exception != null)
             throw exception;
 
@@ -314,9 +325,10 @@ class OffsetFetcherUtils {
         subscriptionState.requestFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
         metadata.requestUpdate(false);
 
-        if (!(error instanceof RetriableException) && !cachedListOffsetsException.compareAndSet(null,
+        if (!(error instanceof RetriableException) && !cachedResetPositionsException.compareAndSet(null,
                 error))
-            log.error("Discarding error in ListOffsetResponse because another error is pending", error);
+            log.error("Discarding error resetting positions because another error is pending",
+                    error);
     }
 
 
@@ -344,7 +356,7 @@ class OffsetFetcherUtils {
         });
 
         if (!truncations.isEmpty()) {
-            maybeSetOffsetForLeaderException(buildLogTruncationException(truncations));
+            maybeSetValidatePositionsException(buildLogTruncationException(truncations));
         }
     }
 
@@ -354,7 +366,7 @@ class OffsetFetcherUtils {
         metadata.requestUpdate(false);
 
         if (!(error instanceof RetriableException)) {
-            maybeSetOffsetForLeaderException(error);
+            maybeSetValidatePositionsException(error);
         }
     }
 
