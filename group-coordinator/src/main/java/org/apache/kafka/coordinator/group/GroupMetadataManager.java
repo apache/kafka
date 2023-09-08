@@ -2931,7 +2931,6 @@ public class GroupMetadataManager {
         }
 
         List<MemberResponse> memberResponses = new ArrayList<>();
-        List<CoordinatorResult<Void, Record>> coordinatorResults = new ArrayList<>();
 
         for (MemberIdentity member: request.members()) {
             String reason = member.reason() != null ? member.reason() : "not provided";
@@ -2939,11 +2938,11 @@ public class GroupMetadataManager {
             // in which case we expect the MemberId to be undefined.
             if (UNKNOWN_MEMBER_ID.equals(member.memberId())) {
                 if (member.groupInstanceId() != null && group.hasStaticMember(member.groupInstanceId())) {
-                    coordinatorResults.add(removeCurrentMemberFromGenericGroup(
+                    removeCurrentMemberFromGenericGroup(
                         group,
                         group.staticMemberId(member.groupInstanceId()),
                         reason
-                    ));
+                    );
                     memberResponses.add(
                         new MemberResponse()
                             .setMemberId(member.memberId())
@@ -2958,7 +2957,7 @@ public class GroupMetadataManager {
                     );
                 }
             } else if (group.isPendingMember(member.memberId())) {
-                coordinatorResults.add(removePendingMemberAndUpdateGenericGroup(group, member.memberId()));
+                group.remove(member.memberId());
                 timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
                 log.info("Pending member {} has left group {} through explicit `LeaveGroup` request. Reason: {}",
                     member.memberId(), group.groupId(), reason);
@@ -2971,11 +2970,11 @@ public class GroupMetadataManager {
             } else {
                 try {
                     group.validateMember(member.memberId(), member.groupInstanceId(), "leave-group");
-                    coordinatorResults.add(removeCurrentMemberFromGenericGroup(
+                    removeCurrentMemberFromGenericGroup(
                         group,
                         member.memberId(),
                         reason
-                    ));
+                    );
                     memberResponses.add(
                         new MemberResponse()
                             .setMemberId(member.memberId())
@@ -2992,16 +2991,22 @@ public class GroupMetadataManager {
             }
         }
 
-        List<CoordinatorResult<Void, Record>> results = coordinatorResults.stream()
-            .filter(result -> result != EMPTY_RESULT)
-            .collect(Collectors.toList());
-
         CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
+        long validMemberLeaveGroups = memberResponses.stream().filter(response -> response.errorCode() == 0).count();
+        String reason = "explicit `LeaveGroup` request for " + request.members().size() + "members, for which " +
+            validMemberLeaveGroups + " were successful.";
 
-        if (results.size() > 1) {
-            throw new IllegalStateException("Expected max 1 non-empty result but found: " + results.size());
-        } else if (results.size() == 1) {
-            coordinatorResult = coordinatorResults.get(0);
+        switch (group.currentState()) {
+            case STABLE:
+            case COMPLETING_REBALANCE:
+                if (validMemberLeaveGroups > 0) {
+                    coordinatorResult = maybePrepareRebalanceOrCompleteJoin(group, reason);
+                }
+                break;
+            case PREPARING_REBALANCE:
+                if (validMemberLeaveGroups > 0) {
+                    coordinatorResult = maybeCompleteJoinPhase(group);
+                }
         }
 
         return new CoordinatorResult<>(
@@ -3020,10 +3025,8 @@ public class GroupMetadataManager {
      * @param memberId  The member id.
      * @param reason    The reason for the LeaveGroup request.
      *
-     * @return The GroupMetadata record and the append future to be completed once the record is
-     *         appended to the log (and replicated).
      */
-    private CoordinatorResult<Void, Record> removeCurrentMemberFromGenericGroup(
+    private void removeCurrentMemberFromGenericGroup(
         GenericGroup group,
         String memberId,
         String reason
@@ -3043,16 +3046,6 @@ public class GroupMetadataManager {
                 .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
         );
         group.remove(member.memberId());
-
-        switch (group.currentState()) {
-            case STABLE:
-            case COMPLETING_REBALANCE:
-                return maybePrepareRebalanceOrCompleteJoin(group, reason);
-            case PREPARING_REBALANCE:
-                return maybeCompleteJoinPhase(group);
-        }
-
-        return EMPTY_RESULT;
     }
 
     /**
