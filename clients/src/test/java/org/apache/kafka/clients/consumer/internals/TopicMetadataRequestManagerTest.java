@@ -93,13 +93,13 @@ public class TopicMetadataRequestManagerTest {
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
-            topic,
+            Optional.of(topic),
             error));
-        List<TopicMetadataRequestManager.CompletableTopicMetadataRequest> inflights = this.topicMetadataRequestManager.inflightRequests();
+        List<TopicMetadataRequestManager.TopicMetadataRequest> inflights = this.topicMetadataRequestManager.inflightRequests();
 
         if (shouldRetry) {
             assertEquals(1, inflights.size());
-            assertEquals(topic, inflights.get(0).topic());
+            assertEquals(topic, inflights.get(0).topic().orElse(null));
         } else {
             assertEquals(0, inflights.size());
         }
@@ -112,16 +112,16 @@ public class TopicMetadataRequestManagerTest {
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         res.unsentRequests.get(0).future().completeExceptionally(new KafkaException("some error"));
 
-        List<TopicMetadataRequestManager.CompletableTopicMetadataRequest> inflights = this.topicMetadataRequestManager.inflightRequests();
+        List<TopicMetadataRequestManager.TopicMetadataRequest> inflights = this.topicMetadataRequestManager.inflightRequests();
         assertTrue(inflights.isEmpty());
     }
 
-    @Test
-    public void testSendingTheSameRequest() {
-        final String topic = "hello";
-        CompletableFuture<Map<String, List<PartitionInfo>>> future = this.topicMetadataRequestManager.requestTopicMetadata(Optional.of(topic));
+    @ParameterizedTest
+    @MethodSource("topicsProvider")
+    public void testSendingTheSameRequest(Optional<String> topic) {
+        CompletableFuture<Map<String, List<PartitionInfo>>> future = this.topicMetadataRequestManager.requestTopicMetadata(topic);
         CompletableFuture<Map<String, List<PartitionInfo>>> future2 =
-            this.topicMetadataRequestManager.requestTopicMetadata(Optional.of(topic));
+            this.topicMetadataRequestManager.requestTopicMetadata(topic);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -133,21 +133,34 @@ public class TopicMetadataRequestManagerTest {
 
         assertTrue(future.isDone());
         assertFalse(future.isCompletedExceptionally());
+        try {
+            future.get();
+        } catch (Throwable e) {
+            System.out.println(e.getMessage());
+        }
         assertTrue(future2.isDone());
         assertFalse(future2.isCompletedExceptionally());
     }
 
     private ClientResponse buildTopicMetadataClientResponse(
         final NetworkClientDelegate.UnsentRequest request,
-        final String topic,
+        final Optional<String> topic,
         final Errors error) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertTrue(abstractRequest instanceof MetadataRequest);
         MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
         Cluster cluster = mockCluster(3, 0);
         List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();
-        topics.add(new MetadataResponse.TopicMetadata(error, topic, false,
-            Collections.emptyList()));
+        if (topic.isPresent()) {
+            topics.add(new MetadataResponse.TopicMetadata(error, topic.get(), false,
+                Collections.emptyList()));
+        } else {
+            // null topic means request for all topics
+            topics.add(new MetadataResponse.TopicMetadata(error, "topic1", false,
+                Collections.emptyList()));
+            topics.add(new MetadataResponse.TopicMetadata(error, "topic2", false,
+                Collections.emptyList()));
+        }
         final MetadataResponse metadataResponse = RequestTestUtils.metadataResponse(cluster.nodes(),
             cluster.clusterResource().clusterId(),
             cluster.controller().id(),
@@ -188,4 +201,5 @@ public class TopicMetadataRequestManagerTest {
             Arguments.of(Errors.NETWORK_EXCEPTION, true),
             Arguments.of(Errors.NONE, false));
     }
+
 }
