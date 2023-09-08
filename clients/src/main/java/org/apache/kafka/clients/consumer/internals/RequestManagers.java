@@ -37,6 +37,7 @@ public class RequestManagers {
     private final List<Optional<? extends RequestManager>> entries;
 
     public RequestManagers(OffsetsRequestManager offsetsRequestManager,
+                           TopicMetadataRequestManager topicMetadataRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager) {
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager,

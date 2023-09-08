@@ -66,8 +66,6 @@ public class ApplicationEventProcessor {
                 return process((AssignmentChangeApplicationEvent) event);
             case TOPIC_METADATA:
                 return process((TopicMetadataApplicationEvent) event);
-            case UNSUBSCRIBE:
-                return process((UnsubscribeApplicationEvent) event);
             case LIST_OFFSETS:
                 return process((ListOffsetsApplicationEvent) event);
         }
