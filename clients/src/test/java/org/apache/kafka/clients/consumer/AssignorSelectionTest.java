@@ -18,24 +18,13 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AssignorSelection;
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.junit.jupiter.api.Test;
-
-import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class AssignorSelectionTest {
-
-    @Test
-    public void testClientAssignorCannotBeNullIfSelected() {
-        assertThrows(IllegalArgumentException.class,
-                () -> AssignorSelection.newClientAssignors(null));
-    }
 
     @Test
     public void testServerAssignorCannotBeNullOrEmptyIfSelected() {
@@ -55,34 +44,6 @@ public class AssignorSelectionTest {
         AssignorSelection selection3 = AssignorSelection.newServerAssignor("uniform");
         assertNotEquals(selection1, selection3);
         assertNotEquals(selection1, null);
-
-        // Client assignors
-        AssignorSelection clientSelection1 =
-                AssignorSelection.newClientAssignors(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.Assignor().setName("client-assignor-1")));
-        AssignorSelection clientSelection2 =
-                AssignorSelection.newClientAssignors(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.Assignor().setName("client-assignor-1")));
-        assertEquals(clientSelection1, clientSelection1);
-        assertEquals(clientSelection1, clientSelection2);
-        AssignorSelection clientSelection3 =
-                AssignorSelection.newClientAssignors(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.Assignor().setName("client-assignor-2")));
-        assertNotEquals(clientSelection1, clientSelection3);
-        assertNotEquals(clientSelection1, null);
-
-        // Mixed server/client
-        assertNotEquals(selection1, clientSelection1);
-    }
-
-    @Test
-    public void testClientAssignorSelection() {
-        ConsumerGroupHeartbeatRequestData.Assignor assignor =
-                new ConsumerGroupHeartbeatRequestData.Assignor().setName("client-assignor-1");
-        AssignorSelection selection =
-                AssignorSelection.newClientAssignors(Collections.singletonList(assignor));
-        assertEquals(AssignorSelection.Type.CLIENT, selection.type());
-        assertNotNull(selection.clientAssignors());
-        assertNull(selection.serverAssignor());
-        assertEquals(1, selection.clientAssignors().size());
-        assertEquals(assignor, selection.clientAssignors().get(0));
     }
 
     @Test
@@ -91,6 +52,5 @@ public class AssignorSelectionTest {
         AssignorSelection selection = AssignorSelection.newServerAssignor(assignorName);
         assertEquals(AssignorSelection.Type.SERVER, selection.type());
         assertEquals(assignorName, selection.serverAssignor());
-        assertNull(selection.clientAssignors());
     }
 }

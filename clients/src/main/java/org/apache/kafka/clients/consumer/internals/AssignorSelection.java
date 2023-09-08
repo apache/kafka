@@ -17,9 +17,6 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
-
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -33,29 +30,18 @@ import java.util.Objects;
  * Server assignors include a name of the server assignor selected, ex. uniform, range.
  */
 public class AssignorSelection {
-    public enum Type { CLIENT, SERVER }
+    public enum Type { SERVER }
 
     private final AssignorSelection.Type type;
     private String serverAssignor;
-    private List<ConsumerGroupHeartbeatRequestData.Assignor> clientAssignors;
 
-    private AssignorSelection(Type type, String serverAssignor,
-                              List<ConsumerGroupHeartbeatRequestData.Assignor> clientAssignors) {
+    private AssignorSelection(Type type, String serverAssignor) {
         this.type = type;
-        if (type == Type.CLIENT) {
-            this.clientAssignors = clientAssignors;
-        } else if (type == Type.SERVER) {
+        if (type == Type.SERVER) {
             this.serverAssignor = serverAssignor;
         } else {
             throw new IllegalArgumentException("Unsupported assignor type " + type);
         }
-    }
-
-    public static AssignorSelection newClientAssignors(List<ConsumerGroupHeartbeatRequestData.Assignor> assignors) {
-        if (assignors == null) {
-            throw new IllegalArgumentException("Selected client assignors cannot be null");
-        }
-        return new AssignorSelection(Type.CLIENT, null, assignors);
     }
 
     public static AssignorSelection newServerAssignor(String serverAssignor) {
@@ -65,16 +51,12 @@ public class AssignorSelection {
         if (serverAssignor.isEmpty()) {
             throw new IllegalArgumentException("Selected server assignor name cannot be empty");
         }
-        return new AssignorSelection(Type.SERVER, serverAssignor, null);
+        return new AssignorSelection(Type.SERVER, serverAssignor);
     }
 
     public static AssignorSelection defaultAssignor() {
         // TODO: review default selection
-        return new AssignorSelection(Type.SERVER, "uniform", null);
-    }
-
-    public List<ConsumerGroupHeartbeatRequestData.Assignor> clientAssignors() {
-        return this.clientAssignors;
+        return new AssignorSelection(Type.SERVER, "uniform");
     }
 
     public String serverAssignor() {
@@ -90,13 +72,11 @@ public class AssignorSelection {
         if (this == assignorSelection) return true;
         if (assignorSelection == null || getClass() != assignorSelection.getClass()) return false;
         return Objects.equals(((AssignorSelection) assignorSelection).type, this.type) &&
-                Objects.equals(((AssignorSelection) assignorSelection).clientAssignors,
-                        this.clientAssignors) &&
                 Objects.equals(((AssignorSelection) assignorSelection).serverAssignor, this.serverAssignor);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, clientAssignors, serverAssignor);
+        return Objects.hash(type, serverAssignor);
     }
 }
