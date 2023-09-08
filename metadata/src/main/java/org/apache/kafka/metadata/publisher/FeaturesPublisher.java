@@ -17,17 +17,26 @@
 
 package org.apache.kafka.metadata.publisher;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.Features;
+import org.slf4j.Logger;
 
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
 
 
 public class FeaturesPublisher implements MetadataPublisher {
+    private final Logger log;
     private volatile Features features = Features.fromKRaftVersion(MINIMUM_KRAFT_VERSION);
+
+    public FeaturesPublisher(
+        LogContext logContext
+    ) {
+        log = logContext.logger(FeaturesPublisher.class);
+    }
 
     public Features features() {
         return features;
@@ -45,10 +54,14 @@ public class FeaturesPublisher implements MetadataPublisher {
         LoaderManifest manifest
     ) {
         if (delta.featuresDelta() != null) {
-            features = new Features(newImage.features().metadataVersion(),
+            Features newFeatures = new Features(newImage.features().metadataVersion(),
                     newImage.features().finalizedVersions(),
                     newImage.provenance().lastContainedOffset(),
                     true);
+            if (!newFeatures.equals(features)) {
+                log.info("Loaded new metadata {}.", newFeatures);
+                features = newFeatures;
+            }
         }
     }
 }
