@@ -780,7 +780,7 @@ public class ReassignPartitionsUnitTest {
     private <T> Seq<T> seq(T... seq) {
         scala.collection.mutable.Buffer<T> res = new scala.collection.mutable.ArrayBuffer<>();
         for (T t : seq)
-            res.addOne(t);
+            res.$plus$eq(t);
         return res.toSeq();
     }
 
