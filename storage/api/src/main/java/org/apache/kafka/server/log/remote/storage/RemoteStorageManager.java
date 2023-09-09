@@ -123,7 +123,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * Returns the index for the respective log segment of {@link RemoteLogSegmentMetadata}.
      * <p>
      * Note: The transaction index may not exist because of no transactional records.
-     * In this case, it should still return an InputStream with empty content, instead of returning {@code null}.
+     * In this case, it should throw a RemoteResourceNotFoundException, instead of returning {@code null}.
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param indexType                type of the index to be fetched for the segment.

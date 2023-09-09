@@ -20,7 +20,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
-import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
@@ -35,7 +35,7 @@ import org.slf4j.{Logger, LoggerFactory}
 import java.io.{File, FileInputStream, IOException}
 import java.nio.file.Files
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
 
@@ -105,7 +105,7 @@ class RemoteIndexCacheTest {
   def testIndexFileNameAndLocationOnDisk(): Unit = {
     val entry = cache.getIndexEntry(rlsMetadata)
     val offsetIndexFile = entry.offsetIndex.file().toPath
-    val txnIndexFile = entry.txnIndex.file().toPath
+    val txnIndexFile = entry.txnIndexOpt.get().file().toPath
     val timeIndexFile = entry.timeIndex.file().toPath
 
     val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
@@ -141,6 +141,28 @@ class RemoteIndexCacheTest {
     assertEquals(offsetPosition2.position, resultPosition2)
     assertNotNull(cache.getIndexEntry(rlsMetadata))
     verifyNoInteractions(rsm)
+  }
+
+  @Test
+  def testFetchIndexForMissingTransactionIndex(): Unit = {
+    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
+      .thenAnswer(ans => {
+        val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
+        val indexType = ans.getArgument[IndexType](1)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
+        maybeAppendIndexEntries(offsetIdx, timeIdx)
+        indexType match {
+          case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
+          case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
+          case IndexType.TRANSACTION => throw new RemoteResourceNotFoundException("txn index not found")
+          case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
+          case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
+        }
+      })
+
+    val entry = cache.getIndexEntry(rlsMetadata)
+    assertFalse(entry.txnIndexOpt.isPresent)
   }
 
   @Test
@@ -273,7 +295,7 @@ class RemoteIndexCacheTest {
     // verify that index(s) rename is only called 1 time
     verify(cacheEntry.timeIndex).renameTo(any(classOf[File]))
     verify(cacheEntry.offsetIndex).renameTo(any(classOf[File]))
-    verify(cacheEntry.txnIndex).renameTo(any(classOf[File]))
+    verify(cacheEntry.txnIndexOpt.get()).renameTo(any(classOf[File]))
 
     // verify no index files on disk
     assertFalse(getIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
@@ -331,12 +353,12 @@ class RemoteIndexCacheTest {
     verify(spyEntry).close()
 
     // close for all index entries must be invoked
-    verify(spyEntry.txnIndex).close()
+    verify(spyEntry.txnIndexOpt.get()).close()
     verify(spyEntry.offsetIndex).close()
     verify(spyEntry.timeIndex).close()
 
     // index files must not be deleted
-    verify(spyEntry.txnIndex, times(0)).deleteIfExists()
+    verify(spyEntry.txnIndexOpt.get(), times(0)).deleteIfExists()
     verify(spyEntry.offsetIndex, times(0)).deleteIfExists()
     verify(spyEntry.timeIndex, times(0)).deleteIfExists()
 
@@ -506,7 +528,7 @@ class RemoteIndexCacheTest {
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
     val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
     val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
-    spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txIndex))
+    spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, Optional.of(txIndex)))
   }
 
   private def assertAtLeastOnePresent(cache: RemoteIndexCache, uuids: Uuid*): Unit = {
