@@ -256,7 +256,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 commitCallback.onComplete(offsets, null);
             }
         }).exceptionally(e -> {
-            System.out.println(e);
             throw new KafkaException(e);
         });
     }
