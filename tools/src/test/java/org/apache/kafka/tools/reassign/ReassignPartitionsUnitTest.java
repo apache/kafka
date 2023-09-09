@@ -37,12 +37,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import scala.Tuple2;
+import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -768,27 +770,18 @@ public class ReassignPartitionsUnitTest {
         return mset(set).toSet();
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"deprecation", "unchecked"})
     private <T> scala.collection.mutable.Set<T> mset(final T...set) {
-        scala.collection.mutable.Set<T> res = new scala.collection.mutable.HashSet<>();
-        for (T t : set)
-            res.add(t);
-        return res;
+        return JavaConverters.asScalaSet(new HashSet<>(Arrays.asList(set)));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"deprecation", "unchecked"})
     private <T> Seq<T> seq(T... seq) {
-        scala.collection.mutable.Buffer<T> res = new scala.collection.mutable.ArrayBuffer<>();
-        for (T t : seq)
-            res.$plus$eq(t);
-        return res.toSeq();
+        return JavaConverters.asScalaIteratorConverter(Arrays.asList(seq).iterator()).asScala().toSeq();
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("deprecation")
     private <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
-        scala.collection.immutable.Map<K, V> res = new scala.collection.immutable.HashMap<>();
-        for (Map.Entry<K, V> e : jmap.entrySet())
-            res = res.$plus(new Tuple2<>(e.getKey(), e.getValue()));
-        return res;
+        return JavaConverters.mapAsScalaMap(jmap);
     }
 }
