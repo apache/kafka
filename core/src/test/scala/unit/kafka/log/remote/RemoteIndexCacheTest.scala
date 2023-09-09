@@ -501,6 +501,50 @@ class RemoteIndexCacheTest {
     }
   }
 
+  @Test
+  def testClearCacheAndIndexFilesWhenResizeCache(): Unit = {
+
+    def getIndexFileFromRemoteCacheDir(suffix: String) = {
+      Files.walk(cache.cacheDir())
+        .filter(Files.isRegularFile(_))
+        .filter(path => path.getFileName.toString.endsWith(suffix))
+        .findAny()
+    }
+
+    Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
+    cache = new RemoteIndexCache(rsm, tpDir.toString)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataList = generateRemoteLogSegmentMetadata(size = 1, tpId)
+
+    assertCacheSize(0)
+    // getIndex for first time will call rsm#fetchIndex
+    val cacheEntry = cache.getIndexEntry(metadataList.head)
+    assertCacheSize(1)
+    assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.INDEX_FILE_SUFFIX).isPresent)
+    assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent)
+    assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent)
+
+    cache.resizeCacheSize(1L)
+
+    // wait until entry is marked for deletion
+    TestUtils.waitUntilTrue(() => cacheEntry.isMarkedForCleanup,
+      "Failed to mark cache entry for cleanup after resizing cache.")
+    TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
+      "Failed to cleanup cache entry after resizing cache.")
+
+    // verify no index files on remote cache dir
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
+      s"Offset index file should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent,
+      s"Txn index file should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent,
+      s"Time index file should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.DELETED_FILE_SUFFIX).isPresent,
+      s"Index file marked for deletion should not be present on disk at ${cache.cacheDir()}")
+
+    assertTrue(cache.internalCache().estimatedSize() == 0)
+  }
+
   private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
                                     = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,

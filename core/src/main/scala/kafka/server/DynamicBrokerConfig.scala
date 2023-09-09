@@ -1155,6 +1155,8 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
       val remoteLogManager = server.remoteLogManager
       if (remoteLogManager.nonEmpty) {
         remoteLogManager.get.resizeCacheSize(newValue)
+        info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP} updated, " +
+          s"old value: $oldValue, new value: $newValue")
       }
     }
   }

@@ -147,6 +147,8 @@ public class RemoteIndexCache implements Closeable {
             // 2. Since the eviction of the caffeine cache is cleared asynchronously, it is possible that after the entry
             // in the old cache is filled in the new cache, the old cache will clear the entry, and the data in the two caches
             // will be inconsistent.
+            internalCache.invalidateAll();
+            log.info("Invalidated all entries in the cache and triggered the cleaning of all index files in the cache dir.");
             internalCache = initEmptyCache(remoteLogIndexFileCacheSize);
         } finally {
             lock.writeLock().unlock();
@@ -185,6 +187,11 @@ public class RemoteIndexCache implements Closeable {
     // Visible for testing
     public Cache<Uuid, Entry> internalCache() {
         return internalCache;
+    }
+
+    // Visible for testing
+    public Path cacheDir() {
+        return cacheDir.toPath();
     }
 
     public void remove(Uuid key) {
