@@ -561,4 +561,8 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         }
         return SEGMENT;
     }
+
+    public int brokerId() {
+        return brokerId;
+    }
 }
