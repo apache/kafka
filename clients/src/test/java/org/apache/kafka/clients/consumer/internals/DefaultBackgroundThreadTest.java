@@ -86,6 +86,7 @@ public class DefaultBackgroundThreadTest {
     private GroupState groupState;
     private CommitRequestManager commitManager;
     private TopicMetadataRequestManager topicMetadataRequestManager;
+    private HeartbeatRequestManager heartbeatRequestManager;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -98,6 +99,7 @@ public class DefaultBackgroundThreadTest {
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.coordinatorManager = mock(CoordinatorRequestManager.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
+        this.heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
                 100,
@@ -362,10 +364,11 @@ public class DefaultBackgroundThreadTest {
 
     private RequestManagers mockRequestManagers() {
         return new RequestManagers(
-                offsetsRequestManager,
-                topicMetadataRequestManager,
-                Optional.of(coordinatorManager),
-                Optional.of(commitManager));
+            offsetsRequestManager,
+            topicMetadataRequestManager,
+            Optional.of(coordinatorManager),
+            Optional.of(commitManager),
+            Optional.of(heartbeatRequestManager));
     }
 
     private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
@@ -388,20 +391,21 @@ public class DefaultBackgroundThreadTest {
         properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
 
         return new DefaultBackgroundThread(
-                this.time,
-                new ConsumerConfig(properties),
-                new LogContext(),
-                applicationEventsQueue,
-                backgroundEventsQueue,
-                this.errorEventHandler,
-                applicationEventProcessor,
-                this.metadata,
-                this.networkClient,
-                this.groupState,
-                this.coordinatorManager,
-                this.commitManager,
-                this.offsetsRequestManager,
-                this.topicMetadataRequestManager);
+            this.time,
+            new ConsumerConfig(properties),
+            new LogContext(),
+            applicationEventsQueue,
+            backgroundEventsQueue,
+            this.errorEventHandler,
+            applicationEventProcessor,
+            this.metadata,
+            this.networkClient,
+            this.groupState,
+            this.coordinatorManager,
+            this.commitManager,
+            this.offsetsRequestManager,
+            this.topicMetadataRequestManager,
+            this.heartbeatRequestManager);
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {

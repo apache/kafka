@@ -79,6 +79,9 @@ public class AssignorSelection {
 
     @Override
     public String toString() {
-        return String.format("Assignor selection {type:%s, name:%s}", type, serverAssignor);
+        return "AssignorSelection{" +
+                "type=" + type +
+                ", serverAssignor='" + serverAssignor + '\'' +
+                '}';
     }
 }
