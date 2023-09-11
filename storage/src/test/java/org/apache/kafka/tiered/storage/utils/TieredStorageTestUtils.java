@@ -102,8 +102,7 @@ public class TieredStorageTestUtils {
     public static Properties createPropsForRemoteStorage(String testClassName,
                                                          String storageDirPath,
                                                          int brokerCount,
-                                                         int numRemoteLogMetadataPartitions,
-                                                         boolean deleteOnClose) {
+                                                         int numRemoteLogMetadataPartitions) {
         Assertions.assertTrue(STORAGE_WAIT_TIMEOUT_SEC > TimeUnit.MILLISECONDS.toSeconds(RLM_TASK_INTERVAL_MS),
                 "STORAGE_WAIT_TIMEOUT_SEC should be greater than RLM_TASK_INTERVAL_MS");
 
@@ -146,12 +145,11 @@ public class TieredStorageTestUtils {
         // Storage manager close is being called while the server is actively processing the socket requests,
         // so enabling this config can break the existing tests.
         // NOTE: When using TestUtils#tempDir(), the folder gets deleted when VM terminates.
-        overridingProps.setProperty(storageConfigPrefix(testClassName, DELETE_ON_CLOSE_CONFIG), String.valueOf(deleteOnClose));
+        overridingProps.setProperty(storageConfigPrefix(testClassName, DELETE_ON_CLOSE_CONFIG), "false");
         return overridingProps;
     }
 
     public static Map<String, String> createTopicConfigForRemoteStorage(boolean enableRemoteStorage,
-            long localLogRetentionBytes,
             int maxRecordBatchPerSegment) {
         Map<String, String> topicProps = new HashMap<>();
         // Enables remote log storage for this topic.
@@ -169,7 +167,7 @@ public class TieredStorageTestUtils {
         // want to delete log segments as soon as possible. When tiered storage is active, an inactive log
         // segment is not eligible for deletion until it has been offloaded, which guarantees all segments
         // should be offloaded before deletion, and their consumption is possible thereafter.
-        topicProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, String.valueOf(localLogRetentionBytes));
+        topicProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1");
         return topicProps;
     }
 

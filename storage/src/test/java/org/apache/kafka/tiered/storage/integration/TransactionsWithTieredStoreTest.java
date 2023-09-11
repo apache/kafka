@@ -69,19 +69,17 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
 
     private Properties overridingProps() {
         int numRemoteLogMetadataPartitions = 3;
-        boolean deleteOnClose = false;
         return createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
-                numRemoteLogMetadataPartitions, deleteOnClose);
+                numRemoteLogMetadataPartitions);
     }
 
     @Override
     public Properties topicConfig() {
         boolean enableRemoteStorage = true;
-        long localLogRetentionBytes = 1;
         int maxBatchCountPerSegment = 1;
         Properties overridingTopicProps = super.topicConfig();
         overridingTopicProps.putAll(createTopicConfigForRemoteStorage(
-                enableRemoteStorage, localLogRetentionBytes, maxBatchCountPerSegment));
+                enableRemoteStorage, maxBatchCountPerSegment));
         return overridingTopicProps;
     }
 
@@ -99,17 +97,16 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
             List<BrokerLocalStorage> localStorages = JavaConverters.bufferAsJavaList(brokers()).stream()
                     .map(b -> new BrokerLocalStorage(b.config().brokerId(), b.config().logDirs().head(), STORAGE_WAIT_TIMEOUT_SEC))
                     .collect(Collectors.toList());
-            Optional<BrokerLocalStorage> brokerLocalStorageOpt = localStorages
+            localStorages
                     .stream()
                     // Select brokers which are assigned a replica of the topic-partition
                     .filter(s -> isAssignedReplica(topicPartition, s.getBrokerId()))
                     // Filter out inactive brokers, which may still contain log segments we would expect
                     // to be deleted based on the retention configuration.
                     .filter(s -> isAlive(s.getBrokerId()))
-                    .findFirst();
-            brokerLocalStorageOpt.ifPresent(localStorage ->
-                    // Wait until the brokers local storage have been cleared from the inactive log segments.
-                    localStorage.waitForAtLeastEarliestLocalOffset(topicPartition, 1L));
+                    .forEach(localStorage ->
+                            // Wait until the brokers local storage have been cleared from the inactive log segments.
+                            localStorage.waitForAtLeastEarliestLocalOffset(topicPartition, 1L));
         });
     }
 
