@@ -104,7 +104,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.networkClientDelegate = networkClient;
         this.errorEventHandler = errorEventHandler;
         this.groupState = groupState;
-
         this.requestManagers = new RequestManagers(
                 offsetsRequestManager,
                 topicMetadataRequestManager,
@@ -153,7 +152,6 @@ public class DefaultBackgroundThread extends KafkaThread {
                     logContext,
                     networkClient);
             this.running = true;
-
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.groupState = new GroupState(rebalanceConfig);
             long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
