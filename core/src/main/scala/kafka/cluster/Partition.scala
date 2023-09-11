@@ -85,6 +85,7 @@ trait AlterPartitionListener {
   def markIsrExpand(): Unit
   def markIsrShrink(): Unit
   def markFailed(): Unit
+  def assignDir(dir: String): Unit
 }
 
 class DelayedOperations(topicPartition: TopicPartition,
@@ -119,6 +120,10 @@ object Partition {
       }
 
       override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
+
+      override def assignDir(dir: String): Unit = {
+        replicaManager.maybeNotifyPartitionAssignedToDirectory(topicPartition, dir)
+      }
     }
 
     val delayedOperations = new DelayedOperations(
@@ -480,6 +485,7 @@ class Partition(val topicPartition: TopicPartition,
       if (!isFutureReplica) log.setLogOffsetsListener(logOffsetsListener)
       maybeLog = Some(log)
       updateHighWatermark(log)
+      alterPartitionListener.assignDir(log.parentDir)
       log
     } finally {
       logManager.finishedInitializingLog(topicPartition, maybeLog)
