@@ -20,8 +20,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -42,14 +40,19 @@ public class MembershipManagerImpl implements MembershipManager {
     private AssignorSelection assignorSelection;
 
     /**
-     * Assignment that the member received from the server and successfully processed
+     * Assignment that the member received from the server and successfully processed.
      */
     private ConsumerGroupHeartbeatResponseData.Assignment currentAssignment;
-
     /**
-     * List of assignments that the member received from the server but hasn't processed yet
+     * Assignment that the member received from the server but hasn't completely processed
+     * yet.
      */
-    private final List<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignments;
+    private Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment;
+    /**
+     * Latest assignment that the member received from the server while a {@link #targetAssignment}
+     * was in process.
+     */
+    private Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment;
 
     public MembershipManagerImpl(String groupId) {
         this(groupId, null, null);
@@ -63,8 +66,9 @@ public class MembershipManagerImpl implements MembershipManager {
         } else {
             setAssignorSelection(assignorSelection);
         }
-        this.targetAssignments = new ArrayList<>();
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
+        this.targetAssignment = Optional.empty();
+        this.nextTargetAssignment = Optional.empty();
     }
 
     /**
@@ -116,17 +120,13 @@ public class MembershipManagerImpl implements MembershipManager {
             this.memberEpoch = response.memberEpoch();
             ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
             if (assignment != null) {
-                targetAssignments.add(assignment);
+                setTargetAssignment(assignment);
             }
             maybeTransitionToStable();
         } else {
             if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
                 resetEpoch();
                 transitionTo(MemberState.FENCED);
-
-                if (response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
-                    resetMemberId();
-                }
             } else if (response.errorCode() == Errors.UNRELEASED_INSTANCE_ID.code()) {
                 transitionTo(MemberState.FAILED);
             }
@@ -141,13 +141,27 @@ public class MembershipManagerImpl implements MembershipManager {
      * reconcile. Transition to {@link MemberState#RECONCILING} otherwise.
      */
     private boolean maybeTransitionToStable() {
-        if (targetAssignments.isEmpty()) {
+        if (!hasPendingTargetAssignment()) {
             transitionTo(MemberState.STABLE);
         } else {
             transitionTo(MemberState.RECONCILING);
         }
         return state.equals(MemberState.STABLE);
     }
+
+    private void setTargetAssignment(ConsumerGroupHeartbeatResponseData.Assignment newTargetAssignment) {
+        if (!targetAssignment.isPresent()) {
+            targetAssignment = Optional.of(newTargetAssignment);
+        } else {
+            // Keep the latest next target assignment
+            nextTargetAssignment = Optional.of(newTargetAssignment);
+        }
+    }
+
+    private boolean hasPendingTargetAssignment() {
+        return targetAssignment.isPresent() || nextTargetAssignment.isPresent();
+    }
+
 
     /**
      * Update state and assignment as the member has successfully processed a new target
@@ -158,16 +172,15 @@ public class MembershipManagerImpl implements MembershipManager {
      * @param assignment Target assignment the member was able to successfully process
      */
     public void onAssignmentProcessSuccess(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-        currentAssignment = assignment;
-        targetAssignments.remove(assignment);
+        updateAssignment(assignment);
         transitionTo(MemberState.STABLE);
     }
 
     /**
-     * Update state and member info as the member was not able to process the assignment, due
-     * to errors in the execution of the user-provided callbacks.
+     * Update state and member info as the member was not able to process the assignment, due to
+     * errors in the execution of the user-provided callbacks.
      *
-     * @params error Exception found during the execution of the user-provided callbacks
+     * @param error Exception found during the execution of the user-provided callbacks
      */
     public void onAssignmentProcessFailure(Throwable error) {
         transitionTo(MemberState.FAILED);
@@ -177,10 +190,6 @@ public class MembershipManagerImpl implements MembershipManager {
 
     private void resetEpoch() {
         this.memberEpoch = 0;
-    }
-
-    private void resetMemberId() {
-        this.memberId = "";
     }
 
     @Override
@@ -198,15 +207,34 @@ public class MembershipManagerImpl implements MembershipManager {
         return this.currentAssignment;
     }
 
+    // VisibleForTesting
+    Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
+        return targetAssignment;
+    }
+
+    // VisibleForTesting
+    Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment() {
+        return nextTargetAssignment;
+    }
+
+    /**
+     * Set the current assignment for the member. This indicates that the reconciliation of the
+     * target assignment has been successfully completed.
+     * This will clear the {@link #targetAssignment}, and take on the
+     * {@link #nextTargetAssignment} if any.
+     *
+     * @param assignment Assignment that has been successfully processed as part of the
+     *                   reconciliation process.
+     */
     @Override
     public void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
         this.currentAssignment = assignment;
+        if (!nextTargetAssignment.isPresent()) {
+            targetAssignment = Optional.empty();
+        } else {
+            targetAssignment = Optional.of(nextTargetAssignment.get());
+            nextTargetAssignment = Optional.empty();
+        }
+        maybeTransitionToStable();
     }
-
-    @Override
-    public Object computeAssignment(Object groupState) {
-        throw new UnsupportedOperationException("Client side assignment computation not supported" +
-                " yet.");
-    }
-
 }

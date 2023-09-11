@@ -55,19 +55,8 @@ public interface MembershipManager {
     ConsumerGroupHeartbeatResponseData.Assignment assignment();
 
     /**
-     * Sets the current assignment for the member
+     * Update the assignment for the member, indicating that the provided assignment is the new
+     * current assignment.
      */
     void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment);
-
-
-    /**
-     * Compute assignment for the group members using the provided group state and client side
-     * assignors defined.
-     *
-     * @param groupState Group state to be used to compute the assignment
-     * @return Group assignment computed using the selected client side assignor
-     */
-    //TODO: fix parameters and return types to represent the group state object as defined in the
-    // ConsumerGroupPrepareAssignmentResponse
-    Object computeAssignment(Object groupState);
 }
