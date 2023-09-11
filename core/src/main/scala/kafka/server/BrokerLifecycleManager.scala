@@ -98,7 +98,7 @@ class BrokerLifecycleManager(
 
   /**
    * The number of times we've tried and failed to communicate.  This variable can only be
-   * read or written from the event queue thread.
+   * read or written from the BrokerToControllerRequestThread.
    */
   private var failedAttempts = 0L
 
@@ -148,8 +148,14 @@ class BrokerLifecycleManager(
   private var readyToUnfence = false
 
   /**
+   * List of offline directories pending to be sent.
+   * This variable can only be read or written from the event queue thread.
+   */
+  private var offlineDirsPending = Set[Uuid]()
+
+  /**
    * True if we sent a event queue to the active controller requesting controlled
-   * shutdown.  This variable can only be read or written from the event queue thread.
+   * shutdown.  This variable can only be read or written from the BrokerToControllerRequestThread.
    */
   private var gotControlledShutdownResponse = false
 
@@ -229,6 +235,14 @@ class BrokerLifecycleManager(
     initialUnfenceFuture
   }
 
+  /**
+   * Propagate directory failures to the controller.
+   * @param directories The directories that have failed.
+   */
+  def propagateDirectoryFailures(directories: Set[Uuid]): Unit = {
+    eventQueue.append(new OfflineDirsEvent(directories))
+  }
+
   def brokerEpoch: Long = _brokerEpoch
 
   def state: BrokerState = _state
@@ -280,6 +294,25 @@ class BrokerLifecycleManager(
     override def run(): Unit = {
       readyToUnfence = true
       scheduleNextCommunicationImmediately()
+    }
+  }
+
+  private class OfflineDirsEvent(val dirs: Set[Uuid]) extends EventQueue.Event {
+    override def run(): Unit = {
+      if (offlineDirsPending.isEmpty) {
+        offlineDirsPending = dirs
+      } else {
+        offlineDirsPending = offlineDirsPending.concat(dirs)
+      }
+      if (registered) {
+        scheduleNextCommunicationImmediately()
+      }
+    }
+  }
+
+  private class OfflineDirsClearEvent(val dirs: Set[Uuid]) extends EventQueue.Event {
+    override def run(): Unit = {
+      offlineDirsPending = offlineDirsPending.diff(dirs)
     }
   }
 
@@ -380,15 +413,16 @@ class BrokerLifecycleManager(
       setBrokerId(nodeId).
       setCurrentMetadataOffset(metadataOffset).
       setWantFence(!readyToUnfence).
-      setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
+      setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN).
+      setOfflineLogDirs(offlineDirsPending.toSeq.asJava)
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat $data")
     }
-    _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data),
-      new BrokerHeartbeatResponseHandler())
+    val handler = new BrokerHeartbeatResponseHandler(offlineDirsPending)
+    _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data), handler)
   }
 
-  private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
+  private class BrokerHeartbeatResponseHandler(dirsInFlight: Set[Uuid]) extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
         error(s"Unable to send broker heartbeat for $nodeId because of an " +
@@ -410,6 +444,7 @@ class BrokerLifecycleManager(
         val errorCode = Errors.forCode(message.data().errorCode())
         if (errorCode == Errors.NONE) {
           failedAttempts = 0
+          eventQueue.append(new OfflineDirsClearEvent(dirsInFlight))
           _state match {
             case BrokerState.STARTING =>
               if (message.data().isCaughtUp) {
