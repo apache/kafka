@@ -316,9 +316,12 @@ public class RemoteIndexCache implements Closeable {
         }
         if (index == null) {
             File tmpIndexFile = new File(indexFile.getParentFile(), indexFile.getName() + RemoteIndexCache.TMP_FILE_SUFFIX);
-            try (InputStream inputStream = fetchRemoteIndex.apply(remoteLogSegmentMetadata)) {
-                if (inputStream == null) return null;
+            InputStream inputStream = fetchRemoteIndex.apply(remoteLogSegmentMetadata);
+            if (inputStream == null) return null;
+            try {
                 Files.copy(inputStream, tmpIndexFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                inputStream.close();
             }
             Utils.atomicMoveWithFallback(tmpIndexFile.toPath(), indexFile.toPath(), false);
             index = readIndex.apply(indexFile);
