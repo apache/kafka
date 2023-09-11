@@ -41,25 +41,26 @@ import java.util.stream.Collectors;
 
 /**
  * <p>
- * Manages the state of the topic metadata requests.  The manager returns the
- * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} when the request is ready to
- * be sent. This manager specifically handles the following user API calls:
+ * Manages the state of topic metadata requests. This manager returns a
+ * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} when a request is ready to
+ * be sent. Specifically, this manager handles the following user API calls:
+ * </p>
  * <ul>
  * <li>listOffsets</li>
  * <li>partitionsFor</li>
  * </ul>
- * </p>
  * <p>
- *     The manager checks the state of the {@link TopicMetadataRequest} before sending a new one, to
- *     prevent sending without backing off from the previous attempts.
- *     It also checks the state of the inflight requests to prevent overwhelming the broker with duplicated requests.
- *     The {@code inflightRequests} is memoized by the topic name.  If all topics are requested, then we use {@code
- *     null} as the key. Once the request is completed successfully, the entry is removed.
+ * The manager checks the state of the {@link TopicMetadataRequestState} before sending a new one to
+ * prevent sending it without backing off from previous attempts.
+ * It also checks the state of inflight requests to avoid overwhelming the broker with duplicate requests.
+ * The {@code inflightRequests} are memoized by topic name. If all topics are requested, then {@code null} is used as the key.
+ * Once a request is completed successfully, its corresponding entry is removed.
  * </p>
  */
+
 public class TopicMetadataRequestManager implements RequestManager {
     private final boolean allowAutoTopicCreation;
-    private final Map<Optional<String>, TopicMetadataRequest> inflightRequests;
+    private final Map<Optional<String>, TopicMetadataRequestState> inflightRequests;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
     private final Logger log;
@@ -87,42 +88,43 @@ public class TopicMetadataRequestManager implements RequestManager {
     }
 
     /**
-     * return the future of the metadata request. If the same topic was requested but incompleted, return the same
-     * future.
+     * return the future of the metadata request. Return the existing future if a request for the same topic is already
+     * inflight.
      *
      * @param topic to be requested. If empty, return the metadata for all topics.
      * @return the future of the metadata request.
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final Optional<String> topic) {
         if (inflightRequests.containsKey(topic)) {
-            System.out.println("here");
-            return inflightRequests.get(topic).future();
+            return inflightRequests.get(topic).future;
         }
 
-        TopicMetadataRequest newRequest = new TopicMetadataRequest(
+        TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
                 logContext,
                 topic,
                 retryBackoffMs,
                 retryBackoffMaxMs);
         inflightRequests.put(topic, newRequest);
-        return newRequest.future();
+        return newRequest.future;
     }
 
     // Visible for testing
-    List<TopicMetadataRequest> inflightRequests() {
+    List<TopicMetadataRequestState> inflightRequests() {
         return new ArrayList<>(inflightRequests.values());
     }
 
-    class TopicMetadataRequest extends CompletableRequest<Map<String, List<PartitionInfo>>> {
+    class TopicMetadataRequestState extends RequestState {
         private final Optional<String> topic;
-        private final RequestState state;
+        CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
-        public TopicMetadataRequest(final LogContext logContext,
+        public TopicMetadataRequestState(final LogContext logContext,
                                     final Optional<String> topic,
                                     final long retryBackoffMs,
                                     final long retryBackoffMaxMs) {
+            super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
+                retryBackoffMaxMs);
+            this.future = new CompletableFuture<>();
             this.topic = topic;
-            this.state = new RequestState(logContext, this.getClass().getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
         }
 
         /**
@@ -130,10 +132,10 @@ public class TopicMetadataRequestManager implements RequestManager {
          * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest} if needed.
          */
         private Optional<NetworkClientDelegate.UnsentRequest> send(final long currentTimeMs) {
-            if (!this.state.canSendRequest(currentTimeMs)) {
+            if (!this.canSendRequest(currentTimeMs)) {
                 return Optional.empty();
             }
-            this.state.onSendAttempt(currentTimeMs);
+            this.onSendAttempt(currentTimeMs);
 
             final MetadataRequest.Builder request;
             request = topic.map(t -> new MetadataRequest.Builder(Collections.singletonList(t), allowAutoTopicCreation))
@@ -144,21 +146,19 @@ public class TopicMetadataRequestManager implements RequestManager {
                 Optional.empty(),
                 (response, exception) -> {
                     if (exception != null) {
-                        this.future().completeExceptionally(new KafkaException(exception));
+                        this.future.completeExceptionally(new KafkaException(exception));
                         inflightRequests.remove(topic);
                         return;
                     }
 
                     try {
                         Map<String, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
-                        future().complete(res);
+                        future.complete(res);
                         inflightRequests.remove(topic);
                     } catch (RetriableException e) {
-                        System.out.println("hereiiiii" + e.getMessage());
-                        this.state.onFailedAttempt(currentTimeMs);
+                        this.onFailedAttempt(currentTimeMs);
                     } catch (Exception t) {
-                        this.future().completeExceptionally(t);
-                        System.out.println("excep" + t.getMessage());
+                        this.future.completeExceptionally(t);
                         inflightRequests.remove(topic);
                     }
                 });

@@ -95,7 +95,7 @@ public class TopicMetadataRequestManagerTest {
             res.unsentRequests.get(0),
             Optional.of(topic),
             error));
-        List<TopicMetadataRequestManager.TopicMetadataRequest> inflights = this.topicMetadataRequestManager.inflightRequests();
+        List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
 
         if (shouldRetry) {
             assertEquals(1, inflights.size());
@@ -112,7 +112,7 @@ public class TopicMetadataRequestManagerTest {
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         res.unsentRequests.get(0).future().completeExceptionally(new KafkaException("some error"));
 
-        List<TopicMetadataRequestManager.TopicMetadataRequest> inflights = this.topicMetadataRequestManager.inflightRequests();
+        List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
         assertTrue(inflights.isEmpty());
     }
 
