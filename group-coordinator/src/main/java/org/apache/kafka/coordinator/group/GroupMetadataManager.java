@@ -2959,8 +2959,8 @@ public class GroupMetadataManager {
             } else if (group.isPendingMember(member.memberId())) {
                 group.remove(member.memberId());
                 timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
-                log.info("Pending member {} has left group {} through explicit `LeaveGroup` request. Reason: {}",
-                    member.memberId(), group.groupId(), reason);
+                log.info("[Group {}] Pending member {} has left group through explicit `LeaveGroup` request; client  reason: {}",
+                    group.groupId(), member.memberId(), reason);
 
                 memberResponses.add(
                     new MemberResponse()
@@ -2991,22 +2991,23 @@ public class GroupMetadataManager {
             }
         }
 
-        CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
-        long validMemberLeaveGroups = memberResponses.stream().filter(response -> response.errorCode() == 0).count();
-        String reason = "explicit `LeaveGroup` request for " + request.members().size() + "members, for which " +
-            validMemberLeaveGroups + " were successful.";
+        List<String> validLeaveGroupMembers = memberResponses.stream()
+            .filter(response -> response.errorCode() == 0)
+            .map(MemberResponse::memberId)
+            .collect(Collectors.toList());
 
-        switch (group.currentState()) {
-            case STABLE:
-            case COMPLETING_REBALANCE:
-                if (validMemberLeaveGroups > 0) {
+        String reason = "explicit `LeaveGroup` request for (" + String.join(", ", validLeaveGroupMembers) + ") members.";
+        CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
+
+        if (!validLeaveGroupMembers.isEmpty()) {
+            switch (group.currentState()) {
+                case STABLE:
+                case COMPLETING_REBALANCE:
                     coordinatorResult = maybePrepareRebalanceOrCompleteJoin(group, reason);
-                }
-                break;
-            case PREPARING_REBALANCE:
-                if (validMemberLeaveGroups > 0) {
+                    break;
+                case PREPARING_REBALANCE:
                     coordinatorResult = maybeCompleteJoinPhase(group);
-                }
+            }
         }
 
         return new CoordinatorResult<>(
