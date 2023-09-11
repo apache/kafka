@@ -130,7 +130,7 @@ class RaftControllerNodeProvider(
       listenerName, securityProtocol, saslMechanism, isZkController = false)
 }
 
-object BrokerToControllerChannelManager {
+object NodeToControllerChannelManager {
   def apply(
     controllerNodeProvider: ControllerNodeProvider,
     time: Time,
@@ -139,8 +139,8 @@ object BrokerToControllerChannelManager {
     channelName: String,
     threadNamePrefix: String,
     retryTimeoutMs: Long
-  ): BrokerToControllerChannelManager = {
-    new BrokerToControllerChannelManagerImpl(
+  ): NodeToControllerChannelManager = {
+    new NodeToControllerChannelManagerImpl(
       controllerNodeProvider,
       time,
       metrics,
@@ -152,7 +152,7 @@ object BrokerToControllerChannelManager {
   }
 }
 
-trait BrokerToControllerChannelManager {
+trait NodeToControllerChannelManager {
   def start(): Unit
   def shutdown(): Unit
   def controllerApiVersions(): Option[NodeApiVersions]
@@ -164,12 +164,12 @@ trait BrokerToControllerChannelManager {
 
 /**
  * This class manages the connection between a broker and the controller. It runs a single
- * [[BrokerToControllerRequestThread]] which uses the broker's metadata cache as its own metadata to find
+ * [[NodeToControllerRequestThread]] which uses the broker's metadata cache as its own metadata to find
  * and connect to the controller. The channel is async and runs the network connection in the background.
  * The maximum number of in-flight requests are set to one to ensure orderly response from the controller, therefore
  * care must be taken to not block on outstanding requests for too long.
  */
-class BrokerToControllerChannelManagerImpl(
+class NodeToControllerChannelManagerImpl(
   controllerNodeProvider: ControllerNodeProvider,
   time: Time,
   metrics: Metrics,
@@ -177,8 +177,8 @@ class BrokerToControllerChannelManagerImpl(
   channelName: String,
   threadNamePrefix: String,
   retryTimeoutMs: Long
-) extends BrokerToControllerChannelManager with Logging {
-  private val logContext = new LogContext(s"[BrokerToControllerChannelManager id=${config.brokerId} name=${channelName}] ")
+) extends NodeToControllerChannelManager with Logging {
+  private val logContext = new LogContext(s"[NodeToControllerChannelManager id=${config.nodeId} name=${channelName}] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val requestThread = newRequestThread
@@ -189,7 +189,7 @@ class BrokerToControllerChannelManagerImpl(
 
   def shutdown(): Unit = {
     requestThread.shutdown()
-    info(s"Broker to controller channel manager for $channelName shutdown")
+    info(s"Node to controller channel manager for $channelName shutdown")
   }
 
   private[server] def newRequestThread = {
@@ -240,7 +240,7 @@ class BrokerToControllerChannelManagerImpl(
     val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
 
     val controllerInformation = controllerNodeProvider.getControllerInfo()
-    new BrokerToControllerRequestThread(
+    new NodeToControllerRequestThread(
       buildNetworkClient(controllerInformation),
       controllerInformation.isZkController,
       buildNetworkClient,
@@ -263,7 +263,7 @@ class BrokerToControllerChannelManagerImpl(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
     callback: ControllerRequestCompletionHandler
   ): Unit = {
-    requestThread.enqueue(BrokerToControllerQueueItem(
+    requestThread.enqueue(NodeToControllerQueueItem(
       time.milliseconds(),
       request,
       callback
@@ -286,13 +286,13 @@ abstract class ControllerRequestCompletionHandler extends RequestCompletionHandl
   def onTimeout(): Unit
 }
 
-case class BrokerToControllerQueueItem(
+case class NodeToControllerQueueItem(
   createdTimeMs: Long,
   request: AbstractRequest.Builder[_ <: AbstractRequest],
   callback: ControllerRequestCompletionHandler
 )
 
-class BrokerToControllerRequestThread(
+class NodeToControllerRequestThread(
   initialNetworkClient: KafkaClient,
   var isNetworkClientForZkController: Boolean,
   networkClientFactory: ControllerInformation => KafkaClient,
@@ -328,7 +328,7 @@ class BrokerToControllerRequestThread(
     }
   }
 
-  private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
+  private val requestQueue = new LinkedBlockingDeque[NodeToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
 
   // Used for testing
@@ -343,7 +343,7 @@ class BrokerToControllerRequestThread(
     activeController.set(newActiveController)
   }
 
-  def enqueue(request: BrokerToControllerQueueItem): Unit = {
+  def enqueue(request: NodeToControllerQueueItem): Unit = {
     if (!started) {
       throw new IllegalStateException("Cannot enqueue a request if the request thread is not running")
     }
@@ -381,7 +381,7 @@ class BrokerToControllerRequestThread(
     util.Collections.emptyList()
   }
 
-  private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+  private[server] def handleResponse(queueItem: NodeToControllerQueueItem)(response: ClientResponse): Unit = {
     debug(s"Request ${queueItem.request} received $response")
     if (response.authenticationException != null) {
       error(s"Request ${queueItem.request} failed due to authentication error with controller",

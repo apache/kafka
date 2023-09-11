@@ -119,7 +119,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var clientToControllerChannelManager: BrokerToControllerChannelManager = _
+  var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
   var forwardingManager: ForwardingManager = _
 
@@ -215,7 +215,7 @@ class BrokerServer(
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
-      clientToControllerChannelManager = BrokerToControllerChannelManager(
+      clientToControllerChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -320,7 +320,7 @@ class BrokerServer(
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      val brokerLifecycleChannelManager = BrokerToControllerChannelManager(
+      val brokerLifecycleChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
