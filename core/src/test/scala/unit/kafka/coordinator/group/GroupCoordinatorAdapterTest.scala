@@ -730,8 +730,9 @@ class GroupCoordinatorAdapterTest {
           ).asJava)
       ).asJava)
     val bufferSupplier = BufferSupplier.create()
+    val transactionStatePartition = 0
 
-    val future = adapter.commitTransactionalOffsets(ctx, data, bufferSupplier)
+    val future = adapter.commitTransactionalOffsets(ctx, data, bufferSupplier, transactionStatePartition)
     assertFalse(future.isDone)
 
     val capturedCallback: ArgumentCaptor[Map[TopicIdPartition, Errors] => Unit] =
@@ -754,6 +755,8 @@ class GroupCoordinatorAdapterTest {
         )
       )),
       capturedCallback.capture(),
+      ArgumentMatchers.eq(data.transactionalId),
+      ArgumentMatchers.eq(transactionStatePartition),
       ArgumentMatchers.eq(RequestLocal(bufferSupplier))
     )
 

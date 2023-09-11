@@ -420,7 +420,8 @@ private[group] class GroupCoordinatorAdapter(
   override def commitTransactionalOffsets(
     context: RequestContext,
     request: TxnOffsetCommitRequestData,
-    bufferSupplier: BufferSupplier
+    bufferSupplier: BufferSupplier,
+    transactionStatePartition: Int
   ): CompletableFuture[TxnOffsetCommitResponseData] = {
     val currentTimeMs = time.milliseconds
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
@@ -472,6 +473,8 @@ private[group] class GroupCoordinatorAdapter(
       request.generationId,
       partitions.toMap,
       callback,
+      request.transactionalId,
+      transactionStatePartition,
       RequestLocal(bufferSupplier)
     )
 

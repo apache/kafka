@@ -327,7 +327,9 @@ class GroupMetadataManager(brokerId: Int,
   private def appendForGroup(group: GroupMetadata,
                              records: Map[TopicPartition, MemoryRecords],
                              requestLocal: RequestLocal,
-                             callback: Map[TopicPartition, PartitionResponse] => Unit): Unit = {
+                             callback: Map[TopicPartition, PartitionResponse] => Unit,
+                             transactionalId: String = null,
+                             transactionStatePartition: Option[Int] = None): Unit = {
     // call replica manager to append the group message
     replicaManager.appendRecords(
       timeout = config.offsetCommitTimeoutMs.toLong,
@@ -337,7 +339,9 @@ class GroupMetadataManager(brokerId: Int,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
-      requestLocal = requestLocal)
+      requestLocal = requestLocal,
+      transactionalId = transactionalId,
+      transactionStatePartition = transactionStatePartition)
   }
 
   /**
@@ -349,7 +353,9 @@ class GroupMetadataManager(brokerId: Int,
                    responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
                    producerId: Long = RecordBatch.NO_PRODUCER_ID,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-                   requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                   requestLocal: RequestLocal = RequestLocal.NoCaching,
+                   transactionalId: String = null,
+                   transactionStatePartition: Option[Int] = None): Unit = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -477,7 +483,7 @@ class GroupMetadataManager(brokerId: Int,
             }
           }
 
-          appendForGroup(group, entries, requestLocal, putCacheCallback)
+          appendForGroup(group, entries, requestLocal, putCacheCallback, transactionalId, transactionStatePartition)
 
         case None =>
           val commitStatus = offsetMetadata.map { case (topicIdPartition, _) =>

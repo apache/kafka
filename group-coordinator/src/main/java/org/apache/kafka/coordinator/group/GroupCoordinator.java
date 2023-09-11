@@ -212,16 +212,18 @@ public interface GroupCoordinator {
     /**
      * Commit transactional offsets for a given Group.
      *
-     * @param context           The request context.
-     * @param request           The TnxOffsetCommitRequest data.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     * @param context                   The request context.
+     * @param request                   The TnxOffsetCommitRequest data.
+     * @param bufferSupplier            The buffer supplier tight to the request thread.
+     * @param transactionStatePartition The partition id for storing the state of this transaction
      *
      * @return A future yielding the response or an exception.
      */
     CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
         RequestContext context,
         TxnOffsetCommitRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        int transactionStatePartition
     );
 
     /**

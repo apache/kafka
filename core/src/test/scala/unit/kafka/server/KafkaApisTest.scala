@@ -1595,10 +1595,12 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NoCaching.bufferSupplier,
+      txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)
     )).thenReturn(future)
 
     createKafkaApis().handle(
@@ -1639,10 +1641,12 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NoCaching.bufferSupplier,
+      txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)
     )).thenReturn(future)
 
     createKafkaApis().handle(
@@ -1710,7 +1714,7 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
 
     // This is the request expected by the group coordinator.
-    val expectedTnxOffsetCommitRequest = new TxnOffsetCommitRequestData()
+    val expectedTxnOffsetCommitRequest = new TxnOffsetCommitRequestData()
       .setGroupId("group")
       .setMemberId("member")
       .setTopics(List(
@@ -1735,10 +1739,12 @@ class KafkaApisTest {
               .setCommittedOffset(50)).asJava)).asJava)
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(expectedTxnOffsetCommitRequest.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
-      expectedTnxOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      expectedTxnOffsetCommitRequest,
+      RequestLocal.NoCaching.bufferSupplier,
+      txnCoordinator.partitionFor(expectedTxnOffsetCommitRequest.transactionalId)
     )).thenReturn(future)
 
     createKafkaApis().handle(
@@ -1836,10 +1842,12 @@ class KafkaApisTest {
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(offsetCommitRequest.data.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       request.context,
       offsetCommitRequest.data,
-      requestLocal.bufferSupplier
+      requestLocal.bufferSupplier,
+      txnCoordinator.partitionFor(offsetCommitRequest.data.transactionalId)
     )).thenReturn(future)
 
     future.complete(new TxnOffsetCommitResponseData()

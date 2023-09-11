@@ -311,9 +311,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       }
       lock.foreach(_.lock())
       try {
+        // Since the replica manager is mocked we can use dummy values for transactionalId and transactionStatePartition.
         groupCoordinator.handleTxnCommitOffsets(member.group.groupId, producerId, producerEpoch,
           JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupRequest.UNKNOWN_GENERATION_ID,
-          offsets, callbackWithTxnCompletion)
+          offsets, callbackWithTxnCompletion, producerId.toString, 0)
         replicaManager.tryCompleteActions()
       } finally lock.foreach(_.unlock())
     }
