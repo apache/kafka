@@ -275,11 +275,11 @@ private[group] class GroupCoordinatorAdapter(
 
   override def fetchAllOffsets(
     context: RequestContext,
-    groupId: String,
+    request: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
-  ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
+  ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     handleFetchOffset(
-      groupId,
+      request.groupId,
       requireStable,
       None
     )
@@ -287,19 +287,18 @@ private[group] class GroupCoordinatorAdapter(
 
   override def fetchOffsets(
     context: RequestContext,
-    groupId: String,
-    topics: util.List[OffsetFetchRequestData.OffsetFetchRequestTopics],
+    request: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
-  ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
+  ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     val topicPartitions = new mutable.ArrayBuffer[TopicPartition]()
-    topics.forEach { topic =>
+    request.topics.forEach { topic =>
       topic.partitionIndexes.forEach { partition =>
         topicPartitions += new TopicPartition(topic.name, partition)
       }
     }
 
     handleFetchOffset(
-      groupId,
+      request.groupId,
       requireStable,
       Some(topicPartitions.toSeq)
     )
@@ -309,14 +308,14 @@ private[group] class GroupCoordinatorAdapter(
     groupId: String,
     requireStable: Boolean,
     partitions: Option[Seq[TopicPartition]]
-  ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
+  ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     val (error, results) = coordinator.handleFetchOffsets(
       groupId,
       requireStable,
       partitions
     )
 
-    val future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    val future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
     if (error != Errors.NONE) {
       future.completeExceptionally(error.exception)
     } else {
@@ -343,7 +342,9 @@ private[group] class GroupCoordinatorAdapter(
           .setErrorCode(offset.error.code))
       }
 
-      future.complete(topicsList)
+      future.complete(new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId(groupId)
+        .setTopics(topicsList))
     }
 
     future

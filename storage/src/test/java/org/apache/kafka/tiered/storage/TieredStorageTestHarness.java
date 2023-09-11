@@ -33,11 +33,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.Seq;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -77,9 +79,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     private static final Integer LOG_CLEANUP_INTERVAL_MS = 500;
     private static final Integer RLM_TASK_INTERVAL_MS = 500;
 
-    protected int numRemoteLogMetadataPartitions = 5;
     private TieredStorageTestContext context;
     private String testClassName = "";
+    private String storageDirPath = "";
 
     @SuppressWarnings("deprecation")
     @Override
@@ -87,6 +89,16 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         for (Properties p : JavaConverters.seqAsJavaList(props)) {
             p.putAll(overridingProps());
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public Seq<Properties> kraftControllerConfigs() {
+        return JavaConverters.asScalaBuffer(Collections.singletonList(overridingProps())).toSeq();
+    }
+
+    protected int numRemoteLogMetadataPartitions() {
+        return 5;
     }
 
     public Properties overridingProps() {
@@ -114,7 +126,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
         overridingProps.setProperty(
                 metadataConfigPrefix(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP),
-                String.valueOf(numRemoteLogMetadataPartitions));
+                String.valueOf(numRemoteLogMetadataPartitions()));
         overridingProps.setProperty(
                 metadataConfigPrefix(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP),
                 String.valueOf(brokerCount()));
@@ -130,8 +142,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         // in every broker and throughout the test. Indeed, as brokers are restarted during the test.
         // You can override this property with a fixed path of your choice if you wish to use a non-temporary
         // directory to access its content after a test terminated.
-        overridingProps.setProperty(storageConfigPrefix(STORAGE_DIR_CONFIG),
-                TestUtils.tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath());
+        overridingProps.setProperty(storageConfigPrefix(STORAGE_DIR_CONFIG), storageDirPath);
         // This configuration will remove all the remote files when close is called in remote storage manager.
         // Storage manager close is being called while the server is actively processing the socket requests,
         // so enabling this config can break the existing tests.
@@ -150,12 +161,15 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     @Override
     public void setUp(TestInfo testInfo) {
         testClassName = testInfo.getTestClass().get().getSimpleName().toLowerCase(Locale.getDefault());
+        storageDirPath = TestUtils.tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
         super.setUp(testInfo);
         context = new TieredStorageTestContext(this);
     }
 
-    @Test
-    public void executeTieredStorageTest() {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ValueSource(strings = {"zk", "kraft"})
+    public void executeTieredStorageTest(String quorum) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
         try {

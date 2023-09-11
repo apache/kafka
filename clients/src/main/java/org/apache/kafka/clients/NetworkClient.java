@@ -1113,7 +1113,7 @@ public class NetworkClient implements KafkaClient {
             maybeFatalException.ifPresent(metadata::fatalError);
 
             // The disconnect may be the result of stale metadata, so request an update
-            metadata.requestUpdate();
+            metadata.requestUpdate(false);
         }
 
         @Override
