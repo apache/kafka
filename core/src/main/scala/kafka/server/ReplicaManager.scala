@@ -55,6 +55,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
+import org.apache.kafka.server.common
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
@@ -269,7 +270,9 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedRemoteFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedRemoteFetch]] = None,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
-                     addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None
+                     addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
+                     assignmentManager: Option[AssignmentsManager] = None,
+                     lifecycleManager: Option[BrokerLifecycleManager] = None
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -2291,9 +2294,9 @@ class ReplicaManager(val config: KafkaConfig,
    * The log directory failure handler for the replica
    *
    * @param dir                     the absolute path of the log directory
-   * @param sendZkNotification      check if we need to send notification to zookeeper node (needed for unit test)
+   * @param notifyController        check if we need to send notification to the Controller (needed for unit test)
    */
-  def handleLogDirFailure(dir: String, sendZkNotification: Boolean = true): Unit = {
+  def handleLogDirFailure(dir: String, notifyController: Boolean = true): Unit = {
     if (!logManager.isLogDirOnline(dir))
       return
     warn(s"Stopping serving replicas in dir $dir")
@@ -2323,13 +2326,54 @@ class ReplicaManager(val config: KafkaConfig,
     }
     logManager.handleLogDirFailure(dir)
 
-    if (sendZkNotification)
+    if (notifyController) {
+      if (config.migrationEnabled) {
+        fatal(s"Shutdown broker because some log directory has failed during migration mode: $dir")
+        Exit.halt(1)
+      }
       if (zkClient.isEmpty) {
-        warn("Unable to propagate log dir failure via Zookeeper in KRaft mode")
+        if (lifecycleManager.isDefined) {
+          val uuid = logManager.directoryId(dir)
+          if (uuid.isDefined) {
+            lifecycleManager.get.propagateDirectoryFailure(uuid.get)
+          } else {
+            fatal(s"Unable to propagate directory failure disabled because directory $dir has no UUID")
+            Exit.halt(1)
+          }
+        } else {
+          warn(s"Log dir $dir failed but propagation is disabled because lifecycleManager is not defined")
+        }
       } else {
         zkClient.get.propagateLogDirEvent(localBrokerId)
       }
+    }
     warn(s"Stopped serving replicas in dir $dir")
+  }
+
+  /**
+   * Called when a topic partition is placed in a log directory.
+   * If a directory event listener is configured,
+   * and if the selected log directory has an assigned Uuid,
+   * then the listener is notified of the assignment.
+   */
+  def maybeNotifyPartitionAssignedToDirectory(tp: TopicPartition, dir: String): Unit = {
+    if (assignmentManager.isDefined) {
+      logManager.directoryId(dir) match {
+        case None => throw new IllegalStateException(s"Assignment into unidentified directory: ${dir}")
+        case Some(dirId) =>
+          getPartition(tp) match {
+            case HostedPartition.Offline | HostedPartition.None =>
+              throw new IllegalStateException("Assignment for a partition that is not online")
+            case HostedPartition.Online(partition) => partition.topicId match {
+              case None =>
+                throw new IllegalStateException(s"Assignment for topic without ID: ${tp.topic()}")
+              case Some(topicId) =>
+                val topicIdPartition = new common.TopicIdPartition(topicId, tp.partition())
+                assignmentManager.get.onAssignment(topicIdPartition, dirId)
+            }
+          }
+      }
+    }
   }
 
   def removeMetrics(): Unit = {

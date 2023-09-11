@@ -27,6 +27,8 @@ import java.nio.ByteBuffer;
 
 public class AssignReplicasToDirsRequest extends AbstractRequest {
 
+    public static final int MAX_ASSIGNMENTS_PER_REQUEST = 2250;
+
     public static class Builder extends AbstractRequest.Builder<AssignReplicasToDirsRequest> {
 
         private final AssignReplicasToDirsRequestData data;

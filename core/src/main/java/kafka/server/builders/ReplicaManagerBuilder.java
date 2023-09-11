@@ -20,6 +20,8 @@ package kafka.server.builders;
 import kafka.log.LogManager;
 import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
+import kafka.server.AssignmentsManager;
+import kafka.server.BrokerLifecycleManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
@@ -66,6 +68,8 @@ public class ReplicaManagerBuilder {
     private Optional<String> threadNamePrefix = Optional.empty();
     private Long brokerEpoch = -1L;
     private Optional<AddPartitionsToTxnManager> addPartitionsToTxnManager = Optional.empty();
+    private Optional<AssignmentsManager> assignmentsManager = Optional.empty();
+    private Optional<BrokerLifecycleManager> lifecycleManager = Optional.empty();
 
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
@@ -172,6 +176,16 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setAssignmentsManager(AssignmentsManager assignmentsManager) {
+        this.assignmentsManager = Optional.of(assignmentsManager);
+        return this;
+    }
+
+    public ReplicaManagerBuilder setLifecycleManager(BrokerLifecycleManager lifecycleManager) {
+        this.lifecycleManager = Optional.of(lifecycleManager);
+        return this;
+    }
+
     public ReplicaManager build() {
         if (config == null) config = new KafkaConfig(Collections.emptyMap());
         if (metrics == null) metrics = new Metrics();
@@ -200,6 +214,8 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedRemoteFetchPurgatory),
                              OptionConverters.toScala(threadNamePrefix),
                              () -> brokerEpoch,
-                             OptionConverters.toScala(addPartitionsToTxnManager));
+                             OptionConverters.toScala(addPartitionsToTxnManager),
+                             OptionConverters.toScala(assignmentsManager),
+                             OptionConverters.toScala(lifecycleManager));
     }
 }

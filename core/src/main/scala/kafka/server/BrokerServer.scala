@@ -85,6 +85,8 @@ class BrokerServer(
 
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
+  var assignmentsManager: AssignmentsManager = _
+
   private val isShuttingDown = new AtomicBoolean(false)
 
   val lock = new ReentrantLock()
@@ -277,6 +279,24 @@ class BrokerServer(
         time
       )
 
+      if (config.logDirs.size > 1) {
+        val assignmentsChannelManager = NodeToControllerChannelManager(
+          controllerNodeProvider,
+          time,
+          metrics,
+          config,
+          "directory-assignments",
+          s"broker-${config.nodeId}-",
+          retryTimeoutMs = 60000
+        )
+        assignmentsManager = new AssignmentsManager(
+          time,
+          assignmentsChannelManager,
+          config.brokerId,
+          () => lifecycleManager.brokerEpoch
+        )
+      }
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -294,7 +314,9 @@ class BrokerServer(
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        addPartitionsToTxnManager = Some(addPartitionsToTxnManager)
+        addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
+        assignmentManager = Option(assignmentsManager),
+        lifecycleManager = Some(lifecycleManager)
       )
 
       /* start token manager */
@@ -647,6 +669,9 @@ class BrokerServer(
 
       if (tokenManager != null)
         CoreUtils.swallow(tokenManager.shutdown(), this)
+
+      if (assignmentsManager != null)
+        CoreUtils.swallow(assignmentsManager.close(), this)
 
       if (replicaManager != null)
         CoreUtils.swallow(replicaManager.shutdown(), this)
