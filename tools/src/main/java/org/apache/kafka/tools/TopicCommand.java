@@ -294,14 +294,14 @@ public abstract class TopicCommand {
         public void printDescription() {
             String configsAsString = config.entries().stream()
                 .filter(config -> !config.isDefault())
-                .map(ce -> String.format("%s=%s", ce.name(), ce.value()))
+                .map(ce -> ce.name() + "=" + ce.value())
                 .collect(Collectors.joining(","));
             System.out.print("Topic: " +  topic);
             if (topicId != Uuid.ZERO_UUID)
                 System.out.print("\tTopicId: " + topicId);
-            System.out.print("\tPartitionCount: %s" + numPartitions);
-            System.out.print("\tReplicationFactor: %s" + replicationFactor);
-            System.out.print("\tConfigs: %s" + configsAsString);
+            System.out.print("\tPartitionCount: " + numPartitions);
+            System.out.print("\tReplicationFactor: " + replicationFactor);
+            System.out.print("\tConfigs: " + configsAsString);
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
         }
