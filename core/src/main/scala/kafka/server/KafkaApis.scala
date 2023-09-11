@@ -27,7 +27,7 @@ import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, EndpointType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
@@ -242,6 +242,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
+        case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3509,43 +3510,34 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeCluster(request: RequestChannel.Request): Unit = {
-    val describeClusterRequest = request.body[DescribeClusterRequest]
-
-    var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
-    // get cluster authorized operations
-    if (describeClusterRequest.data.includeClusterAuthorizedOperations) {
-      if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
-        clusterAuthorizedOperations = authHelper.authorizedOperations(request, Resource.CLUSTER)
-      else
-        clusterAuthorizedOperations = 0
-    }
-
-    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
-    val controllerId = {
-      metadataCache.getControllerId.flatMap {
-        case ZkCachedControllerId(id) => Some(id)
-        case KRaftCachedControllerId(_) => metadataCache.getRandomAliveBrokerId
+    val response = authHelper.computeDescribeClusterResponse(
+      request,
+      EndpointType.BROKER,
+      clusterId,
+      () => {
+        val brokers = new DescribeClusterResponseData.DescribeClusterBrokerCollection()
+        metadataCache.getAliveBrokerNodes(request.context.listenerName).foreach { node =>
+          brokers.add(new DescribeClusterResponseData.DescribeClusterBroker().
+            setBrokerId(node.id).
+            setHost(node.host).
+            setPort(node.port).
+            setRack(node.rack))
+        }
+        brokers
+      },
+      () => {
+        metadataCache.getControllerId match {
+          case Some(value) =>
+            value match {
+              case ZkCachedControllerId (id) => id
+              case KRaftCachedControllerId (_) => metadataCache.getRandomAliveBrokerId.getOrElse(- 1)
+            }
+          case None => -1
+        }
       }
-    }
-
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-      val data = new DescribeClusterResponseData()
-        .setThrottleTimeMs(requestThrottleMs)
-        .setClusterId(clusterId)
-        .setControllerId(controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID))
-        .setClusterAuthorizedOperations(clusterAuthorizedOperations)
-
-
-      brokers.foreach { broker =>
-        data.brokers.add(new DescribeClusterResponseData.DescribeClusterBroker()
-          .setBrokerId(broker.id)
-          .setHost(broker.host)
-          .setPort(broker.port)
-          .setRack(broker.rack))
-      }
-
-      new DescribeClusterResponse(data)
-    })
+    )
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 
   def handleEnvelope(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
@@ -3719,6 +3711,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
     }
+  }
+
+  def handleConsumerGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    requestHelper.sendMaybeThrottle(request, request.body[ConsumerGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

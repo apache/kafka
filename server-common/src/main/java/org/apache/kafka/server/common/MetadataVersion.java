@@ -183,7 +183,10 @@ public enum MetadataVersion {
     IBP_3_6_IV1(13, "3.6", "IV1", true),
 
     // Add KRaft support for Delegation Tokens
-    IBP_3_6_IV2(14, "3.6", "IV2", true);
+    IBP_3_6_IV2(14, "3.6", "IV2", true),
+
+    // Implement KIP-919 controller registration.
+    IBP_3_7_IV0(15, "3.7", "IV0", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -318,6 +321,19 @@ public enum MetadataVersion {
         } else {
             return (short) 0;
         }
+    }
+
+    public short registerControllerRecordVersion() {
+        if (isAtLeast(MetadataVersion.IBP_3_7_IV0)) {
+            return (short) 0;
+        } else {
+            throw new RuntimeException("Controller registration is not supported in " +
+                    "MetadataVersion " + this);
+        }
+    }
+
+    public boolean isControllerRegistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
     }
 
     public short fetchRequestVersion() {

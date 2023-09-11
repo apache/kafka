@@ -18,8 +18,10 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -98,5 +100,27 @@ public class ToolsUtils {
 
         printRow(columnLengths, headers, out);
         rows.forEach(row -> printRow(columnLengths, row, out));
+    }
+
+    public static void validateBootstrapServer(String hostPort) throws IllegalArgumentException {
+        if (hostPort == null || hostPort.trim().isEmpty()) {
+            throw new IllegalArgumentException("Error while validating the bootstrap address\n");
+        }
+
+        String[] hostPorts;
+
+        if (hostPort.contains(",")) {
+            hostPorts = hostPort.split(",");
+        } else {
+            hostPorts = new String[] {hostPort};
+        }
+
+        String[] validHostPort = Arrays.stream(hostPorts)
+                .filter(hostPortData -> Utils.getPort(hostPortData) != null)
+                .toArray(String[]::new);
+
+        if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
+            throw new IllegalArgumentException("Please provide valid host:port like host1:9091,host2:9092\n");
+        }
     }
 }

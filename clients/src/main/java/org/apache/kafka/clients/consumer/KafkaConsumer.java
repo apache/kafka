@@ -2219,7 +2219,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * for example if there is no position yet, or if the end offset is not known yet.
      *
      * <p>
-     * This method uses locally cached metadata and never makes a remote call.
+     * This method uses locally cached metadata. If the log end offset is not known yet, it triggers a request to fetch
+     * the log end offset, but returns immediately.
      *
      * @param topicPartition The partition to get the lag for.
      *

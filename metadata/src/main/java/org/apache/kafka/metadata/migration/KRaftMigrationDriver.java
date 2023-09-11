@@ -174,7 +174,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     private boolean isControllerQuorumReadyForMigration() {
-        Optional<String> notReadyMsg = this.quorumFeatures.reasonAllControllersZkMigrationNotReady();
+        Optional<String> notReadyMsg = this.quorumFeatures.reasonAllControllersZkMigrationNotReady(
+                image.features().metadataVersion(), image.cluster().controllers());
         if (notReadyMsg.isPresent()) {
             log.warn("Still waiting for all controller nodes ready to begin the migration. Not ready due to:" + notReadyMsg.get());
             return false;
@@ -687,7 +688,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
             } catch (Throwable t) {
                 MigrationManifest partialManifest = manifestBuilder.build();
-                log.error("Aborting the metadata migration from ZooKeeper to KRaft. {}.", partialManifest);
+                log.error("Aborting the metadata migration from ZooKeeper to KRaft. {}.", partialManifest, t);
                 zkRecordConsumer.abortMigration(); // This terminates the controller via fatal fault handler
                 super.handleException(t);
             }
