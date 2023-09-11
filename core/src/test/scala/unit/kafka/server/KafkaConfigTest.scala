@@ -1752,7 +1752,7 @@ class KafkaConfigTest {
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
 
     assertEquals(
-      "requirement failed: Cannot enable ZooKeeper migration when JBOD is in use.",
+      "requirement failed: Cannot enable ZooKeeper migration when multiple log directories (aka JBOD) are in use.",
       assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
   }
 
