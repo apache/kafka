@@ -71,6 +71,16 @@ public class FeatureCommandTest {
                 "SupportedMaxVersion: 3.7-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
     }
 
+    @ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_7_IV0)
+    public void testDescribeWithKRaftAndBootstrapControllers() {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe"))
+        );
+        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
+        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
+                "SupportedMaxVersion: 3.7-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(commandOutput));
+    }
+
     @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testUpgradeMetadataVersionWithZk() {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->

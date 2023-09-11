@@ -69,10 +69,8 @@ class KafkaServerKRaftRegistrationTest {
       val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
 
       // Enable migration configs and restart brokers
-      val props = kraftCluster.controllerClientProperties()
-      val voters = props.get(RaftConfig.QUORUM_VOTERS_CONFIG)
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
-      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
@@ -108,10 +106,8 @@ class KafkaServerKRaftRegistrationTest {
       kraftCluster.startup()
 
       // Enable migration configs and restart brokers
-      val props = kraftCluster.controllerClientProperties()
-      val voters = props.get(RaftConfig.QUORUM_VOTERS_CONFIG)
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
-      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       assertThrows(classOf[IllegalArgumentException], () => zkCluster.rollingBrokerRestart())
