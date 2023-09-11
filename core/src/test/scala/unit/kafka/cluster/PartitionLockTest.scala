@@ -273,10 +273,10 @@ class PartitionLockTest extends Logging {
       alterIsrManager,
       transferLeaderManager) {
 
-      override def shrinkIsr(newIsr: Set[Int]): Unit = {
+      override def shrinkIsr(newIsr: Set[Int], isrUpdateCompleteFuture: CompletableFuture[Boolean]): Unit = {
         shrinkIsrSemaphore.acquire()
         try {
-          super.shrinkIsr(newIsr)
+          super.shrinkIsr(newIsr, isrUpdateCompleteFuture)
         } finally {
           shrinkIsrSemaphore.release()
         }
