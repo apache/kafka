@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
@@ -29,9 +31,11 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -51,6 +55,8 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -509,6 +515,37 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector and all of its tasks should no longer be running"
         );
+    }
+
+    /**
+     * The <strong><em>GET /connectors/{connector}/tasks-config</em></strong> endpoint was deprecated in
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-970%3A+Deprecate+and+remove+Connect%27s+redundant+task+configurations+endpoint">KIP-970</a>
+     * and is slated for removal in the next major release. This test verifies that the deprecation warning log is emitted on trying to use the
+     * deprecated endpoint.
+     */
+    @Test
+    public void testTasksConfigDeprecation() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+            "Initial group of workers did not start in time.");
+
+        connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(TOPIC_NAME));
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            NUM_TASKS,
+            "Connector tasks did not start in time"
+        );
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(ConnectorsResource.class)) {
+            connect.requestGet(connect.endpointForResource("connectors/" + CONNECTOR_NAME + "/tasks-config"));
+            List<LogCaptureAppender.Event> logEvents = logCaptureAppender.getEvents();
+            assertEquals(1, logEvents.size());
+            assertEquals(Level.WARN.toString(), logEvents.get(0).getLevel());
+            assertThat(logEvents.get(0).getMessage(), containsString("deprecated"));
+        }
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
