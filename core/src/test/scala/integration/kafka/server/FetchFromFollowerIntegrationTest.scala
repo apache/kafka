@@ -25,7 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -61,12 +61,13 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
-    TestUtils.createTopicWithAdmin(
+    val partitionLeaders = TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
+    assertTrue(partitionLeaders.values.forall(_ == leaderBrokerId))
 
     val version = ApiKeys.FETCH.latestVersion()
     val topicPartition = new TopicPartition(topic, 0)
