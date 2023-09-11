@@ -17,12 +17,12 @@
 package kafka.log.remote
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
+import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteDeletedSuffixIndexFileName, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -552,6 +552,107 @@ class RemoteIndexCacheTest {
       s"Index file marked for deletion should not be present on disk at ${cache.cacheDir()}")
 
     assertTrue(cache.internalCache().estimatedSize() == 0)
+  }
+
+  @Test
+  def testCorrectnessForCacheAndIndexFilesWhenResizeCache(): Unit = {
+
+    def getIndexFileFromRemoteCacheDir(suffix: String) = {
+      Files.walk(cache.cacheDir())
+        .filter(Files.isRegularFile(_))
+        .filter(path => path.getFileName.toString.endsWith(suffix))
+        .findAny()
+    }
+
+    val estimateEntryBytesSize = estimateOneEntryBytesSize()
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
+
+    assertCacheSize(0)
+    // getIndex for first time will call rsm#fetchIndex
+    val cacheEntry = cache.getIndexEntry(metadataList.head)
+    assertCacheSize(1)
+    assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.INDEX_FILE_SUFFIX).isPresent)
+    assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent)
+    assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent)
+
+    // Reduce the cache limit to 1 to ensure that all are evicted.
+    cache.resizeCacheSize(1L)
+
+    // wait until entry is marked for deletion
+    TestUtils.waitUntilTrue(() => cacheEntry.isMarkedForCleanup,
+      "Failed to mark cache entry for cleanup after resizing cache.")
+    TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
+      "Failed to cleanup cache entry after resizing cache.")
+
+    // verify no index files on remote cache dir
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
+      s"Offset index file should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent,
+      s"Txn index file should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent,
+      s"Time index file should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.DELETED_FILE_SUFFIX).isPresent,
+      s"Index file marked for deletion should not be present on disk at ${cache.cacheDir()}")
+
+    assertTrue(cache.internalCache().estimatedSize() == 0)
+
+    // Increase cache capacity to only store 2 entries
+    cache.resizeCacheSize(2 * estimateEntryBytesSize)
+    assertCacheSize(0)
+
+    cache.getIndexEntry(metadataList(0))
+    cache.getIndexEntry(metadataList(1))
+    cache.getIndexEntry(metadataList(2))
+
+    assertCacheSize(2)
+    val missingEntryOpt = {
+      metadataList.find(segmentMetadata => {
+        val segmentId = segmentMetadata.remoteLogSegmentId().id()
+        !cache.internalCache.asMap().containsKey(segmentId)
+      })
+    }
+    assertFalse(missingEntryOpt.isEmpty)
+    // Wait for the completion of file cleanup to prevent NoSuchFileException from being thrown in the `getIndexFileFromRemoteCacheDir`
+    // method due to the ".deleted" file existing and then being deleted.
+    Time.SYSTEM.sleep(5000)
+    // verify no index files for `missingEntryOpt` on remote cache dir
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteOffsetIndexFileName(missingEntryOpt.get)).isPresent,
+      s"Offset index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTimeIndexFileName(missingEntryOpt.get)).isPresent,
+      s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTransactionIndexFileName(missingEntryOpt.get)).isPresent,
+      s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(missingEntryOpt.get)).isPresent,
+      s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
+
+    val cacheMetadataList = metadataList.filter(segmentMetadata => segmentMetadata.remoteLogSegmentId().id() != missingEntryOpt.get.remoteLogSegmentId().id())
+
+    // Reduce cache capacity to only store 1 entries
+    cache.resizeCacheSize(1 * estimateEntryBytesSize)
+    assertCacheSize(1)
+
+    val nextMissingEntryOpt = {
+      cacheMetadataList.find(segmentMetadata => {
+        val segmentId = segmentMetadata.remoteLogSegmentId().id()
+        !cache.internalCache.asMap().containsKey(segmentId)
+      })
+    }
+    assertFalse(nextMissingEntryOpt.isEmpty)
+    // Wait for the completion of file cleanup to prevent NoSuchFileException from being thrown in the `getIndexFileFromRemoteCacheDir`
+    // method due to the ".deleted" file existing and then being deleted.
+    Time.SYSTEM.sleep(5000)
+    // verify no index files for `nextMissingEntryOpt` on remote cache dir
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteOffsetIndexFileName(nextMissingEntryOpt.get)).isPresent,
+      s"Offset index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTimeIndexFileName(nextMissingEntryOpt.get)).isPresent,
+      s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTransactionIndexFileName(nextMissingEntryOpt.get)).isPresent,
+      s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(nextMissingEntryOpt.get)).isPresent,
+      s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
+
+    assertTrue(cache.internalCache().estimatedSize() == 1)
   }
 
   @Test
