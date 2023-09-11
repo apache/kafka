@@ -3722,7 +3722,8 @@ foo
   <pre>./bin/zookeeper-shell.sh localhost:2181 get /cluster/id</pre>
 
   <p>
-    The KRaft controller quorum should also be provisioned with the latest <code>metadata.version</code> of "3.4".
+    The KRaft controller quorum should also be provisioned with the latest <code>metadata.version</code>.
+    This is done automatically when you format the node with the <code>kafka-storage.sh</code> tool.
     For further instructions on KRaft deployment, please refer to <a href="#kraft_config">the above documentation</a>.
   </p>
 
