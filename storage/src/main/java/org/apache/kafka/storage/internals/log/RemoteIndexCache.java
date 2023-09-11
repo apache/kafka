@@ -386,6 +386,7 @@ public class RemoteIndexCache implements Closeable {
                 try {
                     return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION);
                 } catch (RemoteResourceNotFoundException e) {
+                    // Don't throw an exception since the transaction index may not exist because of no transactional records.
                     return null;
                 } catch (RemoteStorageException e) {
                     throw new KafkaException(e);
@@ -456,6 +457,7 @@ public class RemoteIndexCache implements Closeable {
 
         private final OffsetIndex offsetIndex;
         private final TimeIndex timeIndex;
+        // Transaction index is optional because it may not exist for a segment if there are no transactional records.
         private final Optional<TransactionIndex> txnIndexOpt;
 
         // This lock is used to synchronize cleanup methods and read methods. This ensures that cleanup (which changes the
