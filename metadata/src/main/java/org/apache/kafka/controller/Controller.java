@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -388,6 +389,19 @@ public interface Controller extends AclMutator, AutoCloseable {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics,
         boolean validateOnly
+    );
+
+    /**
+     * Attempt to register the given controller.
+     *
+     * @param context       The controller request context.
+     * @param request       The registration request.
+     *
+     * @return              A future yielding the broker registration reply.
+     */
+    CompletableFuture<Void> registerController(
+        ControllerRequestContext context,
+        ControllerRegistrationRequestData request
     );
 
     /**

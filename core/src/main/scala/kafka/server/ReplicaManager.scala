@@ -1263,6 +1263,7 @@ class ReplicaManager(val config: KafkaConfig,
     } catch {
       case e: RejectedExecutionException =>
         // Return the error if any in scheduling the remote fetch task
+        warn("Unable to fetch data from remote storage", e)
         return Some(createLogReadResult(e))
     }
 
