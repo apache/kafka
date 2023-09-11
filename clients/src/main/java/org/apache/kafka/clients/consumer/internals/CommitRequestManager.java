@@ -238,14 +238,14 @@ public class CommitRequestManager implements RequestManager {
         public final GroupState.Generation requestedGeneration;
         private final RequestState requestState;
 
-        public CompletableOffsetFetchRequest(final Set<TopicPartition> partitions,
-                                             final GroupState.Generation generation,
-                                             final long retryBackoffMs,
-                                             final long retryBackoffMaxMs) {
-            super();
+        public OffsetFetchRequestState(final Set<TopicPartition> partitions,
+                                       final GroupState.Generation generation,
+                                       final long retryBackoffMs,
+                                       final long retryBackoffMaxMs) {
+            super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
             this.requestedPartitions = partitions;
             this.requestedGeneration = generation;
-            this.requestState = new RequestState(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
+            this.requestState = new RequestState(logContext, retryBackoffMs);
         }
 
         public boolean sameRequest(final CompletableOffsetFetchRequest request) {
@@ -370,6 +370,8 @@ public class CommitRequestManager implements RequestManager {
             return "OffsetFetchRequestState{" +
                     "requestedPartitions=" + requestedPartitions +
                     ", requestedGeneration=" + requestedGeneration +
+                    ", future=" + future +
+                    ", " + toStringBase() +
                     '}';
         }
     }

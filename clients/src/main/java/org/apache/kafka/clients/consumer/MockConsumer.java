@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.clients.consumer.internals.IdempotentCloser;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -64,13 +63,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<TopicPartition, OffsetAndMetadata> committed;
     private final Queue<Runnable> pollTasks;
     private final Set<TopicPartition> paused;
-    private final IdempotentCloser closed;
 
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private KafkaException pollException;
     private KafkaException offsetsException;
     private AtomicBoolean wakeup;
     private Duration lastPollTimeout;
+    private boolean closed;
     private boolean shouldRebalance;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
@@ -78,7 +77,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.partitions = new HashMap<>();
         this.records = new HashMap<>();
         this.paused = new HashSet<>();
-        this.closed = new IdempotentCloser();
+        this.closed = false;
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
         this.pollTasks = new LinkedList<>();
@@ -470,11 +469,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void close(Duration timeout) {
-        this.closed.close();
+        this.closed = true;
     }
 
     public synchronized boolean closed() {
-        return this.closed.isClosed();
+        return this.closed;
     }
 
     @Override
@@ -502,7 +501,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void ensureNotClosed() {
-        this.closed.maybeThrowIllegalStateException("This consumer has already been closed.");
+        if (this.closed)
+            throw new IllegalStateException("This consumer has already been closed.");
     }
 
     private void updateFetchPosition(TopicPartition tp) {
