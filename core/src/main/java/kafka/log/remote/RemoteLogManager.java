@@ -1001,9 +1001,6 @@ public class RemoteLogManager implements Closeable {
                     // since the checkpoint file was already truncated.
                     boolean shouldDeleteSegment = remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(
                             metadata, logStartOffset, epochWithOffsets);
-                    if (shouldDeleteSegment) {
-                        segmentsToDelete.add(metadata);
-                    }
                     boolean isValidSegment = false;
                     if (!shouldDeleteSegment) {
                         // check whether the segment contains the required epoch range with in the current leader epoch lineage.
@@ -1012,10 +1009,10 @@ public class RemoteLogManager implements Closeable {
                             shouldDeleteSegment =
                                     remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
                                             remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata);
-                            if (shouldDeleteSegment) {
-                                segmentsToDelete.add(metadata);
-                            }
                         }
+                    }
+                    if (shouldDeleteSegment) {
+                        segmentsToDelete.add(metadata);
                     }
                     canProcess = shouldDeleteSegment || !isValidSegment;
                 }

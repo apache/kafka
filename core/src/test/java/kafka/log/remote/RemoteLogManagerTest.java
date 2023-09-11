@@ -1626,8 +1626,8 @@ public class RemoteLogManagerTest {
                 return remoteLogMetadataManager;
             }
         }) {
-            RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
-            task.convertToLeader(0);
+            RemoteLogManager.RLMTask leaderTask = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+            leaderTask.convertToLeader(0);
 
             when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
             when(mockLog.logEndOffset()).thenReturn(200L);
@@ -1655,16 +1655,42 @@ public class RemoteLogManagerTest {
             when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
                     .thenAnswer(answer -> {
                         // cancel the task so that we don't delete the second segment
-                        task.cancel();
+                        leaderTask.cancel();
                         return CompletableFuture.runAsync(() -> {
                         });
                     });
 
-            task.run();
+            leaderTask.run();
 
             assertEquals(200L, logStartOffset.get());
             verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
             verify(remoteStorageManager, never()).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
+
+            // test that the 2nd log segment will be deleted by the new leader
+            RemoteLogManager.RLMTask newLeaderTask = remoteLogManager.new RLMTask(followerTopicIdPartition, 128);
+            newLeaderTask.convertToLeader(1);
+
+            Iterator<RemoteLogSegmentMetadata> firstIterator = remoteLogSegmentMetadatas.iterator();
+            firstIterator.next();
+            Iterator<RemoteLogSegmentMetadata> secondIterator = remoteLogSegmentMetadatas.iterator();
+            secondIterator.next();
+            Iterator<RemoteLogSegmentMetadata> thirdIterator = remoteLogSegmentMetadatas.iterator();
+            thirdIterator.next();
+
+            when(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition))
+                    .thenReturn(firstIterator);
+            when(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition, 0))
+                    .thenReturn(secondIterator)
+                    .thenReturn(thirdIterator);
+
+            when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                    .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
+
+            newLeaderTask.run();
+
+            assertEquals(200L, logStartOffset.get());
+            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
+            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
         }
     }
 
