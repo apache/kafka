@@ -21,12 +21,9 @@ import java.util.Objects;
 
 /**
  * Selection of a type of assignor used by a member to get partitions assigned as part of a
- * consumer group. Selection could be one of:
- * <li>CLIENT assignors</li>
+ * consumer group. Currently supported assignors are:
  * <li>SERVER assignors</li>
  * <p/>
- * Client assignors include of a list of
- * {@link org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData.Assignor}
  * Server assignors include a name of the server assignor selected, ex. uniform, range.
  */
 public class AssignorSelection {
@@ -78,5 +75,10 @@ public class AssignorSelection {
     @Override
     public int hashCode() {
         return Objects.hash(type, serverAssignor);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Assignor selection {type:%s, name:%s}", type, serverAssignor);
     }
 }
