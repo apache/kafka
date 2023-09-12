@@ -41,11 +41,28 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        CommitApplicationEvent that = (CommitApplicationEvent) o;
+
+        return offsets.equals(that.offsets);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + offsets.hashCode();
+        return result;
+    }
+
+    @Override
     public String toString() {
         return "CommitApplicationEvent{" +
-                "offsets=" + offsets +
-                ", future=" + future +
-                ", type=" + type +
+                toStringBase() +
+                ", offsets=" + offsets +
                 '}';
     }
 }

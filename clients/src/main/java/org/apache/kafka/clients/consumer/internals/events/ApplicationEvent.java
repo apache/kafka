@@ -28,7 +28,7 @@ public abstract class ApplicationEvent {
         LIST_OFFSETS,
     }
 
-    protected final Type type;
+    private final Type type;
 
     protected ApplicationEvent(Type type) {
         this.type = Objects.requireNonNull(type);
@@ -39,9 +39,28 @@ public abstract class ApplicationEvent {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        ApplicationEvent that = (ApplicationEvent) o;
+
+        return type == that.type;
+    }
+
+    @Override
+    public int hashCode() {
+        return type.hashCode();
+    }
+
+    protected String toStringBase() {
+        return "type=" + type;
+    }
+
+    @Override
     public String toString() {
         return "ApplicationEvent{" +
-                "type=" + type +
+                toStringBase() +
                 '}';
     }
 }

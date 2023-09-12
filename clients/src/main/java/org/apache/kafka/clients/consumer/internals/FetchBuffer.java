@@ -105,7 +105,7 @@ public class FetchBuffer implements Closeable {
             nextInLineFetch = null;
     }
 
-    boolean maybeDrain(final Set<TopicPartition> partitions, final CompletedFetch completedFetch) {
+    private boolean maybeDrain(final Set<TopicPartition> partitions, final CompletedFetch completedFetch) {
         if (completedFetch != null && !partitions.contains(completedFetch.partition)) {
             log.debug("Removing {} from buffered fetch data as it is not in the set of partitions to retain ({})", completedFetch.partition, partitions);
             completedFetch.drain();

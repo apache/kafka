@@ -25,7 +25,7 @@ public class NewTopicsMetadataUpdateRequestEvent extends ApplicationEvent {
     @Override
     public String toString() {
         return "NewTopicsMetadataUpdateRequestEvent{" +
-                "type=" + type +
+                toStringBase() +
                 '}';
     }
 }

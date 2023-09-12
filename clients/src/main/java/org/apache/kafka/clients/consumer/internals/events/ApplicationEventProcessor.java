@@ -127,8 +127,8 @@ public class ApplicationEventProcessor {
             return false;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.updateAutoCommitTimer(event.currentTimeMs);
-        manager.maybeAutoCommit(event.offsets);
+        manager.updateAutoCommitTimer(event.currentTimeMs());
+        manager.maybeAutoCommit(event.offsets());
         return true;
     }
 

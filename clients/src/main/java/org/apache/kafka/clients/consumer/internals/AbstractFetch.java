@@ -68,7 +68,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     public AbstractFetch(final LogContext logContext,
-                         NodeStatusDetector nodeStatusDetector,
+                         final NodeStatusDetector nodeStatusDetector,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
                          final FetchConfig<K, V> fetchConfig,
@@ -190,7 +190,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
      * Implements the core logic for a failed fetch request/response.
      *
      * @param fetchTarget {@link Node} from which the fetch data was requested
-     * @param t {@link RuntimeException} representing the error that resulted in the failure
+     * @param t {@link Throwable} representing the error that resulted in the failure
      */
     protected void handleFetchResponse(final Node fetchTarget, final Throwable t) {
         try {
@@ -274,7 +274,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
      * @param partition {@link TopicPartition} for which we want to fetch data
      * @param leaderReplica {@link Node} for the leader of the given partition
      * @param currentTimeMs Current time in milliseconds; used to determine if we're within the optional lease window
-     * @return Replic {@link Node node} from which to request the data
+     * @return Replica {@link Node node} from which to request the data
      * @see SubscriptionState#preferredReadReplica
      * @see SubscriptionState#updatePreferredReadReplica
      */

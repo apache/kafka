@@ -245,6 +245,7 @@ public class CompletedFetch {
      * {@link Deserializer deserialization} of the {@link Record record's} key and value are performed in
      * this step.
      *
+     * @param fetchConfig Configuration to use
      * @param maxRecords The number of records to return; the number returned may be {@code 0 <= maxRecords}
      * @return {@link ConsumerRecord Consumer records}
      */

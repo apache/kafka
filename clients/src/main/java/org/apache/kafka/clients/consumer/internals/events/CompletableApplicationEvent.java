@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
 
-    protected final CompletableFuture<T> future;
+    private final CompletableFuture<T> future;
 
     protected CompletableApplicationEvent(Type type) {
         super(type);
@@ -73,10 +73,14 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
     }
 
     @Override
+    protected String toStringBase() {
+        return super.toStringBase() + ", future=" + future;
+    }
+
+    @Override
     public String toString() {
         return "CompletableApplicationEvent{" +
-                "future=" + future +
-                ", type=" + type +
+                toStringBase() +
                 '}';
     }
 }

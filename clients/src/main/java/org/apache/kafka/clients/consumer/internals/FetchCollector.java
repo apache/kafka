@@ -97,27 +97,27 @@ public class FetchCollector<K, V> {
                 final CompletedFetch nextInLineFetch = fetchBuffer.nextInLineFetch();
 
                 if (nextInLineFetch == null || nextInLineFetch.isConsumed()) {
-                    final CompletedFetch records = fetchBuffer.peek();
+                    final CompletedFetch completedFetch = fetchBuffer.peek();
 
-                    if (records == null)
+                    if (completedFetch == null)
                         break;
 
-                    if (!records.isInitialized()) {
+                    if (!completedFetch.isInitialized()) {
                         try {
-                            fetchBuffer.setNextInLineFetch(initialize(records));
+                            fetchBuffer.setNextInLineFetch(initialize(completedFetch));
                         } catch (Exception e) {
-                            // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
-                            // (2) there are no fetched records with actual content preceding this exception.
+                            // Remove a completedFetch upon a parse with exception if (1) it contains no completedFetch, and
+                            // (2) there are no fetched completedFetch with actual content preceding this exception.
                             // The first condition ensures that the completedFetches is not stuck with the same completedFetch
                             // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                             // potential data loss due to an exception in a following record.
-                            if (fetch.isEmpty() && FetchResponse.recordsOrFail(records.partitionData).sizeInBytes() == 0)
+                            if (fetch.isEmpty() && FetchResponse.recordsOrFail(completedFetch.partitionData).sizeInBytes() == 0)
                                 fetchBuffer.poll();
 
                             throw e;
                         }
                     } else {
-                        fetchBuffer.setNextInLineFetch(records);
+                        fetchBuffer.setNextInLineFetch(completedFetch);
                     }
 
                     fetchBuffer.poll();

@@ -57,9 +57,8 @@ public class OffsetFetchApplicationEvent extends CompletableApplicationEvent<Map
     @Override
     public String toString() {
         return "OffsetFetchApplicationEvent{" +
-                "partitions=" + partitions +
-                ", future=" + future +
-                ", type=" + type +
+                toStringBase() +
+                ", partitions=" + partitions +
                 '}';
     }
 }
