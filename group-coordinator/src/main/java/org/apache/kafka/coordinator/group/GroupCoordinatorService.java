@@ -236,7 +236,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         throwIfNotActive();
         return Utils.abs(groupId.hashCode()) % numPartitions;
     }
-
+// abc test
     /**
      * See {@link GroupCoordinator#consumerGroupHeartbeat(RequestContext, ConsumerGroupHeartbeatRequestData)}.
      */
