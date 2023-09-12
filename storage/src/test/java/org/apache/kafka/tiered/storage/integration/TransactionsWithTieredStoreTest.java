@@ -24,12 +24,8 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -53,25 +49,14 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
         super.setUp(testInfo);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
-    public void modifyConfigs(Seq<Properties> props) {
-        for (Properties p : JavaConverters.seqAsJavaList(props)) {
-            p.putAll(overridingProps());
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public Seq<Properties> kraftControllerConfigs() {
-        return JavaConverters.asScalaBuffer(Collections.singletonList(overridingProps())).toSeq();
-    }
-
-    private Properties overridingProps() {
+    public Properties overridingProps() {
+        Properties props = super.overridingProps();
         int numRemoteLogMetadataPartitions = 3;
         boolean deleteOnClose = false;
+
         return createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
-                numRemoteLogMetadataPartitions, deleteOnClose);
+                numRemoteLogMetadataPartitions, deleteOnClose, props);
     }
 
     @Override
@@ -83,13 +68,6 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
         overridingTopicProps.putAll(createTopicConfigForRemoteStorage(
                 enableRemoteStorage, localLogRetentionBytes, maxBatchCountPerSegment));
         return overridingTopicProps;
-    }
-
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testFencingOnTransactionExpiration(String quorum) {
-        // FIXME: Disabled the test with tiered storage since it's failing and needs to be fixed.
     }
 
     @SuppressWarnings("deprecation")

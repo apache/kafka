@@ -35,6 +35,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{Buffer, ListBuffer}
 import scala.concurrent.ExecutionException
@@ -54,18 +55,31 @@ class TransactionsTest extends IntegrationTestHarness {
   val transactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
   val nonTransactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
 
-  serverConfig.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
-  // Set a smaller value for the number of partitions for the __consumer_offsets topic
-  // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-  serverConfig.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-  serverConfig.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
-  serverConfig.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
-  serverConfig.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
-  serverConfig.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-  serverConfig.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-  serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-  serverConfig.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-  serverConfig.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+  def overridingProps(): Properties = {
+    val props = new Properties()
+    props.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+     // Set a smaller value for the number of partitions for the __consumer_offsets topic + // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
+    props.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
+    props.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
+    props.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
+    props.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
+    props.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
+    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
+    props.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+    props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+    props
+
+  }
+
+  override protected def modifyConfigs(props: Seq[Properties]): Unit = {
+    props.foreach(p => p.putAll(overridingProps()))
+  }
+
+  override protected def kraftControllerConfigs(): Seq[Properties] = {
+    Seq(overridingProps())
+
+  }
 
   def topicConfig(): Properties = {
     val topicConfig = new Properties()
