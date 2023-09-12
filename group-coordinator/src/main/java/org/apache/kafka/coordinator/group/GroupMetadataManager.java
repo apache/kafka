@@ -2959,7 +2959,7 @@ public class GroupMetadataManager {
             } else if (group.isPendingMember(member.memberId())) {
                 group.remove(member.memberId());
                 timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
-                log.info("[Group {}] Pending member {} has left group through explicit `LeaveGroup` request; client  reason: {}",
+                log.info("[Group {}] Pending member {} has left group through explicit `LeaveGroup` request; client reason: {}",
                     group.groupId(), member.memberId(), reason);
 
                 memberResponses.add(
@@ -2992,7 +2992,7 @@ public class GroupMetadataManager {
         }
 
         List<String> validLeaveGroupMembers = memberResponses.stream()
-            .filter(response -> response.errorCode() == 0)
+            .filter(response -> response.errorCode() == Errors.NONE.code())
             .map(MemberResponse::memberId)
             .collect(Collectors.toList());
 
@@ -3007,6 +3007,8 @@ public class GroupMetadataManager {
                     break;
                 case PREPARING_REBALANCE:
                     coordinatorResult = maybeCompleteJoinPhase(group);
+                    break;
+                default:
             }
         }
 

@@ -8899,30 +8899,19 @@ public class GroupMetadataManagerTest {
     public void testLeaveGroupUnknownGroup() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
-        context.createGenericGroup("group-id");
 
-        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+        assertThrows(UnknownMemberIdException.class, () -> context.sendGenericGroupLeave(
             new LeaveGroupRequestData()
-                .setGroupId("group-id")
+                .setGroupId("unknown-group-id")
                 .setMembers(Collections.singletonList(
                     new MemberIdentity()
                         .setMemberId("member-id")
                 ))
-        );
-
-        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
-            .setMembers(Collections.singletonList(
-                new LeaveGroupResponseData.MemberResponse()
-                    .setGroupInstanceId(null)
-                    .setMemberId("member-id")
-                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())));
-
-        assertEquals(expectedResponse, leaveResult.response());
-        assertTrue(leaveResult.records().isEmpty());
+        ));
     }
 
     @Test
-    public void testLeaveGroupUnknownConsumerExistingGroup() throws Exception {
+    public void testLeaveGroupUnknownMemberIdExistingGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
         context.createGenericGroup("group-id");
@@ -8940,7 +8929,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId("group-id")
                 .setMembers(Collections.singletonList(
                     new MemberIdentity()
-                        .setMemberId("other-member-id")
+                        .setMemberId("unknown-member-id")
                 ))
         );
 
@@ -8948,7 +8937,7 @@ public class GroupMetadataManagerTest {
             .setMembers(Collections.singletonList(
                 new LeaveGroupResponseData.MemberResponse()
                     .setGroupInstanceId(null)
-                    .setMemberId("other-member-id")
+                    .setMemberId("unknown-member-id")
                     .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())));
 
         assertEquals(expectedResponse, leaveResult.response());
