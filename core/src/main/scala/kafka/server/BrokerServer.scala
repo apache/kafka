@@ -119,7 +119,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var clientToControllerChannelManager: BrokerToControllerChannelManager = _
+  var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
   var forwardingManager: ForwardingManager = _
 
@@ -215,7 +215,7 @@ class BrokerServer(
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
-      clientToControllerChannelManager = BrokerToControllerChannelManager(
+      clientToControllerChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -320,7 +320,7 @@ class BrokerServer(
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      val brokerLifecycleChannelManager = BrokerToControllerChannelManager(
+      val brokerLifecycleChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -463,17 +463,21 @@ class BrokerServer(
       new KafkaConfig(config.originals(), true)
 
       // Start RemoteLogManager before broker start serving the requests.
-      remoteLogManagerOpt.foreach(rlm => {
+      remoteLogManagerOpt.foreach { rlm =>
         val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
         if (listenerName != null) {
-          val endpoint = endpoints.stream.filter(e => e.listenerName.equals(ListenerName.normalised(listenerName)))
+          val endpoint = endpoints.stream
+            .filter(e =>
+              e.listenerName().isPresent &&
+              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
+            )
             .findFirst()
-            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
-              " should be set as a listener name within valid broker listener name list."))
+            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+              listenerName, "Should be set as a listener name within valid broker listener name list: " + endpoints))
           rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
         }
         rlm.startup()
-      })
+      }
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.

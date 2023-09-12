@@ -182,21 +182,61 @@ public class OffsetMetadataManagerTest {
             List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
             long committedOffset
         ) {
-            return offsetMetadataManager.fetchOffsets(
+            return fetchOffsets(
                 groupId,
+                null,
+                -1,
                 topics,
                 committedOffset
             );
+        }
+
+        public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
+            String groupId,
+            String memberId,
+            int memberEpoch,
+            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+            long committedOffset
+        ) {
+            OffsetFetchResponseData.OffsetFetchResponseGroup response = offsetMetadataManager.fetchOffsets(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(memberEpoch)
+                    .setTopics(topics),
+                committedOffset
+            );
+            assertEquals(groupId, response.groupId());
+            return response.topics();
         }
 
         public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
             String groupId,
             long committedOffset
         ) {
-            return offsetMetadataManager.fetchAllOffsets(
+            return fetchAllOffsets(
                 groupId,
+                null,
+                -1,
                 committedOffset
             );
+        }
+
+        public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
+            String groupId,
+            String memberId,
+            int memberEpoch,
+            long committedOffset
+        ) {
+            OffsetFetchResponseData.OffsetFetchResponseGroup response = offsetMetadataManager.fetchAllOffsets(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(memberEpoch),
+                committedOffset
+            );
+            assertEquals(groupId, response.groupId());
+            return response.topics();
         }
 
         public List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> sleep(long ms) {
@@ -1402,6 +1442,123 @@ public class OffsetMetadataManagerTest {
                     mkOffsetPartitionResponse(1, 111L, 2, "metadata")
                 ))
         ), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchWithMemberIdAndEpoch() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        // Create consumer group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        // Create member.
+        group.getOrMaybeCreateMember("member", true);
+        // Commit offset.
+        context.commitOffset("group", "foo", 0, 100L, 1);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", "member", 0, topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", "member", 0, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchFromAdminClient() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        // Create consumer group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        // Create member.
+        group.getOrMaybeCreateMember("member", true);
+        // Commit offset.
+        context.commitOffset("group", "foo", 0, 100L, 1);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchWithUnknownMemberId() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        // Fetch offsets cases.
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchOffsets("group", "", 0, topics, Long.MAX_VALUE));
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchOffsets("group", "member", 0, topics, Long.MAX_VALUE));
+
+        // Fetch all offsets cases.
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchAllOffsets("group", "", 0, Long.MAX_VALUE));
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchAllOffsets("group", "member", 0, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchWithStaleMemberEpoch() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        group.getOrMaybeCreateMember("member", true);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        // Fetch offsets case.
+        assertThrows(StaleMemberEpochException.class,
+            () -> context.fetchOffsets("group", "member", 10, topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertThrows(StaleMemberEpochException.class,
+            () -> context.fetchAllOffsets("group", "member", 10, Long.MAX_VALUE));
     }
 
     static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(

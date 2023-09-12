@@ -171,7 +171,7 @@ public final class RemoteLogManagerConfig {
                                   REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC)
                   .define(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP, STRING,
                                   null,
-                                  new ConfigDef.NonEmptyString(),
+                                  null,
                                   MEDIUM,
                                   REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC)
                   .define(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
@@ -183,7 +183,7 @@ public final class RemoteLogManagerConfig {
                   .define(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
                                   STRING,
                                   null,
-                                  new ConfigDef.NonEmptyString(),
+                                  null,
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC)
                   .define(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, STRING,

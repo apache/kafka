@@ -21,15 +21,15 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.server.util.MockTime
 
-class MockBrokerToControllerChannelManager(
+class MockNodeToControllerChannelManager(
   val client: MockClient,
   time: MockTime,
   controllerNodeProvider: ControllerNodeProvider,
   controllerApiVersions: NodeApiVersions = NodeApiVersions.create(),
   val retryTimeoutMs: Int = 60000,
   val requestTimeoutMs: Int = 30000
-) extends BrokerToControllerChannelManager {
-  private val unsentQueue = new java.util.ArrayDeque[BrokerToControllerQueueItem]()
+) extends NodeToControllerChannelManager {
+  private val unsentQueue = new java.util.ArrayDeque[NodeToControllerQueueItem]()
 
   client.setNodeApiVersions(controllerApiVersions)
 
@@ -41,7 +41,7 @@ class MockBrokerToControllerChannelManager(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
     callback: ControllerRequestCompletionHandler
   ): Unit = {
-    unsentQueue.add(BrokerToControllerQueueItem(
+    unsentQueue.add(NodeToControllerQueueItem(
       createdTimeMs = time.milliseconds(),
       request = request,
       callback = callback
@@ -52,7 +52,7 @@ class MockBrokerToControllerChannelManager(
     Some(controllerApiVersions)
   }
 
-  private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+  private[server] def handleResponse(request: NodeToControllerQueueItem)(response: ClientResponse): Unit = {
     if (response.authenticationException != null || response.versionMismatch != null) {
       request.callback.onComplete(response)
     } else if (response.wasDisconnected() || response.responseBody.errorCounts.containsKey(Errors.NOT_CONTROLLER)) {

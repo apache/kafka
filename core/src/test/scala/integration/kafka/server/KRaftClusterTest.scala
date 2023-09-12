@@ -1164,6 +1164,30 @@ class KRaftClusterTest {
       cluster.close()
     }
   }
+
+  @Test
+  def testRegisteredControllerEndpoints(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(3).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.retry(60000) {
+        val controller = cluster.controllers().values().iterator().next()
+        val registeredControllers = controller.registrationsPublisher.controllers()
+        assertEquals(3, registeredControllers.size(), "Expected 3 controller registrations")
+        registeredControllers.values().forEach(registration => {
+          assertNotNull(registration.listeners.get("CONTROLLER"));
+          assertNotEquals(0, registration.listeners.get("CONTROLLER").port());
+        })
+      }
+    } finally {
+      cluster.close()
+    }
+  }
 }
 
 class BadAuthorizer() extends Authorizer {

@@ -70,7 +70,7 @@
     <suppress checks="ParameterNumber"
               files="(KafkaConsumer|ConsumerCoordinator).java"/>
     <suppress checks="ParameterNumber"
-              files="Sender.java"/>
+              files="(RecordAccumulator|Sender).java"/>
     <suppress checks="ParameterNumber"
               files="ConfigDef.java"/>
     <suppress checks="ParameterNumber"

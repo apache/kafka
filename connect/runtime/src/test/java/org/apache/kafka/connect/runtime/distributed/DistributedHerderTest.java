@@ -108,9 +108,11 @@ import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
@@ -806,6 +808,31 @@ public class DistributedHerderTest {
         assertEquals(
                 Collections.singletonList("Consumer group for sink connector named test-group conflicts with Connect worker group connect-test-group"),
                 nameConfig.errorMessages());
+    }
+
+    @Test
+    public void testConnectorGroupIdConflictsWithWorkerGroupId() {
+        String overriddenGroupId = CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + GROUP_ID_CONFIG;
+        Map<String, String> config = new HashMap<>(CONN2_CONFIG);
+        config.put(overriddenGroupId, "connect-test-group");
+
+        SinkConnector connectorMock = mock(SinkConnector.class);
+
+        // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
+        // the consumer group id we would use for this sink
+        Map<String, ConfigValue> validatedConfigs = herder.validateSinkConnectorConfig(
+                connectorMock, SinkConnectorConfig.configDef(), config);
+
+        ConfigValue overriddenGroupIdConfig = validatedConfigs.get(overriddenGroupId);
+        assertEquals(
+                Collections.singletonList("Consumer group connect-test-group conflicts with Connect worker group connect-test-group"),
+                overriddenGroupIdConfig.errorMessages());
+
+        ConfigValue nameConfig = validatedConfigs.get(ConnectorConfig.NAME_CONFIG);
+        assertEquals(
+                Collections.emptyList(),
+                nameConfig.errorMessages()
+        );
     }
 
     @Test
