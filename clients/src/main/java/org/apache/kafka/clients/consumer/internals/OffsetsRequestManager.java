@@ -593,7 +593,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             if (!leaderAndEpoch.leader.isPresent()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
-                metadata.requestUpdate(false);
+                metadata.requestUpdate(true);
                 listOffsetsRequestState.ifPresent(offsetsRequestState -> offsetsRequestState.remainingToSearch.put(tp, offset));
             } else {
                 int currentLeaderEpoch = leaderAndEpoch.epoch.orElse(ListOffsetsResponse.UNKNOWN_EPOCH);
