@@ -34,7 +34,6 @@ import org.mockito.ArgumentMatcher
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.internals.KafkaFutureImpl
 
-
 class ConsumerGroupServiceTest {
 
   private val group = "testGroup"
