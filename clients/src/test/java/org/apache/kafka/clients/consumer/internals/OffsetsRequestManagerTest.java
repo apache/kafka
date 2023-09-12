@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
@@ -30,11 +31,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -79,6 +83,7 @@ public class OffsetsRequestManagerTest {
     private ConsumerMetadata metadata;
     private SubscriptionState subscriptionState;
     private MockTime time;
+    private ApiVersions apiVersions;
     private static final String TEST_TOPIC = "t1";
     private static final TopicPartition TEST_PARTITION_1 = new TopicPartition(TEST_TOPIC, 1);
     private static final TopicPartition TEST_PARTITION_2 = new TopicPartition(TEST_TOPIC, 2);
@@ -93,7 +98,7 @@ public class OffsetsRequestManagerTest {
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         this.time = new MockTime(0);
-        ApiVersions apiVersions = mock(ApiVersions.class);
+        apiVersions = mock(ApiVersions.class);
         requestManager = new OffsetsRequestManager(subscriptionState, metadata,
                 DEFAULT_ISOLATION_LEVEL, time, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
                 apiVersions, new LogContext());
@@ -126,7 +131,7 @@ public class OffsetsRequestManagerTest {
                 requestManager.fetchOffsets(timestampsToSearch, false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
-        verify(metadata).requestUpdate(false);
+        verify(metadata).requestUpdate(true);
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         // Metadata update not happening within the time boundaries of the request future, so
@@ -216,7 +221,7 @@ public class OffsetsRequestManagerTest {
                         false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
-        verify(metadata).requestUpdate(false);
+        verify(metadata).requestUpdate(true);
 
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -476,7 +481,7 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         requestManager.resetPositionsIfNeeded();
-        verify(metadata).requestUpdate(false);
+        verify(metadata).requestUpdate(true);
         assertEquals(0, requestManager.requestsToSend());
     }
 
@@ -492,6 +497,109 @@ public class OffsetsRequestManagerTest {
                 Optional.of(5));
         testResetPositionsSuccessWithLeaderEpoch(leaderAndEpoch);
         verify(metadata).updateLastSeenEpochIfNewer(TEST_PARTITION_1, leaderAndEpoch.epoch.get());
+    }
+
+    @Test
+    public void testValidatePositionsSuccess() {
+        int currentOffset = 5;
+        int expectedEndOffset = 100;
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
+                Optional.of(3));
+        TopicPartition tp = TEST_PARTITION_1;
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
+                Optional.of(10), leaderAndEpoch);
+
+        expectSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
+
+        requestManager.validatePositionsIfNeeded();
+        assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
+
+        verify(subscriptionState).setNextAllowedRetry(any(), anyLong());
+
+        // Validate positions response with end offsets
+        when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(LEADER_1, leaderAndEpoch.epoch));
+        NetworkClientDelegate.PollResult pollResult = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
+        ClientResponse clientResponse = buildOffsetsForLeaderEpochResponse(unsentRequest,
+                Collections.singletonList(tp), expectedEndOffset);
+        clientResponse.onComplete();
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
+        verify(subscriptionState).maybeCompleteValidation(any(), any(), any());
+    }
+
+    @Test
+    public void testValidatePositionsMissingLeader() {
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(Node.noNode()),
+                Optional.of(5));
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(5L,
+                Optional.of(10), leaderAndEpoch);
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.position(any())).thenReturn(position, position);
+        NodeApiVersions nodeApiVersions = NodeApiVersions.create();
+        when(apiVersions.get(LEADER_1.idString())).thenReturn(nodeApiVersions);
+        requestManager.validatePositionsIfNeeded();
+        verify(metadata).requestUpdate(true);
+        assertEquals(0, requestManager.requestsToSend());
+    }
+
+    @Test
+    public void testValidatePositionsFailureWithUnrecoverableAuthException() {
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
+                Optional.of(5));
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(5L,
+                Optional.of(10), leaderAndEpoch);
+        expectSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
+
+        requestManager.validatePositionsIfNeeded();
+
+        // Validate positions response with TopicAuthorizationException
+        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        ClientResponse clientResponse =
+                buildOffsetsForLeaderEpochResponseWithErrors(unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
+        clientResponse.onComplete();
+
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
+
+        // Following validatePositions should raise the previous exception without performing any
+        // request
+        assertThrows(TopicAuthorizationException.class, () -> requestManager.validatePositionsIfNeeded());
+        assertEquals(0, requestManager.requestsToSend());
+    }
+
+    @Test
+    public void testValidatePositionsAbortIfNoApiVersionsToCheckAgainstThenRecovers() {
+        int currentOffset = 5;
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
+                Optional.of(3));
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
+                Optional.of(10), leaderAndEpoch);
+
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.position(any())).thenReturn(position, position);
+
+        // No api version info initially available
+        when(apiVersions.get(LEADER_1.idString())).thenReturn(null);
+        requestManager.validatePositionsIfNeeded();
+        assertEquals(0, requestManager.requestsToSend(), "Invalid request count");
+        verify(subscriptionState, never()).completeValidation(TEST_PARTITION_1);
+        verify(subscriptionState, never()).setNextAllowedRetry(any(), anyLong());
+
+        // Api version updated, next validate positions should successfully build the request
+        when(apiVersions.get(LEADER_1.idString())).thenReturn(NodeApiVersions.create());
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.position(any())).thenReturn(position, position);
+        requestManager.validatePositionsIfNeeded();
+        assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
+    }
+
+    private void expectSuccessfulBuildRequestForValidatingPositions(SubscriptionState.FetchPosition position, Node leader) {
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.position(any())).thenReturn(position, position);
+        NodeApiVersions nodeApiVersions = NodeApiVersions.create();
+        when(apiVersions.get(leader.idString())).thenReturn(nodeApiVersions);
     }
 
     private void testResetPositionsSuccessWithLeaderEpoch(Metadata.LeaderAndEpoch leaderAndEpoch) {
@@ -686,6 +794,75 @@ public class OffsetsRequestManagerTest {
         });
 
         return buildClientResponse(request, topicResponses, false, null);
+    }
+
+    private ClientResponse buildOffsetsForLeaderEpochResponse(
+            final NetworkClientDelegate.UnsentRequest request,
+            final List<TopicPartition> partitions,
+            final int endOffset) {
+
+        AbstractRequest abstractRequest = request.requestBuilder().build();
+        assertTrue(abstractRequest instanceof OffsetsForLeaderEpochRequest);
+        OffsetsForLeaderEpochRequest offsetsForLeaderEpochRequest = (OffsetsForLeaderEpochRequest) abstractRequest;
+        OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
+        partitions.forEach(tp -> {
+            OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
+            if (topic == null) {
+                topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult().setTopic(tp.topic());
+                data.topics().add(topic);
+            }
+            topic.partitions().add(new OffsetForLeaderEpochResponseData.EpochEndOffset()
+                    .setPartition(tp.partition())
+                    .setErrorCode(Errors.NONE.code())
+                    .setLeaderEpoch(3)
+                    .setEndOffset(endOffset));
+        });
+
+        OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
+        return new ClientResponse(
+                new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
+                request.callback(),
+                "-1",
+                time.milliseconds(),
+                time.milliseconds(),
+                false,
+                null,
+                null,
+                response
+        );
+    }
+
+    private ClientResponse buildOffsetsForLeaderEpochResponseWithErrors(
+            final NetworkClientDelegate.UnsentRequest request,
+            final Map<TopicPartition, Errors> partitionErrors) {
+
+        AbstractRequest abstractRequest = request.requestBuilder().build();
+        assertTrue(abstractRequest instanceof OffsetsForLeaderEpochRequest);
+        OffsetsForLeaderEpochRequest offsetsForLeaderEpochRequest = (OffsetsForLeaderEpochRequest) abstractRequest;
+        OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
+        partitionErrors.keySet().forEach(tp -> {
+            OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
+            if (topic == null) {
+                topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult().setTopic(tp.topic());
+                data.topics().add(topic);
+            }
+            topic.partitions().add(new OffsetForLeaderEpochResponseData.EpochEndOffset()
+                    .setPartition(tp.partition())
+                    .setErrorCode(partitionErrors.get(tp).code()));
+        });
+
+        OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
+        return new ClientResponse(
+                new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
+                request.callback(),
+                "-1",
+                time.milliseconds(),
+                time.milliseconds(),
+                false,
+                null,
+                null,
+                response
+        );
     }
 
     private ClientResponse buildClientResponse(
