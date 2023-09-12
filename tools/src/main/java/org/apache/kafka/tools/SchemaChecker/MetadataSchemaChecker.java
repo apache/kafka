@@ -15,12 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka;
+package org.apache.kafka.tools.SchemaChecker;
 
 
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 
 
 import java.io.*;
@@ -33,12 +36,18 @@ public class MetadataSchemaChecker {
     static int latestTag = -1;
     static int latestVersion = -1;
     public static void main(String[] args) throws Exception{
-        ArgumentParser
+        ArgumentParser par = ArgumentParsers.newArgumentParser("metadata-schema-checker").
+                defaultHelp(true).
+                description("Metadata Schema Checker");
+        par.addArgument("--schema", "-s").
+                required(true).
+                help("Changed schema");
         // need to split all of this up into separate  helper functions
+        Namespace input = par.parseArgsOrFail(args);
 
         try {
             final String dir = System.getProperty("user.dir");
-            String path = dir + "/metadata/src/main/resources/common/metadata/RegisterBrokerRecord.json";
+            String path = dir + "/metadata/src/main/resources/common/metadata/" + input.get("schema").toString() + ".json";
             BufferedReader reader = new BufferedReader(new FileReader(path));
             for (int i = 0; i < 15; i++) {
                 reader.readLine();
@@ -49,7 +58,7 @@ public class MetadataSchemaChecker {
             }
 
 
-            String path1 = dir + "/metadata/src/test/java/org/apache/kafka/TestingSchema.json";
+            String path1 = dir + "/tools/src/main/java/org/apache/kafka/tools/SchemaChecker/TestingSchema.json";
             BufferedReader reader1 = new BufferedReader(new FileReader(path1));
             for (int i = 0; i < 15; i++) {
                 reader1.readLine();
@@ -75,8 +84,6 @@ public class MetadataSchemaChecker {
             latestVersion = Character.getNumericValue(validVersions.charAt(validVersions.length() - 2));
 
             parser(jsonNode1, jsonNode2);
-
-
 
         } catch (FileNotFoundException e) {
             System.out.println("An error occurred.");
