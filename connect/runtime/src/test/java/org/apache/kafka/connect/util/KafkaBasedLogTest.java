@@ -56,6 +56,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -401,6 +403,39 @@ public class KafkaBasedLogTest {
         // Producer flushes when read to log end is called
         verify(producer).flush();
         verifyStartAndStop();
+    }
+
+    @Test
+    public void testOffsetReadFailureWhenWorkThreadFails() throws Exception {
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
+        when(admin.endOffsets(eq(tps))).thenReturn(endOffsets).thenThrow(new RuntimeException());
+
+        store.start();
+
+        AtomicBoolean invoked = new AtomicBoolean();
+        final FutureCallback<Void> successCallback = new FutureCallback<>((error, result) -> invoked.set(true));
+        final FutureCallback<Void> firstFailedCallback = new FutureCallback<>();
+        final FutureCallback<Void> subsequentFailedCallback = new FutureCallback<>();
+
+        store.readToEnd(successCallback);
+        store.readToEnd(firstFailedCallback);
+        store.readToEnd(subsequentFailedCallback);
+
+        // First log end read should succeed
+        successCallback.get(10000, TimeUnit.MILLISECONDS);
+        assertTrue(invoked.get());
+
+        // All enqueued log end reads should fail
+        assertThrows(ExecutionException.class, () -> firstFailedCallback.get(10000, TimeUnit.MILLISECONDS));
+        assertThrows(ExecutionException.class, () -> subsequentFailedCallback.get(10000, TimeUnit.MILLISECONDS));
+
+        // Any future log end read requests should also fail
+        Future<Void> anotherFailedReadFuture = store.readToEnd();
+        assertThrows(ExecutionException.class, () -> anotherFailedReadFuture.get(10000, TimeUnit.MILLISECONDS));
     }
 
     @Test
