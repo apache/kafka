@@ -92,6 +92,18 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
     }
 
     @SuppressWarnings("deprecation")
+    @Override
+    public void maybeVerifyLocalLogStartOffsets(scala.collection.immutable.Map<TopicPartition, Long> partitionLocalStartOffsets) throws InterruptedException {
+        TestUtils.waitForCondition(() ->
+            JavaConverters.seqAsJavaList(brokers()).stream().allMatch(broker ->
+                JavaConverters.mapAsJavaMapConverter(partitionLocalStartOffsets).asJava()
+                        .entrySet().stream().allMatch(entry ->
+                                entry.getValue() == broker.replicaManager().localLog(entry.getKey()).get().localLogStartOffset())
+            ), "local log start offset doesn't change to the expected position:" + partitionLocalStartOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+
     private boolean isAssignedReplica(TopicPartition topicPartition,
                                       Integer replicaId) {
         Optional<KafkaBroker> brokerOpt = JavaConverters.seqAsJavaList(brokers())
