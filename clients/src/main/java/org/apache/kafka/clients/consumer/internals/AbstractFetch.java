@@ -45,6 +45,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
+
 /**
  * {@code AbstractFetch} represents the basic state and logic for record fetching processing.
  * @param <K> Type for the message key
@@ -397,14 +399,6 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
     }
-
-    static void requestMetadataUpdate(final ConsumerMetadata metadata,
-                                      final SubscriptionState subscriptions,
-                                      final TopicPartition topicPartition) {
-        metadata.requestUpdate(true);
-        subscriptions.clearPreferredReadReplica(topicPartition);
-    }
-
 
     /**
      * This is guaranteed (by the {@link IdempotentCloser}) to be executed only once the first time that

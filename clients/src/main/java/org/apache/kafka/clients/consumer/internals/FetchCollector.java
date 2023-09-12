@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 
-import static org.apache.kafka.clients.consumer.internals.AbstractFetch.requestMetadataUpdate;
+import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
 /**
  * {@code FetchCollector} operates at the {@link RecordBatch} level, as that is what is stored in the
