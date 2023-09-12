@@ -189,7 +189,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return the group formatted as a list group response.
+     * @return the group formatted as a list group response based on the committed offset.
      */
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()

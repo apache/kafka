@@ -103,5 +103,4 @@ public class FutureUtils {
         future.completeExceptionally(ex);
         return future;
     }
-
 }

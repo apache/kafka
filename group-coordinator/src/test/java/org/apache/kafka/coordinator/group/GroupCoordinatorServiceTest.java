@@ -721,6 +721,7 @@ public class GroupCoordinatorServiceTest {
             assertEquals(expectResultMap.get(result.groupId()), Collections.singletonList(result));
         }
     }
+
     @Test
     public void testListGroupsFailedImmediately()
         throws InterruptedException, ExecutionException, TimeoutException {
