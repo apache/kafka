@@ -159,15 +159,19 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
         }
     }
 
+    /**
+     * It is true that shared states (e.g. {@link FetchSessionHandler session handlers}) could be accessed by
+     * multiple threads, such as heartbeat thread. However, since this method is called within the context of the
+     * {@link org.apache.kafka.common.internals.IdempotentCloser}, it is <em>not</em> necessary to acquire a lock on
+     * the instance before modifying the states.
+     *
+     * @param timer Timer to enforce time limit
+     */
     @Override
     protected void closeInternal(final Timer timer) {
-        // Shared states (e.g. sessionHandlers) could be accessed by multiple threads (such as heartbeat thread), hence,
-        // it is necessary to acquire a lock on the fetcher instance before modifying the states.
-        synchronized (this) {
-            // we do not need to re-enable wakeups since we are closing already
-            client.disableWakeups();
-            maybeCloseFetchSessions(timer);
-            Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
-        }
+        // we do not need to re-enable wake-ups since we are closing already
+        client.disableWakeups();
+        maybeCloseFetchSessions(timer);
+        super.closeInternal(timer);
     }
 }

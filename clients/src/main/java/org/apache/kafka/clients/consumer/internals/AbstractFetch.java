@@ -417,17 +417,21 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     }
 
     /**
-     * This is guaranteed (by the {@link IdempotentCloser}) to be executed only once the first time that
-     * any of the {@link #close()} methods are called.
+     * This method is called by {@link #close(Timer)} which is guarded by the {@link IdempotentCloser}) such as to only
+     * be executed once the first time that any of the {@link #close()} methods are called. Subclasses can override
+     * this method without the need for extra synchronization at the instance level.
+     *
      * @param timer Timer to enforce time limit
      */
     // Visible for testing
-    protected abstract void closeInternal(Timer timer);
+    protected void closeInternal(Timer timer) {
+        Utils.closeQuietly(fetchBuffer, "fetchBuffer");
+        Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
+    }
 
     public void close(final Timer timer) {
         idempotentCloser.close(() -> {
             closeInternal(timer);
-            Utils.closeQuietly(fetchBuffer, "fetchBuffer");
         });
     }
 
