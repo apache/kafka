@@ -91,7 +91,6 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
     }
 
     @SuppressWarnings("deprecation")
-    @Override
     public void maybeWaitForAtLeastOneSegmentUpload(scala.collection.immutable.Seq<TopicPartition> topicPartitions) {
         JavaConverters.seqAsJavaList(topicPartitions).forEach(topicPartition -> {
             List<BrokerLocalStorage> localStorages = JavaConverters.bufferAsJavaList(brokers()).stream()
