@@ -35,7 +35,7 @@ import org.slf4j.{Logger, LoggerFactory}
 import java.io.{File, FileInputStream, IOException}
 import java.nio.file.Files
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Collections
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
 
@@ -105,7 +105,7 @@ class RemoteIndexCacheTest {
   def testIndexFileNameAndLocationOnDisk(): Unit = {
     val entry = cache.getIndexEntry(rlsMetadata)
     val offsetIndexFile = entry.offsetIndex.file().toPath
-    val txnIndexFile = entry.txnIndexOpt.get().file().toPath
+    val txnIndexFile = entry.txnIndex.file().toPath
     val timeIndexFile = entry.timeIndex.file().toPath
 
     val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
@@ -155,6 +155,7 @@ class RemoteIndexCacheTest {
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
           case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
+          // Throw RemoteResourceNotFoundException since transaction index is not available
           case IndexType.TRANSACTION => throw new RemoteResourceNotFoundException("txn index not found")
           case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
           case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
@@ -162,7 +163,9 @@ class RemoteIndexCacheTest {
       })
 
     val entry = cache.getIndexEntry(rlsMetadata)
-    assertFalse(entry.txnIndexOpt.isPresent)
+    // Verify an empty file is created in the cache directory
+    assertTrue(entry.txnIndex().file().exists())
+    assertEquals(0, entry.txnIndex().file().length())
   }
 
   @Test
@@ -295,7 +298,7 @@ class RemoteIndexCacheTest {
     // verify that index(s) rename is only called 1 time
     verify(cacheEntry.timeIndex).renameTo(any(classOf[File]))
     verify(cacheEntry.offsetIndex).renameTo(any(classOf[File]))
-    verify(cacheEntry.txnIndexOpt.get()).renameTo(any(classOf[File]))
+    verify(cacheEntry.txnIndex).renameTo(any(classOf[File]))
 
     // verify no index files on disk
     assertFalse(getIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
@@ -353,12 +356,12 @@ class RemoteIndexCacheTest {
     verify(spyEntry).close()
 
     // close for all index entries must be invoked
-    verify(spyEntry.txnIndexOpt.get()).close()
+    verify(spyEntry.txnIndex).close()
     verify(spyEntry.offsetIndex).close()
     verify(spyEntry.timeIndex).close()
 
     // index files must not be deleted
-    verify(spyEntry.txnIndexOpt.get(), times(0)).deleteIfExists()
+    verify(spyEntry.txnIndex, times(0)).deleteIfExists()
     verify(spyEntry.offsetIndex, times(0)).deleteIfExists()
     verify(spyEntry.timeIndex, times(0)).deleteIfExists()
 
@@ -528,7 +531,7 @@ class RemoteIndexCacheTest {
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
     val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
     val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
-    spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, Optional.of(txIndex)))
+    spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txIndex))
   }
 
   private def assertAtLeastOnePresent(cache: RemoteIndexCache, uuids: Uuid*): Unit = {

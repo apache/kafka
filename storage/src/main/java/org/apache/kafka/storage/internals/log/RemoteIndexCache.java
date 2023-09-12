@@ -33,6 +33,7 @@ import org.apache.kafka.server.util.ShutdownableThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +48,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -278,7 +278,7 @@ public class RemoteIndexCache implements Closeable {
                         TransactionIndex txnIndex = new TransactionIndex(offset, txnIndexFile);
                         txnIndex.sanityCheck();
 
-                        Entry entry = new Entry(offsetIndex, timeIndex, Optional.ofNullable(txnIndex));
+                        Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
                         internalCache.put(uuid, entry);
                     } else {
                         // Delete all of them if any one of those indexes is not available for a specific segment id
@@ -316,12 +316,8 @@ public class RemoteIndexCache implements Closeable {
         }
         if (index == null) {
             File tmpIndexFile = new File(indexFile.getParentFile(), indexFile.getName() + RemoteIndexCache.TMP_FILE_SUFFIX);
-            InputStream inputStream = fetchRemoteIndex.apply(remoteLogSegmentMetadata);
-            if (inputStream == null) return null;
-            try {
+            try (InputStream inputStream = fetchRemoteIndex.apply(remoteLogSegmentMetadata)) {
                 Files.copy(inputStream, tmpIndexFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            } finally {
-                inputStream.close();
             }
             Utils.atomicMoveWithFallback(tmpIndexFile.toPath(), indexFile.toPath(), false);
             index = readIndex.apply(indexFile);
@@ -389,8 +385,9 @@ public class RemoteIndexCache implements Closeable {
                 try {
                     return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION);
                 } catch (RemoteResourceNotFoundException e) {
-                    // Don't throw an exception since the transaction index may not exist because of no transactional records.
-                    return null;
+                    // Don't throw an exception since the transaction index may not exist because of no transactional
+                    // records. Instead, we return an empty stream so that an empty file is created in the cache
+                    return new ByteArrayInputStream(new byte[0]);
                 } catch (RemoteStorageException e) {
                     throw new KafkaException(e);
                 }
@@ -404,7 +401,7 @@ public class RemoteIndexCache implements Closeable {
                 }
             });
 
-            return new Entry(offsetIndex, timeIndex, Optional.ofNullable(txnIndex));
+            return new Entry(offsetIndex, timeIndex, txnIndex);
         } catch (IOException e) {
             throw new KafkaException(e);
         }
@@ -460,8 +457,7 @@ public class RemoteIndexCache implements Closeable {
 
         private final OffsetIndex offsetIndex;
         private final TimeIndex timeIndex;
-        // Transaction index is optional because it may not exist for a segment if there are no transactional records.
-        private final Optional<TransactionIndex> txnIndexOpt;
+        private final TransactionIndex txnIndex;
 
         // This lock is used to synchronize cleanup methods and read methods. This ensures that cleanup (which changes the
         // underlying files of the index) isn't performed while a read is in-progress for the entry. This is required in
@@ -473,10 +469,10 @@ public class RemoteIndexCache implements Closeable {
 
         private boolean markedForCleanup = false;
 
-        public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, Optional<TransactionIndex> txnIndexOpt) {
+        public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
-            this.txnIndexOpt = txnIndexOpt;
+            this.txnIndex = txnIndex;
         }
 
         // Visible for testing
@@ -490,8 +486,8 @@ public class RemoteIndexCache implements Closeable {
         }
 
         // Visible for testing
-        public Optional<TransactionIndex> txnIndexOpt() {
-            return txnIndexOpt;
+        public TransactionIndex txnIndex() {
+            return txnIndex;
         }
 
         // Visible for testing
@@ -533,9 +529,7 @@ public class RemoteIndexCache implements Closeable {
                     markedForCleanup = true;
                     offsetIndex.renameTo(new File(Utils.replaceSuffix(offsetIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
                     timeIndex.renameTo(new File(Utils.replaceSuffix(timeIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
-                    if (txnIndexOpt.isPresent()) {
-                        txnIndexOpt.get().renameTo(new File(Utils.replaceSuffix(txnIndexOpt.get().file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
-                    }
+                    txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
                 }
             } finally {
                 lock.writeLock().unlock();
@@ -557,9 +551,7 @@ public class RemoteIndexCache implements Closeable {
                         timeIndex.deleteIfExists();
                         return null;
                     }, () -> {
-                        if (txnIndexOpt.isPresent()) {
-                            txnIndexOpt.get().deleteIfExists();
-                        }
+                        txnIndex.deleteIfExists();
                         return null;
                     });
 
@@ -576,7 +568,7 @@ public class RemoteIndexCache implements Closeable {
             try {
                 Utils.closeQuietly(offsetIndex, "OffsetIndex");
                 Utils.closeQuietly(timeIndex, "TimeIndex");
-                txnIndexOpt.ifPresent(txnIndex -> Utils.closeQuietly(txnIndex, "TransactionIndex"));
+                Utils.closeQuietly(txnIndex, "TransactionIndex");
             } finally {
                 lock.writeLock().unlock();
             }
@@ -587,7 +579,8 @@ public class RemoteIndexCache implements Closeable {
             return "Entry{" +
                     "offsetIndex=" + offsetIndex.file().getName() +
                     ", timeIndex=" + timeIndex.file().getName() +
-                    ", txnIndex=" + txnIndexOpt.map(index -> index.file().getName()) + '}';
+                    ", txnIndex=" + txnIndex.file().getName() +
+                    '}';
         }
     }
 
