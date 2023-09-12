@@ -25,6 +25,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.NoSuchElementException;
+
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
@@ -32,6 +34,7 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
@@ -82,6 +85,28 @@ public class KeyValueIteratorFacadeTest {
         replay(mockedKeyValueIterator);
 
         keyValueIteratorFacade.close();
+        verify(mockedKeyValueIterator);
+    }
+
+    @Test
+    public void shouldCloseIteratorAfterPerformingOperationSuccessfully() {
+        expect(mockedKeyValueIterator.peekNextKey()).andReturn("ignored");
+        mockedKeyValueIterator.close();
+        expectLastCall();
+        replay(mockedKeyValueIterator);
+
+        keyValueIteratorFacade.performAndClose(KeyValueIterator::peekNextKey);
+        verify(mockedKeyValueIterator);
+    }
+
+    @Test
+    public void shouldCloseIteratorAfterPerformingOperationWithFailure() {
+        expect(mockedKeyValueIterator.peekNextKey()).andThrow(new NoSuchElementException("Test exception"));
+        mockedKeyValueIterator.close();
+        expectLastCall();
+        replay(mockedKeyValueIterator);
+
+        assertThrows(NoSuchElementException.class, () -> keyValueIteratorFacade.performAndClose(KeyValueIterator::peekNextKey));
         verify(mockedKeyValueIterator);
     }
 }
