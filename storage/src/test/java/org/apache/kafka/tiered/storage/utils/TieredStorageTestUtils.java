@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.DELETE_ON_CLOSE_CONFIG;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.STORAGE_DIR_CONFIG;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP;
@@ -60,6 +61,7 @@ public class TieredStorageTestUtils {
     // The default value of log cleanup interval is 30 secs, and it increases the test execution time.
     private static final Integer LOG_CLEANUP_INTERVAL_MS = 500;
     private static final Integer RLM_TASK_INTERVAL_MS = 500;
+    private static final Integer RLMM_INIT_RETRY_INTERVAL_MS = 300;
 
     public static TopicDescription describeTopic(TieredStorageTestContext context, String topic)
             throws ExecutionException, InterruptedException {
@@ -102,11 +104,11 @@ public class TieredStorageTestUtils {
     public static Properties createPropsForRemoteStorage(String testClassName,
                                                          String storageDirPath,
                                                          int brokerCount,
-                                                         int numRemoteLogMetadataPartitions) {
+                                                         int numRemoteLogMetadataPartitions,
+                                                         Properties overridingProps) {
         Assertions.assertTrue(STORAGE_WAIT_TIMEOUT_SEC > TimeUnit.MILLISECONDS.toSeconds(RLM_TASK_INTERVAL_MS),
                 "STORAGE_WAIT_TIMEOUT_SEC should be greater than RLM_TASK_INTERVAL_MS");
 
-        Properties overridingProps = new Properties();
         // Configure the tiered storage in Kafka. Set an interval of 1 second for the remote log manager background
         // activity to ensure the tiered storage has enough room to be exercised within the lifetime of a test.
         //
@@ -146,6 +148,8 @@ public class TieredStorageTestUtils {
         // so enabling this config can break the existing tests.
         // NOTE: When using TestUtils#tempDir(), the folder gets deleted when VM terminates.
         overridingProps.setProperty(storageConfigPrefix(testClassName, DELETE_ON_CLOSE_CONFIG), "false");
+        // Set a small number of retry interval for retrying RemoteLogMetadataManager resources initialization to speed up the test
+        overridingProps.setProperty(metadataConfigPrefix(testClassName, REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP), RLMM_INIT_RETRY_INTERVAL_MS.toString());
         return overridingProps;
     }
 

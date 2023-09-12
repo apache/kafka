@@ -80,7 +80,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     public Properties overridingProps() {
         Properties overridingProps = createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
-                numRemoteLogMetadataPartitions());
+                numRemoteLogMetadataPartitions(), new Properties());
         readReplicaSelectorClass()
                 .ifPresent(c -> overridingProps.put(KafkaConfig.ReplicaSelectorClassProp(), c.getName()));
         return overridingProps;
