@@ -542,10 +542,6 @@ public class GroupMetadataManagerTest {
             return groupMetadataManager.getOrMaybeCreateGenericGroup(groupId, true);
         }
 
-        ConsumerGroup createConsumerGroup(String groupId) {
-            return groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, true);
-        }
-
         public JoinResult sendGenericGroupJoin(
             JoinGroupRequestData request
         ) {
