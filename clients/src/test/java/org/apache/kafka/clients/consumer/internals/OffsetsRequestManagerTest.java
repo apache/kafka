@@ -109,7 +109,7 @@ public class OffsetsRequestManagerTest {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
                 timestampsToSearch,
                 false);
@@ -126,7 +126,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // Building list offsets request fails with unknown leader
-        expectFailedRequest_MissingLeader();
+        mockFailedRequest_MissingLeader();
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(timestampsToSearch, false);
         assertEquals(0, requestManager.requestsToSend());
@@ -150,7 +150,7 @@ public class OffsetsRequestManagerTest {
         Map<TopicPartition, Node> partitionLeaders = new HashMap<>();
         partitionLeaders.put(TEST_PARTITION_1, LEADER_1);
         partitionLeaders.put(TEST_PARTITION_2, LEADER_1);
-        expectSuccessfulRequest(partitionLeaders);
+        mockSuccessfulRequest(partitionLeaders);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
                 timestampsToSearch,
                 false);
@@ -187,7 +187,7 @@ public class OffsetsRequestManagerTest {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
                 timestampsToSearch,
                 false);
@@ -215,7 +215,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // Building list offsets request fails with unknown leader
-        expectFailedRequest_MissingLeader();
+        mockFailedRequest_MissingLeader();
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(timestampsToSearch,
                         false);
@@ -229,7 +229,7 @@ public class OffsetsRequestManagerTest {
 
         // Cluster metadata update. Previously failed attempt to build the request should be retried
         // and succeed
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         requestManager.onUpdate(new ClusterResource(""));
         assertEquals(1, requestManager.requestsToSend());
 
@@ -245,7 +245,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
                 timestampsToSearch,
                 false);
@@ -268,7 +268,7 @@ public class OffsetsRequestManagerTest {
         assertEquals(0, requestManager.requestsToSend());
 
         // Cluster metadata update. Failed requests should be retried and succeed
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         requestManager.onUpdate(new ClusterResource(""));
         assertEquals(1, requestManager.requestsToSend());
 
@@ -293,7 +293,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
                 timestampsToSearch,
                 false);
@@ -330,7 +330,7 @@ public class OffsetsRequestManagerTest {
         Map<TopicPartition, Node> partitionLeaders = new HashMap<>();
         partitionLeaders.put(TEST_PARTITION_1, LEADER_1);
         partitionLeaders.put(TEST_PARTITION_2, LEADER_2);
-        expectSuccessfulRequest(partitionLeaders);
+        mockSuccessfulRequest(partitionLeaders);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
                 timestampsToSearch,
                 false);
@@ -360,7 +360,7 @@ public class OffsetsRequestManagerTest {
         assertEquals(0, requestManager.requestsToSend());
 
         // Cluster metadata update. Failed requests should be retried
-        expectSuccessfulRequest(partitionLeaders);
+        mockSuccessfulRequest(partitionLeaders);
         requestManager.onUpdate(new ClusterResource(""));
         assertEquals(1, requestManager.requestsToSend());
 
@@ -383,7 +383,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(
                         timestampsToSearch,
@@ -412,7 +412,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(
                         timestampsToSearch,
@@ -444,7 +444,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(
                         timestampsToSearch,
@@ -477,7 +477,7 @@ public class OffsetsRequestManagerTest {
 
     @Test
     public void testResetPositionsMissingLeader() {
-        expectFailedRequest_MissingLeader();
+        mockFailedRequest_MissingLeader();
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         requestManager.resetPositionsIfNeeded();
@@ -509,7 +509,7 @@ public class OffsetsRequestManagerTest {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
                 Optional.of(10), leaderAndEpoch);
 
-        expectSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
+        mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
 
         requestManager.validatePositionsIfNeeded();
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
@@ -549,7 +549,7 @@ public class OffsetsRequestManagerTest {
                 Optional.of(5));
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(5L,
                 Optional.of(10), leaderAndEpoch);
-        expectSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
+        mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
 
         requestManager.validatePositionsIfNeeded();
 
@@ -595,7 +595,7 @@ public class OffsetsRequestManagerTest {
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
     }
 
-    private void expectSuccessfulBuildRequestForValidatingPositions(SubscriptionState.FetchPosition position, Node leader) {
+    private void mockSuccessfulBuildRequestForValidatingPositions(SubscriptionState.FetchPosition position, Node leader) {
         when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.position(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();
@@ -611,7 +611,7 @@ public class OffsetsRequestManagerTest {
                 new OffsetAndTimestamp(offset, 1L, leaderAndEpoch.epoch));
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(tp));
         when(subscriptionState.resetStrategy(any())).thenReturn(strategy);
-        expectSuccessfulRequest(Collections.singletonMap(tp, leader));
+        mockSuccessfulRequest(Collections.singletonMap(tp, leader));
 
         requestManager.resetPositionsIfNeeded();
         assertEquals(1, requestManager.requestsToSend());
@@ -630,7 +630,7 @@ public class OffsetsRequestManagerTest {
     public void testResetPositionsThrowsPreviousException() {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
-        expectSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
 
         requestManager.resetPositionsIfNeeded();
 
@@ -687,13 +687,12 @@ public class OffsetsRequestManagerTest {
         NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
-        ClientResponse clientResponse = buildClientResponse(unsentRequest,
-                expectedResult);
+        ClientResponse clientResponse = buildClientResponse(unsentRequest, expectedResult);
         clientResponse.onComplete();
         verifyRequestSuccessfullyCompleted(actualResult, expectedResult);
     }
 
-    private void expectSuccessfulRequest(Map<TopicPartition, Node> partitionLeaders) {
+    private void mockSuccessfulRequest(Map<TopicPartition, Node> partitionLeaders) {
         partitionLeaders.forEach((tp, broker) -> {
             when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(broker,
                     Metadata.LeaderAndEpoch.noLeaderOrEpoch().epoch));
@@ -702,7 +701,7 @@ public class OffsetsRequestManagerTest {
         when(metadata.fetch()).thenReturn(testClusterMetadata(partitionLeaders));
     }
 
-    private void expectFailedRequest_MissingLeader() {
+    private void mockFailedRequest_MissingLeader() {
         when(metadata.currentLeader(any(TopicPartition.class))).thenReturn(
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1)));
         when(subscriptionState.isAssigned(any(TopicPartition.class))).thenReturn(true);
