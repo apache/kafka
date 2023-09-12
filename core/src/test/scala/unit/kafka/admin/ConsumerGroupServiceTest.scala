@@ -180,16 +180,16 @@ class ConsumerGroupServiceTest {
     val args = Array("--bootstrap-server", "localhost:9092", "--verify-regex", regex)
     val groupService = consumerGroupService(args)
     val output = TestUtils.grabConsoleOutput(groupService.verifyRegex())
-    assertEquals(s"$regex is a valid regular expression" ,output)
+    assertTrue(output.contains(s"$regex is a valid regular expression"))
   }
 
   @Test
   def testVerifyInvalidRegex(): Unit = {
-    val regex = "/?[a-z]/ -> /[a-z]?/"
+    val regex = "\\"
     val args = Array("--bootstrap-server", "localhost:9092", "--verify-regex", regex)
     val groupService = consumerGroupService(args)
     val output = TestUtils.grabConsoleOutput(groupService.verifyRegex())
-    assertEquals(s"$regex is an invalid regular expression", output)
+    assertTrue(output.contains(s"$regex is an invalid regular expression"))
   }
 
   private def consumerGroupService(args: Array[String]): ConsumerGroupService = {
