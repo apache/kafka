@@ -720,7 +720,6 @@ public class GroupCoordinatorServiceTest {
         for (ListGroupsResponseData.ListedGroup result : actualResults) {
             assertEquals(expectResultMap.get(result.groupId()), Collections.singletonList(result));
         }
-
     }
     @Test
     public void testListGroupsFailedImmediately()
@@ -765,7 +764,6 @@ public class GroupCoordinatorServiceTest {
         assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), listGroupsResponseData.errorCode());
         assertEquals(expectedResults, actualResults);
     }
-
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})

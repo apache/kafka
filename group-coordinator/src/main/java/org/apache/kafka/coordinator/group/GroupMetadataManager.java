@@ -423,8 +423,13 @@ public class GroupMetadataManager {
     }
 
     /**
-     * @return The GenericGroup List filtered by statesFilter and committedOffset.
+     * Get the Group List.
+     *
+     * @param statesFilter The states of the groups we want to list. If empty all groups are returned with their state.
+     * @param committedOffset A specified committed offset corresponding to this shard
+     * @return A list containing the ListGroupsResponseData.ListedGroup
      */
+
     public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
         if (!statesFilter.isEmpty()) {
